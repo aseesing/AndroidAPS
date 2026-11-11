@@ -14,11 +14,19 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.drawable.Icon
 import android.provider.Settings
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withScale
+import androidx.wear.watchface.complications.data.ComplicationData
+import androidx.wear.watchface.complications.data.ComplicationType
+import androidx.wear.watchface.complications.data.MonochromaticImage
+import androidx.wear.watchface.complications.data.PlainComplicationText
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
+import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import androidx.wear.watchface.complications.rendering.ComplicationDrawable
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.EventData
@@ -28,6 +36,10 @@ import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import app.aaps.shared.impl.weardata.toDrawable
 import app.aaps.wear.R
+import app.aaps.wear.health.HealthKind
+import app.aaps.wear.health.HealthReading
+import app.aaps.wear.health.healthComplicationData
+import app.aaps.wear.watchfaces.utils.ComplicationStyleValues
 import app.aaps.wear.watchfaces.animation.DesignRect
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimator
@@ -44,7 +56,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.time.Instant
 import java.util.Base64
+import java.util.Random
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -141,22 +155,27 @@ class CwfTechDesignTest {
         .put("textsize", size).put("gravity", gravity).put("fontColor", color).put("font", fontKey).put("fontStyle", "normal")
 
     /**
-     * One row of the table: a small muted label in the label column and the value, white, centred in the
+     * One row of the table: a small muted label in the label column and the value, white, aligned left in the
      * one value column that all six rows share (see [VAL_LEFT] and [VAL_RIGHT]).
      */
     private fun JSONObject.row(label: String, value: String, index: Int, labelText: String? = null) {
         val top = TABLE_TOP + index * ROW_HEIGHT
         text(label, TABLE_LEFT, top, ICON_WIDTH, ROW_HEIGHT, LABEL_SIZE, "left", LABEL_COLOR)
         if (labelText != null) getJSONObject(label).put("textvalue", labelText)
-        text(value, VAL_LEFT, top, VAL_RIGHT - VAL_LEFT, ROW_HEIGHT, VALUE_SIZE, "center", VALUE_COLOR)
+        text(value, VAL_LEFT, top, VAL_RIGHT - VAL_LEFT, ROW_HEIGHT, VALUE_SIZE, "left", VALUE_COLOR)
     }
 
-    /** A row-shaped complication box that blends into the panel: transparent, no frame, the icon in [accent]. */
-    private fun JSONObject.rowBox(key: String, index: Int, accent: String) {
-        place(key, TABLE_LEFT, TABLE_TOP + index * ROW_HEIGHT, VAL_RIGHT - TABLE_LEFT, ROW_HEIGHT)
+    /**
+     * A row of the table for heart rate or steps, as a complication box. The watch draws the ring or the
+     * icon in a square at the left of the box and the value right of it, aligned left. Ring and icon are
+     * transparent here, so only the value shows, and the box starts so far left ([ROW_BOX_LEFT]) that the
+     * value starts where the other values start. The label is a picture in the cover plate.
+     */
+    private fun JSONObject.rowBox(key: String, index: Int) {
+        place(key, ROW_BOX_LEFT, TABLE_TOP + index * ROW_HEIGHT, VAL_RIGHT - ROW_BOX_LEFT, ROW_HEIGHT)
             .put("color", CLEAR).put("borderRadius", 0)
-            .put("fontColor", VALUE_COLOR).put("iconColor", accent).put("textsize", VALUE_SIZE)
-            .put("font", fontKey).put("fontStyle", "normal").put("gravity", "center")
+            .put("fontColor", VALUE_COLOR).put("iconColor", CLEAR).put("ringPrimaryColor", CLEAR).put("ringSecondaryColor", CLEAR)
+            .put("textsize", VALUE_SIZE).put("font", fontKey).put("fontStyle", "normal").put("gravity", "left")
     }
 
     private fun design(default: CwfData): JSONObject = JSONObject(default.json).apply {
@@ -172,6 +191,8 @@ class CwfTechDesignTest {
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION4.key, "false")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5.key, "true")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DATE.key, "true")
+            // The table needs the plain IOB: with detailed IOB the label view shows the total and the value view the detail
+            .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DETAILED_IOB.key, "false")
 
         // No seconds: the watch draws once a minute
         put("enableSecond", false)
@@ -214,17 +235,18 @@ class CwfTechDesignTest {
         row("freetext2", "basalRate", 2, "BAS")
         row("freetext3", "reservoir", 3, "RSV")
 
-        // Heart rate and steps: two more rows of the same table, as row-shaped complication boxes. No fill,
-        // no frame; the icon (left, in the label column) is the label, the value has the table's size.
-        rowBox("complication1", 4, LABEL_COLOR)
-        rowBox("complication2", 5, LABEL_COLOR)
+        // Heart rate and steps: two more rows of the same table, as row-shaped complication boxes that show
+        // only the value. Their labels, a heart and two footprints, are in the cover plate.
+        rowBox("complication1", 4)
+        rowBox("complication2", 5)
         // The logo is a picture in the cover plate (see drawEmblem)
-        // Watch battery: only the text shows (the icon is transparent). It sits inside the battery outline
-        // that the cover plate draws. The box is wide: the watch puts the icon on the left, so the
-        // text is the right part of the box, which is centred in the outline.
+        // Watch battery: only the text shows (ring and icon are transparent). It sits inside the battery
+        // outline that the cover plate draws. The box starts left of the outline: the watch keeps a square at
+        // the left of the box for the ring or icon, and puts the text right of it.
         place("complication5", BATT_BOX_LEFT, BATT_TOP, BATT_BOX_WIDTH, BATT_HEIGHT)
-            .put("color", CLEAR).put("iconColor", CLEAR).put("fontColor", "#FFFFFF").put("textsize", BATT_TEXT_SIZE)
-            .put("font", fontKey).put("fontStyle", "normal").put("gravity", "center")
+            .put("color", CLEAR).put("iconColor", CLEAR).put("ringPrimaryColor", CLEAR).put("ringSecondaryColor", CLEAR)
+            .put("fontColor", "#FFFFFF").put("textsize", BATT_TEXT_SIZE)
+            .put("font", fontKey).put("fontStyle", "normal").put("gravity", "left")
 
         // The graph in its framed panel
         place("chart", CHART_LEFT, CHART_TOP, CHART_WIDTH, CHART_HEIGHT)
@@ -262,38 +284,87 @@ class CwfTechDesignTest {
     }
 
     /**
-     * A render-only face has no complication renderer: draws heart rate, steps and the watch battery
-     * the way the watch roughly does, in the design space.
+     * A render-only face has no complication renderer, so this draws heart rate, steps and the watch
+     * battery with the library's own [ComplicationDrawable], styled the way the face styles its slots,
+     * and with the data the heart rate and steps sources send. In the design space.
      */
-    private fun drawComplicationValues(canvas: Canvas, design: JSONObject) {
-        drawRowBox(canvas, design.getJSONObject("complication1"), "72", LABEL_COLOR, R.drawable.ic_health_heart)
-        drawRowBox(canvas, design.getJSONObject("complication2"), "6482", LABEL_COLOR, R.drawable.ic_health_steps)
-        // The battery text sits in the middle of the outline from the cover plate
-        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE; textSize = BATT_TEXT_SIZE.toFloat(); textAlign = Paint.Align.CENTER
-            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
-        }
-        canvas.drawText("38%", BATT_OUT_LEFT + BATT_OUT_WIDTH / 2f, BATT_TOP + BATT_HEIGHT / 2f + BATT_TEXT_SIZE * 0.35f, text)
+    private fun drawComplicationValues(canvas: Canvas, design: JSONObject, type: ComplicationType = ComplicationType.RANGED_VALUE) {
+        drawSlot(canvas, design.getJSONObject("complication1"), health(HealthKind.HEART_RATE, 72, type))
+        drawSlot(canvas, design.getJSONObject("complication2"), health(HealthKind.STEPS, 6482, type))
+        drawSlot(canvas, design.getJSONObject("complication5"), battery(66, type))
     }
 
-    /** Roughly what the watch draws for a short text complication: the icon on the left, the value right of it. */
-    private fun drawRowBox(canvas: Canvas, view: JSONObject, value: String, accent: String, @DrawableRes icon: Int) {
+    /**
+     * What a watch battery source sends: the level as a gauge or as text, the number without "%", and an
+     * icon. The icon here stands in for the system's battery icon; the design makes it transparent.
+     */
+    private fun battery(percent: Int, type: ComplicationType): ComplicationData {
+        val text = PlainComplicationText.Builder(percent.toString()).build()
+        val icon = MonochromaticImage.Builder(Icon.createWithResource(RuntimeEnvironment.getApplication(), R.drawable.ic_health_heart)).build()
+        return if (type == ComplicationType.RANGED_VALUE)
+            RangedValueComplicationData.Builder(percent.toFloat(), 0f, 100f, text).setText(text).setMonochromaticImage(icon).build()
+        else ShortTextComplicationData.Builder(text, text).setMonochromaticImage(icon).build()
+    }
+
+    /** What the heart rate or steps source sends for [value] in a slot that asked for [type]. */
+    private fun health(kind: HealthKind, value: Long, type: ComplicationType): ComplicationData =
+        healthComplicationData(RuntimeEnvironment.getApplication(), HealthReading(kind, value, missingPermission = false), type, null)!!
+
+    /**
+     * Draws [data] in the slot [view] of the design with the library's [ComplicationDrawable]. The style is
+     * read from [view] the way the face reads it; the keys this design leaves out get the library values.
+     */
+    private fun drawSlot(canvas: Canvas, view: JSONObject, data: ComplicationData) {
+        fun color(key: String, default: Int) = view.optString(key).takeIf { it.isNotEmpty() }?.let { Color.parseColor(it) } ?: default
+        val defaults = ComplicationStyleValues.LIBRARY_DEFAULTS
+        val textColor = color("fontColor", defaults.textColor)
+        val typeface = valueTypeface()
+        val drawable = ComplicationDrawable(RuntimeEnvironment.getApplication())
+        ComplicationStyleValues(
+            textColor = textColor,
+            titleColor = defaults.titleColor,
+            iconColor = color("iconColor", textColor),
+            backgroundColor = color("color", defaults.backgroundColor),
+            textTypeface = typeface,
+            titleTypeface = typeface,
+            borderRadius = view.optInt("borderRadius"),
+            ringWidth = max(view.optInt("ringWidth"), ComplicationStyleValues.MIN_RING_WIDTH_PX),
+            textSize = view.optInt("textsize").takeIf { it > 0 } ?: ComplicationStyleValues.TEXT_SIZE_FIT_BOX,
+            titleSize = ComplicationStyleValues.TEXT_SIZE_FIT_BOX,
+            ringPrimaryColor = color("ringPrimaryColor", defaults.ringPrimaryColor),
+            ringSecondaryColor = color("ringSecondaryColor", defaults.ringSecondaryColor),
+            borderColor = color("borderColor", defaults.borderColor),
+            borderWidth = view.optInt("borderWidth")
+        ).applyTo(drawable)
+        drawable.setComplicationData(data, false)
+        drawable.currentTime = Instant.now()
         val r = rectOf(view)
-        val color = Color.parseColor(accent)
-        val half = 11
-        val iconX = (r.left + ICON_WIDTH / 2).toInt()
-        val iconY = r.centerY().toInt()
-        ContextCompat.getDrawable(RuntimeEnvironment.getApplication(), icon)!!.mutate().apply {
-            setTint(color)
-            setBounds(iconX - half, iconY - half, iconX + half, iconY + half)
-            draw(canvas)
-        }
-        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.color = Color.WHITE; textSize = VALUE_SIZE.toFloat(); textAlign = Paint.Align.CENTER
-            typeface = if (fontFile.exists()) Typeface.createFromFile(fontFile) else Typeface.create("sans-serif-condensed", Typeface.BOLD)
-        }
-        // The watch centres the text in the box part right of the icon
-        canvas.drawText(value, r.left + ICON_WIDTH + (r.width() - ICON_WIDTH) / 2f, r.centerY() + VALUE_SIZE * 0.34f, text)
+        drawable.setBounds(r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt())
+        drawable.draw(canvas)
+    }
+
+    /** The font of the table values. */
+    private fun valueTypeface(): Typeface =
+        if (fontFile.exists()) Typeface.createFromFile(fontFile) else Typeface.create("sans-serif-condensed", Typeface.BOLD)
+
+    /** Where the ink of [value] starts, in the design space, when a text view like [view] shows it aligned left. */
+    private fun textStart(value: String, view: JSONObject): Float {
+        val drawn = createBitmap(800, 800).apply { eraseColor(Color.TRANSPARENT) }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = view.getInt("textsize") * SCALE; typeface = valueTypeface() }
+        Canvas(drawn).drawText(value, view.getInt("leftmargin") * SCALE, (view.getInt("topmargin") + view.getInt("height") / 2f) * SCALE, paint)
+        return leftmostInk(drawn) / SCALE
+    }
+
+    /** The last column of [bitmap] with a pixel that can be seen (alpha above a half). */
+    private fun rightmostInk(bitmap: Bitmap): Float {
+        for (x in bitmap.width - 1 downTo 0) for (y in 0 until bitmap.height) if (Color.alpha(bitmap.getPixel(x, y)) > 128) return x.toFloat()
+        return Float.NaN
+    }
+
+    /** The first column of [bitmap] with a pixel that can be seen (alpha above a half). */
+    private fun leftmostInk(bitmap: Bitmap): Float {
+        for (x in 0 until bitmap.width) for (y in 0 until bitmap.height) if (Color.alpha(bitmap.getPixel(x, y)) > 128) return x.toFloat()
+        return Float.NaN
     }
 
     private fun rectOf(view: JSONObject) = RectF(
@@ -367,7 +438,8 @@ class CwfTechDesignTest {
             'C' -> weavePattern(canvas)
             'G' -> {
                 weavePattern(canvas, "#1A1F2B", "#11151E")
-                rainPattern(canvas, "#26385A", "#0E131D", 240)
+                // Only the scan lines: the rain is the moving rain of the animation, so no still streaks that never move
+                rainPattern(canvas, "#26385A", "#0E131D", count = 0)
             }
             'E' -> circuitPattern(canvas)
             'F' -> rainPattern(canvas)
@@ -486,7 +558,7 @@ class CwfTechDesignTest {
 
     /** F: faint slanted rain streaks and very faint scan lines. */
     private fun rainPattern(canvas: Canvas, streak: String = "#101828", scanColor: String = "#090C14", count: Int = 170) {
-        val random = java.util.Random(7)
+        val random = Random(7)
         val rain = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(streak); strokeWidth = 1f * SCALE }
         repeat(count) {
             val x = random.nextFloat() * 400f
@@ -637,14 +709,14 @@ class CwfTechDesignTest {
     }
 
     /**
-     * The wake-up animation: rain at the slant of the still streaks of the background (1 to the left for
-     * 4 down, about -14 degrees), and the drop of the logo beating at the heart rate.
+     * The wake-up animation: rain slanted 1 to the left for
+     * 4 down (about -14 degrees), and the drop of the logo beating at the heart rate.
      */
     private fun animation(): JSONObject {
         val box = pulseBox()
         return JSONObject().put("durationMs", 6000).put("fps", 24).put("fadeMs", 600)
             .put(
-                "rain", JSONObject().put("count", 90).put("seed", 11).put("speed", 470).put("angle", -14).put("length", 28)
+                "rain", JSONObject().put("count", 140).put("seed", 11).put("speed", 470).put("angle", -14).put("length", 28)
                     .put("lengthVariation", 0.4).put("thickness", 1.6).put("color", RAIN_COLOR).put("alpha", RAIN_ALPHA)
             )
             .put(
@@ -825,8 +897,23 @@ class CwfTechDesignTest {
         canvas.drawRect(BATT_OUT_LEFT * s, BATT_TOP * s, (BATT_OUT_LEFT + BATT_OUT_WIDTH) * s, (BATT_TOP + BATT_HEIGHT) * s, battery)
         battery.style = Paint.Style.FILL
         canvas.drawRect((BATT_OUT_LEFT + BATT_OUT_WIDTH) * s, (BATT_TOP + 6f) * s, (BATT_OUT_LEFT + BATT_OUT_WIDTH + 4f) * s, (BATT_TOP + BATT_HEIGHT - 6f) * s, battery)
+        // The labels of the heart rate and steps rows, in the label colour like the other labels
+        drawRowIcon(canvas, R.drawable.ic_health_heart, 4)
+        drawRowIcon(canvas, R.drawable.ic_health_steps, 5)
         drawEmblem(canvas, logo)
         return ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+    }
+
+    /** Draws [icon] as the label of table row [index], in the label column, on the 800 px cover plate. */
+    private fun drawRowIcon(canvas: Canvas, @DrawableRes icon: Int, index: Int) {
+        val s = SCALE
+        val half = ROW_ICON_SIZE / 2f
+        val centerY = TABLE_TOP + index * ROW_HEIGHT + ROW_HEIGHT / 2f
+        ContextCompat.getDrawable(RuntimeEnvironment.getApplication(), icon)!!.mutate().apply {
+            setTint(Color.parseColor(LABEL_COLOR))
+            setBounds((TABLE_LEFT * s).toInt(), ((centerY - half) * s).toInt(), ((TABLE_LEFT + ROW_ICON_SIZE) * s).toInt(), ((centerY + half) * s).toInt())
+            draw(canvas)
+        }
     }
 
     private fun images(bg: Char = 'G', logo: Int = 6): Map<String, ByteArray> = mapOf(
@@ -856,6 +943,7 @@ class CwfTechDesignTest {
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION4]).isEqualTo("false")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_DATE]).isEqualTo("true")
+        assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_DETAILED_IOB]).isEqualTo("false")
         // Brings its own background and plate; no hand pictures
         assertThat(loaded.cwfData.resData.keys).containsAtLeast(ResFileMap.BACKGROUND.fileName, ResFileMap.COVER_PLATE.fileName)
         assertThat(loaded.cwfData.resData.keys).doesNotContain(ResFileMap.SECOND_HAND.fileName)
@@ -956,21 +1044,37 @@ class CwfTechDesignTest {
     }
 
     @Test
-    fun allSixValuesShareOneCentredColumnAndColour() {
+    fun allSixValuesStartInOneColumnWithOneColour() {
         val design = design(defaultDesign())
-        val centres = mutableListOf<Float>()
         for (key in listOf("iob2", "cob2", "basalRate", "reservoir")) {
             val view = design.getJSONObject(key)
-            assertWithMessage(key).that(view.getString("gravity")).isEqualTo("center")
-            centres += rectOf(view).centerX()
+            assertWithMessage(key).that(view.getString("gravity")).isEqualTo("left")
+            assertWithMessage(key).that(view.getInt("leftmargin")).isEqualTo(VAL_LEFT)
         }
-        // A complication's text area: the box right of the icon
-        for (key in rowBoxKeys) {
-            val r = rectOf(design.getJSONObject(key))
-            centres += (r.left + ICON_WIDTH + r.right) / 2f
-            assertThat(r.left).isEqualTo(TABLE_LEFT.toFloat())
+        // Heart rate and steps, drawn by the library as the watch draws them, in both types the slot can get:
+        // the value starts where a text value starts, and nothing else of the complication shows. (Both
+        // sources list RANGED_VALUE before GOAL_PROGRESS, and so does every type priority, so the slot never
+        // gets GOAL_PROGRESS.)
+        val plain = textStart("72", design.getJSONObject("iob2"))
+        for (type in listOf(ComplicationType.RANGED_VALUE, ComplicationType.SHORT_TEXT))
+            for ((key, kind) in listOf("complication1" to HealthKind.HEART_RATE, "complication2" to HealthKind.STEPS)) {
+                val view = design.getJSONObject(key)
+                val drawn = createBitmap(800, 800).apply { eraseColor(Color.TRANSPARENT) }
+                Canvas(drawn).withScale(SCALE, SCALE) { drawSlot(this, view, health(kind, if (kind == HealthKind.HEART_RATE) 72 else 7282, type)) }
+                val start = leftmostInk(drawn) / SCALE
+                println("$key as $type: value starts at $start, a text value at $plain")
+                File(out, "slot_${key}_$type.png").writeBytes(pngBytes(drawn))
+                assertWithMessage("$key as $type").that(start).isWithin(1.5f).of(plain)
+            }
+        // The battery number, two digits, sits in the middle of the outline, and nothing else of it shows
+        for (type in listOf(ComplicationType.RANGED_VALUE, ComplicationType.SHORT_TEXT)) {
+            val drawn = createBitmap(800, 800).apply { eraseColor(Color.TRANSPARENT) }
+            Canvas(drawn).withScale(SCALE, SCALE) { drawSlot(this, design.getJSONObject("complication5"), battery(66, type)) }
+            val middle = (leftmostInk(drawn) + rightmostInk(drawn)) / 2f / SCALE
+            println("battery as $type: middle of the text at $middle, of the outline at ${BATT_OUT_LEFT + BATT_OUT_WIDTH / 2f}")
+            assertWithMessage("battery as $type").that(middle).isWithin(2f).of(BATT_OUT_LEFT + BATT_OUT_WIDTH / 2f)
+            assertWithMessage("battery as $type").that(leftmostInk(drawn) / SCALE).isAtLeast(BATT_OUT_LEFT + 2f)
         }
-        for (c in centres) assertThat(c).isWithin(1f).of(centres[0])
         // Same size, font and colour for all six values
         val views = (listOf("iob2", "cob2", "basalRate", "reservoir") + rowBoxKeys).map { design.getJSONObject(it) }
         assertThat(views.map { it.getInt("textsize") }.toSet()).hasSize(1)
@@ -1023,14 +1127,15 @@ class CwfTechDesignTest {
             assertWithMessage(key).that(design.getJSONObject(key).getString("visibility")).isEqualTo("visible")
         for (key in rowBoxKeys) {
             val r = rectOf(design.getJSONObject(key))
-            assertThat(r.width()).isAtLeast(110f)
+            assertThat(r.width()).isAtLeast(100f)
             assertThat(r.height()).isAtLeast(ROW_HEIGHT.toFloat())
             assertWithMessage(key).that(design.getJSONObject(key).getInt("borderRadius")).isAtMost(6)
             assertWithMessage(key).that(design.getJSONObject(key).getInt("textsize")).isAtLeast(16)
             assertWithMessage(key).that(design.getJSONObject(key).has("borderColor")).isFalse()
         }
-        // Battery: the icon is invisible, only the text shows, inside the outline
-        assertThat(design.getJSONObject("complication5").getString("iconColor")).isEqualTo(CLEAR)
+        // Battery: icon and ring are invisible, only the text shows, inside the outline
+        for (key in listOf("iconColor", "ringPrimaryColor", "ringSecondaryColor"))
+            assertWithMessage(key).that(design.getJSONObject("complication5").getString(key)).isEqualTo(CLEAR)
     }
 
     private fun textWidth(text: String, size: Int): Float = Paint().apply {
@@ -1119,9 +1224,9 @@ class CwfTechDesignTest {
         assertThat(spec.fps).isEqualTo(24)
         assertThat(spec.fadeMs).isEqualTo(600)
         val rain = spec.rain!!
-        assertThat(rain.count).isEqualTo(90)
+        assertThat(rain.count).isEqualTo(140)
         assertThat(rain.color).isEqualTo(Color.parseColor(RAIN_COLOR))
-        // The same slant as the still streaks of the background: 1 to the left for 4 down
+        // Slanted 1 to the left for 4 down, the look the design was made with
         assertThat(rain.angle.toDouble()).isWithin(0.5).of(Math.toDegrees(atan(-0.25)))
         val pulse = spec.pulse!!
         assertThat(pulse.drawable).isNotNull()
@@ -1368,7 +1473,11 @@ class CwfTechDesignTest {
         const val HIGH_COLOR = "#FCEE0A"
         const val MID_COLOR = "#39FF14"
         const val LOW_COLOR = "#FF003C"
-        const val GRID_COLOR = "#2A2F45"
+        /**
+         * The graph's grid lines and its hour and "now" labels. Transparent: the labels sit at the bottom edge,
+         * where the round screen cuts them off, so they could never be read; the time is at the top.
+         */
+        const val GRID_COLOR = CLEAR
         const val CARBS_COLOR = "#FF4FD8"
         const val BASAL_BACK_COLOR = "#7A1FA2"
         const val HEART_COLOR = "#FF4F7B"
@@ -1382,10 +1491,11 @@ class CwfTechDesignTest {
         const val TIME_HEIGHT = 74
         const val TIME_SIZE = 64
 
-        const val LOOP_LEFT = 58
-        const val LOOP_TOP = 66
-        const val LOOP_WIDTH = 42
-        const val LOOP_HEIGHT = 36
+        const val LOOP_LEFT = 60
+        const val LOOP_TOP = 64
+        /** Square, so the ring around the minutes stays round. */
+        const val LOOP_WIDTH = 38
+        const val LOOP_HEIGHT = 38
 
         const val SGV_LEFT = 28
         const val SGV_TOP = 102
@@ -1402,6 +1512,10 @@ class CwfTechDesignTest {
         const val ROW_HEIGHT = 26
         const val TABLE_BOTTOM = TABLE_TOP + TABLE_ROWS * ROW_HEIGHT
         const val ICON_WIDTH = 30
+        const val ROW_ICON_SIZE = 18
+
+        /** Space between the label column and the values. */
+        const val LABEL_GAP = 8
         const val ROW_PAD = 4
         const val EDGE_MARGIN = 10
         const val LABEL_SIZE = 15
@@ -1415,11 +1529,16 @@ class CwfTechDesignTest {
         }
 
         /**
-         * The one value column. A SHORT_TEXT complication centres its text in the box part right of its icon,
-         * which is estimated as [ICON_WIDTH] wide (the box is as high as the icon). The four text values use
-         * the same part, so all six value centres are equal.
+         * Where the one value column starts, right of the label column. All six values start here, aligned left.
          */
-        const val VAL_LEFT = TABLE_LEFT + ICON_WIDTH
+        const val VAL_LEFT = TABLE_LEFT + ICON_WIDTH + LABEL_GAP
+
+        /**
+         * Left of the heart rate and steps boxes: the square the watch keeps for the ring or icon (as high as
+         * the box, and a little more) lies before the value column, so the value starts at [VAL_LEFT]. The 2 is
+         * measured with the library's drawing (see allSixValuesStartInOneColumnWithOneColour).
+         */
+        const val ROW_BOX_LEFT = VAL_LEFT - ROW_HEIGHT - 2
         val VAL_RIGHT = rowRight(0) - ROW_PAD
 
         const val LOGO_LEFT = 54
