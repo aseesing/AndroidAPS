@@ -1,12 +1,14 @@
-# AndroidAPS – personal watch changes
+# AndroidAPS – personal changes
 
 This is a personal fork of [nightscout/AndroidAPS](https://github.com/nightscout/AndroidAPS).
-It adds a few changes for the **Wear OS watch app**. They were made for a OnePlus Watch 2R
-(Wear OS 5, round 466 x 466 screen), but should work on other round Wear OS watches.
+It adds a few changes, mostly for the **Wear OS watch app**. They were made for a OnePlus Watch 2R
+(Wear OS 5, round 466 x 466 screen), but should work on other round Wear OS watches. On the phone,
+the status lights count down to the end of the sensor and pod, and logs can be saved without email.
 
 > **Not an official AAPS release.** These changes are not reviewed by the AAPS team and are not
 > meant for upstream. AAPS controls insulin: build and use this only if you understand the code
-> and the risk. The phone side has only small changes to how often data is sent to the watch.
+> and the risk. The phone side changes only how often data is sent to the watch, the status
+> lights, and how logs are saved. Nothing changes how insulin is given.
 
 The full upstream README is in [`/README.md`](../README.md).
 
@@ -20,6 +22,7 @@ All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
 | `local/wear-battery` | Less battery use on the watch, fewer messages from the phone |
 | `local/wear-hr-steps-design` | Heart rate and steps on the watch face, design *AAPS HR Steps* |
 | `local/wear-wake-animation` | Wake-up animation, design *AAPS Tech*, and later design updates |
+| `local/status-and-logs` | Phone: status lights count down to the real end, save logs to Downloads |
 
 `master` of this fork is a plain copy of upstream `master`.
 
@@ -84,6 +87,34 @@ The pictures are previews with sample values. The font of AAPS Tech is
 - Choose *AAPS heart rate* for complication 1, *AAPS steps* for complication 2 and the watch
   battery for complication 5.
 
+### 5. Status lights count down (phone)
+
+The status lights in Overview and Actions show the **time left** until a part stops, not its age.
+
+- For known devices the countdown goes to the real end, grace period included. You do not have
+  to set anything:
+
+  | Device | Works | Grace | Ends after |
+  |---|---|---|---|
+  | Dexcom G7 | 10 days | 12 h | 10 days 12 h |
+  | Dexcom G6 | 10 days | – | 10 days |
+  | Omnipod Eros / DASH | 72 h | 8 h | 80 h |
+
+  The sensor model comes from the newest BG reading, the pod from the active pump. On a pod the
+  insulin row ends with the pod.
+- **Yellow** when less than one day is left, **red** in the grace period.
+- Under 10 hours the minutes show and the days go: `9h05m`, `45m`. After the end: `-2h10m`.
+- Other devices and the pump battery count down to your *critical* threshold, with your warning
+  and critical colors, as before.
+- A 15 day G7 sends the same label as the 10 day one, so it would count down 5 days too early.
+- AAPS only knows a new sensor when the BG source sends its start time. xDrip+ sends it for a G7
+  only when it knows the sensor firmware, so keep xDrip+ up to date.
+
+### 6. Save logs to Downloads (phone)
+
+*Maintenance* has a new item **Save logs to Downloads**. It writes the same zip as *Send logs*
+to the `Download` folder of the phone, with no email. No storage permission is needed.
+
 ## Install
 
 1. Build `local/personal`: the watch app is `:wear:assembleFullRelease`, the phone app
@@ -94,7 +125,7 @@ The pictures are previews with sample values. The font of AAPS Tech is
 
 ## Tests
 
-All changes have JVM / Robolectric tests in the `wear` and `plugins/sync` modules. The designs are
+All changes have JVM / Robolectric tests in the `wear`, `plugins/sync` and `ui` modules. The designs are
 built by tests (`CwfTechDesignTest`, `CwfHrStepsDesignTest`) that render the real watch face. These
 tests check, for example, that no text is cut off, that all values in the table line up, and that
 the rain does not make the table hard to read.
@@ -114,7 +145,8 @@ When a new version is out:
    Solve conflicts where git stops, then `git rebase --continue`.
 3. Point the `local/wear-*` branches at their moved commits (`git branch -f <branch> <commit>`).
    `local/wear-battery` and `local/wear-hr-steps-design` each start from upstream on their own;
-   `local/wear-wake-animation` starts from the merge of those two.
-4. Run the `wear` and `plugins/sync` tests, build, and push the branches with
+   `local/wear-wake-animation` starts from the merge of those two. `local/status-and-logs`
+   starts from upstream on its own.
+4. Run the `wear`, `plugins/sync` and `ui` tests, build, and push the branches with
    `git push --force-with-lease`. A rebase rewrites the commits, so a normal push is refused.
 5. Change the base commit at the top of this file.
