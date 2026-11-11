@@ -18,6 +18,7 @@ import app.aaps.core.interfaces.sync.NsClient
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.shared.tests.generatedTextResolver
+import app.aaps.ui.UiStringsValues
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -77,7 +78,7 @@ internal class MaintenanceViewModelTest {
         testDispatcher = StandardTestDispatcher()
         Dispatchers.setMain(testDispatcher)
         sut = MaintenanceViewModel(
-            aapsLogger, generatedTextResolver(), l, maintenance, importExportPrefs, fileListProvider, cloudDirectoryManager,
+            aapsLogger, generatedTextResolver("ui" to UiStringsValues::textOf), l, maintenance, importExportPrefs, fileListProvider, cloudDirectoryManager,
             activePlugin, persistenceLayer, fabricPrivacy, uel, dataSyncSelectorXdrip, pumpSync,
             iobCobCalculator, overviewData, overviewDataCache, nsClient, dateUtil
         )
@@ -191,6 +192,28 @@ internal class MaintenanceViewModelTest {
         sut.cleanupDatabases()
 
         assertThat(event.await()).isEqualTo(MaintenanceEvent.Error("Error"))
+    }
+
+    @Test
+    fun `saveLogsToDownloads names the saved file`() = runBlocking {
+        runEagerly()
+        whenever(maintenance.saveLogsToDownloads()).thenReturn("AndroidAPS_LOG_1.log.zip")
+        val event = expectEvent()
+
+        sut.saveLogsToDownloads()
+
+        assertThat(event.await()).isEqualTo(MaintenanceEvent.Snackbar("Logs saved in Downloads: AndroidAPS_LOG_1.log.zip"))
+    }
+
+    @Test
+    fun `saveLogsToDownloads says so when the file could not be saved`() = runBlocking {
+        runEagerly()
+        whenever(maintenance.saveLogsToDownloads()).thenReturn(null)
+        val event = expectEvent()
+
+        sut.saveLogsToDownloads()
+
+        assertThat(event.await()).isEqualTo(MaintenanceEvent.Snackbar("Failed to save logs"))
     }
 
     @Test

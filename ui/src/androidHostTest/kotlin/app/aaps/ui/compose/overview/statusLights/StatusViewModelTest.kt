@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyVararg
 import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
@@ -237,6 +238,8 @@ internal class StatusViewModelTest {
         whenever(activePlugin.activeBgSource).thenReturn(bgSource)
         whenever(bgSource.sensorBatteryLevel).thenReturn(-1)
         whenever(rh.gs(any<TextRef>())).thenReturn("text")
+        // Personal: the time left is formatted with arguments (StatusTimeLeft)
+        whenever(rh.gs(any<TextRef>(), anyVararg<Any>())).thenReturn("text")
         whenever(dateUtil.computeDiff(any(), any())).thenReturn(TimeDiff(1, 2, 0, 0, 0, 0, 0))
         val cannulaChange = mock<TE>()
         whenever(cannulaChange.timestamp).thenReturn(1_000L)

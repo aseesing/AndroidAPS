@@ -34,6 +34,7 @@ import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.core.ui.CoreUiStrings
+import app.aaps.ui.UiStrings
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
@@ -208,6 +209,17 @@ class MaintenanceViewModel(
                 localSuccess = CoreUiStrings.logs_sent,
                 localFailed = CoreUiStrings.logs_send_failed
             )
+            _events.emit(MaintenanceEvent.Snackbar(message))
+        }
+    }
+
+    fun saveLogsToDownloads() {
+        maintenanceAction("saving logs") {
+            val fileName = withContext(aapsIoDispatcher) {
+                maintenance.saveLogsToDownloads()
+            }
+            val message = if (fileName != null) rh.gs(UiStrings.logs_saved_to_downloads, fileName)
+            else rh.gs(UiStrings.logs_save_failed)
             _events.emit(MaintenanceEvent.Snackbar(message))
         }
     }
