@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import app.aaps.wear.R
 import app.aaps.wear.watchfaces.animation.DesignRect
 import app.aaps.wear.watchfaces.animation.PulseSpec
 import app.aaps.wear.watchfaces.animation.RainSpec
@@ -25,6 +26,15 @@ class WakeAnimationJsonTest {
     private val images = mapOf("heart" to heart)
 
     private fun read(json: String): WakeAnimationSpec? = face.readWakeAnimation(JSONObject(json)) { images[it] }
+
+    @Test
+    fun theWakeUpSettingIsOnlyOfferedForADesignWithAnAnimation() {
+        fun keys(json: String?) = CustomWatchface.settingRows(json, systemEditor = false).map { it.key }
+        assertThat(keys("""{"animation": {}}""")).contains(R.string.key_wake_animation_length)
+        assertThat(keys("""{"metadata": {}}""")).doesNotContain(R.string.key_wake_animation_length)
+        // nothing loaded yet: every row is kept
+        assertThat(keys(null)).contains(R.string.key_wake_animation_length)
+    }
 
     @Test
     fun noAnimationKeyMeansNoAnimation() {

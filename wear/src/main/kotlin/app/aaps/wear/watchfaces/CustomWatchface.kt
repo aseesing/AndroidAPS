@@ -74,6 +74,7 @@ import app.aaps.wear.watchfaces.animation.RainSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeFrameParts
+import app.aaps.wear.watchfaces.animation.WakeLength
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.ComplicationImageFit
 import app.aaps.wear.watchfaces.utils.ComplicationRender
@@ -268,6 +269,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     )
                 }
                 add(WatchFaceSettingRow.Toggle(R.string.key_include_external, R.string.pref_include_external, false))
+                // Wake-up animation (private patch): only for a design that has one
+                if (json == null || json.has(WakeAnimationSpec.JSON_KEY)) add(WakeLength.row())
             }
         }
 
@@ -881,7 +884,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     // ---- Wake-up animation (private patch): rain and a beating heart after a wrist raise ----
 
     /** Plays the optional `animation` of the design; see [WakeAnimator]. */
-    private val wake = WakeAnimator(heartRate = { HealthValues.of(this).heartRate() })
+    private val wake = WakeAnimator(
+        heartRate = { HealthValues.of(this).heartRate() },
+        chosenLengthMs = { WakeLength.parse(sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) }
+    )
 
     /** The time of the frame the wake parts draw, for the complications. */
     private var wakeFrameTime: ZonedDateTime? = null
@@ -933,7 +939,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
      * animation must not cost the design. [image] finds a picture of the zip by its key.
      */
     internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = runCatching {
-        val animation = json.optJSONObject("animation") ?: return@runCatching null
+        val animation = json.optJSONObject(WakeAnimationSpec.JSON_KEY) ?: return@runCatching null
         val spec = WakeAnimationSpec()
         val rain = RainSpec()
         val pulse = PulseSpec()

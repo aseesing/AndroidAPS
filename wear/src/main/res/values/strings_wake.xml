@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- In a file of its own so this local patch never conflicts with upstream changes to strings.xml -->
+<resources>
+    <!-- Wake-up animation of the Custom watch face -->
+    <string name="key_wake_animation_length" translatable="false">wake_animation_length</string>
+    <string name="pref_wake_animation_length">Wake-up animation</string>
+    <string name="wake_animation_as_design" comment="The animation plays as long as the watch face design asks">As the design</string>
+    <string name="wake_animation_off">Off</string>
+    <string name="wake_animation_3s">3 seconds</string>
+    <string name="wake_animation_6s">6 seconds</string>
+    <string name="wake_animation_10s">10 seconds</string>
+    <string name="wake_animation_15s">15 seconds</string>
+    <string name="wake_animation_20s">20 seconds</string>
+    <string name="wake_animation_30s">30 seconds</string>
+</resources>
