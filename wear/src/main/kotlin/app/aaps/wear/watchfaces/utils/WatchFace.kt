@@ -242,6 +242,9 @@ abstract class WatchFace : WatchFaceService() {
     protected fun complicationDataNow(): List<Any?> =
         complicationSlotsManager?.complicationSlots?.values?.map { it.complicationData.value } ?: emptyList()
 
+    /** Hands the watch state (ambient, visible, headless) to a subclass that wants to follow it. */
+    protected open fun onWatchStateReady(watchState: WatchState) {}
+
     // Renderer instance
     private var renderer: WatchFaceRenderer? = null
 
@@ -264,6 +267,7 @@ abstract class WatchFace : WatchFaceService() {
         currentUserStyleRepository: CurrentUserStyleRepository
     ): WatchFace {
         this.complicationSlotsManager = complicationSlotsManager
+        onWatchStateReady(watchState)
 
         // Create renderer that delegates to abstract methods
         renderer = WatchFaceRenderer(

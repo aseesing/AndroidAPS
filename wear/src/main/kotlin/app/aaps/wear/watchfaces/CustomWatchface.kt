@@ -34,6 +34,8 @@ import androidx.core.view.isVisible
 import androidx.viewbinding.ViewBinding
 import androidx.wear.watchface.ComplicationSlot
 import androidx.wear.watchface.ComplicationSlotsManager
+import androidx.wear.watchface.TapType
+import androidx.wear.watchface.WatchState
 import androidx.wear.watchface.complications.ComplicationSlotBounds
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.style.CurrentUserStyleRepository
@@ -61,10 +63,17 @@ import app.aaps.shared.impl.weardata.toTypeface
 import app.aaps.wear.R
 import app.aaps.wear.complications.cwf.CwfRenderTarget
 import app.aaps.wear.databinding.ActivityCustomBinding
+import app.aaps.wear.health.HealthValues
 import app.aaps.wear.utils.toVisibility
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.PROVISIONAL_RING_WIDTH
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.TEMPLE_RESOLUTION
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.complicationSlots
+import app.aaps.wear.watchfaces.animation.DesignRect
+import app.aaps.wear.watchfaces.animation.PulseSpec
+import app.aaps.wear.watchfaces.animation.RainSpec
+import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
+import app.aaps.wear.watchfaces.animation.WakeAnimator
+import app.aaps.wear.watchfaces.animation.WakeFrameParts
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.ComplicationImageFit
 import app.aaps.wear.watchfaces.utils.ComplicationRender
@@ -833,6 +842,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
      * face, a render for an image - false sends the frame the normal way, once a minute.
      */
     override fun drawLayeredFrame(canvas: Canvas, bounds: Rect, zonedDateTime: ZonedDateTime): Boolean {
+        if (drawWakeFrame(canvas, bounds, zonedDateTime)) return true
         if (isRenderOnly || !isLayoutReady || !showSecond || simpleUi.isEnabled(currentWatchMode)) {
             layeredFrames.invalidate()
             return false
@@ -864,8 +874,96 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     override fun onDestroy() {
         layeredFrames.release()
+        wake.release()
         super.onDestroy()
     }
+
+    // ---- Wake-up animation (private patch): rain and a beating heart after a wrist raise ----
+
+    /** Plays the optional `animation` of the design; see [WakeAnimator]. */
+    private val wake = WakeAnimator(heartRate = { HealthValues.of(this).heartRate() })
+
+    /** The time of the frame the wake parts draw, for the complications. */
+    private var wakeFrameTime: ZonedDateTime? = null
+
+    /** The parts of this face for a wake frame. Internal so a test can draw the real views with its own clock. */
+    internal val wakeParts: WakeFrameParts = object : WakeFrameParts {
+        override fun prepare() = layoutMainLayout()
+        override fun background(canvas: Canvas) =
+            canvas.withRotation(backgroundView.rotation, backgroundView.pivotX, backgroundView.pivotY) { backgroundView.draw(this) }
+
+        override fun data(canvas: Canvas) {
+            complications.syncGeometry(::visibleSlotBounds)
+            wakeFrameTime?.let { drawComplicationSlots(canvas, it) }
+            drawLayer(canvas, RenderLayer.DATA_BASE)
+        }
+
+        override fun clockText(canvas: Canvas) = drawLayer(canvas, RenderLayer.CLOCK_TEXT)
+        override fun top(canvas: Canvas) {
+            drawLayer(canvas, RenderLayer.MIDDLE)
+            drawLayer(canvas, RenderLayer.HANDS)
+        }
+
+        override fun secondHand(canvas: Canvas) = drawLayer(canvas, RenderLayer.SECOND_HAND)
+    }
+
+    /** A frame of the wake-up animation, or false to draw the frame as without it. */
+    private fun drawWakeFrame(canvas: Canvas, bounds: Rect, zonedDateTime: ZonedDateTime): Boolean {
+        wakeFrameTime = zonedDateTime
+        val drawn = wake.drawFrame(
+            canvas, bounds.width(), bounds.height(), zonedDateTime.toInstant().toEpochMilli(), contentVersion * 31 + styleGeneration,
+            complicationDataNow(), wakeParts, allowed = !isRenderOnly && !simpleUi.isEnabled(currentWatchMode), ready = isLayoutReady
+        )
+        if (drawn) layeredFrames.invalidate()
+        return drawn
+    }
+
+    override fun getInteractiveModeUpdateRate(): Long = wake.updateDelay(super.getInteractiveModeUpdateRate())
+
+    override fun onWatchStateReady(watchState: WatchState) = wake.watch(watchState)
+
+    override fun onTapCommand(tapType: Int, x: Int, y: Int, eventTime: Long) {
+        super.onTapCommand(tapType, x, y, eventTime)
+        if (tapType == TapType.UP && wake.wakeOnTap()) invalidate()
+    }
+
+    /**
+     * Reads the optional `animation` key of the design [json]. Null when it is absent; missing keys
+     * get the defaults of [WakeAnimationSpec], [RainSpec] and [PulseSpec]. Never throws: a broken
+     * animation must not cost the design. [image] finds a picture of the zip by its key.
+     */
+    internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = runCatching {
+        val animation = json.optJSONObject("animation") ?: return@runCatching null
+        val spec = WakeAnimationSpec()
+        val rain = RainSpec()
+        val pulse = PulseSpec()
+        fun JSONObject.float(key: String, default: Float) = optDouble(key, default.toDouble()).toFloat()
+        fun JSONObject.rect(default: DesignRect) =
+            DesignRect(float("left", default.left), float("top", default.top), float("width", default.width), float("height", default.height))
+        WakeAnimationSpec(
+            durationMs = animation.optLong("durationMs", spec.durationMs),
+            fps = animation.optInt("fps", spec.fps),
+            fadeMs = animation.optLong("fadeMs", spec.fadeMs),
+            rain = animation.optJSONObject("rain")?.let {
+                RainSpec(
+                    count = it.optInt("count", rain.count), seed = it.optLong("seed", rain.seed), speed = it.float("speed", rain.speed),
+                    angle = it.float("angle", rain.angle), length = it.float("length", rain.length),
+                    lengthVariation = it.float("lengthVariation", rain.lengthVariation), thickness = it.float("thickness", rain.thickness),
+                    color = getColor(it.optString("color"), rain.color), alpha = it.optInt("alpha", rain.alpha),
+                    region = it.optJSONObject("region")?.rect(rain.region) ?: rain.region
+                )
+            },
+            pulse = animation.optJSONObject("pulse")?.let {
+                val key = it.optString("image")
+                PulseSpec(
+                    image = key, drawable = key.takeIf { k -> k.isNotEmpty() }?.let(image), rect = it.rect(pulse.rect),
+                    amplitude = it.float("amplitude", pulse.amplitude), secondBeat = it.float("secondBeat", pulse.secondBeat),
+                    glowColor = getColor(it.optString("glowColor"), pulse.glowColor), glowAlpha = it.optInt("glowAlpha", pulse.glowAlpha),
+                    glowRadius = it.float("glowRadius", pulse.glowRadius), fallbackBpm = it.optInt("fallbackBpm", pulse.fallbackBpm)
+                )
+            }
+        )
+    }.getOrNull()
 
     override fun onTimeChanged(oldTime: app.aaps.wear.watchfaces.utils.WatchFaceTime, newTime: app.aaps.wear.watchfaces.utils.WatchFaceTime) {
         super.onTimeChanged(oldTime, newTime)
@@ -1045,6 +1143,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     // schema the system caches its preview from does not say. Asked for inside this
                     // block, which only runs on a real change, since the system rate limits requests.
                     requestPreviewImageUpdate()
+                    wake.setDesign(readWakeAnimation(json) { key -> resDataMap[key]?.toDrawable(resources) })
                 }
                 if (checkPref()) {
                     DynProvider.init(this, json)
