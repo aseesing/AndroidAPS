@@ -55,8 +55,10 @@ All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
 
 - A watch face design can have an optional `animation` block: **falling rain** and an image that
   **beats at the measured heart rate**.
-- It plays for a few seconds (24 frames per second) when you raise your wrist, when the watch face
-  starts or becomes visible, or when you tap the screen. Then the face is still again.
+- It plays (24 frames per second) when you raise your wrist, when the watch face starts or becomes
+  visible, or when you tap the screen. Then the face is still again.
+- How long it plays is a setting of the Custom watch face on the watch, *Wake-up animation*: as the
+  design asks (the default), off, or 3 to 30 seconds. AAPS Tech asks for 15 seconds.
 - It never plays in ambient (always-on) mode, in simple UI, or in previews.
 - Designs without the `animation` block work exactly as before.
 
