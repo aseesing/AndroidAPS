@@ -125,6 +125,9 @@ internal class OverviewViewModelFixture(private val screen: AapsScreenFixture) {
         // modules, so it would throw. Answered from the real resources, like everything else here.
         doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_age_short)).whenever(rh).gs(UiStrings.status_age_short)
         doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_age_short_hours)).whenever(rh).gs(UiStrings.status_age_short_hours)
+        doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_overdue)).whenever(rh).gs(UiStrings.status_overdue)
+        doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_time_left_hours_minutes)).whenever(rh).gs(UiStrings.status_time_left_hours_minutes)
+        doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_time_left_minutes)).whenever(rh).gs(UiStrings.status_time_left_minutes)
 
         // ----- shared ambient -----
         whenever(screen.dateUtil.now()).thenReturn(NOW)

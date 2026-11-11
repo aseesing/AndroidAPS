@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Personal strings for the status light countdown, not in upstream AAPS. Kept apart from
+    strings.xml so that a new AAPS release merges without conflicts in that file. English only.
+-->
+<resources>
+    <string name="status_time_left_hours_minutes" comment="Time left before a sensor or pod stops, used when less than 10 hours are left. h=hours, m=minutes. %1$d=hours, %2$02d=minutes. Example: 9h05m">%1$dh%2$02dm</string>
+    <string name="status_time_left_minutes" comment="Time left before a sensor or pod stops, used when less than 1 hour is left. m=minutes. %1$d=minutes. Example: 45m">%1$dm</string>
+    <string name="status_overdue" comment="Time since a sensor, cannula or battery should have been changed. %1$s=time, like 3h or 2d5h. The minus means it is past the deadline. Example: -3h">-%1$s</string>
+</resources>
