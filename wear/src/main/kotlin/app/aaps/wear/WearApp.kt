@@ -17,6 +17,7 @@ import app.aaps.wear.complications.cwf.CwfComplicationUpdater
 import app.aaps.wear.di.WearGraph
 import app.aaps.wear.events.EventWearPreferenceChange
 import app.aaps.wear.watchfaces.WatchFacePushHelper
+import app.aaps.wear.health.PassiveHealthRegistration
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.MembersInjector
 import dev.zacsweers.metro.createGraphFactory
@@ -71,6 +72,8 @@ class WearApp : Application(), MetroMemberInjector {
         // Refreshes the Custom watch face image complications when the picture changes, rather
         // than leaving them on the system's slow periodic timer
         cwfComplicationUpdater.start()
+        // Health Services forgets passive registrations on reboot: ask again for what is shown
+        CoroutineScope(Dispatchers.Default).launch { PassiveHealthRegistration.updateQuietly(this@WearApp) }
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(preferenceChangeListener)
         startForegroundService(Intent(this, DataLayerListenerServiceWear::class.java))
     }
