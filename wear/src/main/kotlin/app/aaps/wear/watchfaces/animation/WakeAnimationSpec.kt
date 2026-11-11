@@ -12,7 +12,7 @@ import kotlin.math.ceil
  * json (it is the only class that may read that json) and hands them over. All sizes and positions
  * are in the 400 x 400 design space, like every other view of a design.
  *
- * @param durationMs how long one wake plays
+ * @param durationMs how long one wake plays, unless the watch setting `WakeLength` chooses another length
  * @param fps frames per second while it plays
  * @param fadeMs the rain fades in and out over this time, and the heart settles to its rest size
  */
@@ -37,13 +37,13 @@ data class WakeAnimationSpec(
     fun withoutImage(): WakeAnimationSpec = copy(pulse = pulse?.copy(drawable = null))
 
     /**
-     * How strong the animation is [elapsedMs] after the start: rises from 0 to 1 over [fadeMs], and
-     * falls back to 0 over the last [fadeMs].
+     * How strong the animation is [elapsedMs] after the start of a wake that plays [lengthMs]: rises
+     * from 0 to 1 over [fadeMs], and falls back to 0 over the last [fadeMs].
      */
-    fun envelope(elapsedMs: Long): Float {
+    fun envelope(elapsedMs: Long, lengthMs: Long = durationMs): Float {
         if (fadeMs <= 0) return 1f
         val fadeIn = elapsedMs.toFloat() / fadeMs
-        val fadeOut = (durationMs - elapsedMs).toFloat() / fadeMs
+        val fadeOut = (lengthMs - elapsedMs).toFloat() / fadeMs
         return minOf(fadeIn, fadeOut, 1f).coerceIn(0f, 1f)
     }
 
@@ -54,12 +54,24 @@ data class WakeAnimationSpec(
     val frameDelayMs: Long get() = (1000L / fps).coerceAtLeast(1)
 
     /** The most frames one wake may draw. */
-    val maxFrames: Int get() = ceil(durationMs * fps / 1000.0).toInt()
+    val maxFrames: Int get() = maxFrames(durationMs)
+
+    /** The most frames a wake that plays [lengthMs] may draw. */
+    fun maxFrames(lengthMs: Long): Int = ceil(lengthMs * fps / 1000.0).toInt()
+
+    /**
+     * How long a wake plays: [chosenMs] (the watch setting) when there is one, else [durationMs], and
+     * always inside the safe limits. Never 0: "off" is handled before a wake starts.
+     */
+    fun lengthOf(chosenMs: Long?): Long = (chosenMs?.takeIf { it > 0 } ?: durationMs).coerceIn(MIN_DURATION_MS, MAX_DURATION_MS)
 
     companion object {
 
+        /** The key of the animation in the design json. */
+        const val JSON_KEY = "animation"
+
         const val MIN_DURATION_MS = 500L
-        const val MAX_DURATION_MS = 15_000L
+        const val MAX_DURATION_MS = 30_000L
         const val MAX_FPS = 30
     }
 }

@@ -164,7 +164,7 @@ class WakeTimerTest {
         assertThat(wild.fps).isEqualTo(WakeAnimationSpec.MAX_FPS)
         assertThat(wild.fadeMs).isEqualTo(WakeAnimationSpec.MAX_DURATION_MS / 2)
         assertThat(wild.rain?.count).isEqualTo(RainSpec.MAX_COUNT)
-        assertThat(wild.maxFrames).isEqualTo(450)
+        assertThat(wild.maxFrames).isEqualTo(900)
         assertThat(WakeAnimationSpec(rain = RainSpec(count = 0)).normalized().hasContent).isFalse()
         // a heart without its image in the zip is no heart
         assertThat(WakeAnimationSpec(pulse = PulseSpec(image = "missing")).normalized().pulse).isNull()

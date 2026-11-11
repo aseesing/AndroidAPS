@@ -5,16 +5,21 @@ package app.aaps.wear.watchfaces.animation
  *
  * - A wake (the face starts, comes out of ambient, becomes visible again, or is tapped) asks for a
  *   start. The animation starts with the next frame that can draw it, so its first frame is at 0 ms.
- * - It stops after [WakeAnimationSpec.durationMs], or after [WakeAnimationSpec.maxFrames] frames,
- *   whichever comes first. [stop] (ambient, hidden) ends it at once.
+ * - It stops after its length, or after the most frames for that length, whichever comes first.
+ *   [stop] (ambient, hidden) ends it at once. The length is read at the start of each wake: the
+ *   watch setting when the user chose one, else the design's own ([WakeAnimationSpec.lengthOf]).
+ * - With the watch setting "off" no wake starts.
  * - While it plays, [updateDelay] asks for a frame every `1000 / fps` ms; otherwise it gives back the
  *   normal rate unchanged, so the face draws exactly as many frames as without the animation.
  *
  * All calls come from the main thread, where the watch face renders.
  *
- * @param clock a time that never jumps, in ms (`SystemClock.elapsedRealtime` on the watch)
+ * @param chosenLengthMs the length the user chose on the watch (see [WakeLength]): null to keep the
+ *   design's own, 0 for off
+ * @param clock a time that never jumps, in ms (`SystemClock.elapsedRealtime` on the watch); last, so
+ *   it can be passed as a trailing lambda
  */
-class WakeTimer(private val clock: () -> Long) {
+class WakeTimer(private val chosenLengthMs: () -> Long? = { null }, private val clock: () -> Long) {
 
     /**
      * The animation of the design, or null when it has none. A different one plays from the start
@@ -27,8 +32,15 @@ class WakeTimer(private val clock: () -> Long) {
             field = value
             if (same) return
             startedAt = NOT_RUNNING
-            pending = value != null
+            pending = value != null && !isOff
         }
+
+    /** True when the user turned the animation off on the watch. */
+    private val isOff: Boolean get() = chosenLengthMs() == 0L
+
+    /** How long the current (or last) wake plays, in ms. */
+    var lengthThisWakeMs = 0L
+        private set
 
     private var pending = false
     private var startedAt = NOT_RUNNING
@@ -50,7 +62,7 @@ class WakeTimer(private val clock: () -> Long) {
      * @return true when a new start was asked for, so the caller should ask for a frame
      */
     fun wake(): Boolean {
-        if (spec == null || isRunning || pending) return false
+        if (spec == null || isRunning || pending || isOff) return false
         pending = true
         return true
     }
@@ -71,12 +83,14 @@ class WakeTimer(private val clock: () -> Long) {
         val now = clock()
         if (pending) {
             pending = false
+            if (isOff) return null
             startedAt = now
             framesThisWake = 0
+            lengthThisWakeMs = s.lengthOf(chosenLengthMs())
         }
         if (!isRunning) return null
         val elapsed = now - startedAt
-        if (elapsed >= s.durationMs || framesThisWake >= s.maxFrames) {
+        if (elapsed >= lengthThisWakeMs || framesThisWake >= s.maxFrames(lengthThisWakeMs)) {
             startedAt = NOT_RUNNING
             return null
         }

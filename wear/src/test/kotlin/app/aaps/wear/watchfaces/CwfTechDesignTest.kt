@@ -714,7 +714,7 @@ class CwfTechDesignTest {
      */
     private fun animation(): JSONObject {
         val box = pulseBox()
-        return JSONObject().put("durationMs", 6000).put("fps", 24).put("fadeMs", 600)
+        return JSONObject().put("durationMs", ANIMATION_MS).put("fps", 24).put("fadeMs", 600)
             .put(
                 "rain", JSONObject().put("count", 140).put("seed", 11).put("speed", 470).put("angle", -14).put("length", 28)
                     .put("lengthVariation", 0.4).put("thickness", 1.6).put("color", RAIN_COLOR).put("alpha", RAIN_ALPHA)
@@ -1220,7 +1220,7 @@ class CwfTechDesignTest {
         val spec = readAnimation(design)
         // Every value is inside the safe limits, so nothing is changed on the watch
         assertThat(spec.normalized().withoutImage()).isEqualTo(spec.withoutImage())
-        assertThat(spec.durationMs).isEqualTo(6000)
+        assertThat(spec.durationMs).isEqualTo(ANIMATION_MS)
         assertThat(spec.fps).isEqualTo(24)
         assertThat(spec.fadeMs).isEqualTo(600)
         val rain = spec.rain!!
@@ -1284,10 +1284,10 @@ class CwfTechDesignTest {
             val canvas = Canvas(frame)
             val drawn = animator.drawFrame(canvas, size, size, now, 0, emptyList(), face.wakeParts, allowed = true, ready = true)
             // The last one is past the end: the face is drawn the normal way again
-            assertWithMessage("frame at $clock ms is animated").that(drawn).isEqualTo(clock < 6000)
+            assertWithMessage("frame at $clock ms is animated").that(drawn).isEqualTo(clock < ANIMATION_MS)
             if (drawn) canvas.withScale(size / 400f, size / 400f) { drawComplicationValues(this, design) }
             else canvas.drawBitmap(still, 0f, 0f, null)
-            jpegs += ByteArrayOutputStream().also { frame.compress(Bitmap.CompressFormat.JPEG, 88, it) }.toByteArray()
+            jpegs += ByteArrayOutputStream().also { frame.compress(Bitmap.CompressFormat.JPEG, 75, it) }.toByteArray()
             // A png of every quarter second to look at one by one
             if (clock % 250 == 0L) File(dir, "tech_%04dms.png".format(clock)).writeBytes(pngBytes(frame))
             if (clock in zoomMs) keptFrames[clock] = frame else frame.recycle()
@@ -1562,10 +1562,13 @@ class CwfTechDesignTest {
         /** How much larger the drop is at the top of a beat: the most that keeps it above the graph frame. */
         const val PULSE_AMPLITUDE = 0.20
 
-        /** The animation frames: 466 px and 24 per second like the watch, from 0 to 6000 ms. */
+        /** How long one wake plays, unless the watch setting chooses another length. */
+        const val ANIMATION_MS = 15_000L
+
+        /** The animation frames: 466 px and 24 per second like the watch, over the whole animation. */
         const val FRAME_SIZE = 466
         const val FRAME_FPS = 24
-        const val FRAME_COUNT = 144
+        const val FRAME_COUNT = (ANIMATION_MS * FRAME_FPS / 1000).toInt()
 
         /** The time of frame [i]. */
         fun frameMs(i: Int): Long = i * 1000L / FRAME_FPS

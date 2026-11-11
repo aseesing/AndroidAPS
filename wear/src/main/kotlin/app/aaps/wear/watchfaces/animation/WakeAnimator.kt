@@ -22,10 +22,12 @@ import kotlinx.coroutines.launch
  * not ask for an image render, the simple face, ambient, or the editor's highlight frames.
  *
  * @param heartRate the latest measured heart rate, or null; read once per wake
+ * @param chosenLengthMs the length chosen in the watch setting (see [WakeLength]); read once per wake
  */
 class WakeAnimator(
     private val heartRate: () -> Int?,
-    private val timer: WakeTimer = WakeTimer { SystemClock.elapsedRealtime() },
+    chosenLengthMs: () -> Long? = { null },
+    private val timer: WakeTimer = WakeTimer(chosenLengthMs) { SystemClock.elapsedRealtime() },
     private val layers: WakeFrameLayers = WakeFrameLayers(),
     private val newScope: () -> CoroutineScope = { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
 ) {
@@ -112,7 +114,7 @@ class WakeAnimator(
             layers.invalidate()
         }
         val scale = width / DESIGN_SIZE
-        val strength = s.envelope(elapsed)
+        val strength = s.envelope(elapsed, timer.lengthThisWakeMs)
         layers.draw(
             canvas, width, height, nowMs, content, complications, parts,
             rain = { rain?.draw(it, elapsed, scale, strength) },
