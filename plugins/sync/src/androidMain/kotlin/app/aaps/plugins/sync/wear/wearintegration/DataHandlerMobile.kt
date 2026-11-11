@@ -257,7 +257,12 @@ class DataHandlerMobile(
             loop.acceptChangeRequest()?.let { sendError(it) }
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(Constants.NOTIFICATION_ID)
         }
-        onEvent<EventData.ActionResendData> { resendData(it.from) }
+        onEvent<EventData.ActionResendData> {
+            // Asked for explicitly - by the watch, a new connection or the wear screen: send everything,
+            // also what the watch should already have
+            unchangedToWear.reset()
+            resendData(it.from)
+        }
         // The watch's word on Watch Face Push, kept by WearPlugin for the wear screen
         onEvent<EventData.WatchFacePushStatus> { rxBus.send(EventWearUpdateGui(watchFacePushStatus = it)) }
         onEvent<EventData.ActionPumpStatus> {
@@ -1900,7 +1905,11 @@ class DataHandlerMobile(
         sendToWear(EventData.ConfirmAction(rh.gs(CoreUiStrings.error), errorMessage, returnCommand = EventData.Error(dateUtil.now()))) // ignore return path
     }
 
+    /** Leaves out state messages the watch already has, see [UnchangedToWearFilter]. */
+    private val unchangedToWear = UnchangedToWearFilter()
+
     private fun sendToWear(event: EventData) {
+        if (!unchangedToWear.shouldSend(event, dateUtil.now())) return
         rxBus.send(EventMobileToWear(event))
     }
 

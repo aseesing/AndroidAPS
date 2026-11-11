@@ -385,6 +385,16 @@ abstract class BaseWatchFace : WatchFace() {
      */
     protected open fun deferMainLayoutDraw(): Boolean = false
 
+    /** True once the first frame has inflated the layout and filled it, see [onDraw]. */
+    protected val isLayoutReady: Boolean get() = ::binding.isInitialized && layoutSet
+
+    /** Measures and lays out mainLayout for the surface, as every frame of [onDraw] does before drawing. */
+    protected fun layoutMainLayout() {
+        binding.mainLayout.measure(specW, specH)
+        val y = if (forceSquareCanvas) displayWidth else displayHeight // Square Steampunk
+        binding.mainLayout.layout(0, 0, displayWidth, y)
+    }
+
     /** Performs the mainLayout draw that [onDraw] skipped because [deferMainLayoutDraw] is true. */
     protected fun drawMainLayout(canvas: Canvas) {
         if (::binding.isInitialized && layoutSet && !simpleUi.isEnabled(currentWatchMode)) {
@@ -419,9 +429,7 @@ abstract class BaseWatchFace : WatchFace() {
             simpleUi.onDraw(canvas, singleBg[0])
         } else {
             if (layoutSet) {
-                binding.mainLayout.measure(specW, specH)
-                val y = if (forceSquareCanvas) displayWidth else displayHeight // Square Steampunk
-                binding.mainLayout.layout(0, 0, displayWidth, y)
+                layoutMainLayout()
                 if (!deferMainLayoutDraw()) binding.mainLayout.draw(canvas)
             }
         }

@@ -59,7 +59,7 @@ class WearPluginTest : TestBaseWithProfile() {
     /** Collects [WearPlugin.resendRequests] in virtual time; the database flows send their first value as on a phone. */
     private suspend fun TestScope.collectResends(): MutableList<String> {
         val reasons = mutableListOf<String>()
-        val flow = wearPlugin.resendRequests(backgroundScope)
+        val flow = wearPlugin.resendRequests(backgroundScope) { testScheduler.currentTime }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { flow.collect { reasons.add(it) } }
         runCurrent()
         // observeChanges sends the current state when it is collected; that is not a change
@@ -99,10 +99,12 @@ class WearPluginTest : TestBaseWithProfile() {
 
     /**
      * The events of the BG cycle measured on a Pixel at 19:15 (seconds after 19:15:00). Each event
-     * used to start a full resend: 10 events, 9 resends seen in the log. Now one per burst.
+     * used to start a full resend: 10 events, 9 resends seen in the log. A 2 s debounce made that 5,
+     * one per burst. Now the first burst goes out fast with the new BG, and everything after it in
+     * the same cycle waits for [WearPlugin.RESEND_SETTLE_DEBOUNCE] of quiet: 2 resends.
      */
     @Test
-    fun `a BG cycle of events gives one resend per burst`() = runTest {
+    fun `a BG cycle of events gives two resends`() = runTest {
         val reasons = collectResends()
 
         at(10.0, autosens); at(11.0, autosens)                   // calculation, twice
@@ -111,13 +113,43 @@ class WearPluginTest : TestBaseWithProfile() {
         at(49.0, loopGui); at(50.0, loopGui); at(50.2, autosens)  // a new TBR: history change, calculation, loop
         at(51.0, autosens); at(51.3, loopGui)
         at(55.0, nsStatus)
-        advanceTimeBy(10.seconds)
+        advanceTimeBy(WearPlugin.RESEND_SETTLE_DEBOUNCE - 100.milliseconds)
+        runCurrent()
+        assertThat(reasons).containsExactly("EventAutosensCalculationFinished")
+
+        advanceTimeBy(200.milliseconds)
+        runCurrent()
+        // The reason of the last event of each burst
+        assertThat(reasons).containsExactly("EventAutosensCalculationFinished", "EventNsClientStatusUpdated").inOrder()
+    }
+
+    /** A change the user made does not wait for the BG cycle to settle. */
+    @Test
+    fun `a temp target set while the cycle settles goes out fast`() = runTest {
+        val reasons = collectResends()
+
+        at(10.0, autosens)                                        // new BG: resent at 12 s
+        at(20.0, loopGui)                                         // loop result: would wait 30 s
+        advanceTimeBy(5.seconds)                                  // 25 s: the user sets a temp target
+        runCurrent()
+        temporaryTargets.emit(emptyList())
+        advanceTimeBy(WearPlugin.RESEND_DEBOUNCE + 100.milliseconds)
         runCurrent()
 
-        // The reason of the last event of each burst
-        assertThat(reasons).containsExactly(
-            "EventAutosensCalculationFinished", "EventLoopUpdateGui", "EventNsClientStatusUpdated", "EventLoopUpdateGui", "EventNsClientStatusUpdated"
-        ).inOrder()
+        assertThat(reasons).containsExactly("EventAutosensCalculationFinished", "TempTargetChange").inOrder()
+    }
+
+    /** The next BG cycle, minutes later, is fast again. */
+    @Test
+    fun `the first event of the next cycle is resent fast again`() = runTest {
+        val reasons = collectResends()
+
+        at(10.0, autosens)
+        at(300.0, autosens)
+        advanceTimeBy(WearPlugin.RESEND_DEBOUNCE + 100.milliseconds)
+        runCurrent()
+
+        assertThat(reasons).containsExactly("EventAutosensCalculationFinished", "EventAutosensCalculationFinished")
     }
 
     /** A single event waits the debounce time, not longer. */

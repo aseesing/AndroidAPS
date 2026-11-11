@@ -202,4 +202,24 @@ class DataHandlerMobileSceneTest : TestBaseWithProfile() {
         assertThat(sent).isEqualTo(EventData.ActiveSceneState(active = false))
         verify(activeSceneSync, never()).getActiveState()
     }
+
+    /** Every message wakes the watch; a state it already has is left out, see [UnchangedToWearFilter]. */
+    @Test
+    fun `the same state goes to the watch once, until the watch asks for everything`() = runTest {
+        val sent = mutableListOf<EventData>()
+        val job = collectMobileToWear { sent += it }
+        sut.sendActiveSceneState(active = false)
+        sut.sendActiveSceneState(active = false)
+        assertThat(sent).hasSize(1)
+
+        // The watch asks for a resend; the handler runs on its own dispatcher
+        rxBus.send(EventData.ActionResendData("test"))
+        val end = System.currentTimeMillis() + 3_000
+        while (sent.size < 2 && System.currentTimeMillis() < end) {
+            sut.sendActiveSceneState(active = false)
+            Thread.sleep(20)
+        }
+        job.cancel()
+        assertThat(sent).hasSize(2)
+    }
 }

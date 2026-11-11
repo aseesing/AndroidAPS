@@ -29,6 +29,7 @@ import androidx.wear.watchface.TapEvent
 import androidx.wear.watchface.WatchFace
 import androidx.wear.watchface.WatchFaceService
 import androidx.wear.watchface.WatchFaceType
+import androidx.wear.watchface.style.WatchFaceLayer
 import androidx.wear.watchface.WatchState
 import androidx.wear.watchface.style.CurrentUserStyleRepository
 import java.time.ZonedDateTime
@@ -213,6 +214,34 @@ abstract class WatchFace : WatchFaceService() {
      */
     internal open fun complicationRender(slot: ComplicationSlot): ComplicationRender = ComplicationRender.Declared
 
+    /**
+     * Counts the changes announced through [invalidate]: data, preferences, mode, taps. A subclass that
+     * keeps drawn pictures between frames compares it to know when they are out of date. Frames the
+     * library schedules on its own, once a second or once a minute, do not count.
+     */
+    protected var contentVersion = 0
+        private set
+
+    /**
+     * Lets a subclass draw a whole interactive frame its own way, from pictures it kept, instead of
+     * [onDraw], the complications and [onDrawOverlay]. Asked only for a plain frame on the watch: not
+     * ambient, not the editor's highlight, not a preview with layers left out. Return false to draw the
+     * normal way.
+     */
+    protected open fun drawLayeredFrame(canvas: Canvas, bounds: Rect, zonedDateTime: ZonedDateTime): Boolean = false
+
+    /** Paints every complication slot as the normal frame does, for a subclass that draws a frame its own way. */
+    protected fun drawComplicationSlots(canvas: Canvas, zonedDateTime: ZonedDateTime) {
+        renderer?.drawComplications(canvas, zonedDateTime)
+    }
+
+    /**
+     * What the complication slots show now. The library hands every slot a new object when its data
+     * changes, so a subclass can compare these by reference.
+     */
+    protected fun complicationDataNow(): List<Any?> =
+        complicationSlotsManager?.complicationSlots?.values?.map { it.complicationData.value } ?: emptyList()
+
     // Renderer instance
     private var renderer: WatchFaceRenderer? = null
 
@@ -339,12 +368,30 @@ abstract class WatchFace : WatchFaceService() {
             // Update time from ZonedDateTime
             updateTime(zonedDateTime)
 
-            // Delegate to abstract onDraw method
-            onDraw(canvas)
+            val plainFrame = renderParameters.drawMode == DrawMode.INTERACTIVE &&
+                renderParameters.highlightLayer == null &&
+                renderParameters.watchFaceLayers == WatchFaceLayer.ALL_WATCH_FACE_LAYERS
+            if (!plainFrame || !drawLayeredFrame(canvas, bounds, zonedDateTime)) {
+                // Delegate to abstract onDraw method
+                onDraw(canvas)
+                drawComplications(canvas, zonedDateTime)
+                onDrawOverlay(canvas)
+            }
 
-            // Generic render pass for whatever complication slots exist. Empty/no-op for every
-            // watch face that doesn't declare any (the default). What each slot's bounds are - and
-            // whether it is painted at all - is the subclass's call, see [complicationRender].
+            // Read again after every frame, not only once at construction: whether seconds are shown
+            // is known only after the first draw has loaded the design, and changes with preferences.
+            // The library reads this before it schedules the next frame, and rounds a long delay to
+            // the start of the next minute. Without it a face drew 60 frames a minute for a clock that
+            // changes once a minute.
+            interactiveDrawModeUpdateDelayMillis = getInteractiveModeUpdateRate()
+        }
+
+        /**
+         * Generic render pass for whatever complication slots exist. Empty/no-op for every watch face
+         * that doesn't declare any (the default). What each slot's bounds are - and whether it is
+         * painted at all - is the subclass's call, see [complicationRender].
+         */
+        fun drawComplications(canvas: Canvas, zonedDateTime: ZonedDateTime) {
             complicationSlotsManager?.complicationSlots?.values?.forEach { slot ->
                 if (!slot.enabled) return@forEach
                 when (val render = complicationRender(slot)) {
@@ -355,8 +402,6 @@ abstract class WatchFace : WatchFaceService() {
                     }
                 }
             }
-
-            onDrawOverlay(canvas)
         }
 
         override fun renderHighlightLayer(
@@ -460,6 +505,7 @@ abstract class WatchFace : WatchFaceService() {
 
     // Helper method for subclasses to trigger invalidation
     fun invalidate() {
+        contentVersion++
         renderer?.invalidate()
     }
 

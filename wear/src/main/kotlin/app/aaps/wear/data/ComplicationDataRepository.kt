@@ -16,9 +16,18 @@ import app.aaps.wear.R
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.protobuf.ProtoBuf
 import java.io.InputStream
@@ -60,10 +69,31 @@ class ComplicationDataRepository(
     )
 
     /**
+     * The live data - BG, status, graph, treatments - in a small file of its own. The file above keeps
+     * only the designs; its live fields are no longer written or read, except once to fill this file.
+     * See [LiveComplicationData].
+     */
+    private val liveStore: DataStore<LiveComplicationData> = DataStoreFactory.create(
+        serializer = LiveComplicationDataSerializer(aapsLogger),
+        migrations = listOf(LiveDataFromDesignFile { dataStore.data.first() }),
+        produceFile = { context.dataStoreFile("complication_live.pb") }
+    )
+
+    /**
      * Reactive Flow of complication data
      * Complications should collect this Flow to get automatic updates
      */
-    val complicationData: Flow<ComplicationData> = dataStore.data
+    val complicationData: Flow<ComplicationData> = combine(
+        // Each file on its own: a file that cannot be read gives its defaults, the other keeps working
+        dataStore.data.catch { exception ->
+            aapsLogger.error(LTag.WEAR, "Error reading watch face designs", exception)
+            emit(ComplicationData())
+        },
+        liveStore.data.catch { exception ->
+            aapsLogger.error(LTag.WEAR, "Error reading live complication data", exception)
+            emit(LiveComplicationData.EMPTY)
+        }
+    ) { designs, live -> designs.withLive(live) }
         .catch { exception ->
             aapsLogger.error(LTag.WEAR, "Error reading complication data", exception)
             emit(ComplicationData()) // Emit default on error
@@ -75,11 +105,11 @@ class ComplicationDataRepository(
      */
     suspend fun updateBgData(singleBg: EventData.SingleBg) {
         try {
-            dataStore.updateData { current ->
+            updateLiveData { current ->
                 when (singleBg.dataset) {
-                    0 -> current.copy(bgData = singleBg, lastUpdateTimestamp = System.currentTimeMillis())
-                    1 -> current.copy(bgData1 = singleBg, lastUpdateTimestamp = System.currentTimeMillis())
-                    2 -> current.copy(bgData2 = singleBg, lastUpdateTimestamp = System.currentTimeMillis())
+                    0    -> if (same(EventData.SingleBg.serializer(), current.bgData, singleBg)) current else current.copy(bgData = singleBg)
+                    1    -> if (same(EventData.SingleBg.serializer(), current.bgData1, singleBg)) current else current.copy(bgData1 = singleBg)
+                    2    -> if (same(EventData.SingleBg.serializer(), current.bgData2, singleBg)) current else current.copy(bgData2 = singleBg)
                     else -> {
                         aapsLogger.warn(LTag.WEAR, "Unknown BG dataset ${singleBg.dataset}, ignoring")
                         current
@@ -97,11 +127,11 @@ class ComplicationDataRepository(
      */
     suspend fun updateStatusData(status: EventData.Status) {
         try {
-            dataStore.updateData { current ->
+            updateLiveData { current ->
                 when (status.dataset) {
-                    0 -> current.copy(statusData = status, lastUpdateTimestamp = System.currentTimeMillis())
-                    1 -> current.copy(statusData1 = status, lastUpdateTimestamp = System.currentTimeMillis())
-                    2 -> current.copy(statusData2 = status, lastUpdateTimestamp = System.currentTimeMillis())
+                    0    -> if (same(EventData.Status.serializer(), current.statusData, status)) current else current.copy(statusData = status)
+                    1    -> if (same(EventData.Status.serializer(), current.statusData1, status)) current else current.copy(statusData1 = status)
+                    2    -> if (same(EventData.Status.serializer(), current.statusData2, status)) current else current.copy(statusData2 = status)
                     else -> {
                         aapsLogger.warn(LTag.WEAR, "Unknown Status dataset ${status.dataset}, ignoring")
                         current
@@ -118,11 +148,8 @@ class ComplicationDataRepository(
      */
     suspend fun updateGraphData(graphData: EventData.GraphData) {
         try {
-            dataStore.updateData { current ->
-                current.copy(
-                    graphData = graphData,
-                    lastUpdateTimestamp = System.currentTimeMillis()
-                )
+            updateLiveData { current ->
+                if (same(EventData.GraphData.serializer(), current.graphData, graphData)) current else current.copy(graphData = graphData)
             }
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to update graph data", e)
@@ -134,16 +161,88 @@ class ComplicationDataRepository(
      */
     suspend fun updateTreatmentData(treatmentData: EventData.TreatmentData) {
         try {
-            dataStore.updateData { current ->
-                current.copy(
-                    treatmentData = treatmentData,
-                    lastUpdateTimestamp = System.currentTimeMillis()
-                )
+            updateLiveData { current ->
+                if (same(EventData.TreatmentData.serializer(), current.treatmentData, treatmentData)) current else current.copy(treatmentData = treatmentData)
             }
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to update treatment data", e)
         }
     }
+
+    /**
+     * How long the first live update of a sync waits for the others, so they reach the file together.
+     *
+     * The phone sends BG, graph, treatments and status as separate messages within a fraction of a
+     * second. Written one by one, that was four file writes per sync, and every collector - the watch
+     * face, the tiles, the complications - redrew four times for one change.
+     *
+     * A var only so a test can shorten it.
+     */
+    internal var batchWindowMs = 500L
+
+    /**
+     * How long a sync with nothing new may go without stamping [ComplicationData.lastUpdateTimestamp].
+     *
+     * The stamp says when the phone was last heard from - the complications show "no sync" once it is
+     * old - so a message with known data must still renew it, but not with a full write every time.
+     */
+    internal var timestampRefreshMs = 60_000L
+
+    private val batchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pendingChanges = ArrayList<(LiveComplicationData) -> LiveComplicationData>()
+    private var pendingWrite: CompletableDeferred<Unit>? = null
+
+    /**
+     * Applies [change] together with the other live updates that arrive within [batchWindowMs], in one
+     * write. A change that returns its input unchanged costs nothing, and when no change in the batch
+     * found anything new the file is not written at all, apart from renewing an old timestamp.
+     *
+     * Returns once the write is done, like a direct `updateData` call did, so a caller that refreshes
+     * something after it still sees the new data.
+     */
+    private suspend fun updateLiveData(change: (LiveComplicationData) -> LiveComplicationData) {
+        val written = synchronized(pendingChanges) {
+            pendingChanges.add(change)
+            pendingWrite ?: CompletableDeferred<Unit>().also { deferred ->
+                pendingWrite = deferred
+                batchScope.launch {
+                    delay(batchWindowMs)
+                    writePending(deferred)
+                }
+            }
+        }
+        written.await()
+    }
+
+    private suspend fun writePending(written: CompletableDeferred<Unit>) {
+        val changes = synchronized(pendingChanges) {
+            pendingWrite = null
+            pendingChanges.toList().also { pendingChanges.clear() }
+        }
+        try {
+            liveStore.updateData { current ->
+                val now = System.currentTimeMillis()
+                val changed = changes.fold(current) { data, change -> change(data) }
+                when {
+                    changed !== current                                  -> changed.copy(lastUpdateTimestamp = now)
+                    now - current.lastUpdateTimestamp >= timestampRefreshMs -> current.copy(lastUpdateTimestamp = now)
+                    else                                                 -> current
+                }
+            }
+            written.complete(Unit)
+        } catch (e: Throwable) {
+            // Anything, so no caller waits forever; the callers log it
+            written.completeExceptionally(e)
+        }
+    }
+
+    /**
+     * Compares by the stored bytes, not by `equals`: [EventData.SingleBg.equals] looks only at the time
+     * and the colour, so a corrected value with the same time would otherwise be dropped.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun <T> same(serializer: KSerializer<T>, stored: T, received: T): Boolean =
+        ProtoBuf.encodeToByteArray(serializer, stored).contentEquals(ProtoBuf.encodeToByteArray(serializer, received))
 
     /**
      * Store custom watchface data

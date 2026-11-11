@@ -69,6 +69,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
@@ -228,7 +229,7 @@ class WearPlugin(
      * The channel keeps the request until the debounce reads it.
      */
     @OptIn(FlowPreview::class)
-    internal fun resendRequests(scope: CoroutineScope): Flow<String> {
+    internal fun resendRequests(scope: CoroutineScope, now: () -> Long = { System.currentTimeMillis() }): Flow<String> {
         val requests = Channel<String>(Channel.CONFLATED)
         fun forward(source: Flow<*>, reason: String) {
             source.collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { requests.trySend(reason) }
@@ -248,7 +249,18 @@ class WearPlugin(
         // running-mode complication and tile do not wait for the next loop run. A wear-side
         // change already refreshes through handleRunningModeConfirmed.
         forward(persistenceLayer.observeChanges<RM>().drop(1), "RunningModeChange")
-        return requests.receiveAsFlow().debounce(RESEND_DEBOUNCE)
+        // The first resend after a quiet spell goes out fast, it brings the new BG. What follows within
+        // RESEND_SETTLE_WINDOW - the loop result, a new TBR and its recalculation, NS - waits for
+        // RESEND_SETTLE_DEBOUNCE of quiet and goes out as one. That is 2 resends per BG cycle instead
+        // of 5, each one about ten messages that wake the watch. A change the user made goes out fast
+        // always, see FAST_REASONS.
+        var lastResend = Long.MIN_VALUE
+        return requests.receiveAsFlow()
+            .debounce { reason ->
+                val settling = lastResend != Long.MIN_VALUE && now() - lastResend < RESEND_SETTLE_WINDOW.inWholeMilliseconds
+                if (settling && reason !in FAST_REASONS) RESEND_SETTLE_DEBOUNCE else RESEND_DEBOUNCE
+            }
+            .onEach { lastResend = now() }
     }
 
     fun checkCustomWatchfacePreferences() {
@@ -350,5 +362,14 @@ class WearPlugin(
 
         /** The same 2 s the TT and running mode changes waited before they were merged in here. */
         val RESEND_DEBOUNCE = 2.seconds
+
+        /** How long after a resend further events count as part of the same BG cycle. */
+        val RESEND_SETTLE_WINDOW = 60.seconds
+
+        /** The quiet those further events wait for. Longer than any gap in a measured BG cycle (20 s). */
+        val RESEND_SETTLE_DEBOUNCE = 30.seconds
+
+        /** Changes the user made and expects to see on the watch at once: never the settle wait. */
+        val FAST_REASONS = setOf("TempTargetChange", "RunningModeChange", "EatReminderChange")
     }
 }

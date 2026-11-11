@@ -71,11 +71,14 @@ import app.aaps.wear.watchfaces.utils.ComplicationRender
 import app.aaps.wear.watchfaces.utils.ComplicationSlotInfo
 import app.aaps.wear.watchfaces.utils.ComplicationStyleValues
 import app.aaps.wear.watchfaces.utils.ComplicationTypePriority
+import app.aaps.wear.watchfaces.utils.LayeredFrameCache
+import app.aaps.wear.watchfaces.utils.ParsedJsonCache
 import app.aaps.wear.watchfaces.utils.WatchFaceComplicationSlots
 import app.aaps.wear.watchfaces.utils.WatchFaceComplications
 import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
 import app.aaps.wear.watchfaces.utils.WatchFaceSettings
 import app.aaps.wear.watchfaces.utils.WatchfaceViewAdapter.Companion.SelectedWatchFace
+import app.aaps.wear.watchfaces.utils.drawWithHidden
 import app.aaps.wear.watchfaces.utils.secondVisibility
 import dev.zacsweers.metro.Inject
 import kotlinx.coroutines.runBlocking
@@ -86,6 +89,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.temporal.WeekFields
 import kotlin.math.floor
 
@@ -116,6 +120,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private var resDataMap: CwfResDataMap = mutableMapOf()
     private var json = JSONObject()
     private var jsonString = ""
+    private val parsedJson = ParsedJsonCache()
     /**
      * A real [ImageView] for background, deliberately not part of `activity_custom.xml`: background
      * must paint before complications and everything in that layout paints after them (see
@@ -633,9 +638,6 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         return binding
     }
 
-    // Always update at 1 second intervals for smooth analog clock hand movement
-    override fun getInteractiveModeUpdateRate(): Long = 1000L
-
     // Defers mainLayout's own draw until after complications have rendered, so complications land
     // behind cover_chart and the analog hands instead of on top of them. background is not part of
     // mainLayout at all (see resolveBackgroundDrawable()/onDraw()), so it paints first.
@@ -675,6 +677,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         /** What makes a layer stale. A [TICK] layer is redrawn every frame and never cached. */
         enum class Refresh { DATA, MINUTE, TICK }
     }
+
+    /** The view ids of [layer], in paint order. For the test that the layers cover the layout exactly. */
+    internal fun layerViewIds(layer: RenderLayer): List<Int> = layerViews(layer).map { it.id }
 
     /** The views each layer draws, in paint order, cut where the refresh rate changes. */
     private fun layerViews(layer: RenderLayer): List<ViewMap> {
@@ -798,6 +803,67 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     override fun onDrawOverlay(canvas: Canvas) {
         drawMainLayout(canvas)
+    }
+
+    /** Pictures of the parts that do not change every second, see [drawLayeredFrame]. */
+    private val layeredFrames = LayeredFrameCache()
+
+    /** Per layer, the views of mainLayout that are not in it, hidden while that layer draws. */
+    private val viewsOutsideLayer = HashMap<RenderLayer, List<View>>()
+
+    /** Draws the views of [layer] only, where they sit in the whole face. */
+    private fun drawLayer(canvas: Canvas, layer: RenderLayer) {
+        val hide = viewsOutsideLayer.getOrPut(layer) {
+            (ViewMap.entries - layerViews(layer).toSet()).mapNotNull { binding.mainLayout.findViewById<View>(it.id) }
+        }
+        drawWithHidden(binding.mainLayout, hide, canvas)
+    }
+
+    /**
+     * A frame with a running second hand, without drawing the whole face every second.
+     *
+     * The face is cut into the same layers the Watch Face Format face uses ([RenderLayer]). Everything
+     * up to the clock text, with the background and the complications, is kept as one picture, and
+     * everything between the clock text and the second hand as another (see [LayeredFrameCache]). A
+     * frame pastes those and draws only the clock text and the second hand. Stacked in paint order,
+     * the layers give the same picture as the normal frame.
+     *
+     * Only while seconds are shown on the watch; in every other case - ambient, no seconds, the simple
+     * face, a render for an image - false sends the frame the normal way, once a minute.
+     */
+    override fun drawLayeredFrame(canvas: Canvas, bounds: Rect, zonedDateTime: ZonedDateTime): Boolean {
+        if (isRenderOnly || !isLayoutReady || !showSecond || simpleUi.isEnabled(currentWatchMode)) {
+            layeredFrames.invalidate()
+            return false
+        }
+        layoutMainLayout()
+        val width = bounds.width()
+        val height = bounds.height()
+        // The frame's own time, the one onTimeChanged saw when it filled the views for a new minute
+        val now = zonedDateTime.toInstant().toEpochMilli()
+        val content = contentVersion * 31 + styleGeneration
+        val base = layeredFrames.base(width, height, now, content, complicationDataNow()) { layer ->
+            layer.withRotation(backgroundView.rotation, backgroundView.pivotX, backgroundView.pivotY) {
+                backgroundView.draw(this)
+            }
+            complications.syncGeometry(::visibleSlotBounds)
+            drawComplicationSlots(layer, zonedDateTime)
+            drawLayer(layer, RenderLayer.DATA_BASE)
+        }
+        val top = layeredFrames.top(width, height, now, content) { layer ->
+            drawLayer(layer, RenderLayer.MIDDLE)
+            drawLayer(layer, RenderLayer.HANDS)
+        }
+        canvas.drawBitmap(base, 0f, 0f, null)
+        drawLayer(canvas, RenderLayer.CLOCK_TEXT)
+        canvas.drawBitmap(top, 0f, 0f, null)
+        drawLayer(canvas, RenderLayer.SECOND_HAND)
+        return true
+    }
+
+    override fun onDestroy() {
+        layeredFrames.release()
+        super.onDestroy()
     }
 
     override fun onTimeChanged(oldTime: app.aaps.wear.watchfaces.utils.WatchFaceTime, newTime: app.aaps.wear.watchfaces.utils.WatchFaceTime) {
@@ -943,7 +1009,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         customWatchfaceData?.let {
             updatePref(it.metadata)
             try {
-                json = JSONObject(it.json)
+                json = parsedJson.parse(it.json)
                 // ViewMap, FontMap, TrendArrowMap and DynProvider keep their state on enum entries,
                 // which are process-wide, while several CustomWatchface instances can exist at once -
                 // the live watch face, the editor's headless instance, and the one a complication
