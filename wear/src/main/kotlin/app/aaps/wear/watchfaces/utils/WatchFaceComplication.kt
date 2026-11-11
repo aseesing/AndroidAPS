@@ -486,13 +486,15 @@ internal class ComplicationSlotState(val slotId: Int) {
  *   provider; see [ComplicationTypePriority]. Read once at slot creation.
  * @param layoutSettingLabel label for the slot-layout user-style setting, shown by a system editor
  * @param layoutSettingDescription its description
+ * @param defaultSourceFor what a slot shows before the user chose anything. Read once at slot creation.
  */
 internal class WatchFaceComplications(
     private val context: Context,
     private val slotIds: List<Int>,
     private val supportedTypesFor: (slotId: Int) -> List<ComplicationType>,
     @StringRes private val layoutSettingLabel: Int,
-    @StringRes private val layoutSettingDescription: Int
+    @StringRes private val layoutSettingDescription: Int,
+    private val defaultSourceFor: (slotId: Int) -> DefaultComplicationDataSourcePolicy = { DefaultComplicationDataSourcePolicy() }
 ) {
 
     companion object {
@@ -580,7 +582,7 @@ internal class WatchFaceComplications(
             id = state.slotId,
             canvasComplicationFactory = canvasComplicationFactory,
             supportedTypes = supportedTypesFor(state.slotId),
-            defaultDataSourcePolicy = DefaultComplicationDataSourcePolicy(),
+            defaultDataSourcePolicy = defaultSourceFor(state.slotId),
             bounds = bounds
         ).build()
     }

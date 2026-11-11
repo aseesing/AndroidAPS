@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- In a file of its own so this local patch never conflicts with upstream changes to strings.xml -->
+<resources>
+    <!-- Heart rate and steps complications (Health Services) -->
+    <string name="health_heart_rate_label">AAPS heart rate</string>
+    <string name="health_steps_label">AAPS steps</string>
+    <string name="health_no_value" translatable="false">--</string>
+    <string name="health_allow" comment="Very short, shown in a small round complication: at most 6 characters">Allow</string>
+    <string name="health_allow_description">Tap to allow heart rate and steps</string>
+    <string name="health_heart_rate_description" comment="%1$s=heart rate value or --. Example: Heart rate 72 per minute">Heart rate %1$s per minute</string>
+    <string name="health_steps_description" comment="%1$s=number of steps or --. Example: 6482 steps today">%1$s steps today</string>
+</resources>

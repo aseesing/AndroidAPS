@@ -171,7 +171,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         slotIds = complicationSlots.map { it.id },
         supportedTypesFor = ::complicationSupportedTypes,
         layoutSettingLabel = R.string.cwf_complication_layout,
-        layoutSettingDescription = R.string.cwf_complication_layout_description
+        layoutSettingDescription = R.string.cwf_complication_layout_description,
+        defaultSourceFor = { slotId -> customSlotDefaultSource(this, slotId) }
     )
 
     /** The CWF-wide `complicationStyle` values, decoded once per [setWatchfaceStyle] pass. */
