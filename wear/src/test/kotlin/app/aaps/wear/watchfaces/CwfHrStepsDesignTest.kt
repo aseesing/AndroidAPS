@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.provider.Settings
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
@@ -31,6 +32,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
 
@@ -103,22 +105,39 @@ class CwfHrStepsDesignTest {
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2.key, "true")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3.key, "true")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION4.key, "true")
+            .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5.key, "true")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DATE.key, "true")
         // One row of four dials through the middle: carbs and insulin left, heart rate and steps right.
         // Heart rate right of the centre, steps outside it
-        place("complication1", 212, 170, 58)
+        place("complication1", 200 + PIVOT_CLEARANCE.toInt(), DIAL_TOP, DIAL)
             .put("fontColor", "#FFFFFF").put("iconColor", "#E65050").put("ringPrimaryColor", "#E65050").put("ringSecondaryColor", RING_COLOR)
-        place("complication2", 278, 170, 58)
+            .put("ringWidth", RING_WIDTH)
+        place("complication2", 200 + PIVOT_CLEARANCE.toInt() + DIAL, DIAL_TOP, DIAL)
             .put("fontColor", "#FFFFFF").put("iconColor", "#50C878").put("ringPrimaryColor", "#50C878").put("ringSecondaryColor", RING_COLOR)
+            .put("ringWidth", RING_WIDTH)
         // Carbs on board outside, insulin on board left of the centre, with AAPS's own icons instead of the
         // "Carb" and "IOB" texts
-        place("complication3", 64, 170, 58)
+        place("complication3", 200 - PIVOT_CLEARANCE.toInt() - 2 * DIAL, DIAL_TOP, DIAL)
             .put("fontColor", "#FFFFFF").put("iconColor", CARBS_COLOR)
-            .put("borderRadius", 29).put("borderColor", RING_COLOR).put("borderWidth", 3)
-        place("complication4", 130, 170, 58)
+            .put("borderRadius", DIAL / 2).put("borderColor", RING_COLOR).put("borderWidth", 3)
+        place("complication4", 200 - PIVOT_CLEARANCE.toInt() - DIAL, DIAL_TOP, DIAL)
             .put("fontColor", "#FFFFFF").put("iconColor", INSULIN_COLOR)
-            .put("borderRadius", 29).put("borderColor", RING_COLOR).put("borderWidth", 3)
+            .put("borderRadius", DIAL / 2).put("borderColor", RING_COLOR).put("borderWidth", 3)
+        // The battery as a round dial of its own, in the middle of the info row above the other four.
+        // The phone and rig battery texts give way to it; the dial can show either battery.
+        place("complication5", BATTERY_LEFT, BATTERY_TOP, BATTERY_DIAL)
+            .put("fontColor", "#FFFFFF").put("iconColor", BATTERY_COLOR).put("ringPrimaryColor", BATTERY_COLOR).put("ringSecondaryColor", RING_COLOR)
+            .put("ringWidth", RING_WIDTH)
+        for (text in listOf("uploader_battery", "rig_battery")) getJSONObject(text).put("visibility", "gone")
         for (text in listOf("cob1", "cob2", "iob1", "iob2")) getJSONObject(text).put("visibility", "gone")
+        // A digital clock on the left of the info row, instead of the deltas: the trend arrow says
+        // enough. Hour and minute views with a fixed ":" between them, so it shows HH:MM even while
+        // the second hand runs (the "time" view would add the seconds then).
+        for (text in listOf("delta", "avg_delta", "bgi")) getJSONObject(text).put("visibility", "gone")
+        place("hour", 18, CLOCK_TOP, 48, CLOCK_HEIGHT).put("textsize", CLOCK_SIZE).put("gravity", "right").put("fontColor", "#FFFFFF").put("fontStyle", "bold")
+        place("freetext1", 66, CLOCK_TOP, 12, CLOCK_HEIGHT).put("textsize", CLOCK_SIZE).put("gravity", "center").put("fontColor", "#FFFFFF").put("fontStyle", "bold")
+            .put("textvalue", ":")
+        place("minute", 78, CLOCK_TOP, 48, CLOCK_HEIGHT).put("textsize", CLOCK_SIZE).put("gravity", "left").put("fontColor", "#FFFFFF").put("fontStyle", "bold")
         // The date at the top, around the 12 o'clock mark
         place("day_name", 130, 8, 36, 28).put("textsize", 20)
         place("day", 166, 8, 28, 28).put("textsize", 20)
@@ -133,6 +152,8 @@ class CwfHrStepsDesignTest {
         images.forEach { (name, png) -> resData[name] = ResData(png, ResFormat.PNG) }
         runBlocking { face.complicationDataRepository.storeCustomWatchface(CwfData(design.toString(4), ZipWatchfaceFormat.loadMetadata(design), resData)) }
         Thread.sleep(600)   // past the render data share window
+        // 24 hour time as on the watch, so the digital clock reads like the hands
+        Settings.System.putString(RuntimeEnvironment.getApplication().contentResolver, Settings.System.TIME_12_24, "24")
         face.refreshRenderData()
         val image = createBitmap(400, 400).apply { eraseColor(Color.BLACK) }
         val canvas = Canvas(image)
@@ -141,6 +162,7 @@ class CwfHrStepsDesignTest {
         drawSubDial(canvas, design.getJSONObject("complication2"), "6482", 0.65f, Color.rgb(80, 200, 120), R.drawable.ic_health_steps)
         drawSubDial(canvas, design.getJSONObject("complication3"), "12g", null, Color.parseColor(CARBS_COLOR), R.drawable.ic_carbs)
         drawSubDial(canvas, design.getJSONObject("complication4"), "1.25U", null, Color.parseColor(INSULIN_COLOR), R.drawable.ic_ins)
+        drawSubDial(canvas, design.getJSONObject("complication5"), "38%", 0.38f, Color.parseColor(BATTERY_COLOR), NO_ICON)
         return image
     }
 
@@ -158,7 +180,12 @@ class CwfHrStepsDesignTest {
         val half = (r.height() * 0.15f).toInt()
         val iconX = r.centerX().toInt()
         val iconY = (r.centerY() - r.height() * 0.16f).toInt()
-        ContextCompat.getDrawable(RuntimeEnvironment.getApplication(), icon)!!.mutate().apply {
+        if (icon == NO_ICON) {
+            // The battery source brings its own icon; a plain battery stands in for it here
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+            canvas.drawRoundRect(RectF(iconX - half * 0.55f, iconY - half * 0.8f, iconX + half * 0.55f, iconY + half.toFloat()), 2f, 2f, paint)
+            canvas.drawRect(RectF(iconX - half * 0.25f, iconY - half * 1.05f, iconX + half * 0.25f, iconY - half * 0.8f), paint)
+        } else ContextCompat.getDrawable(RuntimeEnvironment.getApplication(), icon)!!.mutate().apply {
             setTint(color)
             setBounds(iconX - half, iconY - half, iconX + half, iconY + half)
             draw(canvas)
@@ -193,9 +220,9 @@ class CwfHrStepsDesignTest {
         val default = defaultDesign()
         val design = design(default)
         val json = design.toString(4)
-        val hands = hands()
-        val png = ByteArrayOutputStream().also { preview(design, default, hands).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-        val zip = zip(json, png, hands)
+        val images = images()
+        val png = ByteArrayOutputStream().also { preview(design, default, images).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        val zip = zip(json, png, images)
         File(out, "$NAME.zip").writeBytes(zip)
         File(out, "$NAME.png").writeBytes(png)
 
@@ -208,6 +235,7 @@ class CwfHrStepsDesignTest {
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION4]).isEqualTo("true")
+        assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_DATE]).isEqualTo("true")
         // Brings its own hour and minute hands, the second hand stays the built-in one
         assertThat(loaded.cwfData.resData.keys).containsAtLeast(ResFileMap.HOUR_HAND.fileName, ResFileMap.MINUTE_HAND.fileName)
@@ -217,7 +245,7 @@ class CwfHrStepsDesignTest {
         assertThat(kept.exists()).isTrue()
         assertThat(JSONObject(jsonInZip(kept.readBytes())).toString(4)).isEqualTo(json)
         val keptEntries = ZipInputStream(kept.inputStream()).use { input -> generateSequence { input.nextEntry }.map { it.name }.toList() }
-        assertThat(keptEntries).containsAtLeast("${ResFileMap.HOUR_HAND.fileName}.png", "${ResFileMap.MINUTE_HAND.fileName}.png")
+        assertThat(keptEntries).containsAtLeast("${ResFileMap.HOUR_HAND.fileName}.png", "${ResFileMap.MINUTE_HAND.fileName}.png", "${ResFileMap.COVER_PLATE.fileName}.png")
     }
 
     @Test
@@ -229,24 +257,50 @@ class CwfHrStepsDesignTest {
             val r = rectOf(design.getJSONObject(key))
             // A circle inside the 400 px round screen, centre (200, 200)
             assertThat(hypot(r.centerX() - 200f, r.centerY() - 200f) + r.width() / 2).isAtMost(200f)
-            assertThat(r.bottom).isAtMost(chart.top)
+            assertThat(r.bottom).isAtMost(chart.top + GRAPH_OVERLAP)
         }
         // One row: carbs, insulin | heart rate, steps; apart from each other, and from the hands' pivot
         val row = listOf("complication3", "complication4", "complication1", "complication2").map { rectOf(design.getJSONObject(it)) }
-        row.zipWithNext().forEach { (left, right) -> assertThat(left.right).isLessThan(right.left) }
-        assertThat(row[1].right).isLessThan(200f)
-        assertThat(row[2].left).isGreaterThan(200f)
+        // Touching is fine, overlapping is not
+        row.zipWithNext().forEach { (left, right) -> assertThat(left.right).isAtMost(right.left) }
+        // ... with room around the hands' pivot and its dot
+        assertThat(row[1].right).isAtMost(200f - PIVOT_CLEARANCE)
+        assertThat(row[2].left).isAtLeast(200f + PIVOT_CLEARANCE)
         row.forEach { r ->
             assertThat(hypot(r.centerX() - 200f, r.centerY() - 200f) + r.width() / 2).isAtMost(200f)
-            assertThat(r.bottom).isAtMost(chart.top)
-            assertThat(r.top).isAtLeast(rectOf(design.getJSONObject("delta")).bottom)    // below the delta row
+            assertThat(r.bottom).isAtMost(chart.top + GRAPH_OVERLAP)
         }
+        // The battery dial: in the middle of the info row, between the deltas and the basal rate, and
+        // above the row of four dials
+        val battery = rectOf(design.getJSONObject("complication5"))
+        assertThat(battery.left).isAtLeast(rectOf(design.getJSONObject("avg_delta")).right)
+        assertThat(battery.right).isAtMost(rectOf(design.getJSONObject("basalRate")).left)
+        // ... clear of the inner dials below it (circles, so measured centre to centre)
+        for (inner in listOf(row[1], row[2]))
+            assertThat(hypot(battery.centerX() - inner.centerX(), battery.centerY() - inner.centerY())).isAtLeast((battery.width() + inner.width()) / 2)
+        assertThat(hypot(battery.centerX() - 200f, battery.centerY() - 200f) + battery.width() / 2).isAtMost(200f)
+        for (text in listOf("uploader_battery", "rig_battery")) assertThat(design.getJSONObject(text).getString("visibility")).isEqualTo("gone")
         // The "Carb" and "IOB" texts give way to the icons
         for (text in listOf("cob1", "cob2", "iob1", "iob2")) assertThat(design.getJSONObject(text).getString("visibility")).isEqualTo("gone")
         // The hands start past the two inner dials, so in no position they cross one (with room for their outline)
         for (key in listOf("complication4", "complication1")) {
             val r = rectOf(design.getJSONObject(key))
             assertThat(hypot(r.centerX() - 200f, r.centerY() - 200f) + r.width() / 2 + 2f).isAtMost(HAND_START)
+        }
+        // The digital clock: in the info row, left of the battery dial, inside the round screen
+        for (key in listOf("hour", "freetext1", "minute")) {
+            val r = rectOf(design.getJSONObject(key))
+            assertThat(r.right).isAtMost(battery.left)
+            assertThat(r.bottom).isAtMost(row.minOf { it.top } + 4f)    // a dial's edge may fall just under it
+            assertThat(hypot(r.left - 200f, r.top - 200f)).isAtMost(200f)
+            assertThat(hypot(r.left - 200f, r.bottom - 200f)).isAtMost(200f)
+        }
+        assertThat(design.getJSONObject("freetext1").getString("textvalue")).isEqualTo(":")
+        for (text in listOf("delta", "avg_delta", "bgi")) assertThat(design.getJSONObject(text).getString("visibility")).isEqualTo("gone")
+        // The hour hand's point reaches past the outer dials in every position
+        for (key in listOf("complication3", "complication2")) {
+            val r = rectOf(design.getJSONObject(key))
+            assertThat(hypot(r.centerX() - 200f, r.centerY() - 200f) + r.width() / 2).isLessThan(HOUR_HAND_END)
         }
         // The date: the lower corners of its text boxes inside the round screen, above the glucose value
         for (key in listOf("day_name", "day", "month")) {
@@ -270,7 +324,7 @@ class CwfHrStepsDesignTest {
      * centre) to the start of the point, and a point ending at [to]. Drawn as an outline with a light
      * fill, so what lies underneath stays readable.
      */
-    private fun hand(canvas: Canvas, scale: Float, from: Float, to: Float, width: Float, color: Int) {
+    private fun hand(canvas: Canvas, scale: Float, from: Float, to: Float, width: Float, color: Int, fillAlpha: Int = 55, stroke: Float = 2.5f) {
         val c = 200f * scale
         val half = width / 2 * scale
         val pointStart = c - (to - width * 1.6f) * scale
@@ -282,11 +336,11 @@ class CwfHrStepsDesignTest {
             lineTo(c + half, c - from * scale)
             close()
         }
-        canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; alpha = 55 })
+        canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; alpha = fillAlpha })
         canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             style = Paint.Style.STROKE
-            strokeWidth = 2.5f * scale
+            strokeWidth = stroke * scale
             strokeJoin = Paint.Join.ROUND
         })
     }
@@ -296,8 +350,33 @@ class CwfHrStepsDesignTest {
      * sub-dials beside the centre, so they never cross them, and drawn as an outline with a light fill so the text
      * underneath stays readable. The second hand stays the built-in one.
      */
+    /**
+     * The dial plate: hour marks every 30 degrees. Above the graph they are long and white, as in the
+     * built-in plate; where they would cross the graph they are short and grey, so they do not cut
+     * through the glucose dots.
+     */
+    private fun coverPlate(): ByteArray = handImage { canvas, scale ->
+        for (hour in 0 until 12) {
+            val angle = Math.toRadians(hour * 30.0)
+            val dx = sin(angle).toFloat()
+            val dy = -cos(angle).toFloat()
+            val inGraph = 200f + dy * PLATE_MARK_INNER >= GRAPH_TOP
+            val inner = if (inGraph) PLATE_MARK_SHORT_INNER else PLATE_MARK_INNER
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = if (inGraph) Color.parseColor("#777777") else Color.WHITE
+                strokeWidth = 3.5f * scale
+                strokeCap = Paint.Cap.ROUND
+            }
+            canvas.drawLine((200f + dx * inner) * scale, (200f + dy * inner) * scale, (200f + dx * PLATE_MARK_OUTER) * scale, (200f + dy * PLATE_MARK_OUTER) * scale, paint)
+        }
+    }
+
+    private fun images(): Map<String, ByteArray> = hands() + (ResFileMap.COVER_PLATE.fileName to coverPlate())
+
     private fun hands(): Map<String, ByteArray> = mapOf(
-        ResFileMap.HOUR_HAND.fileName to handImage { c, s -> hand(c, s, HAND_START, 140f, 13f, Color.rgb(79, 195, 247)) },
+        // The hour hand reaches past the outer dials, so its point always shows, and is filled more
+        // than the minute hand, so it does not disappear into a dial it lies on
+        ResFileMap.HOUR_HAND.fileName to handImage { c, s -> hand(c, s, HAND_START, HOUR_HAND_END, 16f, Color.rgb(79, 195, 247), fillAlpha = 130, stroke = 3f) },
         ResFileMap.MINUTE_HAND.fileName to handImage { c, s -> hand(c, s, HAND_START, 190f, 10f, Color.WHITE) }
     )
 
@@ -305,11 +384,41 @@ class CwfHrStepsDesignTest {
 
         const val NAME = "AAPS_HR_Steps"
 
+        /** The four round dials: their size, their top, and a thinner ring than the default 9 for more room for text. */
+        /** The four dials touch each other; their edge may fall just under the clock and the graph top. */
+        const val DIAL = 72
+        const val DIAL_TOP = 164
+        const val RING_WIDTH = 6
+
+        /** How far a dial's edge may reach into the graph: below the graph's high line, it stays free. */
+        const val GRAPH_OVERLAP = 8f
+
+        /** Free room on each side of the centre for the hands' pivot dot. */
+        const val PIVOT_CLEARANCE = 14f
+
+        const val NO_ICON = 0
+        const val CLOCK_TOP = 131
+        const val CLOCK_HEIGHT = 36
+        const val CLOCK_SIZE = 28
+        const val BATTERY_DIAL = 54
+        const val BATTERY_LEFT = 173
+        const val BATTERY_TOP = 112
+        const val BATTERY_COLOR = "#CFD8DC"
+
         const val RING_COLOR = "#3A3A3A"
         const val CARBS_COLOR = "#FB8C00"      // the design's own carbColor
         const val INSULIN_COLOR = "#64B5F6"    // AAPS's basal blue
 
+        /** The graph's top, where the plate's hour marks turn short and grey. */
+        const val GRAPH_TOP = 230f
+        const val PLATE_MARK_INNER = 160f
+        const val PLATE_MARK_SHORT_INNER = 186f
+        const val PLATE_MARK_OUTER = 198f
+
+        /** Where the hour hand ends: past the outer dials, which reach 158 px from the centre. */
+        const val HOUR_HAND_END = 168f
+
         /** Where the hour and minute hands start, from the centre in the 400 px space. */
-        const val HAND_START = 74f
+        const val HAND_START = 88f
     }
 }
