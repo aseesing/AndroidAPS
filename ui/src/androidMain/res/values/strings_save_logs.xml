@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Personal strings for saving logs to Downloads, not in upstream AAPS. Kept apart from
+    strings.xml so that a new AAPS release merges without conflicts in that file. English only.
+-->
+<resources>
+    <string name="save_logs">Save logs to Downloads</string>
+    <string name="maintenance_save_logs_desc">Save log files as a zip file in the Downloads folder of this phone</string>
+    <string name="logs_saved_to_downloads" comment="%1$s=name of the saved zip file. Example: Logs saved in Downloads: AndroidAPS_LOG_1794424813623.log.zip">Logs saved in Downloads: %1$s</string>
+    <string name="logs_save_failed">Failed to save logs</string>
+</resources>

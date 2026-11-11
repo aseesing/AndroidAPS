@@ -1,8 +1,10 @@
 package app.aaps.implementation.maintenance
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.logging.AAPSLogger
@@ -80,6 +82,40 @@ class MaintenanceImpl(
         }
 
         return ExportResult(localSuccess = emailSuccess, cloudSuccess = cloudSuccess)
+    }
+
+    /**
+     * Makes the same zip as [executeSendLogs], then copies it to Downloads through MediaStore. Since
+     * Android 10 an app may add files there without any storage permission, and the file shows up in
+     * the Files app at once.
+     */
+    override suspend fun saveLogsToDownloads(): String? {
+        val name = constructName()
+        val zipFile = fileListProvider.ensureTempDirExists()?.createFile("application/zip", name) ?: return null
+        val zip = zipLogs(zipFile, getLogFiles(preferences.get(IntKey.MaintenanceLogsAmount)))
+        val resolver = context.contentResolver
+        val pending = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, name)
+            put(MediaStore.Downloads.MIME_TYPE, "application/zip")
+            // Hidden from other apps until the copy is complete
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, pending) ?: return null
+        return try {
+            resolver.openInputStream(zip.uri).use { input ->
+                resolver.openOutputStream(target).use { output ->
+                    requireNotNull(input).copyTo(requireNotNull(output))
+                }
+            }
+            resolver.update(target, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+            aapsLogger.debug("saved logs to Downloads as $name")
+            name
+        } catch (e: Exception) {
+            aapsLogger.error("Cannot save logs to Downloads", e)
+            // Do not leave a broken, half written zip behind
+            resolver.delete(target, null, null)
+            null
+        }
     }
 
     override fun deleteLogs(keep: Int) {
