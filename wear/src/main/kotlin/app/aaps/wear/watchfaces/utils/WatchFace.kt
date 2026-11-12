@@ -245,6 +245,9 @@ abstract class WatchFace : WatchFaceService() {
     /** Hands the watch state (ambient, visible, headless) to a subclass that wants to follow it. */
     protected open fun onWatchStateReady(watchState: WatchState) {}
 
+    /** PERSONAL PATCH: keeps the first frame after a wake cheap, see [FirstFrameAfterWake]. */
+    protected val wakeFrame = FirstFrameAfterWake()
+
     // Renderer instance
     private var renderer: WatchFaceRenderer? = null
 
@@ -268,6 +271,7 @@ abstract class WatchFace : WatchFaceService() {
     ): WatchFace {
         this.complicationSlotsManager = complicationSlotsManager
         onWatchStateReady(watchState)
+        wakeFrame.watch(watchState) // PERSONAL PATCH
 
         // Create renderer that delegates to abstract methods
         renderer = WatchFaceRenderer(
@@ -361,6 +365,7 @@ abstract class WatchFace : WatchFaceService() {
 
             // Update watch state
             val newAmbient = renderParameters.drawMode == DrawMode.AMBIENT
+            wakeFrame.beginFrame(leftAmbient = isAmbient && !newAmbient, interactive = !newAmbient && !wState.isHeadless) // PERSONAL PATCH
             if (isAmbient != newAmbient) {
                 isAmbient = newAmbient
                 onWatchModeChanged(currentWatchMode)
@@ -375,12 +380,15 @@ abstract class WatchFace : WatchFaceService() {
             val plainFrame = renderParameters.drawMode == DrawMode.INTERACTIVE &&
                 renderParameters.highlightLayer == null &&
                 renderParameters.watchFaceLayers == WatchFaceLayer.ALL_WATCH_FACE_LAYERS
-            if (!plainFrame || !drawLayeredFrame(canvas, bounds, zonedDateTime)) {
+            // PERSONAL PATCH: the wake frame is drawn the plain way, one pass over the views; the
+            // layered frame and the wake animation would first draw their kept pictures again
+            if (!plainFrame || wakeFrame.isActive || !drawLayeredFrame(canvas, bounds, zonedDateTime)) {
                 // Delegate to abstract onDraw method
                 onDraw(canvas)
                 drawComplications(canvas, zonedDateTime)
                 onDrawOverlay(canvas)
             }
+            wakeFrame.endFrame() // PERSONAL PATCH
 
             // Read again after every frame, not only once at construction: whether seconds are shown
             // is known only after the first draw has loaded the design, and changes with preferences.
@@ -499,6 +507,7 @@ abstract class WatchFace : WatchFaceService() {
 
         override fun onDestroy() {
             super.onDestroy()
+            wakeFrame.release() // PERSONAL PATCH
             try {
                 context.unregisterReceiver(dateTimeChangedReceiver)
             } catch (_: IllegalArgumentException) {
