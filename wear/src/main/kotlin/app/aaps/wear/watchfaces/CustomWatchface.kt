@@ -81,6 +81,7 @@ import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.DayOverlay
 import app.aaps.wear.watchfaces.daynight.GeoPoint
 import app.aaps.wear.watchfaces.daynight.MoonPhase
+import app.aaps.wear.watchfaces.daynight.Orbit
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.ComplicationImageFit
 import app.aaps.wear.watchfaces.utils.ComplicationRender
@@ -141,11 +142,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private var json = JSONObject()
     private var jsonString = ""
     private val parsedJson = ParsedJsonCache()
-    /** True when the views carry the day look of the design. */
-    private var styleIsDay = false
-    /** The day look of [dayJsonSource], made once per design. */
-    private var dayJson: JSONObject? = null
-    private var dayJsonSource: JSONObject? = null
+    /** The look the views carry: day or night, and the weather (see [DayOverlay]). */
+    private var styleLook: Pair<Boolean, String?> = Pair(false, null)
+    /** The look [styleLook] of [lookJsonSource], made once per design and look. */
+    private var lookJson: JSONObject? = null
+    private var lookJsonSource: JSONObject? = null
+    private var lookJsonKey: Pair<Boolean, String?>? = null
 
     /** Day or night, from the phone's last known place (see `DataHandlerWear`) or fixed hours without one. */
     private val dayNight = DayNightClock(location = { storedLocation() })
@@ -154,6 +156,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         val latitude = sp.getDouble(R.string.key_location_latitude, Double.NaN)
         val longitude = sp.getDouble(R.string.key_location_longitude, Double.NaN)
         return if (latitude.isNaN() || longitude.isNaN()) null else GeoPoint(latitude, longitude)
+    }
+
+    /** The weather the phone sent last (see `EventData.Weather`), or null when there is none or it is too old. */
+    private fun storedWeather(): String? {
+        val kind = sp.getString(R.string.key_weather_kind, "").takeIf { it.isNotEmpty() } ?: return null
+        val age = renderNow() - sp.getLong(R.string.key_weather_time, 0L)
+        return kind.takeIf { age in 0..WEATHER_MAX_AGE_MS }
     }
     /**
      * A real [ImageView] for background, deliberately not part of `activity_custom.xml`: background
@@ -375,6 +384,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
          * The fixed coordinate space every CWF json declares its geometry in. A companion constant so
          * code with no [CustomWatchface] instance to hand can reach it.
          */
+        /** Weather older than this is not shown (private patch): the phone sends it every half hour. */
+        private const val WEATHER_MAX_AGE_MS = 3 * 60 * 60 * 1000L
+
         private const val TEMPLE_RESOLUTION = 400
 
         /**
@@ -1162,7 +1174,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     ambient = isAmbient,
                     isDayNow = { dayNight.isDay(renderNow()) }
                 )
-                json = if (day) dayLook(design) else design
+                // And the weather, when the design has looks for it
+                val weather = if (DayOverlay.hasWeatherLooks(design)) storedWeather() else null
+                val look = Pair(day, weather)
+                json = if (day || weather != null) lookOf(design, look) else design
                 // ViewMap, FontMap, TrendArrowMap and DynProvider keep their state on enum entries,
                 // which are process-wide, while several CustomWatchface instances can exist at once -
                 // the live watch face, the editor's headless instance, and the one a complication
@@ -1178,11 +1193,11 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     jsonString = ""
                     styleOwner = this
                 }
-                if (!sourceResData.isEquals(it.resData) || jsonString != it.json || styleIsDay != day) {
+                if (!sourceResData.isEquals(it.resData) || jsonString != it.json || styleLook != look) {
                     sourceResData = it.resData
-                    resDataMap = if (day) DayOverlay.dayResources(it.resData) else it.resData
+                    resDataMap = if (json !== design) DayOverlay.resources(it.resData, json, day) else it.resData
                     jsonString = it.json
-                    styleIsDay = day
+                    styleLook = look
                     // The views now carry a different design. Anything holding pictures drawn from
                     // the previous one can tell by comparing this, without having to be told - see
                     // [styleId].
@@ -1257,11 +1272,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         }
     }
 
-    /** The day look of [design], made once and kept while the design stays the same. */
-    private fun dayLook(design: JSONObject): JSONObject =
-        dayJson?.takeIf { dayJsonSource === design } ?: DayOverlay.apply(design).also {
-            dayJson = it
-            dayJsonSource = design
+    /** [design] in the [look] (day or night, weather), made once and kept while design and look stay the same. */
+    private fun lookOf(design: JSONObject, look: Pair<Boolean, String?>): JSONObject =
+        lookJson?.takeIf { lookJsonSource === design && lookJsonKey == look } ?: DayOverlay.apply(design, look.first, look.second).also {
+            lookJson = it
+            lookJsonSource = design
+            lookJsonKey = look
         }
 
     private fun updatePref(metadata: CwfMetadataMap) {
@@ -1769,6 +1785,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 val leftOffsetTwin = ((twinView?.let { if (it.visibility(cwf) != View.VISIBLE) viewJson.optInt(JsonKeys.LEFTOFFSETTWINHIDDEN.key, 0) else 0 } ?: 0) * cwf.zoomFactor).toInt()
                 val leftOffsetStep = ((dynData?.getLeftOffsetStep(cwf) ?: 0) * cwf.zoomFactor).toInt()
                 params.leftMargin = left + leftOffset + leftOffsetTwin + leftOffsetStep
+                // Private patch: a view on an arc, like the sun along the edge (see Orbit)
+                Orbit.read(viewJson)?.let { orbit ->
+                    val value = DynProvider(cwf, JSONObject(), ValueMap.fromKey(orbit.valueKey), 0, 0).dataValue(cwf) ?: 0.0
+                    val (x, y) = orbit.point(value)
+                    params.leftMargin = ((x - viewJson.optInt(JsonKeys.WIDTH.key) / 2f) * cwf.zoomFactor).toInt()
+                    params.topMargin = ((y - viewJson.optInt(JsonKeys.HEIGHT.key) / 2f) * cwf.zoomFactor).toInt()
+                }
                 view.layoutParams = params
                 val rotationOffset = if (viewJson.optBoolean(JsonKeys.ROTATIONOFFSET.key, false)) dynData?.getRotationOffset(cwf)?.toFloat() ?: 0F else 0F
                 val rotationOffsetStep = (dynData?.getRotationOffsetStep(cwf) ?: 0).toFloat()
@@ -2146,7 +2169,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         RIG_BATTERY_EXT2(ViewKeys.RIG_BATTERY_EXT2.key, 0.0, 100.0),
         TIMESTAMP_EXT2(ViewKeys.TIMESTAMP_EXT2.key, 0.0, 60.0),
         LOOP_EXT2(ViewKeys.LOOP_EXT2.key, 0.0, 28.0),
-        MOON_PHASE(JsonKeyValues.MOON_PHASE.key, 0.0, 1.0);
+        MOON_PHASE(JsonKeyValues.MOON_PHASE.key, 0.0, 1.0),
+        SUN_PROGRESS(JsonKeyValues.SUN_PROGRESS.key, 0.0, 1.0),
+        NIGHT_PROGRESS(JsonKeyValues.NIGHT_PROGRESS.key, 0.0, 1.0);
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2244,6 +2269,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.LOOP_EXT2        -> if (cwf.status[2].openApsStatus != -1L) ((System.currentTimeMillis() - cwf.status[2].openApsStatus) / 1000 / 60).toDouble() else null
             ValueMap.TIMESTAMP_EXT2   -> if (cwf.singleBg[2].timeStamp != 0L) floor(cwf.timeSince(2) / (1000 * 60)) else null
             ValueMap.MOON_PHASE       -> MoonPhase.at(cwf.renderNow())
+            ValueMap.SUN_PROGRESS     -> cwf.dayNight.sunProgress(cwf.renderNow())
+            ValueMap.NIGHT_PROGRESS   -> cwf.dayNight.nightProgress(cwf.renderNow())
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->

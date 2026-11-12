@@ -124,6 +124,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -1275,6 +1278,47 @@ class DataHandlerMobile(
         return Pair((newest.latitude * 10).roundToInt() / 10.0, (newest.longitude * 10).roundToInt() / 10.0)
     }
 
+    /** Private patch: the weather for the look of the Custom watch face, see [OpenMeteoWeather]. */
+    private val weather = OpenMeteoWeather(::httpGet)
+    @Volatile private var lastWeather: EventData.Weather? = null
+    @Volatile private var weatherAskedAt = 0L
+
+    /**
+     * Reads the weather at the phone's rough place when the last read is half an hour old, and sends
+     * it to the watch. Sent also when it did not change, so the watch knows it is still current.
+     * Nothing happens without location permission or a known place.
+     */
+    private fun refreshWeather() {
+        val now = dateUtil.now()
+        if (now - weatherAskedAt < OpenMeteoWeather.REFRESH_MS) return
+        val (latitude, longitude) = roughLocation() ?: return
+        weatherAskedAt = now
+        scope.launch {
+            val kind = weather.read(latitude, longitude) ?: return@launch
+            aapsLogger.debug(LTag.WEAR, "Weather for the watch: $kind")
+            EventData.Weather(now, kind).also {
+                lastWeather = it
+                rxBus.send(EventMobileToWear(it))
+            }
+        }
+    }
+
+    /** The body of an https GET, or null when it fails. Short timeouts: the weather can wait. */
+    private fun httpGet(url: String): String? = try {
+        (URL(url).openConnection() as HttpURLConnection).run {
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            try {
+                if (responseCode == HttpURLConnection.HTTP_OK) inputStream.bufferedReader().use { it.readText() } else null
+            } finally {
+                disconnect()
+            }
+        }
+    } catch (e: Exception) {
+        aapsLogger.debug(LTag.WEAR, "Weather not read: ${e.message}")
+        null
+    }
+
     suspend fun resendData(from: String) {
         aapsLogger.debug(LTag.WEAR, "Sending data to wear from $from")
         // Wear can request a resend before MainApp's init scope has populated pluginStore.plugins
@@ -1303,6 +1347,8 @@ class DataHandlerMobile(
                 alertOverrideDnd = preferences.get(BooleanKey.AlertOverrideDoNotDisturb)
             ).let { prefs -> roughLocation()?.let { (latitude, longitude) -> prefs.copy(latitude = latitude, longitude = longitude) } ?: prefs }
         )
+        // The last weather, so a watch that restarted has it at once
+        lastWeather?.let { rxBus.send(EventMobileToWear(it)) }
         // QuickWizard
         sendQuickWizardListToWear()
         //UserAction
@@ -1599,6 +1645,7 @@ class DataHandlerMobile(
     }
 
     private suspend fun sendStatus(caller: String) {
+        refreshWeather()
         val profile = profileFunction.getProfile()
         var status = rh.gs(CoreUiStrings.noprofile)
         var iobSum = ""

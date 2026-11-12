@@ -105,6 +105,14 @@ internal class DataHandlerWearTest : WearTestBase() {
     }
 
     @Test
+    fun `weather event stores the kind and the time`() {
+        rxBus.send(EventData.Weather(1_000L, EventData.Weather.RAIN))
+
+        verify(sp, timeout(HANDLER_TIMEOUT_MS)).putString(R.string.key_weather_kind, EventData.Weather.RAIN)
+        verify(sp, timeout(HANDLER_TIMEOUT_MS)).putLong(R.string.key_weather_time, 1_000L)
+    }
+
+    @Test
     fun `preferences event hands the chosen pushed watchface to the push helper`() {
         // The mock helper reports no change, so no install is started - only the hand-over is checked here.
         rxBus.send(EventData.Preferences(0L, false, true, 50, 80, 25.0, 0.5, 1.0, 5, 10, pushedWatchface = PushedWatchfaceId.WFS))
