@@ -568,7 +568,7 @@ abstract class BaseWatchFace : WatchFace() {
         if (layoutSet && (newTime.hasHourChanged(oldTime) || newTime.hasMinuteChanged(oldTime))) {
             missedReadingAlert()
             checkVibrateHourly(oldTime, newTime)
-            if (!simpleUi.isEnabled(currentWatchMode)) setDataFields()
+            if (!simpleUi.isEnabled(currentWatchMode)) setDataFieldsAfterWakeFrame() // PERSONAL PATCH
         } else if (layoutSet && !simpleUi.isEnabled(currentWatchMode) && showSecond && newTime.hasSecondChanged(oldTime)) {
             setSecond()
         }
@@ -837,7 +837,7 @@ abstract class BaseWatchFace : WatchFace() {
         lowResMode = isLowRes(watchMode)
         if (simpleUi.isEnabled(currentWatchMode)) simpleUi.setAntiAlias(currentWatchMode)
         else
-            setDataFields()
+            setDataFieldsAfterWakeFrame() // PERSONAL PATCH
         invalidate()
     }
 
@@ -926,4 +926,23 @@ abstract class BaseWatchFace : WatchFace() {
         return true
     }
 
+    // ---- PERSONAL PATCH: fast first frame after a wake, see FirstFrameAfterWake ----
+
+    /**
+     * [setDataFields], except in the first frame after a wake: then only the date and time now, so
+     * the frame is ready fast, and the full [setDataFields] - values, colours, design, chart - right
+     * after that frame is on the screen. The next frame shows it. Until then the other views keep
+     * what they showed before the wake.
+     */
+    private fun setDataFieldsAfterWakeFrame() {
+        if (!wakeFrame.isActive) {
+            setDataFields()
+            return
+        }
+        setDateAndTime()
+        wakeFrame.refreshAfterFrame {
+            if (::binding.isInitialized && layoutSet && !simpleUi.isEnabled(currentWatchMode)) setDataFields()
+            invalidate()
+        }
+    }
 }

@@ -1,3 +1,5 @@
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
 <!-- Two footprints, each a sole and a heel, for the AAPS steps complication -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"

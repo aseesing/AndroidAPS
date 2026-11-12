@@ -25,6 +25,7 @@ All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
 | `local/wear-wake-animation` | Wake-up animation, design *AAPS Tech* (now *Cyberpunk*), and later design updates |
 | `local/wear-day-night` | Day look and moon for watch face designs, design renamed to *Cyberpunk* |
 | `local/status-and-logs` | Phone: status lights count down to the real end, save logs to Downloads |
+| `local/wear-fast-wake` | Fast first frame after a wake, and the header that marks our own files |
 
 `master` of this fork is a plain copy of upstream `master`.
 
@@ -132,6 +133,14 @@ The status lights in Overview and Actions show the **time left** until a part st
 *Maintenance* has a new item **Save logs to Downloads**. It writes the same zip as *Send logs*
 to the `Download` folder of the phone, with no email. No storage permission is needed.
 
+### 7. Fast first frame after a wake (watch)
+
+When you raise your wrist or press the button, the watch waits for the first frame of the watch
+face. On the OnePlus Watch 2R in *Smart mode*, a late frame left the watch on its own low-power
+face until the button was pressed twice. Now the first frame after a wake only updates the date
+and time. Data, colours, design and chart are filled in right after it, and the wake-up animation
+starts with the next frame.
+
 ## Install
 
 1. Build `local/personal`: the watch app is `:wear:assembleFullRelease`, the phone app
@@ -151,7 +160,9 @@ the rain does not make the table hard to read.
 
 The version check of AAPS is not changed, so the app still tells you when a new AAPS version is
 out. The changes are kept small so they can be moved to a new version: mostly new files, small
-hooks in existing files, and their own strings file.
+hooks in existing files, and their own strings file. Our own files start with a
+`PERSONAL PATCH` header; newer hooks in upstream files are marked with a `// PERSONAL PATCH`
+comment.
 
 When a new version is out:
 
@@ -163,7 +174,7 @@ When a new version is out:
 3. Point the `local/wear-*` branches at their moved commits (`git branch -f <branch> <commit>`).
    `local/wear-battery` and `local/wear-hr-steps-design` each start from upstream on their own;
    `local/wear-wake-animation` starts from the merge of those two. `local/status-and-logs`
-   starts from upstream on its own.
+   starts from upstream on its own. `local/wear-fast-wake` starts from `local/personal`.
 4. Run the `wear`, `plugins/sync` and `ui` tests, build, and push the branches with
    `git push --force-with-lease`. A rebase rewrites the commits, so a normal push is refused.
 5. Change the base commit at the top of this file.
