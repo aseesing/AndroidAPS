@@ -79,4 +79,47 @@ class DayOverlayTest {
         // The original map is not changed
         assertThat(resources["Background"]!!.value[0]).isEqualTo(1.toByte())
     }
+
+    private val withWeather = JSONObject(
+        """
+        {
+          "hour": {"fontColor": "#00F0FF"},
+          "dayLook": {"hour": {"fontColor": "#0A0A0A"}, "images": {"Logo": "LogoDay"}},
+          "weatherLooks": {
+            "day_rain": {"hour": {"fontColor": "#222222"}, "images": {"Background": "BackgroundRain"}},
+            "night_cloudy": {"patient_name": {"visibility": "visible"}}
+          }
+        }
+        """
+    )
+
+    @Test
+    fun theWeatherLookIsLaidOverTheDayLook() {
+        val rain = DayOverlay.apply(withWeather, day = true, weather = "rain")
+        assertThat(rain.getJSONObject("hour").getString("fontColor")).isEqualTo("#222222")
+        // The picture swaps of both looks are kept together
+        assertThat(rain.getJSONObject(DayOverlay.IMAGES_KEY).getString("Logo")).isEqualTo("LogoDay")
+        assertThat(rain.getJSONObject(DayOverlay.IMAGES_KEY).getString("Background")).isEqualTo("BackgroundRain")
+        assertThat(rain.has(DayOverlay.WEATHER_KEY)).isFalse()
+        // A weather without a look: only the day look
+        assertThat(DayOverlay.apply(withWeather, day = true, weather = "clear").getJSONObject("hour").getString("fontColor")).isEqualTo("#0A0A0A")
+        // At night only the night look of that weather
+        val night = DayOverlay.apply(withWeather, day = false, weather = "cloudy")
+        assertThat(night.getJSONObject("hour").getString("fontColor")).isEqualTo("#00F0FF")
+        assertThat(night.getJSONObject("patient_name").getString("visibility")).isEqualTo("visible")
+        assertThat(night.has(DayOverlay.IMAGES_KEY)).isFalse()
+    }
+
+    @Test
+    fun theLookNamesItsPictures() {
+        fun res(byte: Int) = ResData(byteArrayOf(byte.toByte()), ResFormat.PNG)
+        val resources: CwfResDataMap = mutableMapOf("Background" to res(1), "BackgroundRain" to res(2), "Logo" to res(3), "LogoDay" to res(4))
+        val look = DayOverlay.apply(withWeather, day = true, weather = "rain")
+        val shown = DayOverlay.resources(resources, look, day = true)
+        assertThat(shown["Background"]!!.value[0]).isEqualTo(2.toByte())
+        assertThat(shown["Logo"]!!.value[0]).isEqualTo(4.toByte())
+        // A swap to a picture the zip does not have changes nothing
+        val missing = JSONObject("""{"images": {"Background": "Nothing"}}""")
+        assertThat(DayOverlay.resources(resources, missing, day = false)["Background"]!!.value[0]).isEqualTo(1.toByte())
+    }
 }

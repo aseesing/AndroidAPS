@@ -288,6 +288,12 @@ class DataHandlerWear(
                 else watchFacePushHelper.reportStatusIfChanged()
             }
         }
+        // Private patch: the weather for the look of the Custom watch face. The face reads it on its
+        // next refresh (every minute), so nothing else needs to be told.
+        onEvent<EventData.Weather> {
+            if (sp.getString(R.string.key_weather_kind, "") != it.kind) sp.putString(R.string.key_weather_kind, it.kind)
+            sp.putLong(R.string.key_weather_time, it.timeStamp)
+        }
         onEvent<EventData.QuickWizard> {
             val serialized = it.serialize()
             if (serialized != sp.getString(R.string.key_quick_wizard_data, "")) {

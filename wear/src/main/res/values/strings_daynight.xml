@@ -7,6 +7,9 @@
     <!-- The phone's last known place, rounded, for sunrise and sunset -->
     <string name="key_location_latitude" translatable="false">location_latitude</string>
     <string name="key_location_longitude" translatable="false">location_longitude</string>
+    <!-- The weather the phone sent last, and when it was read -->
+    <string name="key_weather_kind" translatable="false">weather_kind</string>
+    <string name="key_weather_time" translatable="false">weather_time</string>
     <string name="pref_day_night_look" comment="Setting: whether the watch face shows its light day look or its dark night look">Day / night look</string>
     <string name="pref_day_night_always_on" comment="Setting: which look the dim always-on screen shows">Always-on look</string>
     <string name="day_night_auto" comment="Day look from sunrise to sunset, night look the rest of the time">Automatic</string>

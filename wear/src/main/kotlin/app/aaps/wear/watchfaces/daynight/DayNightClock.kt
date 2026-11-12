@@ -28,13 +28,58 @@ class DayNightClock(
     /** True when [epochMs] is between sunrise and sunset. */
     fun isDay(epochMs: Long): Boolean {
         val instant = Instant.ofEpochMilli(epochMs)
-        val local = instant.atZone(zone())
+        val day = daylightAround(instant) ?: return false
+        return instant >= day.start && instant < day.end
+    }
+
+    /**
+     * How far the sun is through its day at [epochMs]: 0 at sunrise, 0.5 around noon, 1 at sunset.
+     * Before sunrise it is 0 and after sunset 1. When the sun does not rise at all on that day: 0.
+     */
+    fun sunProgress(epochMs: Long): Double {
+        val instant = Instant.ofEpochMilli(epochMs)
+        val day = daylightAround(instant) ?: return 0.0
+        val length = day.end.toEpochMilli() - day.start.toEpochMilli()
+        if (length <= 0) return 0.0
+        return ((epochMs - day.start.toEpochMilli()).toDouble() / length).coerceIn(0.0, 1.0)
+    }
+
+    /**
+     * How far the night is at [epochMs]: 0 at sunset, 0.5 in the middle of the night, 1 at the next
+     * sunrise. In the day it is 0. When the sun does not rise at all on that day, the night is the
+     * whole local day.
+     */
+    fun nightProgress(epochMs: Long): Double {
+        val instant = Instant.ofEpochMilli(epochMs)
+        val date = instant.atZone(zone()).toLocalDate()
+        val today = daylightOn(date)
+        if (today != null && instant >= today.start && instant < today.end) return 0.0
+        val (start, end) = if (today != null && instant >= today.end)
+            today.end to (daylightOn(date.plusDays(1))?.start ?: date.plusDays(2).atStartOfDay(zone()).toInstant())
+        else
+            (daylightOn(date.minusDays(1))?.end ?: date.atStartOfDay(zone()).toInstant()) to (today?.start ?: date.plusDays(1).atStartOfDay(zone()).toInstant())
+        val length = end.toEpochMilli() - start.toEpochMilli()
+        if (length <= 0) return 0.0
+        return ((epochMs - start.toEpochMilli()).toDouble() / length).coerceIn(0.0, 1.0)
+    }
+
+    /** From when to when the sun is up. */
+    private data class Daylight(val start: Instant, val end: Instant)
+
+    private fun daylightAround(instant: Instant): Daylight? = daylightOn(instant.atZone(zone()).toLocalDate())
+
+    /**
+     * The daylight of the local day [date]: from sunrise to sunset at the stored place, the whole
+     * day when the sun does not set, null when it does not rise. Without a place: the fixed hours.
+     */
+    private fun daylightOn(date: LocalDate): Daylight? {
+        val zone = zone()
         val place = location()?.takeIf { it.isValid() }
-            ?: return local.toLocalTime().let { it >= FALLBACK_DAY_START && it < FALLBACK_DAY_END }
-        return when (val sun = sunOn(local.toLocalDate(), place)) {
-            is SunTimes.Result.RiseAndSet -> instant >= sun.rise && instant < sun.set
-            SunTimes.Result.AlwaysUp      -> true
-            SunTimes.Result.AlwaysDown    -> false
+            ?: return Daylight(date.atTime(FALLBACK_DAY_START).atZone(zone).toInstant(), date.atTime(FALLBACK_DAY_END).atZone(zone).toInstant())
+        return when (val sun = sunOn(date, place)) {
+            is SunTimes.Result.RiseAndSet -> Daylight(sun.rise, sun.set)
+            SunTimes.Result.AlwaysUp      -> Daylight(date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
+            SunTimes.Result.AlwaysDown    -> null
         }
     }
 

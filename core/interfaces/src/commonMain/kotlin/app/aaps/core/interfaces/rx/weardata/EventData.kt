@@ -541,6 +541,25 @@ sealed class EventData : Event() {
         ) : EventData()
     }
 
+    /**
+     * The weather at the phone's rough place, for the look of the Custom watch face (private patch).
+     * Sent by the phone when it changes and with every resend.
+     *
+     * @param timeStamp when the phone read it; the watch treats it as unknown after a few hours
+     * @param kind one of [CLEAR], [PARTLY], [CLOUDY] or [RAIN]
+     */
+    @Serializable
+    data class Weather(val timeStamp: Long, val kind: String) : EventData() {
+
+        companion object {
+
+            const val CLEAR = "clear"
+            const val PARTLY = "partly"
+            const val CLOUDY = "cloudy"
+            const val RAIN = "rain"
+        }
+    }
+
     @Serializable
     data class ActionSetCustomWatchface(val customWatchfaceData: CwfData) : EventData()
 
