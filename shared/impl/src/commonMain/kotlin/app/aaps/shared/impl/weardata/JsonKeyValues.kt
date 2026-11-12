@@ -32,6 +32,8 @@ enum class JsonKeyValues(val key: String) {
     PREF_DARK("key_dark"),
     PREF_MATCH_DIVIDER("key_match_divider"),
     MOON_PHASE("moon_phase"),       // valueKey for dynData: 0 new moon, 0.25 first quarter, 0.5 full moon, 0.75 last quarter, up to 1
+    SUN_PROGRESS("sun_progress"),   // valueKey for dynData: 0 at sunrise, 0.5 around noon, 1 at sunset (same before and after)
+    NIGHT_PROGRESS("night_progress"), // valueKey for dynData: 0 at sunset, 0.5 in the middle of the night, 1 at sunrise (0 in the day)
 
     // Values for JsonKeys.IMAGEFIT, named after android.widget.ImageView.ScaleType. They describe
     // the square the image is drawn into, because the library always crops the image to fill that
