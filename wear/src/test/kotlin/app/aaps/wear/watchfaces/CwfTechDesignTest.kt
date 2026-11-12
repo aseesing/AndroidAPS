@@ -79,7 +79,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * The "Cyberpunk" design (file AAPS_Tech.zip): a dark, neon "cyberpunk" HUD. There is no analog clock, no hand and no
+ * The "Cyberpunk" design: a dark, neon "cyberpunk" HUD. There is no analog clock, no hand and no
  * round dial. The time (neon yellow) and the glucose value with its arrow are the big things. Next to
  * the glucose sits a small data table (insulin, carbs, basal, reservoir). Heart rate, steps and the
  * watch battery are three flat boxes with a neon frame. The loop status sits left of the time. The
@@ -88,7 +88,7 @@ import kotlin.math.sqrt
  *
  * Built from the Default design that the real code generates. The test writes the zip and a preview to
  * `build/cwf-design`, and checks the copy kept in the repository (`wear/cwf-designs`) is the same
- * design. To change the design: change [design], run this test and copy `build/cwf-design/AAPS_Tech.zip`
+ * design. To change the design: change [design], run this test and copy `build/cwf-design/Cyberpunk.zip`
  * over the kept one.
  *
  * The font is `cwf-designs/fonts/Cyber.ttf` when that file exists (it is then added to the zip),
@@ -185,7 +185,7 @@ class CwfTechDesignTest {
 
     private fun design(default: CwfData): JSONObject = JSONObject(default.json).apply {
         getJSONObject("metadata")
-            .put(CwfMetadataKey.CWF_NAME.key, DISPLAY_NAME)
+            .put(CwfMetadataKey.CWF_NAME.key, NAME)
             .put(CwfMetadataKey.CWF_FILENAME.key, NAME)
             .put(CwfMetadataKey.CWF_AUTHOR.key, "AAPS (local)")
             .put(CwfMetadataKey.CWF_CREATED_AT.key, "11/11/26")
@@ -1099,7 +1099,7 @@ class CwfTechDesignTest {
         // The phone accepts it: it needs a name and a preview image
         val loaded = ZipWatchfaceFormat.loadCustomWatchface(zip, "$NAME.zip", authorization = true)
         assertThat(loaded).isNotNull()
-        assertThat(loaded!!.cwfData.metadata[CwfMetadataKey.CWF_NAME]).isEqualTo(DISPLAY_NAME)
+        assertThat(loaded!!.cwfData.metadata[CwfMetadataKey.CWF_NAME]).isEqualTo(NAME)
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION1]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3]).isEqualTo("false")
@@ -1713,10 +1713,8 @@ class CwfTechDesignTest {
 
     private companion object {
 
-        const val NAME = "AAPS_Tech"
-
-        /** The name the phone and the watch show for the design. The file keeps its old name, [NAME]. */
-        const val DISPLAY_NAME = "Cyberpunk"
+        /** The file name of the design, and the name the phone and the watch show for it. It was called "AAPS Tech" before. */
+        const val NAME = "Cyberpunk"
         const val CUSTOM_FONT = "Cyber"
         const val SCALE = 2f
 
