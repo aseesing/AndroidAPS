@@ -5,8 +5,8 @@ import android.graphics.drawable.Drawable
 import kotlin.math.ceil
 
 /**
- * The wake-up animation of a Custom watch face design: falling rain and a beating heart for a few
- * seconds after the wrist is raised.
+ * The wake-up animation of a Custom watch face design: falling rain or glitch bands, and a beating
+ * heart, for a few seconds after the wrist is raised.
  *
  * Plain values only. `CustomWatchface` reads them from the optional `animation` key of the design
  * json (it is the only class that may read that json) and hands them over. All sizes and positions
@@ -21,7 +21,8 @@ data class WakeAnimationSpec(
     val fps: Int = 24,
     val fadeMs: Long = 600,
     val rain: RainSpec? = null,
-    val pulse: PulseSpec? = null
+    val pulse: PulseSpec? = null,
+    val glitch: GlitchSpec? = null
 ) {
 
     /** Values cut to safe limits, so a mistake in a design cannot cost a lot of battery. */
@@ -30,7 +31,8 @@ data class WakeAnimationSpec(
         fps = fps.coerceIn(1, MAX_FPS),
         fadeMs = fadeMs.coerceIn(0, durationMs.coerceIn(MIN_DURATION_MS, MAX_DURATION_MS) / 2),
         rain = rain?.normalized()?.takeIf { it.count > 0 },
-        pulse = pulse?.normalized()?.takeIf { it.drawable != null }    // no image in the zip, no heart
+        pulse = pulse?.normalized()?.takeIf { it.drawable != null },   // no image in the zip, no heart
+        glitch = glitch?.normalized()?.takeIf { it.bands > 0 && it.chance > 0f }
     )
 
     /** The same values without the image object, which is made new each time the design is read. */
@@ -48,7 +50,7 @@ data class WakeAnimationSpec(
     }
 
     /** True when there is something to draw at all. */
-    val hasContent: Boolean get() = rain != null || pulse != null
+    val hasContent: Boolean get() = rain != null || pulse != null || glitch != null
 
     /** Time between two frames while the animation plays. */
     val frameDelayMs: Long get() = (1000L / fps).coerceAtLeast(1)
@@ -132,6 +134,66 @@ data class RainSpec(
     companion object {
 
         const val MAX_COUNT = 300
+    }
+}
+
+/**
+ * Glitch bands: now and then a short burst of thin coloured bands that jump sideways across the face.
+ * Drawn where the rain is: above the background, below every data view. The same every time for
+ * the same [seed].
+ *
+ * @param periodMs the time is cut into periods of this length; each may have one burst
+ * @param chance 0..1, how likely a period has a burst
+ * @param burstMs how long one burst shows
+ * @param bands number of bands in one burst
+ * @param minHeight the thinnest band, in design pixels
+ * @param maxHeight the thickest band, in design pixels
+ * @param minWidth the shortest band, in design pixels
+ * @param maxWidth the longest band, in design pixels
+ * @param jump how far the bands jump sideways during a burst, in design pixels
+ * @param color1 the colour of every other band; its own alpha is multiplied with [alpha]
+ * @param color2 the colour of the other bands
+ * @param alpha 0..255
+ * @param region where the bands may show; they are also always kept inside the round screen
+ */
+data class GlitchSpec(
+    val periodMs: Long = 700,
+    val chance: Float = 0.6f,
+    val burstMs: Long = 160,
+    val bands: Int = 3,
+    val seed: Long = 5,
+    val minHeight: Float = 2f,
+    val maxHeight: Float = 8f,
+    val minWidth: Float = 80f,
+    val maxWidth: Float = 300f,
+    val jump: Float = 8f,
+    val color1: Int = Color.rgb(255, 0, 60),
+    val color2: Int = Color.rgb(0, 200, 216),
+    val alpha: Int = 200,
+    val region: DesignRect = DesignRect.FULL
+) {
+
+    fun normalized(): GlitchSpec {
+        val period = periodMs.coerceIn(100, 10_000)
+        val minH = minHeight.coerceIn(0.5f, 40f)
+        val minW = minWidth.coerceIn(1f, DESIGN_SIZE)
+        return copy(
+            periodMs = period,
+            chance = chance.coerceIn(0f, 1f),
+            burstMs = burstMs.coerceIn(16, period),
+            bands = bands.coerceIn(0, MAX_BANDS),
+            minHeight = minH,
+            maxHeight = maxHeight.coerceIn(minH, 40f),
+            minWidth = minW,
+            maxWidth = maxWidth.coerceIn(minW, DESIGN_SIZE),
+            jump = jump.coerceIn(0f, 40f),
+            alpha = alpha.coerceIn(0, 255)
+        )
+    }
+
+    companion object {
+
+        const val MAX_BANDS = 12
     }
 }
 

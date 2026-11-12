@@ -77,7 +77,7 @@ class KeptLayer(private val clearColor: Int, private val newBitmap: (Int, Int) -
  * A wake-up animation frame, put together from kept pictures and live drawing:
  *
  * 1. the background (kept, opaque),
- * 2. the rain (live) - above the background, below every data view, so the text stays readable,
+ * 2. the rain or the glitch bands (live) - above the background, below every data view, so the text stays readable,
  * 3. the data below the clock text (kept, transparent where nothing paints),
  * 4. the clock text (live),
  * 5. the rest of the data and the hour and minute hands (kept, transparent),

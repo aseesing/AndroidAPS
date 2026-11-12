@@ -1,9 +1,13 @@
 package app.aaps.plugins.sync.wear.wearintegration
 
+import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.content.res.Configuration
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.content.ContextCompat
 import app.aaps.core.data.configuration.Constants
 import app.aaps.core.data.iob.InMemoryGlucoseValue
 import app.aaps.core.data.model.ActiveSceneState
@@ -127,6 +131,7 @@ import java.util.LinkedList
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 // Quiet-period that closes a Wear-event batch. Long enough to absorb a Data Layer reconnect-flush,
 // short enough that live data stays effectively real-time.
@@ -1251,6 +1256,25 @@ class DataHandlerMobile(
     private fun sendQuickWizardListToWear() =
         sendToWear(EventData.QuickWizard(ArrayList(quickWizard.list().filter { e -> e.forDevice(QuickWizardEntry.DEVICE_WATCH) }.map { e -> e.toWear() })))
 
+    /**
+     * The newest place any location provider of the phone still knows, rounded to 0.1 degree (about
+     * 10 km): enough for sunrise and sunset on the watch, and no more than that leaves the phone.
+     * Latitude and longitude, or null without location permission or without any known place. Starts
+     * no location request.
+     */
+    private fun roughLocation(): Pair<Double, Double>? {
+        val granted = listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+            .any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+        if (!granted) return null
+        val manager = context.getSystemService(LocationManager::class.java) ?: return null
+        val newest = try {
+            manager.getProviders(false).mapNotNull { manager.getLastKnownLocation(it) }.maxByOrNull { it.time }
+        } catch (_: SecurityException) {
+            null
+        } ?: return null
+        return Pair((newest.latitude * 10).roundToInt() / 10.0, (newest.longitude * 10).roundToInt() / 10.0)
+    }
+
     suspend fun resendData(from: String) {
         aapsLogger.debug(LTag.WEAR, "Sending data to wear from $from")
         // Wear can request a resend before MainApp's init scope has populated pluginStore.plugins
@@ -1277,7 +1301,7 @@ class DataHandlerMobile(
                 carbsButtonIncrement2 = preferences.get(IntKey.OverviewCarbsButtonIncrement2),
                 pushedWatchface = preferences.get(StringKey.WearPushedWatchface),
                 alertOverrideDnd = preferences.get(BooleanKey.AlertOverrideDoNotDisturb)
-            )
+            ).let { prefs -> roughLocation()?.let { (latitude, longitude) -> prefs.copy(latitude = latitude, longitude = longitude) } ?: prefs }
         )
         // QuickWizard
         sendQuickWizardListToWear()

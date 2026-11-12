@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- In a file of its own so this local patch never conflicts with upstream changes to arrays.xml.
+     The values are those of DayNightChoice. -->
+<resources>
+    <string-array name="day_night_look_names">
+        <item>@string/day_night_auto</item>
+        <item>@string/day_night_day</item>
+        <item>@string/day_night_night</item>
+    </string-array>
+
+    <string-array name="day_night_look_values" translatable="false">
+        <item>auto</item>
+        <item>day</item>
+        <item>night</item>
+    </string-array>
+
+    <string-array name="day_night_always_on_names">
+        <item>@string/day_night_night</item>
+        <item>@string/day_night_day</item>
+        <item>@string/day_night_as_active</item>
+    </string-array>
+
+    <string-array name="day_night_always_on_values" translatable="false">
+        <item>night</item>
+        <item>day</item>
+        <item>active</item>
+    </string-array>
+</resources>
