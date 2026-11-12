@@ -63,9 +63,11 @@ account, from the official source code, with your own key. Nobody else builds th
 5. Installs the Android SDK command line tools and accepts the SDK licenses, which you
    accepted on the first page.
 6. Downloads the chosen release tag from `github.com/nightscout/AndroidAPS`.
-7. Builds and signs the app with Gradle. The memory is set from the machine, so it fits on the
+7. Builds the unsigned app with Gradle. The memory is set from the machine, so it fits on the
    free Colab machine.
-8. Checks with `apksigner` that the app is signed with your key, and only then saves it.
+8. Signs the app with `apksigner` (v2 and v3), like the AAPS command line guide does. Passwords go
+   to `keytool` and `apksigner` through environment variables, so they never show in the log.
+9. Checks that the app is signed with your key, and only then saves it.
 
 ## Files
 

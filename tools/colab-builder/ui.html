@@ -239,8 +239,9 @@
       header('options_heading'),
       o.problem && !o.problemAtButton ? h('div', { class: 'note err' }, o.problem) : null,
       D.existing
-        ? [h('p', {}, s('found_existing', { version: last.version || '?', variant: lastVariant || '?',
-            date: last.date || '?' })),
+        ? [h('p', {}, last.version
+            ? s('found_existing', { version: last.version, variant: lastVariant, date: last.date })
+            : s('found_existing_key_only')),
           radio('mode', 'update', s('mode_update', { version: o.version })),
           o.mode === 'update' && !D.password_saved ? passwordInput('password', 'password_needed') : null,
           radio('mode', 'new', s('mode_new'))]

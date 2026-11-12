@@ -212,6 +212,11 @@ def version_key(tag):
     return tuple(int(x) for x in tag.split("."))
 
 
+def version_key_loose(text):
+    """For SDK folder names like 36.0.0 or 37.0.0-rc1: compares the numbers only."""
+    return tuple(int(x) for x in re.findall(r"\d+", text))
+
+
 def list_versions():
     """Release tags of AAPS, newest first. Uses git, so no GitHub API rate limit."""
     out = subprocess.run(["git", "ls-remote", "--tags", "--refs", AAPS_REPO],
@@ -280,6 +285,7 @@ class Builder:
         self.work = work_dir
         os.makedirs(self.work, exist_ok=True)
         self.log_path = os.path.join(self.work, "build.log")
+        open(self.log_path, "w").close()  # A new log for every run.
         self.step = 0
         self.task_count = 0
         self.started = time.time()
@@ -402,9 +408,16 @@ class Builder:
     def keytool(self):
         return os.path.join(self.java_home, "bin", "keytool")
 
+    def secret_env(self, password, key_password=None):
+        """Passwords go to the tools through the environment, so they never show in the log."""
+        env = self.env()
+        env["AAPS_KS_PASS"] = password
+        env["AAPS_KEY_PASS"] = password if key_password is None else key_password
+        return env
+
     def key_sha256(self, keystore, password, alias):
-        out = subprocess.run([self.keytool(), "-list", "-v", "-keystore", keystore, "-storepass", password,
-                              "-alias", alias], capture_output=True, text=True, env=self.env())
+        out = subprocess.run([self.keytool(), "-list", "-v", "-keystore", keystore, "-storepass:env", "AAPS_KS_PASS",
+                              "-alias", alias], capture_output=True, text=True, env=self.secret_env(password))
         match = re.search(r"SHA256:\s*([0-9A-Fa-f:]+)", out.stdout)
         if out.returncode != 0 or not match:
             return None
@@ -413,38 +426,48 @@ class Builder:
     def create_key(self, keystore, password):
         self.run([self.keytool(), "-genkeypair", "-keystore", keystore, "-storetype", "PKCS12",
                   "-alias", KEY_ALIAS, "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
-                  "-storepass", password, "-keypass", password, "-dname", "CN=AAPS"],
-                 env=self.env(), error_key="error_key")
+                  "-storepass:env", "AAPS_KS_PASS", "-keypass:env", "AAPS_KEY_PASS", "-dname", "CN=AAPS"],
+                 env=self.secret_env(password), error_key="error_key")
 
-    def build(self, src, variant, wear, keystore, password, alias, key_password):
+    def build(self, src, variant, wear):
+        """Builds the unsigned app. It is signed afterwards with `sign`, like the AAPS CLI guide does."""
         ram = total_ram_gb()
         heap = max(3, min(8, int(ram * 0.6)))
         tasks = [":app:assemble" + variant[0].upper() + variant[1:]]
         if wear:
             tasks.append(":wear:assemble" + variant[0].upper() + variant[1:])
-        env = self.env()
-        # Signing values go in through the environment, so they are not visible in the process list.
-        env["ORG_GRADLE_PROJECT_android.injected.signing.store.file"] = keystore
-        env["ORG_GRADLE_PROJECT_android.injected.signing.store.password"] = password
-        env["ORG_GRADLE_PROJECT_android.injected.signing.key.alias"] = alias
-        env["ORG_GRADLE_PROJECT_android.injected.signing.key.password"] = key_password
         args = ["./gradlew", "--console=plain", "--no-daemon", "--max-workers=%d" % cpu_count(),
                 "-Dorg.gradle.jvmargs=-Xmx%dg -XX:+UseParallelGC -Xss4m" % heap,
                 # One heap for Gradle and Kotlin, so two big JVMs do not fight for the memory.
                 "-Pkotlin.compiler.execution.strategy=in-process"] + tasks
         self.log("RAM %.1f GB, Gradle heap %d GB, %d workers" % (ram, heap, cpu_count()))
         os.chmod(os.path.join(src, "gradlew"), 0o755)
-        self.run(args, cwd=src, env=env, error_key="error_build", count_tasks=True)
+        self.run(args, cwd=src, env=self.env(), error_key="error_build", count_tasks=True)
 
-    def apksigner(self):
-        tools = sorted(glob.glob(os.path.join(self.sdk, "build-tools", "*", "apksigner")))
-        return tools[-1] if tools else None
+    def build_tool(self, name):
+        tools = sorted(glob.glob(os.path.join(self.sdk, "build-tools", "*", name)),
+                       key=lambda p: version_key_loose(os.path.basename(os.path.dirname(p))))
+        if not tools:
+            raise BuildError("error_check")
+        return tools[-1]
+
+    def sign(self, unsigned, signed, keystore, password, alias, key_password):
+        """Signs with apksigner. The passwords go in through the environment, never on the command line."""
+        aligned = unsigned
+        check = subprocess.run([self.build_tool("zipalign"), "-c", "-P", "16", "4", unsigned],
+                               capture_output=True, text=True, env=self.env())
+        if check.returncode != 0:
+            aligned = unsigned + ".aligned"
+            self.run([self.build_tool("zipalign"), "-f", "-P", "16", "4", unsigned, aligned],
+                     env=self.env(), error_key="error_check")
+        # v2 and v3, like an app signed by the Android Gradle plugin.
+        self.run([self.build_tool("apksigner"), "sign", "--ks", keystore, "--ks-key-alias", alias,
+                  "--ks-pass", "env:AAPS_KS_PASS", "--key-pass", "env:AAPS_KEY_PASS",
+                  "--v2-signing-enabled", "true", "--v3-signing-enabled", "true",
+                  "--out", signed, aligned], env=self.secret_env(password, key_password), error_key="error_sign")
 
     def check_signature(self, apk, expected_sha256):
-        signer = self.apksigner()
-        if not signer:
-            raise BuildError("error_check")
-        out = subprocess.run([signer, "verify", "--print-certs", apk], capture_output=True, text=True,
+        out = subprocess.run([self.build_tool("apksigner"), "verify", "--print-certs", apk], capture_output=True, text=True,
                              env=self.env())
         self.log(out.stdout + out.stderr)
         match = re.search(r"certificate SHA-256 digest:\s*([0-9a-fA-F]+)", out.stdout)
@@ -455,10 +478,9 @@ class Builder:
 # ---------------------------------------------------------------- the flow
 
 
-def find_apk(src, module, variant):
+def find_unsigned_apk(src, module, variant):
     flavor = variant[:-len("Release")]
-    found = [p for p in glob.glob(os.path.join(src, module, "build", "outputs", "apk", flavor, "release", "*.apk"))
-             if "unsigned" not in os.path.basename(p)]
+    found = glob.glob(os.path.join(src, module, "build", "outputs", "apk", flavor, "release", "*-unsigned.apk"))
     return found[0] if found else None
 
 
@@ -615,12 +637,12 @@ def main_flow(ui, texts, work_dir):
         builder.next_step()
         src = builder.get_source(version)
         builder.next_step()
-        builder.build(src, variant, wear, local_key, key["password"], key["alias"], key["key_password"])
+        builder.build(src, variant, wear)
         builder.next_step()
 
-        apks = [("aaps", find_apk(src, "app", variant))]
+        apks = [("aaps", find_unsigned_apk(src, "app", variant))]
         if wear:
-            apks.append(("aaps-wear", find_apk(src, "wear", variant)))
+            apks.append(("aaps-wear", find_unsigned_apk(src, "wear", variant)))
         out_dir = os.path.join(aaps_dir, version)
         os.makedirs(out_dir, exist_ok=True)
         saved = []
@@ -628,11 +650,11 @@ def main_flow(ui, texts, work_dir):
         for prefix, apk in apks:
             if not apk:
                 raise BuildError("error_check")
-            builder.check_signature(apk, key["sha"])
             name = "%s-%s%s.apk" % (prefix, version, suffix)
             local_copy = os.path.join(work_dir, name)
-            shutil.copy(apk, local_copy)
-            shutil.copy(apk, os.path.join(out_dir, name))
+            builder.sign(apk, local_copy, local_key, key["password"], key["alias"], key["key_password"])
+            builder.check_signature(local_copy, key["sha"])
+            shutil.copy(local_copy, os.path.join(out_dir, name))
             saved.append((name, local_copy))
         builder.next_step()
 
