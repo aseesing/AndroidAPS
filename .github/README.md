@@ -8,8 +8,8 @@ the status lights count down to the end of the sensor and pod, and logs can be s
 > **Not an official AAPS release.** These changes are not reviewed by the AAPS team and are not
 > meant for upstream. AAPS controls insulin: build and use this only if you understand the code
 > and the risk. The phone side changes only how often data is sent to the watch, the status
-> lights, how logs are saved, and it sends a rough place to the watch (see 4). Nothing changes
-> how insulin is given.
+> lights, how logs are saved, it sends a rough place to the watch, and it reads the weather
+> for that rough place from Open-Meteo (see 4). Nothing changes how insulin is given.
 
 The full upstream README is in [`/README.md`](../README.md).
 
@@ -23,7 +23,7 @@ All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
 | `local/wear-battery` | Less battery use on the watch, fewer messages from the phone |
 | `local/wear-hr-steps-design` | Heart rate and steps on the watch face, design *AAPS HR Steps* |
 | `local/wear-wake-animation` | Wake-up animation, design *AAPS Tech* (now *Cyberpunk*), and later design updates |
-| `local/wear-day-night` | Day look and moon for watch face designs, design renamed to *Cyberpunk* |
+| `local/wear-day-night` | Day and weather looks, sun and moon on the edge, designs *Cyberpunk* and *Cyberpunk_Wilds* |
 | `local/status-and-logs` | Phone: status lights count down to the real end, save logs to Downloads |
 | `local/wear-fast-wake` | Fast first frame after a wake, and the header that marks our own files |
 
@@ -68,10 +68,18 @@ All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
 - It never plays in ambient (always-on) mode, in simple UI, or in previews.
 - Designs without the `animation` block work exactly as before.
 
-### 4. Day look and moon
+### 4. Day look, weather, sun and moon
 
 - A watch face design can have an optional `dayLook` block. In the day it is laid over the design,
-  and a picture `XDay` in the zip is shown instead of `X` (for example `BackgroundDay`).
+  and a picture `XDay` in the zip is shown instead of `X` (for example `BackgroundDay`). A look
+  can also name pictures to swap: `"images": {"Background": "BackgroundRain"}`.
+- **Weather:** the phone reads the weather at its rough place from Open-Meteo (free, no account)
+  every half hour, and sends only the kind to the watch: clear, partly cloudy, cloudy or rain. A
+  design can have a look for each under `weatherLooks` (`day_rain`, `night_cloudy`, ...). Weather
+  older than 3 hours is not used.
+- **Sun and moon on the edge:** a view can move along an arc with the new `orbit` key. The sun goes
+  from sunrise (left) to sunset (right) with the value `sun_progress`, the moon through the night
+  with `night_progress`. The moon follows the night, not the real moonrise.
 - **When it is day** is a setting of the Custom watch face on the watch, *Day / night look*:
   *Automatic* (the default, from sunrise to sunset), *Day face* or *Night face*.
 - The always-on screen has its own setting, *Always-on look*: *Night face* (the default, a light
@@ -80,24 +88,29 @@ All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
   **rounded to 0.1 degree (about 10 km)**, and only when AAPS has location permission. The phone
   starts no location request for it. Without a place the day is 07:00 to 19:00.
 - A design can show the **phase of the moon**: the new value `moon_phase` picks a picture. The
-  watch works it out from the date, without phone or internet.
+  watch works it out from the date, without phone or internet. (A dynData with pictures needs an
+  `invalidImage`, or the watch uses one step less than there are pictures.)
 - Both settings show only for a design that has a day look. Designs without it work as before.
 
-### 5. Two watch face designs
+### 5. Three watch face designs
 
 The designs are in [`wear/cwf-designs`](../wear/cwf-designs). Install a zip the same way as any
-other custom watch face for AAPS.
+other custom watch face for AAPS. A zip must stay under about 320 KB: the phone sends it to the
+watch in one message, and a larger one does not arrive (with no error).
 
-| Cyberpunk (night) | Cyberpunk (day) | AAPS HR Steps |
-|---|---|---|
-| ![Cyberpunk at night](images/aaps-tech.png) | ![Cyberpunk in the day](images/aaps-tech-day.png) | ![AAPS HR Steps](images/aaps-hr-steps.png) |
-| `Cyberpunk.zip` (was *AAPS Tech*). Dark neon design: big digital time and BG in range colours, a table with IOB, carbs, basal, reservoir, heart rate and steps, the watch battery, the moon, and the graph. Rain and a beating drop in the logo when the watch wakes up. | The same design in the day: signal yellow and black. The BG, the arrow, the table and the graph stay on black panels in their night colours, so green, yellow and red keep their meaning. Glitch bands instead of rain. | The default analog design with round dials for COB, IOB, heart rate and steps, the watch battery, the date and a digital clock. |
+| Cyberpunk (night) | Cyberpunk (day) | Cyberpunk_Wilds (day) | AAPS HR Steps |
+|---|---|---|---|
+| ![Cyberpunk at night](images/aaps-tech.png) | ![Cyberpunk in the day](images/aaps-tech-day.png) | ![Cyberpunk_Wilds in the day](images/cyberpunk-wilds-day.png) | ![AAPS HR Steps](images/aaps-hr-steps.png) |
+| `Cyberpunk.zip` (was *AAPS Tech*). Dark neon design: big digital time and BG in range colours, a table with IOB, carbs, basal, reservoir, heart rate and steps, the watch battery and the graph. The moon goes along the edge through the night, with a cloud before it when it is cloudy. Rain and a beating drop in the logo when the watch wakes up. | The same design in the day, in a colour per weather (cyan, lilac, grey) with light panels, clouds, and the sun along the edge. The glucose colours are dark there, with the same meaning. Glitch bands, and rain when it rains. | `Cyberpunk_Wilds.zip`: Cyberpunk at night; in the day a painted landscape per weather, with parchment behind the table and the graph. The four landscapes (`DayBackgroundSunny.jpg`, `...Partly`, `...Cloudy`, `...Rain`) can be replaced by your own: 400 x 400, at most about 25 KB each, with a light sky where the time and the glucose value are. | The default analog design with round dials for COB, IOB, heart rate and steps, the watch battery, the date and a digital clock. |
+
+In both Cyberpunk designs the age of the glucose value shows only when it is 5 minutes or older,
+and a loop warning only when the loop has not run for 15 minutes; both in red, under the arrow.
 
 The pictures are previews with sample values. The font of Cyberpunk is
 [Rajdhani](https://fonts.google.com/specimen/Rajdhani) Bold (SIL Open Font License, see
 `wear/cwf-designs/fonts`).
 
-**Settings for Cyberpunk:**
+**Settings for Cyberpunk and Cyberpunk_Wilds:**
 
 - The design turns off *detailed IOB* itself. This only works if watch faces may change watch
   settings. If the first row of the table shows two numbers, turn off *Show detailed IOB* in the
@@ -133,7 +146,7 @@ The status lights in Overview and Actions show the **time left** until a part st
 *Maintenance* has a new item **Save logs to Downloads**. It writes the same zip as *Send logs*
 to the `Download` folder of the phone, with no email. No storage permission is needed.
 
-### 7. Fast first frame after a wake (watch)
+### 8. Fast first frame after a wake (watch)
 
 When you raise your wrist or press the button, the watch waits for the first frame of the watch
 face. On the OnePlus Watch 2R in *Smart mode*, a late frame left the watch on its own low-power
@@ -147,7 +160,7 @@ starts with the next frame.
    `:app:assembleFullRelease`.
 2. Sign both with **the same key as the AAPS you have installed now**, and install with
    `adb install -r`. Then your data and settings stay.
-3. Install a design zip from `wear/cwf-designs`, for example `Cyberpunk.zip`.
+3. Install a design zip from `wear/cwf-designs`, for example `Cyberpunk.zip` or `Cyberpunk_Wilds.zip`.
 
 ## Tests
 
