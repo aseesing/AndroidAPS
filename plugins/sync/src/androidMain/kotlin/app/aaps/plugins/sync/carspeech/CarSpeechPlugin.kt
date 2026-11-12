@@ -44,10 +44,12 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.IntKey
 import dev.zacsweers.metro.SingleIn
 import dev.zacsweers.metro.binding
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -91,16 +93,36 @@ class CarSpeechPlugin(
     private val vehicleDetector = VehicleDetector(context, preferences, aapsLogger)
     private val speaker = BgSpeaker(context, aapsLogger)
 
+    /** Logs what fails in a coroutine of this plugin, so it can never reach the app. */
+    private val errorHandler = CoroutineExceptionHandler { _, e -> aapsLogger.error(LTag.CORE, "Car speech: failed", e) }
+
+    /**
+     * Lives as long as the app. Used for the work started by a click (test, shut down the engine),
+     * which must also work while the plugin is off, and which nobody waits for.
+     */
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO + errorHandler)
+
+    /** The collectors and the speaking, while the plugin is on. */
     private var scope: CoroutineScope? = null
 
     /** What was said last in this car trip. Cleared when the trip ends. */
     private var lastSpoken: CarSpeechRule.LastSpoken? = null
-    private val speakMutex = Mutex()
+    private val ruleMutex = Mutex()
+
+    /**
+     * Texts to say. Conflated: when speaking is slow or hangs, only the newest text waits, and the
+     * collectors that put it here never wait at all.
+     */
+    private var speech: Channel<String>? = null
 
     override suspend fun onStart() {
         super.onStart()
-        val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        // Nothing here waits: every line below only starts a coroutine in newScope
+        val newScope = CoroutineScope(SupervisorJob() + Dispatchers.IO + errorHandler)
         scope = newScope
+        val newSpeech = Channel<String>(Channel.CONFLATED)
+        speech = newSpeech
+        newScope.launch { for (text in newSpeech) speaker.say(text) }
 
         // Each detector runs only while its switch is on
         preferences.observe(CarSpeechBooleanKey.ViaCarAudio)
@@ -115,7 +137,7 @@ class CarSpeechPlugin(
         inVehicle
             .collectResilient(newScope, aapsLogger, LTag.CORE) { inCar ->
                 aapsLogger.debug(LTag.CORE, "Car speech: in the car = $inCar")
-                speakMutex.withLock { lastSpoken = null }
+                ruleMutex.withLock { lastSpoken = null }
                 if (inCar) persistenceLayer.getLastGlucoseValue()?.takeIf { it.isValid }?.let { onReading(it) }
             }
 
@@ -129,32 +151,38 @@ class CarSpeechPlugin(
     }
 
     override suspend fun onStop() {
+        // Nothing here waits either: cancelling ends a speech that runs, and the rest runs in the background
         scope?.cancel()
         scope = null
+        speech = null
         inVehicleFlow = null
         vehicleDetector.stopCarAudio()
         vehicleDetector.stopMotion()
-        speaker.shutdown()
+        backgroundScope.launch { speaker.shutdown() }
         super.onStop()
     }
 
     /** True while the phone is in the car. Null while the plugin is stopped. */
     private var inVehicleFlow: StateFlow<Boolean>? = null
 
-    private suspend fun onReading(gv: GV) = speakMutex.withLock {
-        val reason = CarSpeechRule.decide(
-            inVehicle = inVehicleFlow?.value == true,
-            valueMgdl = gv.value,
-            readingTimestamp = gv.timestamp,
-            now = dateUtil.now(),
-            settings = settings(),
-            lastSpoken = lastSpoken
-        )
-        if (reason == CarSpeechRule.Reason.NONE) return@withLock
-        aapsLogger.debug(LTag.CORE, "Car speech: speaking ${gv.value} because $reason")
-        // Counted as said also when the engine fails, so a broken engine is not tried on every reading
-        lastSpoken = CarSpeechRule.LastSpoken(gv.value, gv.timestamp)
-        speaker.say(textFor(gv))
+    /** Decides at once and hands the text to the speaking coroutine, so it never waits for the speech. */
+    private suspend fun onReading(gv: GV) {
+        val speak = ruleMutex.withLock {
+            val reason = CarSpeechRule.decide(
+                inVehicle = inVehicleFlow?.value == true,
+                valueMgdl = gv.value,
+                readingTimestamp = gv.timestamp,
+                now = dateUtil.now(),
+                settings = settings(),
+                lastSpoken = lastSpoken
+            )
+            if (reason == CarSpeechRule.Reason.NONE) return@withLock false
+            aapsLogger.debug(LTag.CORE, "Car speech: speaking ${gv.value} because $reason")
+            // Counted as said also when the engine fails, so a broken engine is not tried on every reading
+            lastSpoken = CarSpeechRule.LastSpoken(gv.value, gv.timestamp)
+            true
+        }
+        if (speak) speech?.trySend(textFor(gv))
     }
 
     private fun settings() = CarSpeechRule.Settings(
@@ -171,10 +199,9 @@ class CarSpeechPlugin(
         else rh.gs(SyncStrings.car_speech_text, value, rh.gs(gv.trendArrow.directionToDescription()))
     }
 
-    /** The test button: says the newest value now, also outside the car. */
+    /** The test button (main thread): says the newest value in the background, also outside the car. */
     private fun testSpeech() {
-        val testScope = scope ?: return
-        testScope.launch {
+        backgroundScope.launch {
             val gv = persistenceLayer.getLastGlucoseValue()
             speaker.say(if (gv != null) textFor(gv) else rh.gs(SyncStrings.car_speech_test_no_value))
         }

@@ -150,10 +150,16 @@ reported `NO-SOURCE`. That was wrong by the time anyone read it, and it caused w
   preference, propose the change first and wait for approval before editing code. Do NOT immediately
   edit files based on user feedback. The only exception is when the user explicitly says "do it",
   "fix it", "go ahead", or similar direct instruction.
-- **NEVER commit until the user explicitly asks** — Editing files is fine (subject to the rule above),
-  but do NOT run `git commit` (or `git push`) until the user directly asks for it. "Fix it" / "do it"
-  authorizes the code change, NOT a commit. Leave the work in the working tree and let the user review
-  it first; only commit when they say "commit", "push", or similar.
+- **Committing without asking is allowed** (the user's decision on 2026-11-12, replacing the old
+  "never commit until asked" rule). Commit finished, tested work in small commits with a clear
+  message. Pushing to the branch the session works on is fine too; never push to `master`, `dev` or
+  someone else's branch, and never rewrite pushed history, without the user asking.
+- **New code must never be able to hurt the rest of the app.** Everything new that is called from
+  the main thread, the loop or another shared path runs async (its own coroutine scope with a
+  `SupervisorJob` and an exception handler), so a bug, an exception or a hang in it can never stop
+  or slow the loop or the UI. Android callbacks that arrive on the main thread (`BroadcastReceiver`,
+  Bluetooth profile listeners, UI clicks) only copy their data and hand the work to that scope.
+  Where code already runs async, do not add another layer.
 - **Use simple "school english" everywhere** — In code (identifiers, comments, KDoc), commit messages,
   PR text, UI strings and chat, write plain, simple English. Many readers and contributors are
   non-native speakers. Prefer short common words and short sentences; avoid idioms, slang, rare

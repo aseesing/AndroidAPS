@@ -13,6 +13,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -54,8 +55,24 @@ class BgSpeaker(
             .build()
     }
 
-    /** Says [text]. Returns false when nothing was said. Call it from a coroutine, never the main thread. */
-    suspend fun say(text: String): Boolean = mutex.withLock {
+    /**
+     * Says [text]. Returns false when nothing was said. Call it from a background coroutine.
+     *
+     * Never throws (only cancellation) and never takes longer than [TOTAL_TIMEOUT_MS], so a broken
+     * text-to-speech engine can not stop the caller.
+     */
+    suspend fun say(text: String): Boolean =
+        try {
+            withTimeoutOrNull(TOTAL_TIMEOUT_MS) { mutex.withLock { sayLocked(text) } }
+                ?: false.also { aapsLogger.error(LTag.CORE, "Car speech: gave up, speaking took too long") }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            aapsLogger.error(LTag.CORE, "Car speech: speaking failed", e)
+            false
+        }
+
+    private suspend fun sayLocked(text: String): Boolean {
         if (isOngoingCall()) {
             aapsLogger.debug(LTag.CORE, "Car speech: not speaking during a call")
             return false
@@ -69,7 +86,7 @@ class BgSpeaker(
             delay(RETRY_DELAY_MS)
         }
         aapsLogger.error(LTag.CORE, "Car speech: could not speak after $MAX_RETRIES attempts")
-        false
+        return false
     }
 
     /** Frees the engine. It is made again on the next [say]. */
@@ -78,7 +95,7 @@ class BgSpeaker(
     private fun shutdownEngine() {
         try {
             tts?.shutdown()
-        } catch (e: IllegalArgumentException) {
+        } catch (e: Exception) {
             aapsLogger.error(LTag.CORE, "Car speech: error when stopping the engine", e)
         }
         tts = null
@@ -155,5 +172,8 @@ class BgSpeaker(
         private const val RETRY_DELAY_MS = 2_000L
         private const val INIT_TIMEOUT_MS = 10_000L
         private const val SPEAK_TIMEOUT_MS = 30_000L
+
+        /** All attempts together. A reading comes every 5 minutes; an older one is not worth saying. */
+        private const val TOTAL_TIMEOUT_MS = 90_000L
     }
 }

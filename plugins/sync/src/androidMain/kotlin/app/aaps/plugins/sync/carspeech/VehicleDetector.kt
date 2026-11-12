@@ -29,9 +29,14 @@ import com.google.android.gms.location.ActivityTransition
 import com.google.android.gms.location.ActivityTransitionRequest
 import com.google.android.gms.location.ActivityTransitionResult
 import com.google.android.gms.location.DetectedActivity
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Knows when the phone is in the car ("vehicle mode"), in the two ways xDrip+ has:
@@ -55,6 +60,21 @@ class VehicleDetector(
     private val aapsLogger: AAPSLogger
 ) {
 
+    /**
+     * All work of this class runs here, one task after the other, so the order of connect and
+     * disconnect events is kept. Android delivers the broadcasts, the Bluetooth profile answers and
+     * the clicks on the main thread: those only hand their work to this scope, so a bug or a slow
+     * Bluetooth call here can never stop the main thread or the loop.
+     */
+    private val worker = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO.limitedParallelism(1) +
+            CoroutineExceptionHandler { _, e -> aapsLogger.error(LTag.CORE, "Car speech: vehicle detection failed", e) }
+    )
+
+    private fun work(block: () -> Unit) {
+        worker.launch { block() }
+    }
+
     private val carAudioConnected = MutableStateFlow(false)
     private val motionInVehicle = MutableStateFlow(false)
 
@@ -64,42 +84,47 @@ class VehicleDetector(
     /** True while activity recognition says the phone is in a vehicle. */
     val motion: StateFlow<Boolean> = motionInVehicle.asStateFlow()
 
-    private val _lastConnected = MutableStateFlow(readLastConnected())
+    private val _lastConnected = MutableStateFlow(runCatching { readLastConnected() }.getOrNull())
 
     /** The Bluetooth audio device that connected last, so it can be chosen as the car. */
     val lastConnected: StateFlow<AudioDevice?> = _lastConnected.asStateFlow()
 
     data class AudioDevice(val address: String, val name: String)
 
+    // Only read and written on the worker
     private var audioReceiverRegistered = false
     private var motionReceiverRegistered = false
+    private var motionPermissionWarned = false
 
     // ---- car audio ------------------------------------------------------------------------------
 
     private val audioReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
-            val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)
-            val previous = intent.getIntExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, -1)
-            val name = deviceName(device)
-            when {
-                state == BluetoothProfile.STATE_CONNECTED && previous != BluetoothProfile.STATE_CONNECTED       -> {
-                    aapsLogger.debug(LTag.CORE, "Car speech: Bluetooth audio connected: $name")
-                    rememberLastConnected(AudioDevice(device.address, name))
-                    if (device.address == carAddress()) setCarAudio(true)
-                }
+        // Main thread: hand over at once
+        override fun onReceive(context: Context, intent: Intent) = work { onAudioIntent(intent) }
+    }
 
-                state == BluetoothProfile.STATE_DISCONNECTED && previous != BluetoothProfile.STATE_DISCONNECTED -> {
-                    aapsLogger.debug(LTag.CORE, "Car speech: Bluetooth audio disconnected: $name")
-                    if (device.address == carAddress()) setCarAudio(false)
-                }
+    private fun onAudioIntent(intent: Intent) {
+        val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
+        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)
+        val previous = intent.getIntExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, -1)
+        val name = deviceName(device)
+        when {
+            state == BluetoothProfile.STATE_CONNECTED && previous != BluetoothProfile.STATE_CONNECTED       -> {
+                aapsLogger.debug(LTag.CORE, "Car speech: Bluetooth audio connected: $name")
+                rememberLastConnected(AudioDevice(device.address, name))
+                if (device.address == carAddress()) setCarAudio(true)
+            }
+
+            state == BluetoothProfile.STATE_DISCONNECTED && previous != BluetoothProfile.STATE_DISCONNECTED -> {
+                aapsLogger.debug(LTag.CORE, "Car speech: Bluetooth audio disconnected: $name")
+                if (device.address == carAddress()) setCarAudio(false)
             }
         }
     }
 
-    @Synchronized
-    fun startCarAudio() {
-        if (audioReceiverRegistered) return
+    /** Starts listening to the car. Returns at once; the work runs on the worker. */
+    fun startCarAudio() = work {
+        if (audioReceiverRegistered) return@work
         val filter = IntentFilter().apply {
             addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
@@ -110,30 +135,32 @@ class VehicleDetector(
         checkCarAlreadyConnected()
     }
 
-    @Synchronized
-    fun stopCarAudio() {
+    /** Stops listening to the car. Returns at once; the work runs on the worker. */
+    fun stopCarAudio() = work {
         if (audioReceiverRegistered) {
-            context.unregisterReceiver(audioReceiver)
             audioReceiverRegistered = false
+            context.unregisterReceiver(audioReceiver)
         }
         setCarAudio(false)
     }
 
-    /** Makes [device] the car, and looks at once whether it is already connected. */
-    fun chooseCar(device: AudioDevice) {
+    /** Makes [device] the car, and looks whether it is already connected. Returns at once. */
+    fun chooseCar(device: AudioDevice) = work {
         preferences.put(CarSpeechStringKey.CarAddress, device.address)
         preferences.put(CarSpeechStringKey.CarName, device.name)
         setCarAudio(false)
         if (audioReceiverRegistered) checkCarAlreadyConnected()
     }
 
-    fun forgetCar() {
+    /** Forgets the car. Returns at once. */
+    fun forgetCar() = work {
         preferences.put(CarSpeechStringKey.CarAddress, "")
         preferences.put(CarSpeechStringKey.CarName, "")
         setCarAudio(false)
     }
 
-    fun carName(): String = preferences.get(CarSpeechStringKey.CarName)
+    /** For the screen. A read from memory, so it is safe on the main thread. */
+    fun carName(): String = runCatching { preferences.get(CarSpeechStringKey.CarName) }.getOrDefault("")
 
     private fun carAddress(): String = preferences.get(CarSpeechStringKey.CarAddress)
 
@@ -170,10 +197,12 @@ class VehicleDetector(
         val adapter: BluetoothAdapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager?)?.adapter ?: return
         for (profile in listOf(BluetoothProfile.HEADSET, BluetoothProfile.A2DP)) {
             adapter.getProfileProxy(context, object : BluetoothProfile.ServiceListener {
-                @SuppressLint("MissingPermission") // checked above
-                override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+                // Main thread: hand over at once
+                override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) = work {
                     try {
-                        if (proxy.connectedDevices.any { it.address == address }) setCarAudio(true)
+                        @SuppressLint("MissingPermission") // checked above
+                        val connected = proxy.connectedDevices.any { it.address == address }
+                        if (connected) setCarAudio(true)
                     } finally {
                         adapter.closeProfileProxy(profile, proxy)
                     }
@@ -187,15 +216,18 @@ class VehicleDetector(
     // ---- motion ---------------------------------------------------------------------------------
 
     private val motionReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (!ActivityTransitionResult.hasResult(intent)) return
-            val result = ActivityTransitionResult.extractResult(intent) ?: return
-            // The newest event is the state now
-            val last = result.transitionEvents.lastOrNull { it.activityType == DetectedActivity.IN_VEHICLE } ?: return
-            val inVehicle = last.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER
-            aapsLogger.debug(LTag.CORE, "Car speech: activity recognition says in vehicle = $inVehicle")
-            motionInVehicle.value = inVehicle
-        }
+        // Main thread: hand over at once
+        override fun onReceive(context: Context, intent: Intent) = work { onMotionIntent(intent) }
+    }
+
+    private fun onMotionIntent(intent: Intent) {
+        if (!ActivityTransitionResult.hasResult(intent)) return
+        val result = ActivityTransitionResult.extractResult(intent) ?: return
+        // The newest event is the state now
+        val last = result.transitionEvents.lastOrNull { it.activityType == DetectedActivity.IN_VEHICLE } ?: return
+        val inVehicle = last.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER
+        aapsLogger.debug(LTag.CORE, "Car speech: activity recognition says in vehicle = $inVehicle")
+        motionInVehicle.value = inVehicle
     }
 
     private val motionPendingIntent: PendingIntent by lazy {
@@ -207,23 +239,20 @@ class VehicleDetector(
         )
     }
 
-    fun hasMotionPermission(): Boolean =
+    private fun hasMotionPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
 
-    private var motionPermissionWarned = false
-
     /**
-     * Starts activity recognition. Safe to call again: it does nothing while running, and it starts
-     * once the permission is given later.
+     * Starts activity recognition. Returns at once. Safe to call again: it does nothing while
+     * running, and it starts once the permission is given later.
      */
     @SuppressLint("MissingPermission") // checked in hasMotionPermission
-    @Synchronized
-    fun startMotion() {
-        if (motionReceiverRegistered) return
+    fun startMotion() = work {
+        if (motionReceiverRegistered) return@work
         if (!hasMotionPermission()) {
             if (!motionPermissionWarned) aapsLogger.warn(LTag.CORE, "Car speech: no permission for activity recognition, motion detection waits for it")
             motionPermissionWarned = true
-            return
+            return@work
         }
         motionPermissionWarned = false
         // The pending intent is sent with this app's identity, so the receiver need not be exported
@@ -235,18 +264,19 @@ class VehicleDetector(
                 .setActivityTransition(it)
                 .build()
         }
+        // Asynchronous: Google Play services answers later, on the main thread, with only a log line
         ActivityRecognition.getClient(context)
             .requestActivityTransitionUpdates(ActivityTransitionRequest(transitions), motionPendingIntent)
             .addOnFailureListener { aapsLogger.error(LTag.CORE, "Car speech: activity recognition could not start", it) }
     }
 
+    /** Stops activity recognition. Returns at once. */
     @SuppressLint("MissingPermission") // removing needs no more than what started it
-    @Synchronized
-    fun stopMotion() {
+    fun stopMotion() = work {
         if (motionReceiverRegistered) {
+            motionReceiverRegistered = false
             if (hasMotionPermission()) ActivityRecognition.getClient(context).removeActivityTransitionUpdates(motionPendingIntent)
             context.unregisterReceiver(motionReceiver)
-            motionReceiverRegistered = false
         }
         motionInVehicle.value = false
     }
