@@ -69,12 +69,18 @@ import app.aaps.wear.watchfaces.CustomWatchface.Companion.PROVISIONAL_RING_WIDTH
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.TEMPLE_RESOLUTION
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.complicationSlots
 import app.aaps.wear.watchfaces.animation.DesignRect
+import app.aaps.wear.watchfaces.animation.GlitchSpec
 import app.aaps.wear.watchfaces.animation.PulseSpec
 import app.aaps.wear.watchfaces.animation.RainSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeFrameParts
 import app.aaps.wear.watchfaces.animation.WakeLength
+import app.aaps.wear.watchfaces.daynight.DayNightChoice
+import app.aaps.wear.watchfaces.daynight.DayNightClock
+import app.aaps.wear.watchfaces.daynight.DayOverlay
+import app.aaps.wear.watchfaces.daynight.GeoPoint
+import app.aaps.wear.watchfaces.daynight.MoonPhase
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.ComplicationImageFit
 import app.aaps.wear.watchfaces.utils.ComplicationRender
@@ -127,10 +133,28 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private lateinit var binding: ActivityCustomBinding
     private var zoomFactor = 1.0
     private var lowBatColor = Color.RED
+    /** The pictures the views use: those of the zip, in the day with the day pictures in their place (see [DayOverlay]). */
     private var resDataMap: CwfResDataMap = mutableMapOf()
+    /** The pictures of the zip as they came, to see whether a new zip arrived. */
+    private var sourceResData: CwfResDataMap = mutableMapOf()
+    /** The design the views use: that of the zip, in the day with its day overlay laid over it. */
     private var json = JSONObject()
     private var jsonString = ""
     private val parsedJson = ParsedJsonCache()
+    /** True when the views carry the day look of the design. */
+    private var styleIsDay = false
+    /** The day look of [dayJsonSource], made once per design. */
+    private var dayJson: JSONObject? = null
+    private var dayJsonSource: JSONObject? = null
+
+    /** Day or night, from the phone's last known place (see `DataHandlerWear`) or fixed hours without one. */
+    private val dayNight = DayNightClock(location = { storedLocation() })
+
+    private fun storedLocation(): GeoPoint? {
+        val latitude = sp.getDouble(R.string.key_location_latitude, Double.NaN)
+        val longitude = sp.getDouble(R.string.key_location_longitude, Double.NaN)
+        return if (latitude.isNaN() || longitude.isNaN()) null else GeoPoint(latitude, longitude)
+    }
     /**
      * A real [ImageView] for background, deliberately not part of `activity_custom.xml`: background
      * must paint before complications and everything in that layout paints after them (see
@@ -271,6 +295,11 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 add(WatchFaceSettingRow.Toggle(R.string.key_include_external, R.string.pref_include_external, false))
                 // Wake-up animation (private patch): only for a design that has one
                 if (json == null || json.has(WakeAnimationSpec.JSON_KEY)) add(WakeLength.row())
+                // Day look (private patch): only for a design that has one
+                if (json == null || DayOverlay.hasDayLook(json)) {
+                    add(DayNightChoice.activeRow())
+                    add(DayNightChoice.alwaysOnRow())
+                }
             }
         }
 
@@ -935,7 +964,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     /**
      * Reads the optional `animation` key of the design [json]. Null when it is absent; missing keys
-     * get the defaults of [WakeAnimationSpec], [RainSpec] and [PulseSpec]. Never throws: a broken
+     * get the defaults of [WakeAnimationSpec], [RainSpec], [PulseSpec] and [GlitchSpec]. Never throws: a broken
      * animation must not cost the design. [image] finds a picture of the zip by its key.
      */
     internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = runCatching {
@@ -943,6 +972,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         val spec = WakeAnimationSpec()
         val rain = RainSpec()
         val pulse = PulseSpec()
+        val glitch = GlitchSpec()
         fun JSONObject.float(key: String, default: Float) = optDouble(key, default.toDouble()).toFloat()
         fun JSONObject.rect(default: DesignRect) =
             DesignRect(float("left", default.left), float("top", default.top), float("width", default.width), float("height", default.height))
@@ -966,6 +996,16 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     amplitude = it.float("amplitude", pulse.amplitude), secondBeat = it.float("secondBeat", pulse.secondBeat),
                     glowColor = getColor(it.optString("glowColor"), pulse.glowColor), glowAlpha = it.optInt("glowAlpha", pulse.glowAlpha),
                     glowRadius = it.float("glowRadius", pulse.glowRadius), fallbackBpm = it.optInt("fallbackBpm", pulse.fallbackBpm)
+                )
+            },
+            glitch = animation.optJSONObject("glitch")?.let {
+                GlitchSpec(
+                    periodMs = it.optLong("periodMs", glitch.periodMs), chance = it.float("chance", glitch.chance),
+                    burstMs = it.optLong("burstMs", glitch.burstMs), bands = it.optInt("bands", glitch.bands), seed = it.optLong("seed", glitch.seed),
+                    minHeight = it.float("minHeight", glitch.minHeight), maxHeight = it.float("maxHeight", glitch.maxHeight),
+                    minWidth = it.float("minWidth", glitch.minWidth), maxWidth = it.float("maxWidth", glitch.maxWidth), jump = it.float("jump", glitch.jump),
+                    color1 = getColor(it.optString("color1"), glitch.color1), color2 = getColor(it.optString("color2"), glitch.color2),
+                    alpha = it.optInt("alpha", glitch.alpha), region = it.optJSONObject("region")?.rect(glitch.region) ?: glitch.region
                 )
             }
         )
@@ -1114,7 +1154,15 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         customWatchfaceData?.let {
             updatePref(it.metadata)
             try {
-                json = parsedJson.parse(it.json)
+                val design = parsedJson.parse(it.json)
+                // Day or night as the wearer chose, separately for the active and the always-on screen
+                val day = DayOverlay.hasDayLook(design) && DayNightChoice.showDay(
+                    active = sp.getString(R.string.key_day_night_look, DayNightChoice.AUTO),
+                    alwaysOn = sp.getString(R.string.key_day_night_always_on, DayNightChoice.NIGHT),
+                    ambient = isAmbient,
+                    isDayNow = { dayNight.isDay(renderNow()) }
+                )
+                json = if (day) dayLook(design) else design
                 // ViewMap, FontMap, TrendArrowMap and DynProvider keep their state on enum entries,
                 // which are process-wide, while several CustomWatchface instances can exist at once -
                 // the live watch face, the editor's headless instance, and the one a complication
@@ -1130,9 +1178,11 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     jsonString = ""
                     styleOwner = this
                 }
-                if (!resDataMap.isEquals(it.resData) || jsonString != it.json) {
-                    resDataMap = it.resData
+                if (!sourceResData.isEquals(it.resData) || jsonString != it.json || styleIsDay != day) {
+                    sourceResData = it.resData
+                    resDataMap = if (day) DayOverlay.dayResources(it.resData) else it.resData
                     jsonString = it.json
+                    styleIsDay = day
                     // The views now carry a different design. Anything holding pictures drawn from
                     // the previous one can tell by comparing this, without having to be told - see
                     // [styleId].
@@ -1206,6 +1256,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             }
         }
     }
+
+    /** The day look of [design], made once and kept while the design stays the same. */
+    private fun dayLook(design: JSONObject): JSONObject =
+        dayJson?.takeIf { dayJsonSource === design } ?: DayOverlay.apply(design).also {
+            dayJson = it
+            dayJsonSource = design
+        }
 
     private fun updatePref(metadata: CwfMetadataMap) {
         val cwfAuthorization = metadata[CwfMetadataKey.CWF_AUTHORIZATION]?.toBooleanStrictOrNull()
@@ -2088,7 +2145,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         RESERVOIR_LEVEL_EXT2(JsonKeyValues.RESERVOIR_LEVEL_EXT2.key, 0.0, 2.0),
         RIG_BATTERY_EXT2(ViewKeys.RIG_BATTERY_EXT2.key, 0.0, 100.0),
         TIMESTAMP_EXT2(ViewKeys.TIMESTAMP_EXT2.key, 0.0, 60.0),
-        LOOP_EXT2(ViewKeys.LOOP_EXT2.key, 0.0, 28.0);
+        LOOP_EXT2(ViewKeys.LOOP_EXT2.key, 0.0, 28.0),
+        MOON_PHASE(JsonKeyValues.MOON_PHASE.key, 0.0, 1.0);
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2185,6 +2243,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.RIG_BATTERY_EXT2 -> cwf.status[2].rigBattery.replace("%", "").toDoubleOrNull()
             ValueMap.LOOP_EXT2        -> if (cwf.status[2].openApsStatus != -1L) ((System.currentTimeMillis() - cwf.status[2].openApsStatus) / 1000 / 60).toDouble() else null
             ValueMap.TIMESTAMP_EXT2   -> if (cwf.singleBg[2].timeStamp != 0L) floor(cwf.timeSince(2) / (1000 * 60)) else null
+            ValueMap.MOON_PHASE       -> MoonPhase.at(cwf.renderNow())
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->

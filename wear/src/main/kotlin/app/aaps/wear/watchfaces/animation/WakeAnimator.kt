@@ -10,8 +10,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
- * The wake-up animation of the Custom watch face: rain and a beating heart for a few seconds after
- * the wrist is raised. Private patch, see [WakeAnimationSpec] for what a design can set.
+ * The wake-up animation of the Custom watch face: rain or glitch bands, and a beating heart, for a
+ * few seconds after the wrist is raised. Private patch, see [WakeAnimationSpec] for what a design can set.
  *
  * The watch face hands over the design's values ([setDesign]), the watch state ([watch]), asks for
  * each plain interactive frame whether this one draws it ([drawFrame]), and asks for the time to the
@@ -34,6 +34,7 @@ class WakeAnimator(
 
     private var spec: WakeAnimationSpec? = null
     private var rain: RainField? = null
+    private var glitch: GlitchField? = null
     private var pulse: HeartPulse? = null
     private var bpm = PulseCurve.FALLBACK_BPM
     private var isHeadless = false
@@ -57,6 +58,7 @@ class WakeAnimator(
         timer.spec = s
         if (s?.withoutImage() != spec?.withoutImage() || s?.pulse?.drawable !== spec?.pulse?.drawable) {
             rain = s?.rain?.let { RainField(it) }
+            glitch = s?.glitch?.let { GlitchField(it) }
             pulse?.release()
             pulse = s?.pulse?.let { HeartPulse(it) }
             layers.invalidate()
@@ -117,7 +119,10 @@ class WakeAnimator(
         val strength = s.envelope(elapsed, timer.lengthThisWakeMs)
         layers.draw(
             canvas, width, height, nowMs, content, complications, parts,
-            rain = { rain?.draw(it, elapsed, scale, strength) },
+            rain = { c ->
+                rain?.draw(c, elapsed, scale, strength)
+                glitch?.draw(c, elapsed, scale, strength)
+            },
             heart = { c -> pulse?.let { it.draw(c, PulseCurve.value(elapsed, bpm, s.pulse?.secondBeat ?: 0f) * strength, scale) } }
         )
         return true

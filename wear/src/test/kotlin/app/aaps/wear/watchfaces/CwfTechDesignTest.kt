@@ -2,6 +2,7 @@ package app.aaps.wear.watchfaces
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -32,6 +33,7 @@ import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.rx.weardata.ResData
 import app.aaps.core.interfaces.rx.weardata.ResFormat
+import app.aaps.shared.impl.weardata.JsonKeyValues
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import app.aaps.shared.impl.weardata.toDrawable
@@ -44,6 +46,7 @@ import app.aaps.wear.watchfaces.animation.DesignRect
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeTimer
+import app.aaps.wear.watchfaces.daynight.DayOverlay
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
@@ -57,6 +60,8 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.Base64
 import java.util.Random
 import java.util.zip.ZipEntry
@@ -74,7 +79,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * The "AAPS Tech" design: a dark, neon "cyberpunk" HUD. There is no analog clock, no hand and no
+ * The "Cyberpunk" design: a dark, neon "cyberpunk" HUD. There is no analog clock, no hand and no
  * round dial. The time (neon yellow) and the glucose value with its arrow are the big things. Next to
  * the glucose sits a small data table (insulin, carbs, basal, reservoir). Heart rate, steps and the
  * watch battery are three flat boxes with a neon frame. The loop status sits left of the time. The
@@ -83,7 +88,7 @@ import kotlin.math.sqrt
  *
  * Built from the Default design that the real code generates. The test writes the zip and a preview to
  * `build/cwf-design`, and checks the copy kept in the repository (`wear/cwf-designs`) is the same
- * design. To change the design: change [design], run this test and copy `build/cwf-design/AAPS_Tech.zip`
+ * design. To change the design: change [design], run this test and copy `build/cwf-design/Cyberpunk.zip`
  * over the kept one.
  *
  * The font is `cwf-designs/fonts/Cyber.ttf` when that file exists (it is then added to the zip),
@@ -180,7 +185,7 @@ class CwfTechDesignTest {
 
     private fun design(default: CwfData): JSONObject = JSONObject(default.json).apply {
         getJSONObject("metadata")
-            .put(CwfMetadataKey.CWF_NAME.key, "AAPS Tech")
+            .put(CwfMetadataKey.CWF_NAME.key, NAME)
             .put(CwfMetadataKey.CWF_FILENAME.key, NAME)
             .put(CwfMetadataKey.CWF_AUTHOR.key, "AAPS (local)")
             .put(CwfMetadataKey.CWF_CREATED_AT.key, "11/11/26")
@@ -205,7 +210,7 @@ class CwfTechDesignTest {
         // Views this design does not use. The three hands are off; the digital time replaces them.
         for (hidden in listOf(
             "time", "second", "timePeriod", "week_number", "patient_name", "status", "tempTarget", "uploader_battery", "rig_battery",
-            "bgi", "avg_delta", "delta", "freetext4", "complication3", "complication4", "hour_hand", "minute_hand", "second_hand"
+            "bgi", "avg_delta", "delta", "complication3", "complication4", "hour_hand", "minute_hand", "second_hand"
         )) getJSONObject(hidden).put("visibility", "gone")
 
         // The background picture: dark panels with faint scan lines
@@ -251,9 +256,47 @@ class CwfTechDesignTest {
         // The graph in its framed panel
         place("chart", CHART_LEFT, CHART_TOP, CHART_WIDTH, CHART_HEIGHT)
 
+        // The moon right of the logo: one of MOON_STEPS pictures, chosen by the phase of today
+        place("freetext4", MOON_LEFT, MOON_TOP, MOON_SIZE).put("textvalue", "").put("dynData", MOON_DYN)
+        (optJSONObject("dynData") ?: JSONObject().also { put("dynData", it) }).put(MOON_DYN, moonDynData())
+
         // Rain and the beating drop for a few seconds after the wrist is raised
         put("animation", animation())
+
+        // From sunrise to sunset: the yellow day look (see dayOverlay)
+        put(DayOverlay.JSON_KEY, dayOverlay())
     }
+
+    /** The moon view picks picture k of [MOON_STEPS] for the phases (k - 1) / [MOON_STEPS] until k / [MOON_STEPS]. */
+    private fun moonDynData(): JSONObject = JSONObject().put("valueKey", JsonKeyValues.MOON_PHASE.key).apply {
+        for (k in 1..MOON_STEPS) put("image$k", moonName(k))
+    }
+
+    /**
+     * The day look, laid over the design from sunrise to sunset ("Signaalgeel"). The background turns
+     * yellow with black panels; the pictures of the zip whose name ends in "Day" take the place of the
+     * night ones. Only the texts on the yellow change colour. The glucose value, the arrow, the table and
+     * the graph stay on black panels in their night colours, so green, yellow and red keep their meaning.
+     * The rain gives way to short glitch bands.
+     */
+    private fun dayOverlay(): JSONObject = JSONObject().apply {
+        put("day_name", JSONObject().put("fontColor", DAY_MUTED))
+        put("month", JSONObject().put("fontColor", DAY_MUTED))
+        put("day", JSONObject().put("fontColor", DAY_INK))
+        put("hour", JSONObject().put("fontColor", DAY_INK))
+        put("minute", JSONObject().put("fontColor", DAY_INK))
+        put("freetext1", JSONObject().put("fontColor", DAY_TEAL))
+        put("loop", JSONObject().put("fontColor", DAY_INK))
+        put("complication5", JSONObject().put("fontColor", DAY_INK))
+        for (label in listOf("iob1", "cob1", "freetext2", "freetext3")) put(label, JSONObject().put("fontColor", DAY_LABEL))
+        put("animation", JSONObject().put("rain", JSONObject.NULL).put("glitch", glitch()))
+    }
+
+    /** The day animation: now and then a short burst of red and teal bands, under the data like the rain. */
+    private fun glitch(): JSONObject = JSONObject()
+        .put("periodMs", 900).put("chance", 0.55).put("burstMs", 140).put("bands", 3).put("seed", 23)
+        .put("minHeight", 2).put("maxHeight", 7).put("minWidth", 100).put("maxWidth", 260).put("jump", 8)
+        .put("color1", LOW_COLOR).put("color2", DAY_CYAN).put("alpha", 200)
 
     /** The resources of [design]: those of the Default design, [images] and the font. */
     private fun resources(default: CwfData, images: Map<String, ByteArray>): MutableMap<String, ResData> = default.resData.toMutableMap().apply {
@@ -261,9 +304,13 @@ class CwfTechDesignTest {
         fonts().forEach { (name, bytes) -> this[name] = ResData(bytes, ResFormat.TTF) }
     }
 
-    /** A render-only face that shows [design], with 24 hour time as on the watch. */
-    private fun storedFace(design: JSONObject, default: CwfData, images: Map<String, ByteArray>): CustomWatchface {
+    /**
+     * A render-only face that shows [design], with 24 hour time as on the watch, as it looks at
+     * [instant]. The watch has no place in the tests, so the day look shows from 07:00 to 19:00.
+     */
+    private fun storedFace(design: JSONObject, default: CwfData, images: Map<String, ByteArray>, instant: Long = NIGHT_MS): CustomWatchface {
         val face = newFace()
+        face.setRenderInstant(instant)
         face.sp.putBoolean(R.string.key_show_date, true)
         val resData = resources(default, images)
         runBlocking { face.complicationDataRepository.storeCustomWatchface(CwfData(design.toString(4), ZipWatchfaceFormat.loadMetadata(design), resData)) }
@@ -274,8 +321,8 @@ class CwfTechDesignTest {
     }
 
     /** Renders [design] on black, with the boxes drawn as an example, as the zip's preview image. */
-    private fun preview(design: JSONObject, default: CwfData, images: Map<String, ByteArray>): Bitmap {
-        val face = storedFace(design, default, images)
+    private fun preview(design: JSONObject, default: CwfData, images: Map<String, ByteArray>, instant: Long = NIGHT_MS): Bitmap {
+        val face = storedFace(design, default, images, instant)
         val image = createBitmap(400, 400).apply { eraseColor(Color.BLACK) }
         val canvas = Canvas(image)
         canvas.drawBitmap(face.renderToBitmap(400, 400), 0f, 0f, null)
@@ -590,8 +637,8 @@ class CwfTechDesignTest {
      * line has a red copy offset by one or two pixels behind it (the glitch). Drawn into the cover plate,
      * where nothing else is.
      */
-    private fun drawEmblem(canvas: Canvas, logo: Int = 1) {
-        if (logo != 1) return drawLogoOption(canvas, logo)
+    private fun drawEmblem(canvas: Canvas, logo: Int = 1, ink: Ink = NIGHT_INK) {
+        if (logo != 1) return drawLogoOption(canvas, logo, ink)
         val s = SCALE
         val l = LOGO_LEFT.toFloat()
         val t = LOGO_TOP.toFloat()
@@ -629,13 +676,19 @@ class CwfTechDesignTest {
         canvas.drawText("AAPS", cx, baseline, text)
     }
 
+    /**
+     * The colours of the logo: the line ([line]) with a [lineShadow] copy behind it, and the word
+     * ([text]) with two coloured copies behind it.
+     */
+    private data class Ink(val line: String, val lineShadow: String, val text: String, val textShadow1: String, val textShadow2: String)
+
     /** Draws [block] twice, in design units: a red copy offset by 2,1 and the cyan one, as a glitch. */
-    private fun glitched(canvas: Canvas, width: Float, fillShape: Boolean = false, block: (Canvas, Paint) -> Unit) {
+    private fun glitched(canvas: Canvas, width: Float, fillShape: Boolean = false, ink: Ink = NIGHT_INK, block: (Canvas, Paint) -> Unit) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             strokeWidth = width; style = if (fillShape) Paint.Style.FILL else Paint.Style.STROKE
             strokeJoin = Paint.Join.MITER; strokeCap = Paint.Cap.SQUARE
         }
-        for ((dx, dy, color) in listOf(Triple(2f, 1f, LOW_COLOR), Triple(0f, 0f, CYAN))) {
+        for ((dx, dy, color) in listOf(Triple(2f, 1f, ink.lineShadow), Triple(0f, 0f, ink.line))) {
             paint.color = Color.parseColor(color)
             canvas.save()
             canvas.translate(dx, dy)
@@ -645,15 +698,15 @@ class CwfTechDesignTest {
     }
 
     /** The word "AAPS" with a red and a cyan copy behind the white one; [stencil] cuts a thin gap through the letters. */
-    private fun word(canvas: Canvas, cx: Float, cy: Float, size: Float, stencil: Boolean = false) {
+    private fun word(canvas: Canvas, cx: Float, cy: Float, size: Float, stencil: Boolean = false, ink: Ink = NIGHT_INK) {
         canvas.saveLayer(null, null)
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = size; textAlign = Paint.Align.CENTER; typeface = logoTypeface() }
         val baseline = cy - (text.fontMetrics.ascent + text.fontMetrics.descent) / 2f
-        text.color = Color.parseColor(LOW_COLOR)
+        text.color = Color.parseColor(ink.textShadow1)
         canvas.drawText("AAPS", cx + 1.5f, baseline + 1f, text)
-        text.color = Color.parseColor(CYAN)
+        text.color = Color.parseColor(ink.textShadow2)
         canvas.drawText("AAPS", cx - 1.5f, baseline - 0.5f, text)
-        text.color = Color.WHITE
+        text.color = Color.parseColor(ink.text)
         canvas.drawText("AAPS", cx, baseline, text)
         if (stencil) {
             val clear = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) }
@@ -682,7 +735,7 @@ class CwfTechDesignTest {
      * high space), which is the pulse rectangle of the animation ([pulseRect]), so at rest it lies
      * exactly on the drop of the still logo.
      */
-    private fun logoPulse(): ByteArray {
+    private fun logoPulse(ink: Ink = NIGHT_INK): ByteArray {
         val box = pulseBox()
         val width = ceil(box.width * PULSE_PX_PER_UNIT).toInt()
         val height = ceil(box.height * PULSE_PX_PER_UNIT).toInt()
@@ -691,7 +744,7 @@ class CwfTechDesignTest {
         // Each axis scaled so the box fills the picture exactly, also after rounding to whole pixels
         canvas.scale(width / (DROP_BOX_RIGHT - DROP_BOX_LEFT), height / (DROP_BOX_BOTTOM - DROP_BOX_TOP))
         canvas.translate(-DROP_BOX_LEFT, -DROP_BOX_TOP)
-        glitched(canvas, 2f) { c, paint -> c.drawPath(logoDrop(), paint) }
+        glitched(canvas, 2f, ink = ink) { c, paint -> c.drawPath(logoDrop(), paint) }
         return ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
     }
 
@@ -732,7 +785,7 @@ class CwfTechDesignTest {
     }
 
     /** Logo options 2 to 5, all in the slot of the first one, in design units. */
-    private fun drawLogoOption(canvas: Canvas, logo: Int) {
+    private fun drawLogoOption(canvas: Canvas, logo: Int, ink: Ink = NIGHT_INK) {
         canvas.save()
         canvas.scale(SCALE, SCALE)
         val l = LOGO_LEFT.toFloat()
@@ -790,14 +843,14 @@ class CwfTechDesignTest {
                 val l = 0f
                 val t = 0f
                 val w = LOGO_WIDTH / k
-                glitched(canvas, 2f) { c, paint ->
+                glitched(canvas, 2f, ink = ink) { c, paint ->
                     c.drawPath(logoDrop(), paint)
                     c.drawPath(Path().apply {
                         moveTo(l + 1f, t + 36f); lineTo(l + 8f, t + 36f); lineTo(l + 12f, t + 27f); lineTo(l + 17f, t + 45f)
                         lineTo(l + 20f, t + 36f); lineTo(l + w - 2f, t + 36f)
                     }, paint)
                 }
-                word(canvas, l + 71f, t + 17f, 30f, stencil = true)
+                word(canvas, l + 71f, t + 17f, 30f, stencil = true, ink = ink)
                 canvas.restore()
             }
             else -> {
@@ -868,12 +921,12 @@ class CwfTechDesignTest {
      * a cyan frame line on top of the graph with cut corners,
      * and the small battery outline the watch battery text sits in.
      */
-    private fun coverPlate(logo: Int = 1): ByteArray {
+    private fun coverPlate(logo: Int = 1, day: Boolean = false): ByteArray {
         val image = createBitmap(800, 800).apply { eraseColor(Color.TRANSPARENT) }
         val canvas = Canvas(image)
         val s = SCALE
-        val frame = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(CYAN); strokeWidth = 3f * s; style = Paint.Style.STROKE; strokeCap = Paint.Cap.SQUARE }
-        val thin = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(LINE_COLOR); strokeWidth = 1f * s }
+        val frame = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(if (day) LOW_COLOR else CYAN); strokeWidth = 3f * s; style = Paint.Style.STROKE; strokeCap = Paint.Cap.SQUARE }
+        val thin = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(if (day) DAY_LINE else LINE_COLOR); strokeWidth = 1f * s }
         // Table: a bar on the left with a short cap on top, and a line under each row
         canvas.drawLine((TABLE_LEFT - 8f) * s, TABLE_TOP * s, (TABLE_LEFT - 8f) * s, TABLE_BOTTOM * s, frame)
         canvas.drawLine((TABLE_LEFT - 8f) * s, TABLE_TOP * s, (TABLE_LEFT + 14f) * s, TABLE_TOP * s, frame)
@@ -893,24 +946,25 @@ class CwfTechDesignTest {
         }
         canvas.drawPath(top, frame)
         // The battery outline with its small nub on the right
-        val battery = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#E6E6F2"); strokeWidth = 2f * s; style = Paint.Style.STROKE }
+        val battery = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(if (day) DAY_INK else "#E6E6F2"); strokeWidth = 2f * s; style = Paint.Style.STROKE }
         canvas.drawRect(BATT_OUT_LEFT * s, BATT_TOP * s, (BATT_OUT_LEFT + BATT_OUT_WIDTH) * s, (BATT_TOP + BATT_HEIGHT) * s, battery)
         battery.style = Paint.Style.FILL
         canvas.drawRect((BATT_OUT_LEFT + BATT_OUT_WIDTH) * s, (BATT_TOP + 6f) * s, (BATT_OUT_LEFT + BATT_OUT_WIDTH + 4f) * s, (BATT_TOP + BATT_HEIGHT - 6f) * s, battery)
         // The labels of the heart rate and steps rows, in the label colour like the other labels
-        drawRowIcon(canvas, R.drawable.ic_health_heart, 4)
-        drawRowIcon(canvas, R.drawable.ic_health_steps, 5)
-        drawEmblem(canvas, logo)
+        val label = if (day) DAY_LABEL else LABEL_COLOR
+        drawRowIcon(canvas, R.drawable.ic_health_heart, 4, label)
+        drawRowIcon(canvas, R.drawable.ic_health_steps, 5, label)
+        drawEmblem(canvas, logo, if (day) DAY_INK_LOGO else NIGHT_INK)
         return ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
     }
 
     /** Draws [icon] as the label of table row [index], in the label column, on the 800 px cover plate. */
-    private fun drawRowIcon(canvas: Canvas, @DrawableRes icon: Int, index: Int) {
+    private fun drawRowIcon(canvas: Canvas, @DrawableRes icon: Int, index: Int, color: String = LABEL_COLOR) {
         val s = SCALE
         val half = ROW_ICON_SIZE / 2f
         val centerY = TABLE_TOP + index * ROW_HEIGHT + ROW_HEIGHT / 2f
         ContextCompat.getDrawable(RuntimeEnvironment.getApplication(), icon)!!.mutate().apply {
-            setTint(Color.parseColor(LABEL_COLOR))
+            setTint(Color.parseColor(color))
             setBounds((TABLE_LEFT * s).toInt(), ((centerY - half) * s).toInt(), ((TABLE_LEFT + ROW_ICON_SIZE) * s).toInt(), ((centerY + half) * s).toInt())
             draw(canvas)
         }
@@ -920,7 +974,116 @@ class CwfTechDesignTest {
         ResFileMap.BACKGROUND.fileName to background(bg),
         ResFileMap.COVER_PLATE.fileName to coverPlate(logo),
         LOGO_PULSE to logoPulse()
-    ) + arrowImages()
+    ) + arrowImages() + moonImages() + dayImages(logo)
+
+    /** The pictures that take the place of the night ones from sunrise to sunset (see [dayOverlay]). */
+    private fun dayImages(logo: Int = 6): Map<String, ByteArray> = mapOf(
+        ResFileMap.BACKGROUND.fileName + DayOverlay.IMAGE_SUFFIX to backgroundDay(),
+        ResFileMap.COVER_PLATE.fileName + DayOverlay.IMAGE_SUFFIX to coverPlate(logo, day = true),
+        LOGO_PULSE + DayOverlay.IMAGE_SUFFIX to logoPulse(DAY_INK_LOGO)
+    ) + (1..MOON_STEPS).associate { moonName(it) + DayOverlay.IMAGE_SUFFIX to moonPng(moonPhaseOf(it), day = true) }
+
+    private fun moonImages(): Map<String, ByteArray> = (1..MOON_STEPS).associate { moonName(it) to moonPng(moonPhaseOf(it), day = false) }
+
+    /** The name of moon picture [k] (1 .. [MOON_STEPS]). */
+    private fun moonName(k: Int) = "Moon%02d".format(k)
+
+    /** The phase moon picture [k] shows: the middle of the phases it stands for. */
+    private fun moonPhaseOf(k: Int): Double = (k - 0.5) / MOON_STEPS
+
+    /**
+     * The part of the moon that is lit at [phase] (0 new, 0.5 full), as seen from the north: the light
+     * grows from the right. A half circle on the lit side and half an ellipse (the line between light
+     * and dark), in a circle of radius [r] around [c], [c].
+     */
+    private fun moonLit(phase: Double, c: Float, r: Float): Path {
+        val litRight = phase < 0.5
+        val k = cos(2 * PI * phase).toFloat()
+        val rx = abs(k) * r
+        // A crescent bulges to the lit side, a gibbous moon to the dark side
+        val bulgeRight = litRight == (k > 0)
+        return Path().apply {
+            moveTo(c, c - r)
+            arcTo(RectF(c - r, c - r, c + r, c + r), -90f, if (litRight) 180f else -180f)
+            arcTo(RectF(c - rx, c - r, c + rx, c + r), 90f, if (bulgeRight) -180f else 180f)
+            close()
+        }
+    }
+
+    /**
+     * One moon picture, [MOON_PX] pixels for the [MOON_SIZE] view. At night: a dark navy disc with a
+     * faint cyan ring and glow, the lit part ice white. In the day: a black disc, the lit part white.
+     */
+    private fun moonPng(phase: Double, day: Boolean): ByteArray {
+        val image = createBitmap(MOON_PX, MOON_PX).apply { eraseColor(Color.TRANSPARENT) }
+        val canvas = Canvas(image)
+        canvas.scale(MOON_PX / MOON_SIZE.toFloat(), MOON_PX / MOON_SIZE.toFloat())
+        val c = MOON_SIZE / 2f
+        val r = MOON_RADIUS
+        if (!day) {
+            val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(110, 0, 240, 255); maskFilter = BlurMaskFilter(2.5f, BlurMaskFilter.Blur.NORMAL) }
+            canvas.drawCircle(c, c, r + 0.5f, glow)
+        }
+        canvas.drawCircle(c, c, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(if (day) DAY_INK else "#141B30") })
+        canvas.drawPath(moonLit(phase, c, r - 0.5f), Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(if (day) "#FFFFFF" else "#DDF9FF") })
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = if (day) 2f else 1.5f
+            color = if (day) Color.parseColor(DAY_INK) else Color.argb(115, 0, 240, 255)
+        }
+        canvas.drawCircle(c, c, r, ring)
+        return pngBytes(image)
+    }
+
+    /** The glucose panel of the day look: the glucose value, its arrow and its age on black. */
+    private fun glucosePanel() = shape(
+        listOf(
+            GL_LEFT + 14f to GL_TOP.toFloat(), GL_RIGHT.toFloat() to GL_TOP.toFloat(), GL_RIGHT.toFloat() to GL_BOTTOM - 14f,
+            GL_RIGHT - 14f to GL_BOTTOM.toFloat(), GL_LEFT.toFloat() to GL_BOTTOM.toFloat(), GL_LEFT.toFloat() to GL_TOP + 14f
+        )
+    )
+
+    /**
+     * The day background ("Signaalgeel"): signal yellow with a faint carbon weave, and black panels for
+     * the glucose value, the table and the graph, with faint scan lines. Yellow and black hazard
+     * stripes along the bottom of the glucose panel.
+     */
+    private fun backgroundDay(): ByteArray {
+        val image = createBitmap(800, 800).apply { eraseColor(Color.parseColor(DAY_YELLOW)) }
+        val canvas = Canvas(image)
+        val weave = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(20, 0, 0, 0); strokeWidth = 1f * SCALE }
+        var d = -800f
+        while (d < 800f) {
+            canvas.drawLine(d, 0f, d + 800f, 800f, weave)
+            canvas.drawLine(d + 800f, 0f, d, 800f, weave)
+            d += 4f * SCALE
+        }
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(DAY_INK) }
+        val lines = Paint().apply { color = Color.parseColor("#141414"); strokeWidth = 1f * SCALE }
+        for (panel in listOf(glucosePanel(), tablePanel(), chartPanel())) {
+            canvas.save()
+            canvas.clipPath(panel)
+            canvas.drawPath(panel, fill)
+            var y = 0f
+            while (y < 800f) {
+                canvas.drawLine(0f, y, 800f, y, lines)
+                y += 4f * SCALE
+            }
+            canvas.restore()
+        }
+        // Hazard stripes: the bottom 6 of the glucose panel, left of the arrow
+        canvas.save()
+        canvas.clipPath(glucosePanel())
+        canvas.clipRect(GL_LEFT * SCALE, (GL_BOTTOM - 6f) * SCALE, 150f * SCALE, GL_BOTTOM * SCALE)
+        val stripe = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(DAY_YELLOW); strokeWidth = 5f * SCALE }
+        var x = GL_LEFT - 10f
+        while (x < 160f) {
+            canvas.drawLine(x * SCALE, GL_BOTTOM * SCALE, (x + 6f) * SCALE, (GL_BOTTOM - 6f) * SCALE, stripe)
+            x += 10f
+        }
+        canvas.restore()
+        return pngBytes(image)
+    }
 
     @Test
     fun buildsTheDesignAndItsPreview() {
@@ -936,7 +1099,7 @@ class CwfTechDesignTest {
         // The phone accepts it: it needs a name and a preview image
         val loaded = ZipWatchfaceFormat.loadCustomWatchface(zip, "$NAME.zip", authorization = true)
         assertThat(loaded).isNotNull()
-        assertThat(loaded!!.cwfData.metadata[CwfMetadataKey.CWF_NAME]).isEqualTo("AAPS Tech")
+        assertThat(loaded!!.cwfData.metadata[CwfMetadataKey.CWF_NAME]).isEqualTo(NAME)
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION1]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3]).isEqualTo("false")
@@ -951,6 +1114,12 @@ class CwfTechDesignTest {
         if (fontFile.exists()) assertThat(loaded.cwfData.resData[CUSTOM_FONT]?.format).isEqualTo(ResFormat.TTF)
         // The picture of the beating drop of the wake-up animation
         assertThat(loaded.cwfData.resData[LOGO_PULSE]?.format).isEqualTo(ResFormat.PNG)
+        // The day pictures and the moons are kept under their own names
+        val dayNames = listOf(ResFileMap.BACKGROUND.fileName, ResFileMap.COVER_PLATE.fileName, LOGO_PULSE).map { it + DayOverlay.IMAGE_SUFFIX }
+        val moonNames = (1..MOON_STEPS).flatMap { listOf(moonName(it), moonName(it) + DayOverlay.IMAGE_SUFFIX) }
+        assertThat(loaded.cwfData.resData.keys).containsAtLeastElementsIn(dayNames + moonNames)
+        // And the preview of the day look, to look at
+        File(out, "${NAME}_day.png").writeBytes(pngBytes(preview(design, default, images, DAY_MS)))
 
         // The copy kept in the repository is this design
         assertThat(kept.exists()).isTrue()
@@ -959,6 +1128,97 @@ class CwfTechDesignTest {
         assertThat(keptEntries).containsAtLeast("${ResFileMap.COVER_PLATE.fileName}.png", "${ResFileMap.BACKGROUND.fileName}.png")
         if (fontFile.exists()) assertThat(keptEntries).contains("$CUSTOM_FONT.ttf")
         assertThat(keptEntries).contains("$LOGO_PULSE.png")
+        assertThat(keptEntries).containsAtLeastElementsIn((dayNames + moonNames).map { "$it.png" })
+    }
+
+    @Test
+    fun theDayLookChangesOnlyTheTextsOnYellow() {
+        val design = design(defaultDesign())
+        assertThat(DayOverlay.hasDayLook(design)).isTrue()
+        val day = DayOverlay.apply(design)
+        // The texts on yellow are dark, with enough contrast
+        fun contrast(a: String, b: String): Double {
+            val la = luminance(Color.parseColor(a))
+            val lb = luminance(Color.parseColor(b))
+            return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+        }
+        for (key in listOf("hour", "minute", "day", "loop", "complication5")) {
+            assertWithMessage(key).that(contrast(day.getJSONObject(key).getString("fontColor"), DAY_YELLOW)).isAtLeast(7.0)
+        }
+        for (key in listOf("day_name", "month")) assertWithMessage(key).that(contrast(day.getJSONObject(key).getString("fontColor"), DAY_YELLOW)).isAtLeast(4.5)
+        // The colon is big: 3 is enough
+        assertThat(contrast(day.getJSONObject("freetext1").getString("fontColor"), DAY_YELLOW)).isAtLeast(3.0)
+        // The glucose colours stay as they are, and no text in the day takes one of them
+        for (key in listOf("midColor", "highColor", "lowColor")) assertWithMessage(key).that(day.getString(key)).isEqualTo(design.getString(key))
+        val glucose = listOf("midColor", "highColor", "lowColor").map { design.getString(it) }
+        for (key in listOf("hour", "minute", "freetext1", "cob2", "iob2", "basalRate", "reservoir", "day", "day_name", "month"))
+            assertWithMessage(key).that(day.getJSONObject(key).getString("fontColor")).isNotIn(glucose)
+        // The values in the table do not change: white on the black panel, day and night
+        for (key in listOf("iob2", "cob2", "basalRate", "reservoir", "complication1", "complication2"))
+            assertWithMessage(key).that(day.getJSONObject(key).getString("fontColor")).isEqualTo(VALUE_COLOR)
+        // No rain in the day, glitch bands instead; the heart stays, with its day picture
+        val dayPictures = images().toMutableMap().apply { dayImages().forEach { (name, png) -> this[name.removeSuffix(DayOverlay.IMAGE_SUFFIX)] = png } }
+        val spec = readAnimation(day, dayPictures)
+        assertThat(spec.rain).isNull()
+        assertThat(spec.glitch).isNotNull()
+        assertThat(spec.normalized().withoutImage()).isEqualTo(spec.withoutImage())
+        assertThat(spec.pulse?.drawable).isNotNull()
+    }
+
+    @Test
+    fun rendersTheDayLookFromSunriseToSunset() {
+        val default = defaultDesign()
+        val design = design(default)
+        val images = images()
+        val night = preview(design, default, images, NIGHT_MS)
+        val day = preview(design, default, images, DAY_MS)
+        sheet(listOf("night 23:00" to night, "day 12:00" to day), "${NAME}_day_night.png")
+        // Left of the glucose panel: yellow in the day, dark at night
+        assertThat(luminance(day.getPixel(19, 200))).isGreaterThan(0.5)
+        assertThat(luminance(night.getPixel(19, 200))).isLessThan(0.05)
+        // The glucose panel and the table stay black in the day
+        assertThat(luminance(day.getPixel(226, 184))).isLessThan(0.02)
+        assertThat(luminance(day.getPixel(TABLE_LEFT + 2, TABLE_BOTTOM - 4))).isLessThan(0.05)
+        // The moon is drawn: its lit part is the brightest of its box at night
+        var brightest = 0.0
+        for (y in MOON_TOP until MOON_TOP + MOON_SIZE) for (x in MOON_LEFT until MOON_LEFT + MOON_SIZE) brightest = max(brightest, luminance(night.getPixel(x, y)))
+        assertThat(brightest).isGreaterThan(0.6)
+    }
+
+    @Test
+    fun theMoonPicturesFollowThePhase() {
+        fun litShare(phase: Double, side: IntRange = 0 until MOON_PX): Double {
+            val png = moonPng(phase, day = true)
+            val bitmap = BitmapFactory.decodeByteArray(png, 0, png.size)
+            var lit = 0
+            var all = 0
+            for (y in 0 until MOON_PX) for (x in side) {
+                if (hypot(x - MOON_PX / 2f, y - MOON_PX / 2f) > MOON_PX / 2f * MOON_RADIUS / (MOON_SIZE / 2f) - 3) continue
+                all++
+                if (luminance(bitmap.getPixel(x, y)) > 0.5) lit++
+            }
+            return lit.toDouble() / all
+        }
+        assertThat(litShare(0.02)).isLessThan(0.05)
+        assertThat(litShare(0.5)).isGreaterThan(0.9)
+        assertThat(litShare(0.25)).isWithin(0.08).of(0.5)
+        // Waxing: light on the right; waning: on the left
+        val left = 0 until MOON_PX / 2
+        val right = MOON_PX / 2 until MOON_PX
+        assertThat(litShare(0.25, right)).isGreaterThan(0.9)
+        assertThat(litShare(0.25, left)).isLessThan(0.1)
+        assertThat(litShare(0.75, left)).isGreaterThan(0.9)
+        assertThat(litShare(0.75, right)).isLessThan(0.1)
+        // Gibbous is more than half, crescent less
+        assertThat(litShare(0.375)).isGreaterThan(0.7)
+        assertThat(litShare(0.125)).isLessThan(0.3)
+        // Each picture stands for its own part of the cycle, the first one around new moon
+        assertThat(moonPhaseOf(1)).isLessThan(1.0 / MOON_STEPS)
+        assertThat(moonPhaseOf(MOON_STEPS)).isGreaterThan(1 - 1.0 / MOON_STEPS)
+        val dyn = design(defaultDesign()).getJSONObject("dynData").getJSONObject(MOON_DYN)
+        assertThat(dyn.getString("valueKey")).isEqualTo(JsonKeyValues.MOON_PHASE.key)
+        assertThat(dyn.getString("image$MOON_STEPS")).isEqualTo(moonName(MOON_STEPS))
+        assertThat(dyn.has("image${MOON_STEPS + 1}")).isFalse()
     }
 
     private fun insideRound(key: String, r: RectF, margin: Float = 0f) {
@@ -996,7 +1256,8 @@ class CwfTechDesignTest {
         assertThat(chart.height()).isAtLeast(130f)
         // Full width (340) and at least 130 high, below the table
 
-        val blocks = mapOf("date" to date, "time" to time, "bg" to bg, "table" to table, "loop" to loop, "battery" to battery, "logo" to logo, "chart" to chart)
+        val moon = rectOf(design.getJSONObject("freetext4"))
+        val blocks = mapOf("date" to date, "time" to time, "bg" to bg, "table" to table, "loop" to loop, "battery" to battery, "logo" to logo, "chart" to chart, "moon" to moon)
         val names = blocks.keys.toList()
         for (i in names.indices) for (j in i + 1 until names.size) disjoint("${names[i]} / ${names[j]}", blocks.getValue(names[i]), blocks.getValue(names[j]))
     }
@@ -1366,7 +1627,7 @@ class CwfTechDesignTest {
         val html = """
             |<!doctype html>
             |<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-            |<title>AAPS Tech wake</title>
+            |<title>Cyberpunk wake</title>
             |<style>
             |  html, body { margin: 0; background: #000; color: #9aa; font: 14px sans-serif; }
             |  .page { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px; }
@@ -1452,7 +1713,8 @@ class CwfTechDesignTest {
 
     private companion object {
 
-        const val NAME = "AAPS_Tech"
+        /** The file name of the design, and the name the phone and the watch show for it. It was called "AAPS Tech" before. */
+        const val NAME = "Cyberpunk"
         const val CUSTOM_FONT = "Cyber"
         const val SCALE = 2f
 
@@ -1585,5 +1847,36 @@ class CwfTechDesignTest {
         const val CHART_TOP = 264
         const val CHART_WIDTH = 340
         const val CHART_HEIGHT = 136
+
+        /** The moon, right of the logo, and its pictures: one per 1/24 of the cycle, about 1.2 days. */
+        const val MOON_LEFT = 186
+        const val MOON_TOP = 204
+        const val MOON_SIZE = 44
+        const val MOON_RADIUS = 19f
+        const val MOON_PX = 96
+        const val MOON_STEPS = 24
+        const val MOON_DYN = "moon"
+
+        /** The black panel behind the glucose value in the day look. */
+        const val GL_LEFT = 24
+        const val GL_TOP = 104
+        const val GL_RIGHT = 230
+        const val GL_BOTTOM = 202
+
+        /** The day look: signal yellow and black, a red accent and a teal one. */
+        const val DAY_YELLOW = "#F5E400"
+        const val DAY_INK = "#0A0A0A"
+        const val DAY_MUTED = "#4A4500"
+        const val DAY_LABEL = "#CFC64A"
+        const val DAY_TEAL = "#007A86"
+        const val DAY_CYAN = "#00B8C8"
+        const val DAY_LINE = "#3A3600"
+
+        val NIGHT_INK = Ink(line = CYAN, lineShadow = LOW_COLOR, text = "#FFFFFF", textShadow1 = LOW_COLOR, textShadow2 = CYAN)
+        val DAY_INK_LOGO = Ink(line = DAY_INK, lineShadow = LOW_COLOR, text = DAY_INK, textShadow1 = LOW_COLOR, textShadow2 = DAY_CYAN)
+
+        /** The moments the pictures show: 11 November 2026 at 23:00 (night) and at noon (day), local time. */
+        val NIGHT_MS: Long = LocalDateTime.of(2026, 11, 11, 23, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val DAY_MS: Long = LocalDateTime.of(2026, 11, 11, 12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
     }
 }

@@ -28,6 +28,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.Mockito.timeout
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyBlocking
@@ -82,6 +84,24 @@ internal class DataHandlerWearTest : WearTestBase() {
         verify(preferences, timeout(HANDLER_TIMEOUT_MS)).put(IntKey.OverviewCarbsButtonIncrement1, 5)
         verify(preferences, timeout(HANDLER_TIMEOUT_MS)).put(IntKey.OverviewCarbsButtonIncrement2, 10)
         verify(preferences, timeout(HANDLER_TIMEOUT_MS)).put(BooleanKey.AlertOverrideDoNotDisturb, false)
+    }
+
+    @Test
+    fun `preferences event stores the phone's place for the day look`() {
+        rxBus.send(EventData.Preferences(0L, false, true, 50, 80, 25.0, 0.5, 1.0, 5, 10, latitude = 52.4, longitude = 4.9))
+
+        verify(sp, timeout(HANDLER_TIMEOUT_MS)).putDouble(R.string.key_location_latitude, 52.4)
+        verify(sp, timeout(HANDLER_TIMEOUT_MS)).putDouble(R.string.key_location_longitude, 4.9)
+    }
+
+    @Test
+    fun `preferences event without a place keeps the stored one`() {
+        rxBus.send(EventData.Preferences(0L, false, true, 50, 80, 25.0, 0.5, 1.0, 5, 10))
+
+        // The face is chosen after the place is stored, so once it is, the place would have been written
+        verify(watchFacePushHelper, timeout(HANDLER_TIMEOUT_MS)).selectFace(PushedWatchfaceId.CWF)
+        verify(sp, never()).putDouble(eq(R.string.key_location_latitude), any())
+        verify(sp, never()).putDouble(eq(R.string.key_location_longitude), any())
     }
 
     @Test

@@ -484,7 +484,14 @@ sealed class EventData : Event() {
          * is in Do Not Disturb, as on the phone. Defaulted to on, so a payload from a phone that predates the
          * field keeps the alarms as they were.
          */
-        val alertOverrideDnd: Boolean = true
+        val alertOverrideDnd: Boolean = true,
+        /**
+         * The phone's last known place, rounded to 0.1 degree (about 10 km), so the watch can show the
+         * day look of a watch face from sunrise to sunset. Null when the phone has no place or may not
+         * read it, and from an older sender.
+         */
+        val latitude: Double? = null,
+        val longitude: Double? = null
     ) : EventData()
 
     @Serializable

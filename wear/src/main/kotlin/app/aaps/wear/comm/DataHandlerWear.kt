@@ -265,6 +265,17 @@ class DataHandlerWear(
             preferences.put(IntKey.OverviewCarbsButtonIncrement2, it.carbsButtonIncrement2)
             // Read by the watch's own alarms, see DoNotDisturbRule
             preferences.put(BooleanKey.AlertOverrideDoNotDisturb, it.alertOverrideDnd)
+            // The day look of the Custom watch face follows sunrise and sunset there. Kept when the
+            // phone sends none, so a short loss of the phone's place does not move the day to fixed hours.
+            val latitude = it.latitude
+            val longitude = it.longitude
+            // Written only when it changed, like the face's own preferences: a write can start a redraw.
+            if (latitude != null && longitude != null &&
+                (sp.getDouble(R.string.key_location_latitude, Double.NaN) != latitude || sp.getDouble(R.string.key_location_longitude, Double.NaN) != longitude)
+            ) {
+                sp.putDouble(R.string.key_location_latitude, latitude)
+                sp.putDouble(R.string.key_location_longitude, longitude)
+            }
             // The Watch Face Push face the wearer chose on the phone. Stored whatever the watch
             // can do with it, so a watch updated to Wear OS 6 later installs the chosen face on
             // its next start; swapped now when the watch can. Either way the phone is told what
