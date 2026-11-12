@@ -13,6 +13,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.wear.R
+import app.aaps.wear.watchdirect.WatchDirectReadings
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -107,7 +108,12 @@ class ComplicationDataRepository(
         try {
             updateLiveData { current ->
                 when (singleBg.dataset) {
-                    0    -> if (same(EventData.SingleBg.serializer(), current.bgData, singleBg)) current else current.copy(bgData = singleBg)
+                    // A newer reading the watch took from the sensor itself (direct-to-watch) is not
+                    // replaced by an older one from the phone. The phone's copy of the same reading wins.
+                    0    -> {
+                        val chosen = WatchDirectReadings.choose(current.bgData, singleBg)
+                        if (same(EventData.SingleBg.serializer(), current.bgData, chosen)) current else current.copy(bgData = chosen)
+                    }
                     1    -> if (same(EventData.SingleBg.serializer(), current.bgData1, singleBg)) current else current.copy(bgData1 = singleBg)
                     2    -> if (same(EventData.SingleBg.serializer(), current.bgData2, singleBg)) current else current.copy(bgData2 = singleBg)
                     else -> {
@@ -120,6 +126,28 @@ class ComplicationDataRepository(
             aapsLogger.error(LTag.WEAR, "Failed to update BG data", e)
         }
     }
+
+    /**
+     * A reading the watch took from the sensor itself (direct-to-watch). It goes on the face when it
+     * is newer than what the phone sent, and into the graph where the graph has no reading of that
+     * time. It stays on this watch.
+     */
+    suspend fun addSensorReading(reading: EventData.SingleBg) {
+        try {
+            // Live data, like the phone's updates: one batched write, and updateLiveData sets the time
+            updateLiveData { current ->
+                current.copy(
+                    bgData = WatchDirectReadings.choose(current.bgData, reading),
+                    graphData = EventData.GraphData(WatchDirectReadings.mergeIntoGraph(current.graphData.entries, listOf(reading)))
+                )
+            }
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Failed to add sensor reading", e)
+        }
+    }
+
+    /** What the faces show right now. */
+    suspend fun current(): ComplicationData = complicationData.first()
 
     /**
      * Update Status data from phone

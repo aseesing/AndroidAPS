@@ -16,6 +16,7 @@ import app.aaps.wear.comm.ExceptionHandlerWear
 import app.aaps.wear.complications.cwf.CwfComplicationUpdater
 import app.aaps.wear.di.WearGraph
 import app.aaps.wear.events.EventWearPreferenceChange
+import app.aaps.wear.watchdirect.WatchDirect
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import app.aaps.wear.health.PassiveHealthRegistration
 import dev.zacsweers.metro.Inject
@@ -45,6 +46,7 @@ class WearApp : Application(), MetroMemberInjector {
     @Inject lateinit var exceptionHandlerWear: ExceptionHandlerWear
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
     @Inject lateinit var cwfComplicationUpdater: CwfComplicationUpdater
+    @Inject lateinit var watchDirect: WatchDirect
 
     /**
      * Held in a field on purpose: `SharedPreferences` keeps its change listeners in a
@@ -74,6 +76,8 @@ class WearApp : Application(), MetroMemberInjector {
         cwfComplicationUpdater.start()
         // Health Services forgets passive registrations on reboot: ask again for what is shown
         CoroutineScope(Dispatchers.Default).launch { PassiveHealthRegistration.updateQuietly(this@WearApp) }
+        // Direct-to-watch: listens for the phone turning it on, and picks a set-up sensor up again after a restart
+        watchDirect.start()
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(preferenceChangeListener)
         startForegroundService(Intent(this, DataLayerListenerServiceWear::class.java))
     }

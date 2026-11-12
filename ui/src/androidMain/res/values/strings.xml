@@ -44,7 +44,8 @@
     <string name="agp_standard_deviation" comment="Standard deviation of glucose values">SD</string>
     <string name="agp_cv" comment="Coefficient of variation of glucose values">CV</string>
     <string name="agp_available_days">Days</string>
-    <string name="agp_decimal" comment="%1$.1f=numeric AGP value without units, such as eA1c, GMI or days of glucose data. Example: 13.8">%1$.1f</string>
+    <string name="agp_decimal" comment="%1$.1f=numeric AGP value without units, such as days of glucose data. Example: 13.8">%1$.1f</string>
+    <string name="hba1c_mmol_mol" comment="%1$d=HbA1c (or eA1c, GMI) in the IFCC unit mmol/mol, a whole number. Shown under the same value in percent. Example: 48 mmol/mol">%1$d mmol/mol</string>
     <string name="cgp_title">Glucose Pentagon (CGP) — 14 days</string>
     <string name="cgp_tor" comment="Glucose Pentagon axis: Time out of Range">ToR</string>
     <string name="cgp_cv" comment="Glucose Pentagon axis: Coefficient of Variation">\%CV</string>
@@ -225,6 +226,7 @@
     <string name="a11y_tt_none" comment="Screen-reader state of the temp target chip when no temp target is running; the chip then shows the profile target.">no temp target, profile target</string>
     <string name="a11y_tt_adjusted" comment="Screen-reader state of the temp target chip when the loop has changed the target; on screen this is only a colour.">adjusted by the loop</string>
     <string name="a11y_profile_entry" comment="Screen-reader name of one value field in the profile editor. %1$s=the list it belongs to, with its unit (e.g. Basal [U/h]), %2$s=the start time of that entry. Example: Basal [U/h] at 08:00">%1$s at %2$s</string>
+    <string name="widget_delta" translatable="false">Δ %1$s</string>
     <string name="a11y_bg_delta" comment="Screen-reader text for the change since the previous glucose reading. %1$s=the change with its sign and unit. Example: delta +0.3">delta %1$s</string>
     <string name="a11y_bg_old_reading" comment="Screen-reader word added to a glucose reading that is too old to trust. On screen the value is struck through.">old reading</string>
     <string name="a11y_bg_age_old" comment="Screen-reader text for the age of a glucose reading that is too old to trust. %1$s=the age, %2$s=a11y_bg_old_reading. Example: (12 min), old reading">%1$s, %2$s</string>
@@ -264,7 +266,7 @@
     <string name="profile_switches">Profile Switches</string>
     <string name="basal_pct_from_tdd_label">% of basal</string>
     <string name="selected_profile">Selected:</string>
-    <string name="comparation">Comparation</string>
+    <string name="comparation">Comparison</string>
     <string name="profile_tab_1">Profile 1</string>
     <string name="profile_tab_2">Profile 2</string>
     <string name="motol_default_profile">Default profile</string>
@@ -381,5 +383,26 @@
     <string name="cal_precheck_delta_too_high">Glucose is changing too fast (Δ %1$s %3$s per 5 min, limit %2$s). Wait for stability.</string>
     <string name="cal_precheck_mark_sensor_change">Mark sensor change</string>
     <string name="graph_therapy_event_bg_with_note" comment="Shown when the user taps a BG check in the overview graph. %1$s = glucose with its unit, %2$s = the note the user wrote. Example: 6.1 mmol/L, before lunch">%1$s, %2$s</string>
+
+    <!-- CGM warm-up and second sensor rows in the Overview status card -->
+    <string name="overview_cgm_warmup_label">Warm-up</string>
+    <string name="overview_cgm_warmup_waiting" comment="Shown in the warm-up row when the time left is not known yet">Waiting</string>
+    <string name="overview_second_sensor_label" comment="A second CGM sensor that warms up next to the one in use, before the loop switches to it">New sensor</string>
+    <string name="overview_second_sensor_warmup">Warming up</string>
+    <string name="overview_second_sensor_ready_in" comment="%1$s=whole hours before the new sensor may be used by the loop, with its unit. Example: Ready in 8 h">Ready in %1$s</string>
+    <string name="overview_second_sensor_waiting_readings">Waiting for readings</string>
+    <string name="overview_second_sensor_ready">Ready to switch</string>
+    <string name="overview_second_sensor_readings" comment="%1$d=number of valid glucose readings the new sensor has sent so far. Example: Readings: 12">Readings: %1$d</string>
+    <string name="overview_second_sensor_switch" comment="Button: the loop uses the new sensor from now on">Switch</string>
+    <string name="overview_second_sensor_switch_confirm">Use the new sensor for the loop from now on? The loop stops using the sensor it uses now.</string>
+    <string name="overview_second_sensor_switch_ok">The loop now uses the new sensor.</string>
+    <string name="overview_second_sensor_switch_ok_calibration_failed">Calibrations you entered for the old sensor could not be removed, so they may still be used for the new sensor. Check your calibrations.</string>
+    <string name="overview_second_sensor_switch_ok_connect_failed">The loop now uses the new sensor, but the connection to it could not be started. Keep the phone near the sensor and open the sensor status screen to check that readings come in.</string>
+    <string name="overview_second_sensor_switch_ok_sensor_unknown">The switch was made, but a step after it failed and the sensor in use could not be read back. Open the sensor status screen and check which sensor is in use.</string>
+    <string name="overview_second_sensor_switch_refused_absent">There is no new sensor to switch to. Nothing was changed.</string>
+    <string name="overview_second_sensor_switch_refused_not_settled">The new sensor has not settled long enough yet. Nothing was changed.</string>
+    <string name="overview_second_sensor_switch_refused_no_readings">The new sensor has not sent enough valid readings yet. Nothing was changed.</string>
+    <string name="overview_second_sensor_switch_refused_no_recent_reading">The new sensor has not sent a reading in the last minutes. Nothing was changed. Wait for its next reading and try again.</string>
+    <string name="overview_second_sensor_switch_error">Something went wrong during the switch. Open the sensor status screen and check which sensor is in use.</string>
 
 </resources>

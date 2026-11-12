@@ -1,18 +1,26 @@
 package app.aaps.implementation.alerts
 
+import app.aaps.core.data.model.GV
+import app.aaps.core.data.model.SourceSensor
+import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.pump.defs.PumpDescription
 import app.aaps.core.data.time.T
+import app.aaps.core.interfaces.alerts.CgmAlarmType
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
+import app.aaps.core.interfaces.notifications.NotificationId
 import app.aaps.core.interfaces.notifications.NotificationManager
 import app.aaps.core.interfaces.plugin.ActivePlugin
+import app.aaps.core.interfaces.profile.EffectiveProfile
 import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.pump.PumpWithConcentration
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.smsCommunicator.SmsCommunicator
 import app.aaps.core.interfaces.utils.DateUtil
+import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.IntKey
 import app.aaps.core.keys.interfaces.Preferences
+import app.aaps.implementation.alerts.cgm.CgmAlarmManager
 import app.aaps.implementation.alerts.keys.LocalAlertLongKey
 import app.aaps.shared.tests.TestBase
 import kotlinx.coroutines.CoroutineScope
@@ -25,8 +33,10 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 
 class LocalAlertUtilsImplTest : TestBase() {
@@ -40,6 +50,7 @@ class LocalAlertUtilsImplTest : TestBase() {
     @Mock lateinit var persistenceLayer: PersistenceLayer
     @Mock lateinit var dateUtil: DateUtil
     @Mock lateinit var notificationManager: NotificationManager
+    @Mock lateinit var cgmAlarmManager: CgmAlarmManager
     @Mock lateinit var pump: PumpWithConcentration
     @Mock lateinit var pumpDescription: PumpDescription
 
@@ -80,6 +91,7 @@ class LocalAlertUtilsImplTest : TestBase() {
             persistenceLayer,
             dateUtil,
             notificationManager,
+            cgmAlarmManager,
             testScope
         )
         whenever(dateUtil.now()).thenReturn(now)
@@ -208,7 +220,7 @@ class LocalAlertUtilsImplTest : TestBase() {
     fun `reportPumpStatusRead updates alarm when profile is available`() = runTest {
         val lastDataTime = now - T.mins(5).msecs()
         val thresholdMinutes = 30
-        val profile = org.mockito.kotlin.mock<app.aaps.core.interfaces.profile.EffectiveProfile>()
+        val profile = mock<EffectiveProfile>()
 
         whenever(profileFunction.getProfile()).thenReturn(profile)
         whenever(pump.lastDataTime).thenReturn(MutableStateFlow(lastDataTime))
@@ -235,7 +247,7 @@ class LocalAlertUtilsImplTest : TestBase() {
         val lastDataTime = now - T.mins(5).msecs()
         val thresholdMinutes = 30
         val futureAlarmTime = now + T.hours(2).msecs()
-        val profile = org.mockito.kotlin.mock<app.aaps.core.interfaces.profile.EffectiveProfile>()
+        val profile = mock<EffectiveProfile>()
 
         whenever(profileFunction.getProfile()).thenReturn(profile)
         whenever(pump.lastDataTime).thenReturn(MutableStateFlow(lastDataTime))
@@ -302,7 +314,7 @@ class LocalAlertUtilsImplTest : TestBase() {
         val lastDataTime = now - T.mins(10).msecs()
         val thresholdMinutes = 40
         val currentAlarmTime = now + T.mins(5).msecs()
-        val profile = org.mockito.kotlin.mock<app.aaps.core.interfaces.profile.EffectiveProfile>()
+        val profile = mock<EffectiveProfile>()
 
         whenever(profileFunction.getProfile()).thenReturn(profile)
         whenever(pump.lastDataTime).thenReturn(MutableStateFlow(lastDataTime))
@@ -313,5 +325,140 @@ class LocalAlertUtilsImplTest : TestBase() {
 
         val expectedEarliestAlarm = lastDataTime + T.mins(thresholdMinutes.toLong()).msecs()
         verify(preferences).put(LocalAlertLongKey.NextPumpDisconnectedAlarm, expectedEarliestAlarm)
+    }
+
+    // region CGM alarms - the rules are in CgmAlarmEngineTest and CgmAlarmManagerTest
+
+    @Test
+    fun `checkGlucoseAlerts runs the CGM alarms`() = runTest {
+        localAlertUtils.checkGlucoseAlerts()
+        verify(cgmAlarmManager).check()
+    }
+
+    @Test
+    fun `hypo treated holds the low alarms for 20 minutes`() {
+        localAlertUtils.snoozeHypoAfterTreatment()
+        verify(cgmAlarmManager).acknowledgeHypoTreated(T.mins(20).msecs())
+    }
+
+    @Test
+    fun `acknowledge mute and test go to the CGM alarms`() {
+        localAlertUtils.acknowledgeCgmAlarms(CgmAlarmType.HIGH)
+        localAlertUtils.muteCgmAlarms(30)
+        localAlertUtils.testCgmAlarm(CgmAlarmType.URGENT_LOW)
+        verify(cgmAlarmManager).acknowledge(CgmAlarmType.HIGH)
+        verify(cgmAlarmManager).mute(30)
+        verify(cgmAlarmManager).test(CgmAlarmType.URGENT_LOW)
+    }
+
+    // endregion
+
+    // region missed readings
+
+    private suspend fun lastReadingMinutesAgo(minutes: Long) {
+        val reading = GV(
+            timestamp = now - T.mins(minutes).msecs(), raw = null, value = 100.0,
+            trendArrow = TrendArrow.FLAT, noise = null, sourceSensor = SourceSensor.UNKNOWN
+        )
+        whenever(persistenceLayer.getLastGlucoseValue()).thenReturn(reading)
+    }
+
+    @Test
+    fun `the missed readings alarm goes off for a user who relies on the low alarm`() = runTest {
+        // Its own switch is off, but the low alarm is on: a silent sensor must not leave the user blind.
+        whenever(preferences.get(BooleanKey.AlertMissedBgReading)).thenReturn(false)
+        whenever(preferences.get(BooleanKey.AlertHypo)).thenReturn(true)
+        lastReadingMinutesAgo(30)
+
+        localAlertUtils.checkStaleBGAlert()
+
+        verify(preferences).put(LocalAlertLongKey.NextMissedReadingsAlarm, now)
+    }
+
+    @Test
+    fun `no missed readings alarm when neither it nor any glucose alarm is on`() = runTest {
+        lastReadingMinutesAgo(30)
+
+        localAlertUtils.checkStaleBGAlert()
+
+        verify(preferences, never()).put(eq(LocalAlertLongKey.NextMissedReadingsAlarm), any())
+    }
+
+    // endregion
+
+    // -------------------------------------------------------------------------------------------
+    // checkStaleBGAlert
+    //
+    // This is what `PeriodicMaintenance` runs, and on its very first pass. The alarm asks "how old
+    // is the newest reading I have stored", which silently assumes the app has been running all
+    // along to store them. Android keeps running, so that holds. A platform that suspends the whole
+    // process - iOS - or one that is simply started cold reads its own downtime as a CGM outage,
+    // which is nightscout/AndroidAPS#5495. The guard against it is the startup pre-snooze, so these
+    // tests pin both sides of that gate.
+    // -------------------------------------------------------------------------------------------
+
+    private val staleThresholdMinutes = 30
+
+    /** A stored reading [ageMinutes] old, with the snooze gate opening at [nextAlarmAt]. */
+    private fun stubStaleCheck(ageMinutes: Long, nextAlarmAt: Long) {
+        val timestamp = now - T.mins(ageMinutes).msecs()
+        whenever(preferences.get(BooleanKey.AlertMissedBgReading)).thenReturn(true)
+        whenever(preferences.get(BooleanKey.NsClientCreateAnnouncementsFromErrors)).thenReturn(false)
+        whenever(preferences.get(IntKey.AlertsStaleDataThreshold)).thenReturn(staleThresholdMinutes)
+        whenever(preferences.get(LocalAlertLongKey.NextMissedReadingsAlarm)).thenReturn(nextAlarmAt)
+        whenever(dateUtil.isOlderThan(timestamp, 5)).thenReturn(ageMinutes > 5)
+        runTest {
+            whenever(persistenceLayer.getLastGlucoseValue()).thenReturn(
+                GV(raw = 0.0, noise = 0.0, value = 100.0, timestamp = timestamp, sourceSensor = SourceSensor.UNKNOWN, trendArrow = TrendArrow.FLAT)
+            )
+        }
+    }
+
+    @Test
+    fun `checkStaleBGAlert raises the alarm when the newest reading is older than the threshold`() = runTest {
+        stubStaleCheck(ageMinutes = 45, nextAlarmAt = now - 1)
+
+        localAlertUtils.checkStaleBGAlert()
+
+        // Re-arming the snooze happens inside the branch that posts the alarm and nowhere else, so
+        // this is that branch - and it also shows the next one is held off for a full threshold.
+        verify(preferences).put(LocalAlertLongKey.NextMissedReadingsAlarm, now + T.mins(staleThresholdMinutes.toLong()).msecs())
+        verify(notificationManager, never()).dismiss(NotificationId.BG_READINGS_MISSED)
+    }
+
+    @Test
+    fun `checkStaleBGAlert stays quiet while the startup pre-snooze is still running`() = runTest {
+        // Exactly the state `preSnoozeAlarms` leaves behind: the gate opens five minutes from now.
+        // This is the whole fix for a cold start - the first maintenance pass sees a database that
+        // is stale only because the app was not running, and must not call that a missed reading.
+        stubStaleCheck(ageMinutes = 45, nextAlarmAt = now + T.mins(5).msecs())
+
+        localAlertUtils.checkStaleBGAlert()
+
+        verify(preferences, never()).put(eq(LocalAlertLongKey.NextMissedReadingsAlarm), any<Long>())
+        verifyNoInteractions(notificationManager)
+    }
+
+    @Test
+    fun `checkStaleBGAlert clears a raised alarm once a fresh reading has arrived`() = runTest {
+        // The issue reported that nothing ever clears this alarm. It does clear, on the next pass
+        // after the data comes back - which is up to five minutes later, because that is how often
+        // `PeriodicMaintenance` runs.
+        stubStaleCheck(ageMinutes = 2, nextAlarmAt = now - 1)
+
+        localAlertUtils.checkStaleBGAlert()
+
+        verify(notificationManager).dismiss(NotificationId.BG_READINGS_MISSED)
+    }
+
+    @Test
+    fun `checkStaleBGAlert does nothing at all when the alert is switched off`() = runTest {
+        stubStaleCheck(ageMinutes = 45, nextAlarmAt = now - 1)
+        whenever(preferences.get(BooleanKey.AlertMissedBgReading)).thenReturn(false)
+
+        localAlertUtils.checkStaleBGAlert()
+
+        // Not even a dismiss: an old reading with the alert off falls through both branches.
+        verifyNoInteractions(notificationManager)
     }
 }

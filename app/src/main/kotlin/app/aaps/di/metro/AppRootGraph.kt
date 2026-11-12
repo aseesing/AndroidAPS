@@ -72,6 +72,7 @@ import app.aaps.core.interfaces.pump.PumpStatusProvider
 import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.pump.PumpWithConcentration
 import app.aaps.core.interfaces.pump.TemporaryBasalStorage
+import app.aaps.core.interfaces.pump.emulator.PumpEmulators
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.receivers.ReceiverStatusStore
 import app.aaps.core.interfaces.resources.ResourceHelper
@@ -122,11 +123,13 @@ import app.aaps.database.AppRepository
 import app.aaps.database.di.DatabaseConfig
 import app.aaps.di.ExternalOptionsOverride
 import app.aaps.implementation.lifecycle.ProcessLifecycleListener
+import app.aaps.implementation.maintenance.PeriodicMaintenance
 import app.aaps.implementation.maintenance.cloud.CloudStorageManager
 import app.aaps.implementation.notifications.SnackbarNotificationFallback
 import app.aaps.implementation.plugin.PluginStore
 import app.aaps.implementation.profile.ProfileSwitchScheduler
 import app.aaps.implementation.profile.ProfileSwitchSilentGate
+import app.aaps.implementation.queue.CommandExecutor
 import app.aaps.implementation.resources.ResourceHelperImpl
 import app.aaps.implementation.scenes.ActiveSceneManager
 import app.aaps.implementation.scenes.SceneExecutor
@@ -334,7 +337,9 @@ interface AppRootGraph : MetroViewModelMultibindings {
     val dataInbox: DataInbox
     val autosensData: AutosensData
     val commandQueue: CommandQueue
+    val commandExecutor: CommandExecutor
     val localAlertUtils: LocalAlertUtils
+    val periodicMaintenance: PeriodicMaintenance
     val bolusProgressData: BolusProgressData
     val persistenceLayer: PersistenceLayer
     val cloudStorageManager: CloudStorageManager
@@ -547,6 +552,12 @@ interface AppRootGraph : MetroViewModelMultibindings {
 
             /** Extra external options to report enabled. `ExternalOptionsOverride.NONE` in production. */
             @Provides externalOptionsOverride: ExternalOptionsOverride,
+
+            /**
+             * The emulated pumps. Production passes a new one. A test that restarts the app passes the one of the
+             * graph before, so the emulated pump runs on, as a real one would.
+             */
+            @Provides pumpEmulators: PumpEmulators,
 
             @Includes coreObjects: CoreObjectsGraph
         ): AppRootGraph

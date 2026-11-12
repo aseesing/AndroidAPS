@@ -18,9 +18,9 @@ enum class StringKey(
     override val preferenceType: PreferenceType = PreferenceType.TEXT_FIELD,
     private val entriesRefs: Map<String, TextRef> = emptyMap(),
     /**
-     * Entry labels that are not a resource in this module. Only the units preference needs this:
-     * "mg/dL" and "mmol/L" read the same in every language, and the `units_*` strings themselves
-     * now live in `:core:ui`, which this module cannot depend on.
+     * Entry labels that are not a resource and are the same in every language: "mg/dL" and "mmol/L"
+     * (the `units_*` strings live in `:core:ui`, which this module cannot depend on), and the language
+     * names. They follow the [entriesRefs] entries in the list.
      */
     private val entriesLiterals: Map<String, String> = emptyMap(),
     override val defaultedBySM: Boolean = false,
@@ -48,35 +48,39 @@ enum class StringKey(
     GeneralLanguage(
         key = "language",
         defaultValue = "default",
-        title = KeysStrings.pref_title_language,
+        // Not translated on purpose: a user who selected a language they cannot read must still be able
+        // to find this setting and their own language. Each language is written in that language.
+        title = TextRef.Literal("Language"),
         preferenceType = PreferenceType.LIST,
-        entriesRefs = mapOf(
-            "default" to KeysStrings.lang_default,
-            "en" to KeysStrings.lang_en,
-            "af" to KeysStrings.lang_af,
-            "bg" to KeysStrings.lang_bg,
-            "cs" to KeysStrings.lang_cs,
-            "de" to KeysStrings.lang_de,
-            "dk" to KeysStrings.lang_dk,
-            "fr" to KeysStrings.lang_fr,
-            "nl" to KeysStrings.lang_nl,
-            "es" to KeysStrings.lang_es,
-            "el" to KeysStrings.lang_el,
-            "ga" to KeysStrings.lang_ga,
-            "it" to KeysStrings.lang_it,
-            "ko" to KeysStrings.lang_ko,
-            "lt" to KeysStrings.lang_lt,
-            "nb" to KeysStrings.lang_nb,
-            "pl" to KeysStrings.lang_pl,
-            "pt" to KeysStrings.lang_pt,
-            "pt_BR" to KeysStrings.lang_pt_br,
-            "ro" to KeysStrings.lang_ro,
-            "ru" to KeysStrings.lang_ru,
-            "sk" to KeysStrings.lang_sk,
-            "sv" to KeysStrings.lang_sv,
-            "tr" to KeysStrings.lang_tr,
-            "zh_TW" to KeysStrings.lang_zh_tw,
-            "zh_CN" to KeysStrings.lang_zh_cn
+        entriesRefs = mapOf("default" to KeysStrings.lang_default),
+        // English first, then the Latin script in alphabetical order, then the other scripts
+        entriesLiterals = mapOf(
+            "en" to "English",
+            "af" to "Afrikaans",
+            "cs" to "Čeština",
+            "dk" to "Dansk",
+            "de" to "Deutsch",
+            "es" to "Español",
+            "fr" to "Français",
+            "ga" to "Gaeilge",
+            "it" to "Italiano",
+            "lt" to "Lietuvių",
+            "nl" to "Nederlands",
+            "nb" to "Norsk bokmål",
+            "pl" to "Polski",
+            "pt" to "Português",
+            "pt_BR" to "Português (Brasil)",
+            "ro" to "Română",
+            "sk" to "Slovenčina",
+            "sv" to "Svenska",
+            "tr" to "Türkçe",
+            "el" to "Ελληνικά",
+            "bg" to "Български",
+            "ru" to "Русский",
+            "he" to "עברית",
+            "ko" to "한국어",
+            "zh_TW" to "繁體中文",
+            "zh_CN" to "简体中文"
         ),
         defaultedBySM = true,
         // Android 12 has no app languages: AAPS follows the phone there
@@ -226,8 +230,126 @@ enum class StringKey(
         validator = StringValidator.minLength(17)
     ),
 
+    // Sound of each CGM alarm: "default" (the standard AAPS alarm sound), "none" (notification only),
+    // or a Trio sound (see core/ui/SOUNDS.md). The value of a Trio sound is its file name. Urgent low
+    // has no "none".
+    AlertUrgentLowSound(
+        key = "alert_cgm_urgent_low_sound",
+        defaultValue = "default",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("ulg", allowNone = false),
+        dependency = BooleanKey.AlertUrgentLow,
+    ),
+    AlertUrgentLowSoonSound(
+        key = "alert_cgm_urgent_low_soon_sound",
+        defaultValue = "default",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("lgs", allowNone = true),
+        dependency = BooleanKey.AlertUrgentLowSoon,
+    ),
+    AlertHypoSound(
+        key = "alert_cgm_low_sound",
+        defaultValue = "default",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("lg", allowNone = true),
+        dependency = BooleanKey.AlertHypo,
+    ),
+    AlertRapidFallSound(
+        key = "alert_cgm_fall_rate_sound",
+        defaultValue = "default",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("lgs", allowNone = true),
+        dependency = BooleanKey.AlertRapidFall,
+    ),
+    AlertHyperSound(
+        key = "alert_cgm_high_sound",
+        defaultValue = "none",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("hg", allowNone = true),
+        dependency = BooleanKey.AlertHyper,
+    ),
+    AlertRapidRiseSound(
+        key = "alert_cgm_rise_rate_sound",
+        defaultValue = "none",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("hg", allowNone = true),
+        dependency = BooleanKey.AlertRapidRise,
+    ),
+    AlertCgmSensorFailedSound(
+        key = "alert_cgm_sensor_failed_sound",
+        defaultValue = "default",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("dcr", allowNone = true),
+        dependency = BooleanKey.AlertCgmSensorFailed,
+    ),
+    AlertCgmSensorExpiredSound(
+        key = "alert_cgm_sensor_ended_sound",
+        defaultValue = "default",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("dts", allowNone = true),
+        dependency = BooleanKey.AlertCgmSensorExpired,
+    ),
+    AlertCgmSignalLostSound(
+        key = "alert_cgm_signal_loss_sound",
+        defaultValue = "none",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("dts", allowNone = true),
+        dependency = BooleanKey.AlertCgmSignalLost,
+    ),
+    AlertCgmSensorIssueSound(
+        key = "alert_cgm_sensor_issue_sound",
+        defaultValue = "none",
+        title = KeysStrings.pref_title_alert_cgm_sound,
+        summary = KeysStrings.pref_summary_alert_cgm_sound,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = cgmAlarmSoundEntries("dts", allowNone = true),
+        dependency = BooleanKey.AlertCgmSensorIssue,
+    ),
+
     ;
 
     override val entries: Map<String, TextRef> =
         entriesRefs + entriesLiterals.mapValues { TextRef.Literal(it.value) }
+}
+
+/**
+ * The sound choices of one CGM alarm: the AAPS sound, no sound (unless [allowNone] is false), the six
+ * Trio sounds made for [trioSet] (acoustic and electronic, mild to harsh), then the eight Trio tones.
+ * The value of a Trio sound is its file name in `core/ui/res/raw`, which `AlarmSound.fileName` holds.
+ */
+private fun cgmAlarmSoundEntries(trioSet: String, allowNone: Boolean): Map<String, TextRef> = buildMap {
+    put("default", KeysStrings.alert_sound_default)
+    if (allowNone) put("none", KeysStrings.alert_sound_none)
+    put("trio_acoustic_${trioSet}_mild", KeysStrings.alert_sound_trio_acoustic_mild)
+    put("trio_acoustic_${trioSet}_medium", KeysStrings.alert_sound_trio_acoustic_medium)
+    put("trio_acoustic_${trioSet}_harsh", KeysStrings.alert_sound_trio_acoustic_harsh)
+    put("trio_electronic_${trioSet}_mild", KeysStrings.alert_sound_trio_electronic_mild)
+    put("trio_electronic_${trioSet}_medium", KeysStrings.alert_sound_trio_electronic_medium)
+    put("trio_electronic_${trioSet}_harsh", KeysStrings.alert_sound_trio_electronic_harsh)
+    put("trio_tone_glass_bell", KeysStrings.alert_sound_trio_glass_bell)
+    put("trio_tone_harp", KeysStrings.alert_sound_trio_harp)
+    put("trio_tone_meow", KeysStrings.alert_sound_trio_meow)
+    put("trio_tone_saw_wave", KeysStrings.alert_sound_trio_saw_wave)
+    put("trio_tone_hard_saw_wave", KeysStrings.alert_sound_trio_hard_saw_wave)
+    put("trio_tone_sine_wave", KeysStrings.alert_sound_trio_sine_wave)
+    put("trio_tone_open_can", KeysStrings.alert_sound_trio_open_can)
+    put("trio_tone_open_wrapper", KeysStrings.alert_sound_trio_open_wrapper)
 }

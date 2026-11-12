@@ -30,6 +30,7 @@ import app.aaps.core.interfaces.profile.ProfileRepository
 import app.aaps.core.interfaces.profile.ProfileUtil
 import app.aaps.core.interfaces.protection.ExportPasswordDataStore
 import app.aaps.core.interfaces.pump.PumpSync
+import app.aaps.core.interfaces.pump.emulator.PumpEmulators
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
@@ -57,6 +58,7 @@ import app.aaps.di.ExternalOptionsOverride
 import app.aaps.di.PluginSource
 import app.aaps.di.mergePlugins
 import app.aaps.implementation.lifecycle.ProcessLifecycleListener
+import app.aaps.implementation.maintenance.PeriodicMaintenance
 import app.aaps.implementation.notifications.SnackbarNotificationFallback
 import app.aaps.implementation.plugin.PluginStore
 import app.aaps.implementation.profile.ProfileSwitchScheduler
@@ -94,7 +96,8 @@ class MetroGraphs(
     private val context: Context,
     private val memberInjector: MetroMemberInjector,
     private val databaseConfig: DatabaseConfig,
-    private val externalOptionsOverride: ExternalOptionsOverride
+    private val externalOptionsOverride: ExternalOptionsOverride,
+    private val pumpEmulators: PumpEmulators
 ) {
 
 
@@ -119,7 +122,7 @@ class MetroGraphs(
     /** The one Metro root. Sub-graphs are extensions of it rather than roots of their own. */
     private val root: AppRootGraph by lazy {
         createGraphFactory<AppRootGraph.Factory>()
-            .create(applicationScope, context, memberInjector, databaseConfig, externalOptionsOverride, CoreObjectsGraph)
+            .create(applicationScope, context, memberInjector, databaseConfig, externalOptionsOverride, pumpEmulators, CoreObjectsGraph)
     }
 
     /**
@@ -277,6 +280,7 @@ class MetroGraphs(
     val widgetUpdater: WidgetUpdater get() = root.widgetUpdater
     val commandQueue: CommandQueue get() = root.commandQueue
     val localAlertUtils: LocalAlertUtils get() = root.localAlertUtils
+    val periodicMaintenance: PeriodicMaintenance get() = root.periodicMaintenance
     val persistenceLayer: PersistenceLayer get() = root.persistenceLayer
     val appRepository: AppRepository get() = root.appRepository
     val constraintsChecker: ConstraintsChecker get() = root.constraintsChecker
