@@ -1,0 +1,309 @@
+<div id="aaps-app-__AAPS_TOKEN__" class="aaps-app"></div>
+<style>
+  .aaps-app {
+    --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --box: #f6f8fa;
+    --accent: #1a73e8; --accent-fg: #ffffff; --ok: #1a7f37;
+    --warn-bg: #fff4e5; --warn-fg: #6b3a00; --err-bg: #ffebe9; --err-fg: #a40e26;
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--fg); background: var(--bg); max-width: 720px; padding: 16px;
+    box-sizing: border-box; border-radius: 12px; overflow-wrap: anywhere;
+  }
+  @media (prefers-color-scheme: dark) {
+    .aaps-app {
+      --bg: #1f2124; --fg: #e8eaed; --muted: #a8b0b8; --line: #3c4043; --box: #2a2d31;
+      --accent: #8ab4f8; --accent-fg: #1f2124; --ok: #81c995;
+      --warn-bg: #3d2f12; --warn-fg: #fdd99b; --err-bg: #3f1d1d; --err-fg: #f8b4b4;
+    }
+  }
+  .aaps-app * { box-sizing: border-box; }
+  .aaps-app h1 { font-size: 22px; margin: 0 0 4px; }
+  .aaps-app h2 { font-size: 18px; margin: 20px 0 6px; }
+  .aaps-app p { margin: 8px 0; }
+  .aaps-app ul, .aaps-app ol { margin: 6px 0; padding-left: 22px; }
+  .aaps-app li { margin: 4px 0; }
+  .aaps-app a { color: var(--accent); }
+  .aaps-app .muted { color: var(--muted); font-size: 14px; }
+  .aaps-app .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .aaps-app select, .aaps-app input[type=password], .aaps-app textarea {
+    font: inherit; color: var(--fg); background: var(--box); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; width: 100%; max-width: 100%;
+  }
+  .aaps-app .top select { width: auto; }
+  .aaps-app textarea { min-height: 90px; font-family: ui-monospace, monospace; font-size: 13px; }
+  .aaps-app label.check, .aaps-app label.radio {
+    display: flex; gap: 10px; align-items: flex-start; padding: 10px; margin: 8px 0;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--box); cursor: pointer;
+  }
+  .aaps-app label.check input, .aaps-app label.radio input { width: 22px; height: 22px; flex: none; margin: 1px 0 0; }
+  .aaps-app label.accept { border: 2px solid var(--accent); font-weight: 600; }
+  .aaps-app .field { margin: 10px 0; }
+  .aaps-app .field > span { display: block; font-weight: 600; margin-bottom: 4px; }
+  .aaps-app button.main {
+    font: inherit; font-weight: 600; width: 100%; min-height: 52px; margin-top: 16px;
+    border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-fg); cursor: pointer;
+  }
+  .aaps-app button.main:disabled { opacity: 0.4; cursor: not-allowed; }
+  .aaps-app .note { border-radius: 8px; padding: 10px 12px; margin: 10px 0; background: var(--box); }
+  .aaps-app .warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .aaps-app .err { background: var(--err-bg); color: var(--err-fg); }
+  .aaps-app details { margin: 12px 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  .aaps-app summary { cursor: pointer; font-weight: 600; min-height: 32px; display: list-item; }
+  .aaps-app .steps { list-style: none; padding: 0; }
+  .aaps-app .steps li { display: flex; gap: 10px; align-items: center; padding: 4px 0; }
+  .aaps-app .steps .icon { width: 24px; text-align: center; flex: none; }
+  .aaps-app .steps .done { color: var(--ok); }
+  .aaps-app .steps .now { font-weight: 700; }
+  .aaps-app .steps .todo { color: var(--muted); }
+  .aaps-app pre {
+    background: var(--box); border-radius: 8px; padding: 10px; font-size: 12px;
+    max-height: 320px; overflow: auto; white-space: pre-wrap;
+  }
+  .aaps-app code { font-family: ui-monospace, monospace; font-size: 14px; }
+</style>
+<script>
+(function () {
+  const C = __AAPS_CONFIG__;
+  const root = document.getElementById('aaps-app-' + C.token);
+  const D = C.data || {};
+  let lang = C.lang;
+
+  function s(key, vars) {
+    let v = (C.strings[lang] || {})[key];
+    if (v === undefined) v = (C.strings.en || {})[key];
+    if (v === undefined) v = key;
+    if (typeof v === 'string' && vars) {
+      v = v.replace(/\{(\w+)\}/g, (m, n) => (n in vars ? String(vars[n]) : m));
+    }
+    return v;
+  }
+
+  function h(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === 'class') e.className = v;
+      else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+      else if (k === 'checked' || k === 'value' || k === 'disabled' || k === 'open') e[k] = v;
+      else e.setAttribute(k, v);
+    }
+    for (const kid of kids.flat()) {
+      if (kid === null || kid === undefined || kid === false) continue;
+      e.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    }
+    return e;
+  }
+
+  const list = (key, ordered) => h(ordered ? 'ol' : 'ul', {}, s(key).map(t => h('li', {}, t)));
+
+  function languageSelect() {
+    const names = Object.keys(C.strings);
+    if (names.length < 2) return null;
+    return h('label', { class: 'muted' }, s('language_label') + ' ',
+      h('select', { onchange: e => { lang = e.target.value; render(); } },
+        names.map(code => h('option', { value: code, selected: code === lang ? 'selected' : null },
+          C.strings[code].language_name))));
+  }
+
+  function header(titleKey) {
+    return h('div', { class: 'top' }, h('h1', {}, s(titleKey)), languageSelect());
+  }
+
+  function finish(result) {
+    result.lang = lang;
+    root.replaceChildren(h('p', { class: 'muted' }, s('please_wait')));
+    window['aapsResult_' + C.token] = JSON.stringify(result);
+  }
+
+  // ------------------------------------------------------------ page 1: legal
+
+  const legal = { accepted: false };
+
+  function pageLegal() {
+    const parts = s('sdk_license').split('{link}');
+    const button = h('button', { class: 'main', disabled: !legal.accepted,
+      onclick: () => { if (legal.accepted) finish({ accepted: true }); } }, s('continue'));
+    return [
+      header('title'),
+      h('h2', {}, s('legal_heading')),
+      h('p', {}, s('legal_intro')),
+      h('h2', {}, s('legal_why_heading')), list('legal_why'),
+      h('h2', {}, s('legal_rules_heading')), list('legal_rules'),
+      h('h2', {}, s('legal_risk_heading')), list('legal_risk'),
+      h('h2', {}, s('legal_data_heading')), list('legal_data'),
+      h('p', {}, parts[0],
+        h('a', { href: D.sdk_license_url, target: '_blank', rel: 'noopener' }, s('sdk_license_link_text')),
+        parts[1] || ''),
+      h('label', { class: 'check accept' },
+        h('input', { type: 'checkbox', checked: legal.accepted,
+          onchange: e => { legal.accepted = e.target.checked; button.disabled = !legal.accepted; } }),
+        h('span', {}, s('accept_label'))),
+      button,
+      h('p', { class: 'muted' }, s('drive_hint')),
+    ];
+  }
+
+  // ------------------------------------------------------------ page 2: options
+
+  const o = {
+    mode: D.existing ? 'update' : 'new',
+    version: D.latest, variant: D.default_variant || 'fullRelease', wear: !!D.default_wear,
+    pwMode: 'none', pw: '', pw2: '', remember: true, password: '',
+    importOpen: false, moreOpen: false, ks: '', newConfirm: false, problem: D.error || null, problemAtButton: false,
+  };
+
+  function radio(group, value, label, extra) {
+    return h('label', { class: 'radio' },
+      h('input', { type: 'radio', name: group + C.token, checked: o[group] === value,
+        onchange: () => { o[group] = value; o.problem = null; render(); } }),
+      h('span', {}, label, extra ? h('div', { class: 'muted' }, extra) : null));
+  }
+
+  function passwordInput(field, labelKey) {
+    return h('label', { class: 'field' }, h('span', {}, s(labelKey)),
+      h('input', { type: 'password', value: o[field], autocomplete: 'new-password',
+        oninput: e => { o[field] = e.target.value; } }));
+  }
+
+  function newKeyPart() {
+    const importBox = refs.imp = h('details', { open: o.importOpen },
+      h('summary', {}, s('import_toggle')),
+      h('p', { class: 'muted' }, s('import_hint')),
+      h('textarea', { value: o.ks, spellcheck: 'false', oninput: e => { o.ks = e.target.value; } }));
+    return [
+      h('h2', {}, s('password_heading')),
+      radio('pwMode', 'none', s('password_none'), s('password_none_hint')),
+      radio('pwMode', 'own', s('password_own')),
+      o.pwMode === 'own' ? h('div', {},
+        passwordInput('pw', 'password_label'),
+        passwordInput('pw2', 'password_repeat'),
+        h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: o.remember, onchange: e => { o.remember = e.target.checked; } }),
+          h('span', {}, s('password_remember')))) : null,
+      importBox,
+    ];
+  }
+
+  // The open state of a <details> is read straight from the page before each new render. The
+  // toggle event comes later, so a quick change after opening would otherwise close it again.
+  const refs = { imp: null, more: null };
+  function syncOpen() {
+    if (refs.imp && refs.imp.isConnected) o.importOpen = refs.imp.open;
+    if (refs.more && refs.more.isConnected) o.moreOpen = refs.more.open;
+  }
+
+  function check() {
+    if (o.mode === 'update') {
+      if (!D.password_saved && !o.password) return 'password_needed';
+      return null;
+    }
+    if (D.existing && !o.newConfirm) return 'confirm_needed';
+    if (o.importOpen) return o.ks.trim() ? null : 'import_empty';
+    if (o.pwMode === 'own') {
+      if (o.pw.length < 6) return 'password_too_short';
+      if (o.pw !== o.pw2) return 'password_mismatch';
+    }
+    return null;
+  }
+
+  function start() {
+    syncOpen();
+    const problem = check();
+    if (problem) { o.problem = s(problem); o.problemAtButton = true; render(); return; }
+    const useImport = o.mode === 'new' && o.importOpen;
+    finish({
+      mode: o.mode, version: o.version, variant: o.variant, wear: o.wear,
+      password_mode: o.pwMode,
+      password: o.mode === 'update' ? o.password : (o.pwMode === 'own' && !useImport ? o.pw : ''),
+      remember: o.remember,
+      keystore_set: useImport ? o.ks.trim() : null,
+    });
+  }
+
+  function pageOptions() {
+    const last = D.last || {};
+    const lastVariant = last.variant ? s('variant_' + last.variant) : '';
+    const more = refs.more = h('details', { open: o.moreOpen },
+      h('summary', {}, s('more_options')),
+      h('label', { class: 'field' }, h('span', {}, s('version_label')),
+        h('select', { onchange: e => { o.version = e.target.value; render(); } },
+          D.versions.map(v => h('option', { value: v, selected: v === o.version ? 'selected' : null },
+            v === D.latest ? s('latest_tag', { version: v }) : v)))),
+      h('label', { class: 'field' }, h('span', {}, s('variant_label')),
+        h('select', { onchange: e => { o.variant = e.target.value; } },
+          D.variants.map(v => h('option', { value: v, selected: v === o.variant ? 'selected' : null },
+            s('variant_' + v))))),
+      h('label', { class: 'check' },
+        h('input', { type: 'checkbox', checked: o.wear, onchange: e => { o.wear = e.target.checked; } }),
+        h('span', {}, s('wear_label'))));
+    return [
+      header('options_heading'),
+      o.problem && !o.problemAtButton ? h('div', { class: 'note err' }, o.problem) : null,
+      D.existing
+        ? [h('p', {}, s('found_existing', { version: last.version || '?', variant: lastVariant || '?',
+            date: last.date || '?' })),
+          radio('mode', 'update', s('mode_update', { version: o.version })),
+          o.mode === 'update' && !D.password_saved ? passwordInput('password', 'password_needed') : null,
+          radio('mode', 'new', s('mode_new'))]
+        : h('p', {}, s('first_time')),
+      o.mode === 'new' && D.browser_build_zip ? h('div', { class: 'note warn' }, s('found_browser_zip')) : null,
+      o.mode === 'new' && D.existing ? [
+        h('div', { class: 'note warn' }, s('new_warning')),
+        h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: o.newConfirm, onchange: e => { o.newConfirm = e.target.checked; } }),
+          h('span', {}, s('new_confirm')))] : null,
+      o.mode === 'new' ? newKeyPart() : null,
+      more,
+      o.problem && o.problemAtButton ? h('div', { class: 'note err' }, o.problem) : null,
+      h('button', { class: 'main', onclick: start }, s('start')),
+      h('p', { class: 'muted' }, s('start_hint')),
+    ];
+  }
+
+  // ------------------------------------------------------------ pages without questions
+
+  function pageProgress() {
+    const icon = { done: '✓', now: '▶', todo: '○' };
+    return [
+      h('h1', {}, s('progress_heading')),
+      h('p', { class: 'muted' }, s('keep_open')),
+      h('ul', { class: 'steps' }, D.steps.map(st =>
+        h('li', { class: st.state }, h('span', { class: 'icon' }, icon[st.state]), st.text))),
+      D.detail ? h('p', { class: 'muted' }, h('code', {}, D.detail)) : null,
+      h('p', { class: 'muted' }, D.elapsed),
+    ];
+  }
+
+  function pageDone() {
+    return [
+      h('h1', {}, s('done_heading')),
+      h('p', {}, s('done_minutes', { minutes: D.minutes })),
+      h('p', {}, s('done_files')),
+      h('ul', {}, D.files.map(f => h('li', {}, h('code', {}, f)))),
+      h('div', { class: 'note warn' }, s('done_no_share')),
+      D.new_key ? h('div', { class: 'note warn' }, s('done_new_key')) : null,
+      h('h2', {}, s('done_install_heading')),
+      list('done_install', true),
+      h('p', {}, s('done_key')),
+    ];
+  }
+
+  function pageError() {
+    return [
+      h('h1', {}, s('error_heading')),
+      h('div', { class: 'note err' }, D.message),
+      D.log ? h('pre', {}, D.log) : null,
+      h('p', {}, s('error_log_file', { file: D.log_file })),
+      h('p', {}, s('error_retry')),
+    ];
+  }
+
+  const pages = { legal: pageLegal, options: pageOptions, progress: pageProgress, done: pageDone, error: pageError };
+
+  function render() {
+    if (C.page === 'options') syncOpen();
+    root.replaceChildren(...[pages[C.page]()].flat(3).filter(Boolean));
+  }
+
+  render();
+})();
+</script>
