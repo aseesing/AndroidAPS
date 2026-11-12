@@ -27,6 +27,7 @@ import app.aaps.wear.data.ComplicationDataRepository
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,8 +70,15 @@ class WatchDirect(
     private val cgmAlarmWatch: CgmAlarmWatch
 ) {
 
-    /** One at a time: the link's callbacks and the phone's messages are handled in order. */
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
+    /**
+     * One at a time: the link's callbacks and the phone's messages are handled in order.
+     * PERSONAL PATCH: with an exception handler, so a failed step is logged and does not end the
+     * watch app.
+     */
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default.limitedParallelism(1) +
+            CoroutineExceptionHandler { _, e -> aapsLogger.error(LTag.WEAR, "Direct to watch: step failed, the app goes on", e) }
+    )
     private var started = false
 
     val isSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S

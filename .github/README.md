@@ -162,8 +162,15 @@ Merged from the open upstream pull request
 - **It changes insulin delivery:** while no reading arrives in closed loop, it ends a temp basal
   that is above the profile basal. It never raises delivery.
 
-The only change by us: the watch keeps our batched writes of live data (see 1) when it stores a
-reading it took from the sensor itself.
+Our changes to it (marked `PERSONAL PATCH`):
+
+- The watch keeps our batched writes of live data (see 1) when it stores a reading it took from
+  the sensor itself.
+- **A fault in the driver can not end the app.** An exception in its background jobs, its BLE
+  thread, its Bluetooth callbacks, the CGM alarms, the start screen buttons or direct-to-watch is
+  logged, and the app (and so the loop) goes on. A failed Bluetooth step fails the connection, so
+  the driver tries again. Each step of the plugin start is guarded on its own. A review found no
+  place where the driver blocks the main thread, the loop or the pump command queue.
 
 ### 10. Speak glucose in the car (phone)
 

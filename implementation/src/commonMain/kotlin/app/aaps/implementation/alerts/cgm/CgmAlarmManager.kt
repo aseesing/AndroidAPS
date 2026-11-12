@@ -34,6 +34,7 @@ import app.aaps.implementation.alerts.keys.LocalAlertStringKey
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -79,6 +80,10 @@ class CgmAlarmManager(
      * twice, or an acknowledge could be overwritten by a check that started before it.
      */
     private val lock = Mutex()
+
+    // PERSONAL PATCH: the app scope has no exception handler, so an exception in a launch here would
+    // end the app and with it the loop. Log it instead.
+    private val errorHandler = CoroutineExceptionHandler { _, e -> aapsLogger.error(LTag.CORE, "CGM alarms: failed, the app goes on", e) }
 
     /** False until the first check of this run: the notifications of the last run are gone. */
     private var started = false
@@ -141,7 +146,7 @@ class CgmAlarmManager(
      * after a check that is running at that moment, so the check cannot overwrite it.
      */
     fun acknowledge(type: CgmAlarmType? = null) {
-        appScope.launch {
+        appScope.launch(errorHandler) {
             lock.withLock {
                 val now = dateUtil.now()
                 val step = CgmAlarmEngine.acknowledge(loadRuntime(), ::settings, type, now)
@@ -157,7 +162,7 @@ class CgmAlarmManager(
      * time carbs need to work. Urgent low comes back after its own repeat time at most.
      */
     fun acknowledgeHypoTreated(snoozeMs: Long) {
-        appScope.launch {
+        appScope.launch(errorHandler) {
             lock.withLock {
                 val lowGroup = CgmAlarmType.entries.filter { it.group == CgmAlarmGroup.LOW }.toSet()
                 val runtime = loadRuntime()
@@ -184,7 +189,7 @@ class CgmAlarmManager(
         _mutedUntil.value = until
         aapsLogger.debug(LTag.CORE, "CGM alarms muted until ${if (until == 0L) "-" else dateUtil.dateAndTimeString(until)}")
         // Stop what is ringing now (or bring back what the mute held), without waiting for the next reading.
-        appScope.launch { check() }
+        appScope.launch(errorHandler) { check() }
     }
 
     /** Play [type] once, as the real alarm would, until the user dismisses it. Changes no alarm state. */
@@ -279,7 +284,7 @@ class CgmAlarmManager(
         timer?.cancel()
         if (nextCheckAt == null) return
         val wait = (nextCheckAt - now).coerceIn(MIN_TIMER_MS, MAX_TIMER_MS)
-        timer = appScope.launch {
+        timer = appScope.launch(errorHandler) {
             delay(wait)
             try {
                 check()

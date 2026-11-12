@@ -1,5 +1,6 @@
 package app.aaps.plugins.dexcomoneplus
 
+import android.util.Log
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -19,7 +20,15 @@ private class OnePlusAndroidBleExecutor : OnePlusBleExecutor {
 
     /** Throws `RejectedExecutionException` after [shutdownNow], exactly as before. */
     override fun execute(block: () -> Unit) {
-        delegate.execute(block)
+        // PERSONAL PATCH: an exception that escapes a cycle would reach the default handler of the
+        // thread, which ends the whole app and with it the loop. Log it and keep the app running.
+        delegate.execute {
+            try {
+                block()
+            } catch (e: Throwable) {
+                Log.e("OnePlusBleExecutor", "BLE cycle failed, the app goes on", e)
+            }
+        }
     }
 
     /** Also interrupts the running cycle, which is what cuts `onePlusSleep` short. */

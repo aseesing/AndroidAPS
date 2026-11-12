@@ -58,6 +58,7 @@ import dev.zacsweers.metro.SingleIn
 import dev.zacsweers.metro.binding
 import app.aaps.core.interfaces.concurrent.aapsIoDispatcher
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
@@ -157,13 +158,21 @@ class DexcomOnePlusPlugin @Inject constructor(
     /** True after [onStop] until the next [onStart]. The setup screens refuse their actions then. */
     fun isStopped(): Boolean = stopped
 
+    // PERSONAL PATCH: see ioScope()
+    private val workErrorHandler = CoroutineExceptionHandler { _, e ->
+        aapsLogger.error(LTag.BGSOURCE, "DEXCOM_ONEPLUS_SESSION: job failed, the app goes on", e)
+    }
+
     /** The work scope, or null while the plugin is [stopped]. */
     private fun ioScope(): CoroutineScope? = workScopeLock.withLock {
         if (stopped) {
             aapsLogger.debug(LTag.BGSOURCE, "DEXCOM_ONEPLUS_SESSION: plugin is stopped, no new work started")
             null
         } else {
-            workScope ?: CoroutineScope(SupervisorJob() + aapsIoDispatcher).also { workScope = it }
+            // PERSONAL PATCH: an exception in any job of this scope (ingest, watchdog, warm-up guard,
+            // ...) is logged here instead of reaching the default handler, which would end the app
+            // and with it the loop.
+            workScope ?: CoroutineScope(SupervisorJob() + aapsIoDispatcher + workErrorHandler).also { workScope = it }
         }
     }
 
@@ -438,7 +447,9 @@ class DexcomOnePlusPlugin @Inject constructor(
         sensorAlertsRunning = true
         workScopeLock.withLock { stopped = false }
         ioScope()
-        syncDriverFromPrefs()
+        // PERSONAL PATCH: each step of the start is guarded like the steps of onStop (startStep), so
+        // an exception here can not break the start of the other plugins or of the app.
+        startStep("sync driver") { syncDriverFromPrefs() }
         // Rehydrate the ingest dedup BEFORE any reconnect can deliver glucose, so an app update /
         // restart cannot re-insert already-stored readings (duplicates halt the loop). Sequence floor
         // from the sensor store + recent already-stored ONE+ timestamps from the DB.
@@ -450,29 +461,31 @@ class DexcomOnePlusPlugin @Inject constructor(
             aapsLogger.error(LTag.BGSOURCE, "DEXCOM_ONEPLUS_BG: ingest seed query failed: ${t.message}", t)
             emptyList()
         }
-        DexcomOnePlusIngest.seed(sensorStore.loadLastIngestSequence(), recentTs)
-        refreshProductionLifecycle()
+        startStep("seed ingest") { DexcomOnePlusIngest.seed(sensorStore.loadLastIngestSequence(), recentTs) }
+        startStep("lifecycle") { refreshProductionLifecycle() }
         // Before either slot resumes: an install that hit the cross-slot collision was left with the
         // same MAC in both stores, and the two resumes below would recreate it on every start.
-        reconcileSlotsOnSameSensor()
-        val autoResumeQueued = driver.resumeStoredSession()
-        val stagingResumeQueued = resumeStagingSessionIfStored()
-        warmupPhase = driver.warmupState().phase
+        startStep("reconcile slots") { reconcileSlotsOnSameSensor() }
+        var autoResumeQueued = false
+        var stagingResumeQueued = false
+        startStep("resume") { autoResumeQueued = driver.resumeStoredSession() }
+        startStep("resume staging") { stagingResumeQueued = resumeStagingSessionIfStored() }
+        startStep("warm-up phase") { warmupPhase = driver.warmupState().phase }
         // The privilege the OEM profiles have been asking for since they were written. Only when a
         // sensor is actually stored: no session wanted, no service, no notification.
-        refreshSessionService()
+        startStep("session service") { refreshSessionService() }
         // Reconcile a warm-up notification that survived a process restart with the driver's current
         // state — cancels it when warm-up is already READY/IDLE (otherwise nothing clears the stale
         // status-bar notification until the next onWarmup event, which may never arrive after restart).
-        host.showWarmup(driver.warmupState())
+        startStep("warm-up notification") { host.showWarmup(driver.warmupState()) }
         aapsLogger.info(
             LTag.BGSOURCE,
             "DEXCOM_ONEPLUS_SESSION: plugin start " +
                 "autoResumeQueued=$autoResumeQueued " +
                 "stagingResumeQueued=$stagingResumeQueued",
         )
-        startWarmupBasalGuard()
-        ioScope()?.let { watchHandover.start(it) }
+        startStep("warm-up basal guard") { startWarmupBasalGuard() }
+        startStep("watch handover") { ioScope()?.let { watchHandover.start(it) } }
     }
 
     /**
@@ -538,6 +551,17 @@ class DexcomOnePlusPlugin @Inject constructor(
     }
 
     /** One step of [onStop]. A throw is logged and does not stop the next steps. */
+    /** PERSONAL PATCH: [stopStep] for [onStart]. */
+    private inline fun startStep(name: String, step: () -> Unit) {
+        try {
+            step()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            aapsLogger.error(LTag.BGSOURCE, "DEXCOM_ONEPLUS_SESSION: plugin start, $name failed: ${t.message}", t)
+        }
+    }
+
     private inline fun stopStep(name: String, step: () -> Unit) {
         try {
             step()

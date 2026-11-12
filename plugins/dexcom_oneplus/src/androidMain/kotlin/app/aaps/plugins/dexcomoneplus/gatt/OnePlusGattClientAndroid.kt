@@ -115,75 +115,99 @@ class OnePlusGattClientAndroid(
         }
     }
 
+    /**
+     * PERSONAL PATCH: the GATT callbacks run on a binder thread and the posted steps on the main
+     * thread. A call like `discoverServices` or `requestMtu` can throw (Bluetooth turned off, the
+     * permission taken away). Uncaught, that ends the whole app and with it the loop. Here it fails
+     * the connection, so the driver tries again, and the app goes on.
+     */
+    private inline fun guarded(where: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Throwable) {
+            OnePlusLog.e("${OnePlusLogMarkers.ERROR}: GATT step $where failed, the app goes on", e)
+            try {
+                readyLatch.fail("$where failed: ${e.message}")
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            if (!isCurrentGatt(g)) {
-                OnePlusLog.d(
-                    "${OnePlusLogMarkers.SESSION}: ignore stale gatt state=$newState status=$status",
-                )
-                return
-            }
-            OnePlusLog.i(
-                "${OnePlusLogMarkers.SESSION}: gatt state=$newState status=$status",
-            )
-            if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
-                connected = true
-                // Juggluco's Dex/ONE+ path lets the OS negotiate the interval. Forcing HIGH
-                // (7.5 ms) correlated with peer status 19 right after the post-auth 0x4E, so this
-                // is off by default (see [OemDeviceProfile.forceHighConnectionPriority]).
-                if (profile.forceHighConnectionPriority) {
-                    try {
-                        g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
-                    } catch (_: Throwable) {
-                    }
-                }
-                // Juggluco: wait out BOND_BONDING before discoverServices.
-                val bond = g.device?.bondState ?: BluetoothDevice.BOND_NONE
-                if (bond == BluetoothDevice.BOND_BONDING) {
-                    OnePlusLog.i(
-                        "${OnePlusLogMarkers.SESSION}: wait BOND_BONDING before discover",
+            guarded("onConnectionStateChange") {
+                if (!isCurrentGatt(g)) {
+                    OnePlusLog.d(
+                        "${OnePlusLogMarkers.SESSION}: ignore stale gatt state=$newState status=$status",
                     )
-                    scheduleDiscoverWhenBondReady(g)
-                } else {
-                    beginPostConnect(g)
+                    return
                 }
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 OnePlusLog.i(
-                    "${OnePlusLogMarkers.SESSION}: link down status=$status " +
-                        OnePlusAudioLinkState.describe(appContext, bluetoothManager.adapter),
+                    "${OnePlusLogMarkers.SESSION}: gatt state=$newState status=$status",
                 )
-                connected = false
-                readyLatch.fail("disconnected status=$status")
-                completePendingOp(BluetoothGatt.GATT_FAILURE)
-                poisonNotifyQueues()
+                if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                    connected = true
+                    // Juggluco's Dex/ONE+ path lets the OS negotiate the interval. Forcing HIGH
+                    // (7.5 ms) correlated with peer status 19 right after the post-auth 0x4E, so this
+                    // is off by default (see [OemDeviceProfile.forceHighConnectionPriority]).
+                    if (profile.forceHighConnectionPriority) {
+                        try {
+                            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    // Juggluco: wait out BOND_BONDING before discoverServices.
+                    val bond = g.device?.bondState ?: BluetoothDevice.BOND_NONE
+                    if (bond == BluetoothDevice.BOND_BONDING) {
+                        OnePlusLog.i(
+                            "${OnePlusLogMarkers.SESSION}: wait BOND_BONDING before discover",
+                        )
+                        scheduleDiscoverWhenBondReady(g)
+                    } else {
+                        beginPostConnect(g)
+                    }
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    OnePlusLog.i(
+                        "${OnePlusLogMarkers.SESSION}: link down status=$status " +
+                            OnePlusAudioLinkState.describe(appContext, bluetoothManager.adapter),
+                    )
+                    connected = false
+                    readyLatch.fail("disconnected status=$status")
+                    completePendingOp(BluetoothGatt.GATT_FAILURE)
+                    poisonNotifyQueues()
+                }
             }
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
-            if (!isCurrentGatt(g)) return
-            OnePlusLog.i("${OnePlusLogMarkers.SESSION}: mtu=$mtu status=$status")
-            if (pendingPostReadyMtu) {
-                pendingPostReadyMtu = false
-                return
+            guarded("onMtuChanged") {
+                if (!isCurrentGatt(g)) return
+                OnePlusLog.i("${OnePlusLogMarkers.SESSION}: mtu=$mtu status=$status")
+                if (pendingPostReadyMtu) {
+                    pendingPostReadyMtu = false
+                    return
+                }
+                g.discoverServices()
             }
-            g.discoverServices()
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            if (!isCurrentGatt(g)) return
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                readyLatch.fail("discover status=$status")
-                return
-            }
-            val delayMs = profile.postDiscoverDelayMs
-            if (delayMs > 0L) {
-                OnePlusLog.d(
-                    "${OnePlusLogMarkers.SESSION}: post-discover settle ${delayMs}ms",
-                )
-                // Never sleep on the binder thread — schedule CCCD after Ob1-style pause.
-                mainHandler.postDelayed({ beginCccdSetup(g) }, delayMs)
-            } else {
-                beginCccdSetup(g)
+            guarded("onServicesDiscovered") {
+                if (!isCurrentGatt(g)) return
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    readyLatch.fail("discover status=$status")
+                    return
+                }
+                val delayMs = profile.postDiscoverDelayMs
+                if (delayMs > 0L) {
+                    OnePlusLog.d(
+                        "${OnePlusLogMarkers.SESSION}: post-discover settle ${delayMs}ms",
+                    )
+                    // Never sleep on the binder thread — schedule CCCD after Ob1-style pause.
+                    mainHandler.postDelayed({ guarded("beginCccdSetup") { beginCccdSetup(g) } }, delayMs)
+                } else {
+                    beginCccdSetup(g)
+                }
             }
         }
 
@@ -192,38 +216,40 @@ class OnePlusGattClientAndroid(
             descriptor: BluetoothGattDescriptor,
             status: Int,
         ) {
-            if (!isCurrentGatt(g)) return
-            OnePlusLog.d(
-                "${OnePlusLogMarkers.SESSION}: descriptorWrite uuid=${descriptor.uuid} status=$status phase=$cccdPhase",
-            )
-            // bleExecutor-driven CCCD (Control / Backfill / bond teardown) uses the op latch.
-            if (cccdPhase == CccdPhase.DONE || cccdPhase == CccdPhase.NONE) {
-                completePendingOp(status)
-                return
-            }
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                readyLatch.fail("CCCD write status=$status phase=$cccdPhase")
-                cccdPhase = CccdPhase.NONE
-                return
-            }
-            when (cccdPhase) {
-                CccdPhase.EXTRA -> {
-                    cccdPhase = CccdPhase.AUTH
-                    if (!submitAuthCccd(g)) {
-                        readyLatch.fail("Auth CCCD submit failed")
-                        cccdPhase = CccdPhase.NONE
+            guarded("onDescriptorWrite") {
+                if (!isCurrentGatt(g)) return
+                OnePlusLog.d(
+                    "${OnePlusLogMarkers.SESSION}: descriptorWrite uuid=${descriptor.uuid} status=$status phase=$cccdPhase",
+                )
+                // bleExecutor-driven CCCD (Control / Backfill / bond teardown) uses the op latch.
+                if (cccdPhase == CccdPhase.DONE || cccdPhase == CccdPhase.NONE) {
+                    completePendingOp(status)
+                    return
+                }
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    readyLatch.fail("CCCD write status=$status phase=$cccdPhase")
+                    cccdPhase = CccdPhase.NONE
+                    return
+                }
+                when (cccdPhase) {
+                    CccdPhase.EXTRA -> {
+                        cccdPhase = CccdPhase.AUTH
+                        if (!submitAuthCccd(g)) {
+                            readyLatch.fail("Auth CCCD submit failed")
+                            cccdPhase = CccdPhase.NONE
+                        }
                     }
+                    CccdPhase.AUTH -> {
+                        cccdPhase = CccdPhase.DONE
+                        readyLatch.complete()
+                        OnePlusLog.i(
+                            "${OnePlusLogMarkers.SESSION}: gatt ready control=${controlChar != null} " +
+                                "backfill=${backfillChar != null}",
+                        )
+                        maybeRequestMtuAfterReady(g)
+                    }
+                    else -> Unit
                 }
-                CccdPhase.AUTH -> {
-                    cccdPhase = CccdPhase.DONE
-                    readyLatch.complete()
-                    OnePlusLog.i(
-                        "${OnePlusLogMarkers.SESSION}: gatt ready control=${controlChar != null} " +
-                            "backfill=${backfillChar != null}",
-                    )
-                    maybeRequestMtuAfterReady(g)
-                }
-                else -> Unit
             }
         }
 
@@ -232,17 +258,21 @@ class OnePlusGattClientAndroid(
             characteristic: BluetoothGattCharacteristic,
             status: Int,
         ) {
-            if (!isCurrentGatt(g)) return
-            OnePlusLog.d(
-                "${OnePlusLogMarkers.SESSION}: charWrite uuid=${characteristic.uuid} status=$status",
-            )
-            completePendingOp(status)
+            guarded("onCharacteristicWrite") {
+                if (!isCurrentGatt(g)) return
+                OnePlusLog.d(
+                    "${OnePlusLogMarkers.SESSION}: charWrite uuid=${characteristic.uuid} status=$status",
+                )
+                completePendingOp(status)
+            }
         }
 
         @Deprecated("Deprecated in Java")
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            if (!isCurrentGatt(g)) return
-            onNotify(characteristic.uuid, characteristic.value)
+            guarded("onCharacteristicChanged") {
+                if (!isCurrentGatt(g)) return
+                onNotify(characteristic.uuid, characteristic.value)
+            }
         }
 
         override fun onCharacteristicChanged(
@@ -250,8 +280,10 @@ class OnePlusGattClientAndroid(
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
-            if (!isCurrentGatt(g)) return
-            onNotify(characteristic.uuid, value)
+            guarded("onCharacteristicChanged") {
+                if (!isCurrentGatt(g)) return
+                onNotify(characteristic.uuid, value)
+            }
         }
 
         private fun onNotify(uuid: UUID, value: ByteArray?) {
@@ -573,9 +605,9 @@ class OnePlusGattClientAndroid(
                 readyLatch.fail("bond stuck in BOND_BONDING")
                 return
             }
-            mainHandler.postDelayed({ tick() }, 100L)
+            mainHandler.postDelayed({ guarded("bondTick") { tick() } }, 100L)
         }
-        mainHandler.post { tick() }
+        mainHandler.post { guarded("bondTick") { tick() } }
     }
 
     private fun createBondLe(device: BluetoothDevice): Boolean {

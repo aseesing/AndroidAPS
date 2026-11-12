@@ -1,5 +1,6 @@
 package app.aaps.plugins.source.compose
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -366,7 +367,7 @@ fun DexcomOnePlusStartScreen(
             errorText = errorText,
             selectedLabel = selected?.name ?: selected?.address,
             enabled = hasDevice,
-            onConnectClick = onConnectClick,
+            onConnectClick = { runGuarded(onConnectClick) { errorText = it } }, // PERSONAL PATCH: see runGuarded
         )
     }
 
@@ -444,7 +445,7 @@ fun DexcomOnePlusStartScreen(
                     ScanHeader(
                         scanning = scanning,
                         deviceCount = devices.size,
-                        onStartScan = onStartScan,
+                        onStartScan = { runGuarded(onStartScan) { errorText = it } }, // PERSONAL PATCH: see runGuarded
                         onStopScan = onStopScan,
                     )
                     // Its own pane, so the list gets the whole height instead of a fixed 216 dp box.
@@ -494,7 +495,7 @@ fun DexcomOnePlusStartScreen(
                     ScanHeader(
                         scanning = scanning,
                         deviceCount = devices.size,
-                        onStartScan = onStartScan,
+                        onStartScan = { runGuarded(onStartScan) { errorText = it } }, // PERSONAL PATCH: see runGuarded
                         onStopScan = onStopScan,
                     )
                 }
@@ -970,5 +971,20 @@ private fun ColumnScope.ConnectAction(
                 stringResource(SourceStrings.dexcom_oneplus_connect_follow)
             },
         )
+    }
+}
+
+/**
+ * PERSONAL PATCH: Connect and Scan run on the main thread and call into Bluetooth (start the scan,
+ * start or stop a session). Such a call can throw, for example when Bluetooth is off or the
+ * permission was taken away. Uncaught on the main thread, that ends the whole app and with it the
+ * loop. Here the error is logged and shown on the screen instead.
+ */
+private fun runGuarded(action: () -> Unit, onError: (String) -> Unit) {
+    try {
+        action()
+    } catch (e: Throwable) {
+        Log.e("DexcomOnePlusStart", "Start screen action failed, the app goes on", e)
+        onError(e.message ?: e.javaClass.simpleName)
     }
 }
