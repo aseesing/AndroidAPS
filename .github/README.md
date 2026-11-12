@@ -8,7 +8,8 @@ the status lights count down to the end of the sensor and pod, and logs can be s
 > **Not an official AAPS release.** These changes are not reviewed by the AAPS team and are not
 > meant for upstream. AAPS controls insulin: build and use this only if you understand the code
 > and the risk. The phone side changes only how often data is sent to the watch, the status
-> lights, and how logs are saved. Nothing changes how insulin is given.
+> lights, how logs are saved, and it sends a rough place to the watch (see 4). Nothing changes
+> how insulin is given.
 
 The full upstream README is in [`/README.md`](../README.md).
 
@@ -21,7 +22,8 @@ All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
 | `local/personal` | **The branch to build.** All changes below, merged. |
 | `local/wear-battery` | Less battery use on the watch, fewer messages from the phone |
 | `local/wear-hr-steps-design` | Heart rate and steps on the watch face, design *AAPS HR Steps* |
-| `local/wear-wake-animation` | Wake-up animation, design *AAPS Tech*, and later design updates |
+| `local/wear-wake-animation` | Wake-up animation, design *AAPS Tech* (now *Cyberpunk*), and later design updates |
+| `local/wear-day-night` | Day look and moon for watch face designs, design renamed to *Cyberpunk* |
 | `local/status-and-logs` | Phone: status lights count down to the real end, save logs to Downloads |
 
 `master` of this fork is a plain copy of upstream `master`.
@@ -56,30 +58,45 @@ All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
 
 ### 3. Wake-up animation
 
-- A watch face design can have an optional `animation` block: **falling rain** and an image that
-  **beats at the measured heart rate**.
+- A watch face design can have an optional `animation` block: **falling rain** or short
+  **glitch bands**, and an image that **beats at the measured heart rate**.
 - It plays (24 frames per second) when you raise your wrist, when the watch face starts or becomes
   visible, or when you tap the screen. Then the face is still again.
 - How long it plays is a setting of the Custom watch face on the watch, *Wake-up animation*: as the
-  design asks (the default), off, or 3 to 30 seconds. AAPS Tech asks for 15 seconds.
+  design asks (the default), off, or 3 to 30 seconds. Cyberpunk asks for 15 seconds.
 - It never plays in ambient (always-on) mode, in simple UI, or in previews.
 - Designs without the `animation` block work exactly as before.
 
-### 4. Two watch face designs
+### 4. Day look and moon
+
+- A watch face design can have an optional `dayLook` block. In the day it is laid over the design,
+  and a picture `XDay` in the zip is shown instead of `X` (for example `BackgroundDay`).
+- **When it is day** is a setting of the Custom watch face on the watch, *Day / night look*:
+  *Automatic* (the default, from sunrise to sunset), *Day face* or *Night face*.
+- The always-on screen has its own setting, *Always-on look*: *Night face* (the default, a light
+  screen there costs battery), *Day face*, or *Same as active screen*.
+- The watch works out sunrise and sunset itself. For that, the phone sends its last known place,
+  **rounded to 0.1 degree (about 10 km)**, and only when AAPS has location permission. The phone
+  starts no location request for it. Without a place the day is 07:00 to 19:00.
+- A design can show the **phase of the moon**: the new value `moon_phase` picks a picture. The
+  watch works it out from the date, without phone or internet.
+- Both settings show only for a design that has a day look. Designs without it work as before.
+
+### 5. Two watch face designs
 
 The designs are in [`wear/cwf-designs`](../wear/cwf-designs). Install a zip the same way as any
 other custom watch face for AAPS.
 
-| AAPS Tech | AAPS HR Steps |
-|---|---|
-| ![AAPS Tech](images/aaps-tech.png) | ![AAPS HR Steps](images/aaps-hr-steps.png) |
-| Dark "cyberpunk" design: big digital time and BG in range colours, a table with IOB, carbs, basal, reservoir, heart rate and steps, the watch battery, and the graph. Rain and a beating drop in the logo when the watch wakes up. | The default analog design with round dials for COB, IOB, heart rate and steps, the watch battery, the date and a digital clock. |
+| Cyberpunk (night) | Cyberpunk (day) | AAPS HR Steps |
+|---|---|---|
+| ![Cyberpunk at night](images/aaps-tech.png) | ![Cyberpunk in the day](images/aaps-tech-day.png) | ![AAPS HR Steps](images/aaps-hr-steps.png) |
+| `Cyberpunk.zip` (was *AAPS Tech*). Dark neon design: big digital time and BG in range colours, a table with IOB, carbs, basal, reservoir, heart rate and steps, the watch battery, the moon, and the graph. Rain and a beating drop in the logo when the watch wakes up. | The same design in the day: signal yellow and black. The BG, the arrow, the table and the graph stay on black panels in their night colours, so green, yellow and red keep their meaning. Glitch bands instead of rain. | The default analog design with round dials for COB, IOB, heart rate and steps, the watch battery, the date and a digital clock. |
 
-The pictures are previews with sample values. The font of AAPS Tech is
+The pictures are previews with sample values. The font of Cyberpunk is
 [Rajdhani](https://fonts.google.com/specimen/Rajdhani) Bold (SIL Open Font License, see
 `wear/cwf-designs/fonts`).
 
-**Settings for AAPS Tech:**
+**Settings for Cyberpunk:**
 
 - The design turns off *detailed IOB* itself. This only works if watch faces may change watch
   settings. If the first row of the table shows two numbers, turn off *Show detailed IOB* in the
@@ -87,7 +104,7 @@ The pictures are previews with sample values. The font of AAPS Tech is
 - Choose *AAPS heart rate* for complication 1, *AAPS steps* for complication 2 and the watch
   battery for complication 5.
 
-### 5. Status lights count down (phone)
+### 6. Status lights count down (phone)
 
 The status lights in Overview and Actions show the **time left** until a part stops, not its age.
 
@@ -110,7 +127,7 @@ The status lights in Overview and Actions show the **time left** until a part st
 - AAPS only knows a new sensor when the BG source sends its start time. xDrip+ sends it for a G7
   only when it knows the sensor firmware, so keep xDrip+ up to date.
 
-### 6. Save logs to Downloads (phone)
+### 7. Save logs to Downloads (phone)
 
 *Maintenance* has a new item **Save logs to Downloads**. It writes the same zip as *Send logs*
 to the `Download` folder of the phone, with no email. No storage permission is needed.
@@ -121,7 +138,7 @@ to the `Download` folder of the phone, with no email. No storage permission is n
    `:app:assembleFullRelease`.
 2. Sign both with **the same key as the AAPS you have installed now**, and install with
    `adb install -r`. Then your data and settings stay.
-3. Install a design zip from `wear/cwf-designs`.
+3. Install a design zip from `wear/cwf-designs`, for example `Cyberpunk.zip`.
 
 ## Tests
 
