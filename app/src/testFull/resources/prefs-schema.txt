@@ -139,6 +139,15 @@ boluswizard_percentage|IntKey|true
 bt_watchdog_last|LongNonKey|true
 bt_watchdog|BooleanKey|true
 calibration_entries_valid_from|CalibrationLongKey|false
+car_speech_car_address|CarSpeechStringKey|false
+car_speech_car_name|CarSpeechStringKey|false
+car_speech_change_threshold|CarSpeechIntKey|true
+car_speech_last_connected_address|CarSpeechStringKey|false
+car_speech_last_connected_name|CarSpeechStringKey|false
+car_speech_out_of_range_repeat|CarSpeechIntKey|true
+car_speech_setup|CarSpeechIntentKey|false
+car_speech_via_car_audio|CarSpeechBooleanKey|true
+car_speech_via_motion|CarSpeechBooleanKey|true
 carbsReqThreshold|IntKey|true
 carbs_button_increment_1|IntKey|true
 carbs_button_increment_2|IntKey|true

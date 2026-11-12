@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
+<!--
+    Personal strings for speaking glucose in the car, not in upstream AAPS. Kept apart from
+    strings.xml so that a new AAPS release merges without conflicts in that file. English only.
+-->
+<resources>
+
+    <string name="car_speech">Speak glucose in the car</string>
+    <string name="car_speech_description">Says the glucose value and trend on the car speakers while you drive, when the value changes or is too low or too high.</string>
+    <string name="car_speech_via_car_audio">Detect the car by Bluetooth</string>
+    <string name="car_speech_via_car_audio_summary">You are in the car while the phone is connected to the car chosen under \"Car and test\".</string>
+    <string name="car_speech_via_motion">Detect driving by movement</string>
+    <string name="car_speech_via_motion_summary">Google activity recognition tells when you are in a vehicle. Needs the physical activity permission.</string>
+    <string name="car_speech_change_threshold">Speak on a change of</string>
+    <string name="car_speech_change_threshold_summary">Inside the target range, the value is spoken only when it moved this much since the last time.</string>
+    <string name="car_speech_out_of_range_repeat">Repeat a low or a high every</string>
+    <string name="car_speech_out_of_range_repeat_summary">A value below the low mark or above the high mark is spoken again after this time.</string>
+    <string name="car_speech_setup">Car and test</string>
+    <string name="car_speech_setup_summary">Choose the Bluetooth device of the car and test the voice</string>
+    <string name="car_speech_car_section">Car</string>
+    <string name="car_speech_no_car">No car chosen yet.</string>
+    <string name="car_speech_current_car" comment="%1$s=name of the Bluetooth device of the car. Example: The car is: VW Radio">The car is: %1$s</string>
+    <string name="car_speech_choose_explanation">Connect the phone to the car over Bluetooth. The device that connected last is shown here, and you can choose it as the car.</string>
+    <string name="car_speech_no_device_seen">No Bluetooth audio device connected yet since this setting is on.</string>
+    <string name="car_speech_use_as_car" comment="%1$s=name of a Bluetooth audio device. Example: Use VW Radio as the car">Use %1$s as the car</string>
+    <string name="car_speech_forget_car">Forget the car</string>
+    <string name="car_speech_state_section">Now</string>
+    <string name="car_speech_in_car">In the car: the glucose value is spoken.</string>
+    <string name="car_speech_not_in_car">Not in the car: nothing is spoken.</string>
+    <string name="car_speech_test">Speak the glucose value now</string>
+    <string name="car_speech_test_no_value">No glucose value yet</string>
+    <string name="car_speech_text" comment="Spoken text. %1$s=glucose value with no unit, %2$s=trend in words. Example: 7.2, rising">%1$s, %2$s</string>
+    <string name="car_speech_permission_motion_title">Physical activity</string>
+    <string name="car_speech_permission_motion_description">Needed to know when you are driving, so the glucose value can be spoken in the car.</string>
+
+</resources>

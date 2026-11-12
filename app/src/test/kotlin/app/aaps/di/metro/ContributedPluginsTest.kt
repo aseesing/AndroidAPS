@@ -41,6 +41,8 @@ class ContributedPluginsTest {
             // sync - the every-build part of the 300 block. SmsCommunicator 300 and Tidepool 320 are
             // @NotNSClient; 340 (OpenHumans) comes from its own graph extension.
             310, 330, 350, 360, 370,
+            // PERSONAL PATCH: speak glucose in the car (CarSpeechPlugin)
+            380,
             // smoothing
             600, 610, 620, 630,
             // calibration

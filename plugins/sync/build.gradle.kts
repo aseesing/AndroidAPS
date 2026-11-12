@@ -97,6 +97,9 @@ kotlin {
                 api(libs.androidx.ui.tooling.preview)
                 implementation(libs.androidx.compose.ui.tooling)
 
+                // PERSONAL PATCH: car speech, activity recognition ("in a vehicle")
+                implementation(libs.com.google.android.gms.playservices.location)
+
                 // OpenHumans
                 api(libs.com.squareup.okhttp3.okhttp)
                 api(libs.com.squareup.retrofit2.retrofit)
