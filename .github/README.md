@@ -4,18 +4,25 @@ This is a personal fork of [nightscout/AndroidAPS](https://github.com/nightscout
 It adds a few changes, mostly for the **Wear OS watch app**. They were made for a OnePlus Watch 2R
 (Wear OS 5, round 466 x 466 screen), but should work on other round Wear OS watches. On the phone,
 the status lights count down to the end of the sensor and pod, and logs can be saved without email.
+It also has the **Dexcom ONE+ / G7 driver** of an open upstream pull request, so AAPS reads the
+sensor itself, and it **speaks the glucose value in the car**, so xDrip+ is not needed.
 
 > **Not an official AAPS release.** These changes are not reviewed by the AAPS team and are not
 > meant for upstream. AAPS controls insulin: build and use this only if you understand the code
-> and the risk. The phone side changes only how often data is sent to the watch, the status
-> lights, how logs are saved, and it sends a rough place to the watch (see 4). Nothing changes
-> how insulin is given.
+> and the risk. Our own changes on the phone change only how often data is sent to the watch, the
+> status lights, how logs are saved, they send a rough place to the watch (see 4), and they speak
+> the glucose value in the car (see 10). **The Dexcom
+> ONE+ / G7 driver (see 9) is not ours and is not yet reviewed upstream. It is the glucose source of
+> the loop, and it can end a high temp basal when readings stop.**
 
 The full upstream README is in [`/README.md`](../README.md).
 
 ## Base and branches
 
-All changes are made on top of upstream **4.0.0** (`master` at `f77abd9b82`).
+The changes 1 to 8 are made on top of upstream **4.0.0** (`master` at `f77abd9b82`). The Dexcom
+ONE+ / G7 driver (see 9) is built on upstream `dev`, so merging it also brought about 170 commits of
+upstream `dev` that came after 4.0.0. The base of `local/personal` is now upstream `dev` at
+`99408ea5c2`, not 4.0.0. Change 10 is made on top of that.
 
 | Branch | What it holds |
 |---|---|
@@ -133,13 +140,62 @@ The status lights in Overview and Actions show the **time left** until a part st
 *Maintenance* has a new item **Save logs to Downloads**. It writes the same zip as *Send logs*
 to the `Download` folder of the phone, with no email. No storage permission is needed.
 
-### 7. Fast first frame after a wake (watch)
+### 8. Fast first frame after a wake (watch)
 
 When you raise your wrist or press the button, the watch waits for the first frame of the watch
 face. On the OnePlus Watch 2R in *Smart mode*, a late frame left the watch on its own low-power
 face until the button was pressed twice. Now the first frame after a wake only updates the date
 and time. Data, colours, design and chart are filled in right after it, and the wake-up animation
 starts with the next frame.
+
+### 9. Dexcom ONE+ / G7 without xDrip+ (phone and watch)
+
+Merged from the open upstream pull request
+[nightscout/AndroidAPS#5431](https://github.com/nightscout/AndroidAPS/pull/5431) by MTR93600 (head
+`2d799d46`, 2026-11-10). It is not our code; see the pull request for the details.
+
+- A new BG source **Dexcom ONE+ / G7** talks to the sensor over Bluetooth itself, so xDrip+ or
+  the Dexcom app is not needed.
+- Start, warm-up (with pre-soak), calibration, sensor status and a driver log are in the plugin.
+- CGM alarms for this source, also on the watch, and *direct to watch*: the watch can read the
+  sensor itself when the phone is away.
+- **It changes insulin delivery:** while no reading arrives in closed loop, it ends a temp basal
+  that is above the profile basal. It never raises delivery.
+
+The only change by us: the watch keeps our batched writes of live data (see 1) when it stores a
+reading it took from the sensor itself.
+
+### 10. Speak glucose in the car (phone)
+
+The *vehicle mode* speech of xDrip+, so that xDrip+ is not needed for it. It is the plugin **Speak
+glucose in the car** under *General* in the Config Builder. The code is a port of xDrip+
+`BgToSpeech`, `SpeechUtil`, `HeadsetStateReceiver` and `ActivityRecognizedService` (GPLv3, by
+jamorham and others), changed where written below.
+
+- **In the car** (as in xDrip+, both can be on):
+  - *Detect the car by Bluetooth* (on by default): connect the phone to the car, open
+    *Car and test* in the settings of the plugin, and choose the device that connected last as the
+    car. While that device is connected, you are in the car. xDrip+ looks only at the hands-free
+    connection; here the media connection (A2DP) counts too.
+  - *Detect driving by movement* (off by default): Google activity recognition says when you are
+    in a vehicle. It needs the *physical activity* permission. xDrip+ asks every few minutes; this
+    uses the newer API that reports only the start and the end of driving.
+- **What it says:** the glucose value and the trend, for example *"7.2, rising"*, in your unit and
+  in the language of the phone (English when that language has no voice).
+- **When it says it:**
+  - the first reading in the car,
+  - below the low mark or above the high mark (the marks of the overview): at once, and again
+    every *Repeat a low or a high every* (default 10 min),
+  - inside the range only when the value moved *Speak on a change of* (default 10 mg/dl) since the
+    last time, or when it just came back from a low or a high,
+  - never a reading older than 4 minutes, and never during a phone call.
+- **How:** as navigation guidance with the music turned down for a moment, so Android Auto plays
+  it on the car speakers like a navigation voice. xDrip+ instead waits up to 40 s for the music to
+  stop.
+- *Car and test* also shows whether you are in the car now, and has a button to say the newest
+  value at once.
+
+The rule for *when* is plain Kotlin in `commonMain` with its own tests (`CarSpeechRuleTest`).
 
 ## Install
 
@@ -164,17 +220,18 @@ hooks in existing files, and their own strings file. Our own files start with a
 `PERSONAL PATCH` header; newer hooks in upstream files are marked with a `// PERSONAL PATCH`
 comment.
 
-When a new version is out:
+Since the Dexcom ONE+ / G7 driver (see 9), `local/personal` holds a merge of upstream `dev`.
+A rebase onto a new `master` would have to move all those `dev` commits too, so **merge** instead:
 
-1. Bring `master` of this fork up to date with upstream (the *Sync fork* button on GitHub, or
-   `gh repo sync aseesing/AndroidAPS -b master`), and fetch it.
-2. Move `local/personal` with all its merges in one step:
-   `git rebase --rebase-merges --onto <new master> f77abd9b82 local/personal`.
-   Solve conflicts where git stops, then `git rebase --continue`.
-3. Point the `local/wear-*` branches at their moved commits (`git branch -f <branch> <commit>`).
-   `local/wear-battery` and `local/wear-hr-steps-design` each start from upstream on their own;
-   `local/wear-wake-animation` starts from the merge of those two. `local/status-and-logs`
-   starts from upstream on its own. `local/wear-fast-wake` starts from `local/personal`.
-4. Run the `wear`, `plugins/sync` and `ui` tests, build, and push the branches with
-   `git push --force-with-lease`. A rebase rewrites the commits, so a normal push is refused.
-5. Change the base commit at the top of this file.
+1. Fetch upstream: `git fetch https://github.com/nightscout/AndroidAPS dev:refs/remotes/upstream/dev`
+   (or the new release tag).
+2. Merge it into `local/personal`: `git merge upstream/dev`. Solve conflicts where git stops.
+   When pull request #5431 is merged upstream, its commits come in this way and nothing else is
+   needed for it.
+3. Run the `wear`, `plugins/sync`, `plugins/source` and `ui` tests, build, and push with a normal
+   `git push` (a merge does not rewrite commits).
+4. Change the base commit at the top of this file.
+
+Before the driver, the branches were moved with
+`git rebase --rebase-merges --onto <new master> f77abd9b82 local/personal`, and the `local/wear-*`
+branches were pointed at their moved commits.
