@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
 <!-- In a file of its own so this local patch never conflicts with upstream changes to arrays.xml.
      The values are lengths in ms, "0" for off, or "design" (see WakeLength). -->
 <resources>
