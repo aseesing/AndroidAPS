@@ -5,7 +5,9 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 object Versions {
 
     // On change edit aaps-ci.yml
-    const val appVersion = "4.0.1-dev-a"
+    // PERSONAL PATCH: upstream dev says "4.0.1-dev-a". Without "-dev" AAPS does not see a dev build,
+    // so the closed loop works without engineering mode (see .github/README.md, base and branches).
+    const val appVersion = "4.0.1"
     const val versionCode = 1500
 
     const val compileSdk = 37

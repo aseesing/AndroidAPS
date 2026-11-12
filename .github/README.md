@@ -24,6 +24,10 @@ ONE+ / G7 driver (see 9) is built on upstream `dev`, so merging it also brought 
 upstream `dev` that came after 4.0.0. The base of `local/personal` is now upstream `dev` at
 `99408ea5c2`, not 4.0.0. Change 10 is made on top of that.
 
+Upstream `dev` calls itself `4.0.1-dev-a`. AAPS sees the `-dev` and then turns the closed loop off
+unless engineering mode is on. This fork sets the version to **`4.0.1`**, so the closed loop works
+as before.
+
 | Branch | What it holds |
 |---|---|
 | `local/personal` | **The branch to build.** All changes below, merged. |
