@@ -61,7 +61,10 @@ class CwfYellowDesignTest : CyberpunkDesignBase() {
         mergeIn(JSONObject().apply {
             put("day_name", JSONObject().put("fontColor", YELLOW_MUTED))
             put("month", JSONObject().put("fontColor", YELLOW_MUTED))
-            for (key in listOf("day", "hour", "minute", "complication5")) put(key, JSONObject().put("fontColor", YELLOW_INK))
+            for (key in listOf("day", "hour", "minute", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW)) put(key, JSONObject().put("fontColor", YELLOW_INK))
+            // The batteries stand on yellow: the dark colours of the light looks
+            put("dynData", JSONObject().put(WATCH_NUMBER_DYN, JSONObject().put("fontColor1", YELLOW_INK)).put(PHONE_NUMBER_DYN, JSONObject().put("fontColor1", YELLOW_INK))
+                .mergeIn(batteryDayColours()))
             put("freetext1", JSONObject().put("fontColor", YELLOW_TEAL))
             for (label in listOf("iob1", "cob1", "freetext2", "freetext3")) put(label, JSONObject().put("fontColor", YELLOW_LABEL))
         })
@@ -76,7 +79,7 @@ class CwfYellowDesignTest : CyberpunkDesignBase() {
         LOGO_PULSE to logoPulse(YELLOW_LOGO),
         SUN to sunPng(),
         BLANK to blankPng()
-    ) + arrowImages()
+    ) + arrowImages() + batteryImages()
 
     /**
      * The background: signal yellow with a faint carbon weave and the faint dashed track of the sun,
@@ -129,9 +132,14 @@ class CwfYellowDesignTest : CyberpunkDesignBase() {
         val design = design(defaultDesign())
         assertThat(design.has(DayOverlay.WEATHER_KEY)).isFalse()
         // The texts on yellow are dark, with enough contrast
-        for (key in listOf("hour", "minute", "day", "complication5"))
+        for (key in listOf("hour", "minute", "day", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW))
             assertWithMessage(key).that(contrast(design.getJSONObject(key).getString("fontColor"), YELLOW)).isAtLeast(7.0)
         for (key in listOf("day_name", "month")) assertWithMessage(key).that(contrast(design.getJSONObject(key).getString("fontColor"), YELLOW)).isAtLeast(4.5)
+        // The battery icons: every level colour can be seen on yellow
+        for (dyn in listOf(WATCH_ICON_DYN, PHONE_ICON_DYN)) for (key in listOf("invalidColor", "color1", "color2", "color3")) {
+            val colour = design.getJSONObject("dynData").getJSONObject(dyn).getString(key)
+            assertWithMessage("$dyn $key").that(contrast(colour, YELLOW)).isAtLeast(3.0)
+        }
         // The colon is big: 3 is enough
         assertThat(contrast(design.getJSONObject("freetext1").getString("fontColor"), YELLOW)).isAtLeast(3.0)
         // On the black panels: the night colours. White values, the neon glucose colours, readable labels
@@ -176,7 +184,7 @@ class CwfYellowDesignTest : CyberpunkDesignBase() {
         const val YELLOW_LINE = "#3A3600"
 
         val YELLOW_LOGO = Ink(line = YELLOW_INK, lineShadow = LOW_COLOR, text = YELLOW_INK, textShadow1 = LOW_COLOR, textShadow2 = YELLOW_CYAN)
-        val YELLOW_PLATE = Plate(frame = LOW_COLOR, thin = YELLOW_LINE, battery = YELLOW_INK, label = YELLOW_LABEL, logo = YELLOW_LOGO)
+        val YELLOW_PLATE = Plate(frame = LOW_COLOR, thin = YELLOW_LINE, label = YELLOW_LABEL, logo = YELLOW_LOGO)
 
         /** 11 November 2026 at 16:00, local time. */
         val AFTERNOON_MS: Long = DAY_MS + 4 * 3_600_000L

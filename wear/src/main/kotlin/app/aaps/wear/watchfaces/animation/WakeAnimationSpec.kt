@@ -19,6 +19,7 @@ import kotlin.math.ceil
  * @param durationMs how long one wake plays, unless the watch setting `WakeLength` chooses another length
  * @param fps frames per second while it plays
  * @param fadeMs the rain fades in and out over this time, and the heart settles to its rest size
+ * @param blink views that blink while their value is low, for example a battery at 20 % or less
  */
 data class WakeAnimationSpec(
     val durationMs: Long = 6000,
@@ -26,7 +27,8 @@ data class WakeAnimationSpec(
     val fadeMs: Long = 600,
     val rain: RainSpec? = null,
     val pulse: PulseSpec? = null,
-    val glitch: GlitchSpec? = null
+    val glitch: GlitchSpec? = null,
+    val blink: List<BlinkSpec> = emptyList()
 ) {
 
     /** Values cut to safe limits, so a mistake in a design cannot cost a lot of battery. */
@@ -36,7 +38,8 @@ data class WakeAnimationSpec(
         fadeMs = fadeMs.coerceIn(0, durationMs.coerceIn(MIN_DURATION_MS, MAX_DURATION_MS) / 2),
         rain = rain?.normalized()?.takeIf { it.count > 0 },
         pulse = pulse?.normalized()?.takeIf { it.drawable != null },   // no image in the zip, no heart
-        glitch = glitch?.normalized()?.takeIf { it.bands > 0 && it.chance > 0f }
+        glitch = glitch?.normalized()?.takeIf { it.bands > 0 && it.chance > 0f },
+        blink = blink.map { it.normalized() }.filter { it.views.isNotEmpty() && it.valueKey.isNotEmpty() }
     )
 
     /** The same values without the image object, which is made new each time the design is read. */
@@ -54,7 +57,10 @@ data class WakeAnimationSpec(
     }
 
     /** True when there is something to draw at all. */
-    val hasContent: Boolean get() = rain != null || pulse != null || glitch != null
+    val hasContent: Boolean get() = rain != null || pulse != null || glitch != null || blink.isNotEmpty()
+
+    /** The keys of all views that may blink. */
+    val blinkViews: Set<String> get() = blink.flatMapTo(LinkedHashSet()) { it.views }
 
     /** Time between two frames while the animation plays. */
     val frameDelayMs: Long get() = (1000L / fps).coerceAtLeast(1)
@@ -79,6 +85,38 @@ data class WakeAnimationSpec(
         const val MIN_DURATION_MS = 500L
         const val MAX_DURATION_MS = 30_000L
         const val MAX_FPS = 30
+    }
+}
+
+/**
+ * Views that blink while a value is low: shown for the first half of each [periodMs], hidden for the
+ * second half. Only while the wake-up animation plays, so it costs no frames of its own. Before and
+ * after, and on the always-on screen, the views show as normal.
+ *
+ * @param views the keys of the views, for example `uploader_battery`
+ * @param valueKey the value that decides, a value key of `dynData`, for example `watch_battery`
+ * @param atOrBelow the views blink while the value is this or lower; never when there is no value
+ * @param periodMs one time on and off
+ */
+data class BlinkSpec(
+    val views: List<String>,
+    val valueKey: String,
+    val atOrBelow: Double,
+    val periodMs: Long = 1000
+) {
+
+    fun normalized(): BlinkSpec = copy(views = views.filter { it.isNotEmpty() }.distinct(), periodMs = periodMs.coerceIn(MIN_PERIOD_MS, MAX_PERIOD_MS))
+
+    /** True when the views blink for [value]. */
+    fun isLow(value: Double?): Boolean = value != null && value <= atOrBelow
+
+    /** True when the views are hidden [elapsedMs] after the start of a wake. They start shown. */
+    fun isOff(elapsedMs: Long): Boolean = elapsedMs.coerceAtLeast(0) % periodMs >= periodMs / 2
+
+    companion object {
+
+        const val MIN_PERIOD_MS = 200L
+        const val MAX_PERIOD_MS = 5000L
     }
 }
 

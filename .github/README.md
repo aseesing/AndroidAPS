@@ -39,6 +39,7 @@ as before.
 | `local/wear-day-night-faces` | A day face and a night face, chosen in AAPS; the four Cyberpunk and Wilds designs |
 | `local/status-and-logs` | Phone: status lights count down to the real end, save logs to Downloads |
 | `local/wear-fast-wake` | Fast first frame after a wake, and the header that marks our own files |
+| `local/wear-phone-battery` | Phone and watch battery icons on the Cyberpunk and Wilds designs, blinking when low |
 
 `master` of this fork is a plain copy of upstream `master`.
 
@@ -79,6 +80,7 @@ as before.
 - How long it plays is a setting of the Custom watch face on the watch, *Wake-up animation*: as the
   design asks (the default), off, or 3 to 30 seconds. Cyberpunk asks for 15 seconds.
 - It never plays in ambient (always-on) mode, in simple UI, or in previews.
+- While it plays, a battery at 20 % or less blinks (see 11).
 - Designs without the `animation` block work exactly as before.
 
 ### 4. A day face and a night face, weather, sun and moon
@@ -118,7 +120,7 @@ and a larger one does not arrive (with no error).
 | Cyberpunk Tech | Cyberpunk Yellow | Cyberpunk Weather | Wilds Weather |
 |---|---|---|---|
 | ![Cyberpunk Tech](images/cyberpunk-tech.png) | ![Cyberpunk Yellow](images/cyberpunk-yellow.png) | ![Cyberpunk Weather](images/cyberpunk-weather.png) | ![Wilds Weather](images/wilds-weather.png) |
-| `Cyberpunk_Tech.zip`, for the night. Dark neon design: big digital time and BG in range colours, a table with IOB, carbs, basal, reservoir, heart rate and steps, the watch battery and the graph. The moon goes along the edge through the night, with a cloud before it when it is cloudy. Rain and a beating drop in the logo when the watch wakes up. | `Cyberpunk_Yellow.zip`, for the day. Signal yellow with black panels; the glucose value keeps its neon colours on black. The sun along the edge, glitch bands and the beating drop when the watch wakes up. | `Cyberpunk_Weather.zip`, for the day. A colour per weather (cyan, lilac, grey) with light panels, clouds, and the sun along the edge. The glucose colours are dark there, with the same meaning. Glitch bands, and rain when it rains. | `Wilds_Weather.zip`, for the day. A painted landscape per weather (our own drawing), with parchment behind the table and the graph, and a warm sun. The landscapes (`Background.jpg` for sunny, `DayBackgroundPartly.jpg`, `...Cloudy`, `...Rain`) can be replaced by your own: 400 x 400, at most about 25 KB each, with a light sky where the time and the glucose value are. |
+| `Cyberpunk_Tech.zip`, for the night. Dark neon design: big digital time and BG in range colours, a table with IOB, carbs, basal, reservoir, heart rate and steps, the batteries of the watch and the phone, and the graph. The moon goes along the edge through the night, with a cloud before it when it is cloudy. Rain and a beating drop in the logo when the watch wakes up. | `Cyberpunk_Yellow.zip`, for the day. Signal yellow with black panels; the glucose value keeps its neon colours on black. The sun along the edge, glitch bands and the beating drop when the watch wakes up. | `Cyberpunk_Weather.zip`, for the day. A colour per weather (cyan, lilac, grey) with light panels, clouds, and the sun along the edge. The glucose colours are dark there, with the same meaning. Glitch bands, and rain when it rains. | `Wilds_Weather.zip`, for the day. A painted landscape per weather (our own drawing), with parchment behind the table and the graph, and a warm sun. The landscapes (`Background.jpg` for sunny, `DayBackgroundPartly.jpg`, `...Cloudy`, `...Rain`) can be replaced by your own: 400 x 400, at most about 25 KB each, with a light sky where the time and the glucose value are. |
 
 `AAPS_HR_Steps.zip` (the default analog design with round dials for COB, IOB, heart rate and steps)
 is still there. In the four Cyberpunk and Wilds designs the age of the glucose value shows only
@@ -134,8 +136,8 @@ Font License, see `wear/cwf-designs/fonts`).
 - The design turns off *detailed IOB* itself. This only works if watch faces may change watch
   settings. If the first row of the table shows two numbers, turn off *Show detailed IOB* in the
   AAPS settings on the watch.
-- Choose *AAPS heart rate* for complication 1, *AAPS steps* for complication 2 and the watch
-  battery for complication 5.
+- Choose *AAPS heart rate* for complication 1 and *AAPS steps* for complication 2. Complication 5
+  is not used any more: the design shows the watch battery itself (see 11).
 
 ### 6. Status lights count down (phone)
 
@@ -231,6 +233,31 @@ jamorham and others), changed where written below.
   value at once.
 
 The rule for *when* is plain Kotlin in `commonMain` with its own tests (`CarSpeechRuleTest`).
+
+### 11. Phone and watch battery on the watch face (watch)
+
+The four Cyberpunk and Wilds designs show the battery of the watch and the battery of the phone
+side by side, right of the time: an icon in the shape of the watch and one in the shape of the
+phone, with the number under each.
+
+- The icon fills from the bottom up, in steps of 5 %.
+- **Green** above 40 %, **yellow** from 21 to 40 %, **red** at 20 % or less, for both. On the light
+  designs (Yellow, Weather, Wilds) these are the dark colours the glucose value uses there: dark
+  green, amber and dark red, so they can be read on a light background.
+- The inside of the icon is see-through: only the outline and the fill have colour.
+- **Red blinks** (icon and number) while the wake-up animation plays (see 3). After that, and on
+  the always-on screen, it stays red without blinking, so it costs no extra battery. With the
+  wake-up animation turned off on the watch, it does not blink.
+- Without a value (for example no data from the phone yet) the icon is an empty grey outline and
+  the number is `--`.
+- The phone battery is the value the phone already sends with its status. The watch reads its own
+  battery from the last battery message of the system; no listener runs in the background.
+- For designers: the new value key `watch_battery` (0 to 100) can be used in `dynData`, and the
+  `animation` block can have a `blink` list: `{"views": [...], "valueKey": "...", "atOrBelow": 20}`.
+  A Custom watch face has no free picture views, so these designs show the icons in `delta` and
+  `avg_delta` and the numbers in `rig_battery` and `uploader_battery`, and switch those on in their
+  metadata.
+- The time moved 7 pixels to the left, so the watch icon lines up with the values of the table.
 
 ## Install
 
