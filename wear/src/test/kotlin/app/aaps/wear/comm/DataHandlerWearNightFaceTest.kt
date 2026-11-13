@@ -14,6 +14,7 @@ import app.aaps.shared.impl.rx.bus.RxBusImpl
 import app.aaps.wear.AAPSLoggerTest
 import app.aaps.wear.R
 import app.aaps.wear.WearTestBase
+import app.aaps.wear.alarm.CgmAlarmWatch
 import app.aaps.wear.alarm.PhoneAlarmWatch
 import app.aaps.wear.data.ComplicationDataRepository
 import app.aaps.wear.eatreminder.EatReminderWatch
@@ -50,6 +51,7 @@ internal class DataHandlerWearNightFaceTest : WearTestBase() {
     @Mock lateinit var watchFacePushHelper: WatchFacePushHelper
     @Mock lateinit var eatReminderWatch: EatReminderWatch
     @Mock lateinit var phoneAlarmWatch: PhoneAlarmWatch
+    @Mock lateinit var cgmAlarmWatch: CgmAlarmWatch
 
     private val logger = AAPSLoggerTest()
     private lateinit var rxBus: RxBus
@@ -71,7 +73,7 @@ internal class DataHandlerWearNightFaceTest : WearTestBase() {
         collector = CoroutineScope(Dispatchers.Unconfined).launch(start = CoroutineStart.UNDISPATCHED) {
             rxBus.toFlow(EventWearDataToMobile::class).collect { sent.add(it.payload) }
         }
-        sut = DataHandlerWear(context, rxBus, sp, preferences, logger, complicationDataRepository, watchFacePushHelper, eatReminderWatch, phoneAlarmWatch)
+        sut = DataHandlerWear(context, rxBus, sp, preferences, logger, complicationDataRepository, watchFacePushHelper, eatReminderWatch, phoneAlarmWatch, cgmAlarmWatch)
     }
 
     @AfterEach
