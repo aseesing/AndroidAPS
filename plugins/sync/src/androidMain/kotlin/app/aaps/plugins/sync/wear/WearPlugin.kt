@@ -45,9 +45,13 @@ import app.aaps.core.utils.DeferredForegroundStart
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin.Companion.RESEND_DEBOUNCE
 import app.aaps.plugins.sync.wear.compose.WearComposeContent
+import app.aaps.plugins.sync.wear.keys.WearDayNightKey
+import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
 import app.aaps.plugins.sync.wear.receivers.WearDataReceiver
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
 import app.aaps.plugins.sync.wear.wearintegration.DataLayerListenerServiceMobileHelper
+import app.aaps.plugins.sync.wear.wearintegration.EventWearNightWatchface
+import app.aaps.plugins.sync.wear.wearintegration.WearNightFacePreferences
 import app.aaps.shared.impl.extensions.safeQueryBroadcastReceivers
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
@@ -100,6 +104,7 @@ class WearPlugin(
         .pluginName(CoreUiStrings.wear)
         .description(SyncStrings.description_wear)
         .composeContent { WearComposeContent() },
+    ownPreferences = WearDayNightKey.entries + WearNightFaceKey.entries, // PERSONAL PATCH: day and night face
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
 
@@ -172,10 +177,14 @@ class WearPlugin(
             preferences.observe(StringNonKey.WearCwfFileName).drop(1).map {},
             // Which Watch Face Format face the watch installs; the watch swaps its slot on arrival
             preferences.observe(StringKey.WearPushedWatchface).drop(1).map {},
+            preferences.observe(WearDayNightKey.DayNightLookSetting).drop(1).map {}, // PERSONAL PATCH: day and night face
+            preferences.observe(WearDayNightKey.AlwaysOnLookSetting).drop(1).map {}, // PERSONAL PATCH: day and night face
         ).collectResilient(newScope, aapsLogger, LTag.WEAR) {
             dataHandlerMobile.resendData("PreferenceChange")
             checkCustomWatchfacePreferences()
+            checkNightWatchfacePreferences() // PERSONAL PATCH: day and night face
         }
+        collectNightWatchface(newScope) // PERSONAL PATCH: day and night face
         resendRequests(newScope)
             .collectResilient(newScope, aapsLogger, LTag.WEAR) { reason -> dataHandlerMobile.resendData(reason) }
         // Refresh wear scene tile whenever the scene list changes (add / update / delete). The
@@ -344,7 +353,9 @@ class WearPlugin(
                 key = "wear_custom_watchface_settings",
                 title = SyncStrings.wear_custom_watchface_settings,
                 items = listOf(
-                    BooleanKey.WearCustomWatchfaceAuthorization
+                    BooleanKey.WearCustomWatchfaceAuthorization,
+                    WearDayNightKey.DayNightLookSetting, // PERSONAL PATCH: day and night face
+                    WearDayNightKey.AlwaysOnLookSetting // PERSONAL PATCH: day and night face
                 )
             ),
             PreferenceSubScreenDef(
@@ -357,6 +368,41 @@ class WearPlugin(
         ),
         icon = Icons.Default.Watch
     )
+
+    // ---- PERSONAL PATCH: day and night face, see WearNightFace.kt ----
+
+    private val nightFace = WearNightFacePreferences(preferences)
+
+    private val _savedNightWatchface = MutableStateFlow<CwfData?>(null)
+
+    /** The night face the watch confirmed, like [savedCustomWatchface] for the main face. Null when the watch has none. */
+    val savedNightWatchface: StateFlow<CwfData?> = _savedNightWatchface.asStateFlow()
+
+    /** Keeps the night face the watch reports, and gives it the metadata the phone settings ask for. */
+    internal fun collectNightWatchface(scope: CoroutineScope) {
+        rxBus.toFlow(EventWearNightWatchface::class)
+            .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { event ->
+                _savedNightWatchface.value = event.customWatchfaceData
+                checkNightWatchfacePreferences()
+            }
+    }
+
+    /** The night face version of [checkCustomWatchfacePreferences]. */
+    fun checkNightWatchfacePreferences() {
+        _savedNightWatchface.value?.let { nightFace.metadataUpdate(it) }?.let {
+            rxBus.send(EventMobileToWear(EventData.ActionUpdateCustomWatchface(it, night = true)))
+        }
+    }
+
+    /**
+     * Asks the watch to forget its night face, so the main face shows day and night again. The
+     * watch then reports its main face only, so the night face is marked as gone here.
+     */
+    fun clearNightWatchface(timeStamp: Long) {
+        rxBus.send(EventMobileToWear(EventData.ActionClearNightWatchface(timeStamp)))
+        _savedNightWatchface.value = null
+        nightFace.forget()
+    }
 
     internal companion object {
 

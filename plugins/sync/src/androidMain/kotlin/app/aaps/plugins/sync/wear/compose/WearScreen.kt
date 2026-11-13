@@ -95,6 +95,7 @@ internal fun WearScreen(
     // Only title needs pre-resolving (plain String used in LaunchedEffect suspend block)
     val wearTitle = stringResource(CoreUiStrings.wear)
     val importTitle = stringResource(SyncStrings.wear_import_custom_watchface_title)
+        .let { importListTitle(uiState, it) } // PERSONAL PATCH: day and night face
 
     // Determine current sub-screen
     val subScreen = when {
@@ -178,6 +179,8 @@ internal fun WearScreen(
                     },
                     onSelectPushedWatchface = { viewModel.selectPushedWatchface(it) },
                     onDismissCustomWatchfaceNotShown = { viewModel.dismissCustomWatchfaceNotShown() },
+                    onLoadNightWatchface = { viewModel.loadNightWatchfaceFiles() }, // PERSONAL PATCH: day and night face
+                    onRemoveNightWatchface = { viewModel.clearNightWatchface() }, // PERSONAL PATCH: day and night face
                     modifier = modifier
                 )
             }
@@ -202,6 +205,8 @@ internal fun WearMainContent(
     onMoreWatchfaces: () -> Unit,
     onSelectPushedWatchface: (String) -> Unit,
     onDismissCustomWatchfaceNotShown: () -> Unit,
+    onLoadNightWatchface: () -> Unit = {}, // PERSONAL PATCH: day and night face
+    onRemoveNightWatchface: () -> Unit = {}, // PERSONAL PATCH: day and night face
     modifier: Modifier = Modifier
 ) {
     // The face the wearer tapped, waiting for their confirmation; null while no dialog is open.
@@ -338,7 +343,7 @@ internal fun WearMainContent(
                     verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
                 ) {
                     Text(
-                        text = stringResource(SyncStrings.wear_custom_watchface, uiState.watchfaceName),
+                        text = dayWatchfaceTitle(uiState), // PERSONAL PATCH: day and night face
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(horizontal = AapsSpacing.small)
                     )
@@ -371,6 +376,7 @@ internal fun WearMainContent(
                     }
                 }
             }
+            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface) // PERSONAL PATCH: day and night face
         }
     }
 }
@@ -412,10 +418,10 @@ private fun WatchfaceChoiceRow(
     }
 }
 
-private data class ButtonDef(val icon: ImageVector, val text: String, val onClick: () -> Unit)
+internal data class ButtonDef(val icon: ImageVector, val text: String, val onClick: () -> Unit) // PERSONAL PATCH: internal, used by the night face card
 
 @Composable
-private fun ButtonRow(
+internal fun ButtonRow( // PERSONAL PATCH: internal, used by the night face card
     button1: ButtonDef,
     button2: ButtonDef?,
     modifier: Modifier = Modifier

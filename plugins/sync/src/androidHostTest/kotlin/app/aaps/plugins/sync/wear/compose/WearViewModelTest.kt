@@ -65,6 +65,7 @@ internal class WearViewModelTest {
         whenever(wearPlugin.connectedDevice).thenReturn(connectedDeviceFlow)
         whenever(wearPlugin.savedCustomWatchface).thenReturn(savedCustomWatchfaceFlow)
         whenever(wearPlugin.watchFacePushStatus).thenReturn(watchFacePushStatusFlow)
+        whenever(wearPlugin.savedNightWatchface).thenReturn(MutableStateFlow(null)) // PERSONAL PATCH: day and night face
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(eventWearUpdateGuiFlow)
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(pushedWatchfaceFlow)
         whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")

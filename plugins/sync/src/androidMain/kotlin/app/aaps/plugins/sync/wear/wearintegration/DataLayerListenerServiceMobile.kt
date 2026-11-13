@@ -79,7 +79,7 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
             }
         rxBus.toFlow(EventMobileToWearWatchface::class)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
-                withContext(Dispatchers.IO) { sendMessage(rxWatchfacePath, it.payload) }
+                withContext(Dispatchers.IO) { sendMessage(watchfacePath(rxWatchfacePath, it.night), it.payload) } // PERSONAL PATCH: night face path
             }
     }
 
