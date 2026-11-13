@@ -940,8 +940,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private val wake = WakeAnimator(
         heartRate = { HealthValues.of(this).heartRate() },
         chosenLengthMs = { WakeLength.parse(sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) },
-        value = { key -> ValueMap.fromKey(key).takeIf { it != ValueMap.NONE }?.let { DynProvider(this, JSONObject(), it, 0, 0).dataValue(this) } }
+        value = ::wakeValue
     )
+
+    /** The value of [key] (for example `uploader_battery`) for the animation's blink rule. Internal for the phone preview. */
+    internal fun wakeValue(key: String): Double? =
+        ValueMap.fromKey(key).takeIf { it != ValueMap.NONE }?.let { DynProvider(this, JSONObject(), it, 0, 0).dataValue(this) }
 
     /** The battery of the watch itself, for the value `watch_battery` (private patch). */
     private val watchBattery by lazy(LazyThreadSafetyMode.NONE) { WatchBatteryLevel(this) }

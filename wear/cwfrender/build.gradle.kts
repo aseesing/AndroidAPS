@@ -79,6 +79,7 @@ val wearShared = listOf(
     "watchfaces/utils/WatchFaceTime.kt",
     "watchfaces/utils/WatchMode.kt",
     "watchfaces/utils/WatchShape.kt",
+    "watchfaces/utils/WatchBatteryLevel.kt",
     "watchfaces/utils/WatchfaceViewAdapter.kt",
 )
 
