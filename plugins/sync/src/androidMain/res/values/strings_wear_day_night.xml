@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
+<!--
+    Personal strings for a day face and a night face of the Custom watch face, not in upstream AAPS.
+    Kept apart from strings.xml so that a new AAPS release merges without conflicts in that file.
+    English only.
+-->
+<resources>
+    <string name="wear_day_night_day_title" comment="Title of the main Custom watch face on the Wear screen when a night face is also set. %1$s=name of the watch face. Example: Day face: AAPS V2">Day face: %1$s</string>
+    <string name="wear_day_night_both_title" comment="Title of the main Custom watch face on the Wear screen when no night face is set, so this face shows day and night. %1$s=name of the watch face. Example: Day and night face: AAPS V2">Day and night face: %1$s</string>
+    <string name="wear_day_night_night_title" comment="Title of the night Custom watch face on the Wear screen. %1$s=name of the watch face. Example: Night face: Cyberpunk">Night face: %1$s</string>
+    <string name="wear_day_night_no_night_face">No night face. The face above shows day and night.</string>
+    <string name="wear_day_night_load_night_face" comment="Button: choose a watch face file and send it to the watch as the night face">Load night face</string>
+    <string name="wear_day_night_remove_night_face" comment="Button: the watch forgets its night face and shows the day face day and night">Remove night face</string>
+    <string name="wear_day_night_select_night_face" comment="Title of the list of watch face files when loading a night face">Select night face</string>
+    <string name="wear_day_night_look" comment="Setting: when the watch shows the day face and when the night face">Day / night look</string>
+    <string name="wear_day_night_look_auto" comment="Choice of the setting Day / night look: day face from sunrise to sunset, night face at night">Automatic (sunrise to sunset)</string>
+    <string name="wear_day_night_face_day" comment="Choice of the settings Day / night look and Always-on look: always show the day face">Day face</string>
+    <string name="wear_day_night_face_night" comment="Choice of the settings Day / night look and Always-on look: always show the night face">Night face</string>
+    <string name="wear_day_night_always_on_look" comment="Setting: which face the always-on (ambient) screen of the watch shows">Always-on look</string>
+    <string name="wear_day_night_always_on_look_active" comment="Choice of the setting Always-on look: the same face as the active screen shows at that moment">Same as active screen</string>
+</resources>
