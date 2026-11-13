@@ -11,7 +11,8 @@ sensor itself, and it **speaks the glucose value in the car**, so xDrip+ is not 
 > meant for upstream. AAPS controls insulin: build and use this only if you understand the code
 > and the risk. Our own changes on the phone change only how often data is sent to the watch, the
 > status lights, how logs are saved, they send a rough place to the watch and read the weather for
-> that place from Open-Meteo (see 4), and they speak the glucose value in the car (see 10). **The
+> that place from Open-Meteo (see 4), they speak the glucose value in the car (see 10), and they
+> show a live preview of the watch face and sync its settings with the watch (see 11). **The
 > Dexcom ONE+ / G7 driver (see 9) is not ours and is not yet reviewed upstream. It is the glucose
 > source of the loop, and it can end a high temp basal when readings stop.**
 
@@ -39,6 +40,7 @@ as before.
 | `local/wear-day-night-faces` | A day face and a night face, chosen in AAPS; the four Cyberpunk and Wilds designs |
 | `local/status-and-logs` | Phone: status lights count down to the real end, save logs to Downloads |
 | `local/wear-fast-wake` | Fast first frame after a wake, and the header that marks our own files |
+| `local/wear-live-preview` | Phone: live preview of the Custom watch face, its settings set on the phone and synced with the watch |
 
 `master` of this fork is a plain copy of upstream `master`.
 
@@ -231,6 +233,22 @@ jamorham and others), changed where written below.
   value at once.
 
 The rule for *when* is plain Kotlin in `commonMain` with its own tests (`CarSpeechRuleTest`).
+
+### 11. Live watch face preview and its settings (phone and watch)
+
+- **Live preview.** On the phone, the wear screen shows the Custom watch face as it looks on the
+  watch now, in place of the static picture of the design: the current values, the moving clock and
+  the wake-up animation. A tap plays the animation again. It is drawn by the watch's own code: the
+  new module `wear/cwfrender` builds the watch's drawing files a second time for the phone, without
+  changing them, together with only the resources they use.
+- The preview only draws while it is on screen. It is freed again when the wear screen is left. If
+  it fails in any way, it switches itself off and the static picture is shown: it can not stop AAPS.
+- **Settings on the phone.** *Watch face settings*, under the preview, has the settings of the
+  Custom watch face (which values to show, seconds, date, complication slots, wake-up animation
+  length, ...). A change shows in the preview at once and goes to the watch.
+- **Both ways.** A change made on the watch comes back to the phone. Per setting the newer change
+  wins. A setting the design itself sets (an authorized design) is shown, but can not be changed.
+  The day / night look is not part of this; it is set on the phone as before (see 4).
 
 ## Install
 
