@@ -195,6 +195,10 @@ Our changes to it (marked `PERSONAL PATCH`):
   logged, and the app (and so the loop) goes on. A failed Bluetooth step fails the connection, so
   the driver tries again. Each step of the plugin start is guarded on its own. A review found no
   place where the driver blocks the main thread, the loop or the pump command queue.
+- **The CGM alarm settings can be reached.** They sit under *Local alerts* → *CGM alarms* → one
+  section per alarm (switch, level, delay, repeat, sound). The settings screen drew only two levels
+  of sections, so only *Mute and test* showed. Now every level opens. The glucose alarms (urgent
+  low, low, high, fast fall and rise) are **off** by default: turn on the ones you need.
 
 ### 10. Speak glucose in the car (phone)
 
