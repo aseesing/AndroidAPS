@@ -95,6 +95,16 @@ internal class WearViewModelNightFaceTest {
         return captor.allValues.filterIsInstance<EventMobileToWearWatchface>()
     }
 
+    /**
+     * The file list is read on Dispatchers.IO. In the app the wearer can only pick a file once the
+     * list shows; the test must wait for that too, or a late load opens the list again after the pick.
+     */
+    private fun awaitImportList() {
+        val until = System.currentTimeMillis() + 5_000
+        while (!sut.uiState.value.showImportList && System.currentTimeMillis() < until) Thread.sleep(10)
+        assertThat(sut.uiState.value.showImportList).isTrue()
+    }
+
     @Test
     fun `the night face the watch reports is shown apart from the main face`() {
         assertThat(sut.uiState.value.nightFace.hasNightWatchface).isFalse()
@@ -112,6 +122,7 @@ internal class WearViewModelNightFaceTest {
     @Test
     fun `a zip chosen after load night face goes to the watch as the night face`() {
         sut.loadNightWatchfaceFiles()
+        awaitImportList()
         assertThat(sut.uiState.value.nightFace.importForNight).isTrue()
 
         sut.selectWatchface(zip)
@@ -126,6 +137,7 @@ internal class WearViewModelNightFaceTest {
     @Test
     fun `a zip chosen after the normal load stays the main face`() {
         sut.loadWatchfaceFiles()
+        awaitImportList()
         sut.selectWatchface(zip)
 
         assertThat(sentZips().single().night).isFalse()
@@ -136,6 +148,7 @@ internal class WearViewModelNightFaceTest {
     @Test
     fun `leaving the import list ends the night load`() {
         sut.loadNightWatchfaceFiles()
+        awaitImportList()
         sut.hideImportList()
         assertThat(sut.uiState.value.nightFace.importForNight).isFalse()
 
