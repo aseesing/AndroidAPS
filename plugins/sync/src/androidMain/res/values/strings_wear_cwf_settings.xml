@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
+<!--
+    Personal strings for the Custom watch face settings that the phone can set too, not in upstream
+    AAPS. The labels of the settings themselves come from the watch app and from core/interfaces.
+    English only.
+-->
+<resources>
+    <string name="wear_cwf_settings" comment="Button on the Wear screen, and title of the screen it opens: the settings of the Custom watch face, set from the phone">Watch face settings</string>
+    <string name="wear_cwf_settings_look" comment="Header of a group of settings: how the Custom watch face looks (seconds, date, dark, wake-up animation, ...)">Look</string>
+    <string name="wear_cwf_settings_shown_values" comment="Header of a group of settings: which values the Custom watch face shows (BG, IOB, COB, ...)">Values shown</string>
+    <string name="wear_cwf_settings_not_from_watch">The watch has not sent its settings yet. Until it does, the defaults are shown here.</string>
+    <string name="wear_cwf_settings_set_by_design" comment="Shown under a setting that the user cannot change, because the loaded watch face sets it. Authorize custom watchfaces is the name of a setting in the wear settings.">Set by the watch face, because of the setting \"Authorize custom watchfaces\"</string>
+</resources>

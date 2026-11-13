@@ -99,6 +99,7 @@ kotlin {
 
                 // PERSONAL PATCH: car speech, activity recognition ("in a vehicle")
                 implementation(libs.com.google.android.gms.playservices.location)
+                implementation(project(":wear:cwfrender")) // PERSONAL PATCH: live watch face preview
 
                 // OpenHumans
                 api(libs.com.squareup.okhttp3.okhttp)

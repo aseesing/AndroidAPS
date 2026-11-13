@@ -111,4 +111,25 @@ class UnchangedToWearFilterTest {
         assertThat(first).isEqualTo(9)
         assertThat(second).isEqualTo(2)
     }
+
+    @Test
+    fun theLastValueOfEachKindIsKeptForThePreviewAlsoWhenHeldBack() {
+        val status = EventData.Status(
+            dataset = 0, externalStatus = "", iobSum = "1.2", iobDetail = "", cob = "10g", currentBasal = "0.8U/h", battery = "80",
+            rigBattery = "", openApsStatus = t0, bgi = "", batteryLevel = 1, tempTarget = "", tempTargetLevel = 0,
+            reservoirString = "", reservoir = 0.0, reservoirLevel = 0
+        )
+        filter.shouldSend(bg(t0, 100.0), t0)
+        filter.shouldSend(bg(t0 + 300_000, 104.0), t0 + 300_000)
+        filter.shouldSend(status, t0)
+        filter.shouldSend(EventData.SceneList(arrayListOf()), t0)
+        assertThat(filter.shouldSend(preferences(t0), t0)).isTrue()
+        assertThat(filter.shouldSend(preferences(t0 + 60_000), t0 + 60_000)).isFalse()
+
+        val seen = filter.lastSeen()
+        assertThat(seen.filterIsInstance<EventData.SingleBg>().single().sgv).isEqualTo(104.0)
+        assertThat(seen.filterIsInstance<EventData.Status>().single()).isEqualTo(status)
+        assertThat(seen.filterIsInstance<EventData.Preferences>().single().timeStamp).isEqualTo(t0 + 60_000)
+        assertThat(seen.filterIsInstance<EventData.SceneList>()).isEmpty()
+    }
 }

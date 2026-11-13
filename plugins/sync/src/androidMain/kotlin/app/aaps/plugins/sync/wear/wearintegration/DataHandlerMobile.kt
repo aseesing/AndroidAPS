@@ -2063,6 +2063,8 @@ class DataHandlerMobile(
             EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(update.customWatchfaceData, update.night))
                 .also { it.sourceNodeId = update.sourceNodeId }
         )
+
+    internal fun lastSentToWear(): List<EventData> = unchangedToWear.lastSeen() + listOfNotNull(lastWeather) // PERSONAL PATCH: live watch face preview
 }
 
 /**

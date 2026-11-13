@@ -23,9 +23,13 @@ class UnchangedToWearFilter {
 
     private val lastSent = HashMap<String, Pair<String, Long>>()
 
+    /** The last value of each kind the watch face draws, sent or not. For the live preview on the phone. */
+    private val seen = LinkedHashMap<String, EventData>()
+
     /** True when [event] should be sent at [now]; then it is noted as sent. */
     @Synchronized
     fun shouldSend(event: EventData, now: Long): Boolean {
+        previewKeyOf(event)?.let { seen[it] = event }
         val key = keyOf(event) ?: return true
         val content = contentOf(event)
         val last = lastSent[key]
@@ -37,6 +41,22 @@ class UnchangedToWearFilter {
     /** Forgets what was sent, so everything goes out again. */
     @Synchronized
     fun reset() = lastSent.clear()
+
+    /**
+     * The last value of each kind the watch face draws, as the phone last built it for the watch. Also
+     * the ones this filter held back: the watch has those already, so they are its current values too.
+     */
+    @Synchronized
+    fun lastSeen(): List<EventData> = seen.values.toList()
+
+    private fun previewKeyOf(event: EventData): String? = when (event) {
+        is EventData.SingleBg      -> "SingleBg${event.dataset}"
+        is EventData.Status        -> "Status${event.dataset}"
+        is EventData.GraphData     -> "GraphData"
+        is EventData.TreatmentData -> "TreatmentData"
+        is EventData.Preferences   -> "Preferences"
+        else                       -> null
+    }
 
     private fun keyOf(event: EventData): String? = when (event) {
         is EventData.SingleBg         -> "SingleBg${event.dataset}"
