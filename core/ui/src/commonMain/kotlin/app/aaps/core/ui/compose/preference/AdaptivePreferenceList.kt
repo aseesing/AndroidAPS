@@ -5,7 +5,14 @@
 
 package app.aaps.core.ui.compose.preference
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import app.aaps.core.keys.interfaces.PreferenceItem
 import app.aaps.core.keys.interfaces.PreferenceKey
 import app.aaps.core.keys.interfaces.VisibilityContext
@@ -42,8 +49,28 @@ fun AdaptivePreferenceList(
             }
 
             is PreferenceSubScreenDef -> {
-                // Subscreens are handled by PreferenceContentExtensions as nested collapsible sections
-                // Not rendered here in the flat list
+                // PERSONAL PATCH: a subscreen in this list (for example inside a group of the search
+                // sheet) was not drawn at all. Show it as a collapsible section, like the settings
+                // screen does.
+                if (shouldShowSubScreenInline(subScreen = item, visibilityContext = visibilityContext)) {
+                    var expanded by remember(item.key) { mutableStateOf(false) }
+                    ClickablePreferenceCategoryHeader(
+                        title = item.title,
+                        summaryItems = item.effectiveSummaryItems(),
+                        expanded = expanded,
+                        onToggle = { expanded = !expanded },
+                        insideCard = true
+                    )
+                    if (expanded && item.items.isNotEmpty()) {
+                        Column(modifier = Modifier.padding(start = LocalPreferenceTheme.current.nestedContentIndent)) {
+                            AdaptivePreferenceList(
+                                items = item.items,
+                                onShowMessage = onShowMessage,
+                                visibilityContext = visibilityContext
+                            )
+                        }
+                    }
+                }
             }
         }
     }

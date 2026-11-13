@@ -126,11 +126,15 @@ private fun RenderPreferenceItems(
                             Column(
                                 modifier = Modifier.padding(start = theme.nestedContentIndent)
                             ) {
-                                AdaptivePreferenceList(
+                                // PERSONAL PATCH: the same renderer again, so a subscreen inside this one
+                                // shows as a collapsible section too. Before, a third level was not
+                                // drawn at all (the settings of each CGM alarm were missing).
+                                RenderPreferenceItems(
                                     items = item.items,
+                                    parentKey = subSectionKey,
                                     onShowMessage = onShowMessage,
-                                    visibilityContext = visibilityContext,
-                                    onNavigateToSubScreen = null // Nested subscreens not supported here
+                                    sectionState = sectionState,
+                                    visibilityContext = visibilityContext
                                 )
                             }
                         }
@@ -146,7 +150,7 @@ private fun RenderPreferenceItems(
  * Used in inline rendering context (AllPreferencesScreen).
  */
 @Composable
-private fun shouldShowSubScreenInline(
+internal fun shouldShowSubScreenInline(
     subScreen: PreferenceSubScreenDef,
     visibilityContext: VisibilityContext?
 ): Boolean {
