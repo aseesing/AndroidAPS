@@ -1,12 +1,46 @@
-# AndroidAPS – personal changes
+<h1 align="center">AndroidAPS · personal edition</h1>
 
-This is a personal fork of [nightscout/AndroidAPS](https://github.com/nightscout/AndroidAPS).
-It adds a few changes, mostly for the **Wear OS watch app**. They were made for a OnePlus Watch 2R
-(Wear OS 5, round 466 x 466 screen), but should work on other round Wear OS watches. On the phone,
-the status lights count down to the end of the sensor and pod, and logs can be saved without email.
-It also has the **Dexcom ONE+ / G7 driver** of an open upstream pull request, so AAPS reads the
-sensor itself, and it **speaks the glucose value in the car**, so xDrip+ is not needed.
+<p align="center">
+  <b>Watch faces that wake up.</b> Rain, glitch bands and a beating heart when you raise your wrist.<br>
+  A live preview of the watch face in AAPS on the phone. The Dexcom ONE+ / G7 read without xDrip+.
+</p>
 
+<table align="center">
+<tr>
+<td align="center" width="33%"><img src="images/cyberpunk_tech.gif" width="220" alt="Cyberpunk Tech: falling rain, a beating heart"><br><b>Cyberpunk Tech</b><br><sub>falling rain, a beating heart</sub></td>
+<td align="center" width="33%"><img src="images/cyberpunk_weather.gif" width="220" alt="Cyberpunk Weather: glitch bands, the weather of your place"><br><b>Cyberpunk Weather</b><br><sub>glitch bands, the weather of your place</sub></td>
+<td align="center" width="33%"><img src="images/cyberpunk_yellow.gif" width="220" alt="Cyberpunk Yellow: glitch bands, a low battery blinks"><br><b>Cyberpunk Yellow</b><br><sub>glitch bands, a low battery blinks</sub></td>
+</tr>
+<tr>
+<td align="center" width="33%"><img src="images/wilds_weather.gif" width="220" alt="Wilds Weather: a beating heart, sun and weather"><br><b>Wilds Weather</b><br><sub>a beating heart, sun and weather</sub></td>
+<td align="center" width="33%"><img src="images/aaps_hr_steps.gif" width="220" alt="AAPS HR Steps: an analog clock, heart rate and steps on the watch"><br><b>AAPS HR Steps</b><br><sub>an analog clock, heart rate and steps on the watch</sub></td>
+<td align="center" width="33%"><sub>Each picture is drawn by the watch's own code, wake-up animation and all, by <code>ReadmeAnimationsTest</code>. The same code draws the live preview on the phone.</sub></td>
+</tr>
+</table>
+
+This is a personal fork of [nightscout/AndroidAPS](https://github.com/nightscout/AndroidAPS), made
+for a OnePlus Watch 2R (Wear OS 5, round 466 x 466 screen). It should work on other round Wear OS
+watches too.
+
+## What is new
+
+| | | |
+|---|---|---|
+| 🎬 | **[Wake-up animation](#3-wake-up-animation)** | Rain, glitch bands and a heart that beats at your heart rate, when you raise your wrist or tap. |
+| 📱 | **[Live preview on the phone](#12-live-watch-face-preview-and-its-settings-phone-and-watch)** | The wear screen in AAPS shows the face as it looks on the watch now, moving clock and animation included. |
+| ⚙️ | **[Watch face settings in AAPS](#12-live-watch-face-preview-and-its-settings-phone-and-watch)** | Set the watch face on the phone, see it in the preview at once. Changes on the watch come back. |
+| 🌗 | **[Day face and night face](#4-a-day-face-and-a-night-face-weather-sun-and-moon)** | A face for the day and one for the night, with the weather, the sun and the moon on the edge. |
+| 🎨 | **[Five designs](#5-watch-face-designs)** | Cyberpunk Tech, Weather and Yellow, Wilds Weather and AAPS HR Steps. |
+| 🔋 | **[Battery on the face](#11-phone-and-watch-battery-on-the-watch-face-watch)** | Phone and watch battery side by side; a low one blinks while the animation plays. |
+| ❤️ | **[Heart rate and steps](#2-heart-rate-and-steps)** | Two complications from what the watch measures anyway. No extra sensor on. |
+| 🪫 | **[Less battery use on the watch](#1-less-battery-use-on-the-watch)** | Fewer redraws, less writing, fewer messages from the phone. |
+| ⚡ | **[Fast wake](#8-fast-first-frame-after-a-wake-watch)** | The first frame after a wrist raise comes at once. |
+| 🩸 | **[Dexcom ONE+ / G7 without xDrip+](#9-dexcom-one--g7-without-xdrip-phone-and-watch)** | AAPS reads the sensor itself, even straight to the watch. From an open upstream pull request. |
+| 🚗 | **[Speak glucose in the car](#10-speak-glucose-in-the-car-phone)** | The value and the trend over the car speakers, like a navigation voice. |
+| 🚦 | **[Status lights count down](#6-status-lights-count-down-phone)** | The sensor and pod lights show the time left to the real end. |
+| 📄 | **[Save logs to Downloads](#7-save-logs-to-downloads-phone)** | Logs without email. |
+
+> [!WARNING]
 > **Not an official AAPS release.** These changes are not reviewed by the AAPS team and are not
 > meant for upstream. AAPS controls insulin: build and use this only if you understand the code
 > and the risk. Our own changes on the phone change only how often data is sent to the watch, the
@@ -270,6 +304,11 @@ phone, with the number under each.
   changing them, together with only the resources they use.
 - The preview only draws while it is on screen. It is freed again when the wear screen is left. If
   it fails in any way, it switches itself off and the static picture is shown: it can not stop AAPS.
+- The night face card has its own live preview, so the day face and the night face can both be seen.
+- The watch sends the phone only a short copy of its design. The pictures and fonts come from the
+  design's zip on the phone, the one that was sent to the watch (in the AAPS export folder). Without
+  that zip the static picture is shown, not a wrong face.
+- The pictures at the top of this page are made the same way, by `ReadmeAnimationsTest`.
 - **Settings on the phone.** *Watch face settings*, under the preview, has the settings of the
   Custom watch face (which values to show, seconds, date, complication slots, wake-up animation
   length, ...). A change shows in the preview at once and goes to the watch.
