@@ -8,6 +8,7 @@ import android.content.Context
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.wear.phonepreview.CwfPreviewRenderer
+import app.aaps.wear.phonepreview.PreviewThread
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -17,7 +18,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.Executors
 
 /**
  * Owns the one [CwfPreviewRenderer] of the phone app and the one thread it runs on.
@@ -38,8 +38,8 @@ class CwfPreviewEngine(
     private val aapsLogger: AAPSLogger
 ) {
 
-    private val dispatcher = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "CwfPreview").apply { isDaemon = true } }
-        .asCoroutineDispatcher()
+    /** An Android thread with a `Looper`: the face's views need one, see [PreviewThread]. */
+    private val dispatcher = PreviewThread().executor.asCoroutineDispatcher()
 
     private var renderer: CwfPreviewRenderer? = null
 

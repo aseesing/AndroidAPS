@@ -21,6 +21,8 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowSystemClock
 import java.io.File
 import java.time.Duration
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -69,6 +71,21 @@ class CwfPreviewRendererTest {
         assertThat(renderer.wake()).isTrue()
         renderer.frame(SIZE, now)
         assertThat(renderer.isAnimating).isTrue()
+    }
+
+    @Test
+    fun drawsOnThePreviewThreadAsOnThePhone() {
+        // The phone draws on its own thread, not on the main thread the other tests run on. On a
+        // plain thread the face's chart view could not be built, and the first preview on a phone stopped.
+        val frame = FutureTask {
+            val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
+            val now = System.currentTimeMillis()
+            values(now).forEach(renderer::apply)
+            renderer.setDesign(design("Cyberpunk_Tech"))
+            renderer.frame(SIZE, now)
+        }
+        PreviewThread().executor.execute(frame)
+        assertThat(frame.get(30, TimeUnit.SECONDS).width).isEqualTo(SIZE)
     }
 
     @Test
