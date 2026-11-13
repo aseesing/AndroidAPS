@@ -68,6 +68,7 @@ import app.aaps.wear.utils.toVisibility
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.PROVISIONAL_RING_WIDTH
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.TEMPLE_RESOLUTION
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.complicationSlots
+import app.aaps.wear.watchfaces.animation.BlinkSpec
 import app.aaps.wear.watchfaces.animation.DesignRect
 import app.aaps.wear.watchfaces.animation.GlitchSpec
 import app.aaps.wear.watchfaces.animation.PulseSpec
@@ -91,6 +92,7 @@ import app.aaps.wear.watchfaces.utils.ComplicationStyleValues
 import app.aaps.wear.watchfaces.utils.ComplicationTypePriority
 import app.aaps.wear.watchfaces.utils.LayeredFrameCache
 import app.aaps.wear.watchfaces.utils.ParsedJsonCache
+import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
 import app.aaps.wear.watchfaces.utils.WatchFaceComplicationSlots
 import app.aaps.wear.watchfaces.utils.WatchFaceComplications
 import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
@@ -937,8 +939,30 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     /** Plays the optional `animation` of the design; see [WakeAnimator]. */
     private val wake = WakeAnimator(
         heartRate = { HealthValues.of(this).heartRate() },
-        chosenLengthMs = { WakeLength.parse(sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) }
+        chosenLengthMs = { WakeLength.parse(sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) },
+        value = { key -> ValueMap.fromKey(key).takeIf { it != ValueMap.NONE }?.let { DynProvider(this, JSONObject(), it, 0, 0).dataValue(this) } }
     )
+
+    /** The battery of the watch itself, for the value `watch_battery` (private patch). */
+    private val watchBattery by lazy(LazyThreadSafetyMode.NONE) { WatchBatteryLevel(this) }
+
+    /** Per set of design keys, the views of mainLayout that are not in it; see [drawOnly]. */
+    private val viewsOutsideKeys = HashMap<Set<String>, List<View>>()
+
+    /** Draws only the views with the design keys [keys], where they sit in the whole face. */
+    private fun drawOnly(canvas: Canvas, keys: Set<String>) {
+        val hide = viewsOutsideKeys.getOrPut(keys) {
+            ViewMap.entries.filter { it.key !in keys }.mapNotNull { binding.mainLayout.findViewById<View>(it.id) }
+        }
+        drawWithHidden(binding.mainLayout, hide, canvas)
+    }
+
+    /** Like `drawLayer`, with the views of the design keys [leaveOut] left out as well. */
+    private fun drawLayerWithout(canvas: Canvas, layer: RenderLayer, leaveOut: Set<String>) {
+        if (leaveOut.isEmpty()) return drawLayer(canvas, layer)
+        val inLayer = layerViews(layer).filter { it.key !in leaveOut }.map { it.key }.toSet()
+        drawOnly(canvas, inLayer)
+    }
 
     /** The time of the frame the wake parts draw, for the complications. */
     private var wakeFrameTime: ZonedDateTime? = null
@@ -949,11 +973,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         override fun background(canvas: Canvas) =
             canvas.withRotation(backgroundView.rotation, backgroundView.pivotX, backgroundView.pivotY) { backgroundView.draw(this) }
 
-        override fun data(canvas: Canvas) {
+        override fun data(canvas: Canvas, leaveOut: Set<String>) {
             complications.syncGeometry(::visibleSlotBounds)
             wakeFrameTime?.let { drawComplicationSlots(canvas, it) }
-            drawLayer(canvas, RenderLayer.DATA_BASE)
+            drawLayerWithout(canvas, RenderLayer.DATA_BASE, leaveOut)
         }
+
+        override fun views(canvas: Canvas, keys: Set<String>) = drawOnly(canvas, keys)
 
         override fun clockText(canvas: Canvas) = drawLayer(canvas, RenderLayer.CLOCK_TEXT)
         override fun top(canvas: Canvas) {
@@ -1029,7 +1055,16 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     color1 = getColor(it.optString("color1"), glitch.color1), color2 = getColor(it.optString("color2"), glitch.color2),
                     alpha = it.optInt("alpha", glitch.alpha), region = it.optJSONObject("region")?.rect(glitch.region) ?: glitch.region
                 )
-            }
+            },
+            blink = animation.optJSONArray("blink")?.let { list ->
+                (0 until list.length()).mapNotNull { list.optJSONObject(it) }.map {
+                    val views = it.optJSONArray("views")
+                    BlinkSpec(
+                        views = (0 until (views?.length() ?: 0)).map { i -> views!!.optString(i) }, valueKey = it.optString("valueKey"),
+                        atOrBelow = it.optDouble("atOrBelow", 0.0), periodMs = it.optLong("periodMs", 1000)
+                    )
+                }
+            } ?: emptyList()
         )
     }.getOrNull()
 
@@ -2190,6 +2225,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         RIG_BATTERY_EXT2(ViewKeys.RIG_BATTERY_EXT2.key, 0.0, 100.0),
         TIMESTAMP_EXT2(ViewKeys.TIMESTAMP_EXT2.key, 0.0, 60.0),
         LOOP_EXT2(ViewKeys.LOOP_EXT2.key, 0.0, 28.0),
+        WATCH_BATTERY(WatchBatteryLevel.KEY, 0.0, 100.0), // PERSONAL PATCH
         MOON_PHASE(JsonKeyValues.MOON_PHASE.key, 0.0, 1.0),
         SUN_PROGRESS(JsonKeyValues.SUN_PROGRESS.key, 0.0, 1.0),
         NIGHT_PROGRESS(JsonKeyValues.NIGHT_PROGRESS.key, 0.0, 1.0);
@@ -2289,6 +2325,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.RIG_BATTERY_EXT2 -> cwf.status[2].rigBattery.replace("%", "").toDoubleOrNull()
             ValueMap.LOOP_EXT2        -> if (cwf.status[2].openApsStatus != -1L) ((System.currentTimeMillis() - cwf.status[2].openApsStatus) / 1000 / 60).toDouble() else null
             ValueMap.TIMESTAMP_EXT2   -> if (cwf.singleBg[2].timeStamp != 0L) floor(cwf.timeSince(2) / (1000 * 60)) else null
+            ValueMap.WATCH_BATTERY    -> cwf.watchBattery.percent() // PERSONAL PATCH
             ValueMap.MOON_PHASE       -> MoonPhase.at(cwf.renderNow())
             ValueMap.SUN_PROGRESS     -> cwf.dayNight.sunProgress(cwf.renderNow())
             ValueMap.NIGHT_PROGRESS   -> cwf.dayNight.nightProgress(cwf.renderNow())

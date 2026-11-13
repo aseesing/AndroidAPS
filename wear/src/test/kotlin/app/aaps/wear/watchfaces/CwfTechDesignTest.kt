@@ -126,7 +126,7 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         CLOUD_NIGHT_PARTLY to cloudNightPng(full = false),
         CLOUD_NIGHT_FULL to cloudNightPng(full = true),
         BLANK to blankPng()
-    )
+    ) + batteryImages()
 
     override fun checkLooks(design: JSONObject, pictures: List<Bitmap>) {
         val clear = pictures[0]
@@ -571,7 +571,6 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
             assertWithMessage(key).that(r.top).isEqualTo((TABLE_TOP + (4 + i) * ROW_HEIGHT).toFloat())
             insideRound("$key panel edge", RectF(r.left, r.top, rowRight(4 + i).toFloat(), r.bottom), margin = 6f)
         }
-        insideRound("complication5", rectOf(design.getJSONObject("complication5")), margin = 6f)
     }
 
     @Test
@@ -590,7 +589,6 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         assertThat(tableKeys.minOf { size(it) }).isAtLeast(13)
         assertThat(valueSizes.min()).isAtLeast(16)
         assertThat(size("timestamp")).isAtLeast(16)
-        assertThat(design.getJSONObject("complication5").getInt("textsize")).isAtLeast(16)
     }
 
     /** Where the ink of [value] starts, in the design space, when a text view like [view] shows it aligned left. */
@@ -599,12 +597,6 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = view.getInt("textsize") * SCALE; typeface = valueTypeface() }
         Canvas(drawn).drawText(value, view.getInt("leftmargin") * SCALE, (view.getInt("topmargin") + view.getInt("height") / 2f) * SCALE, paint)
         return leftmostInk(drawn) / SCALE
-    }
-
-    /** The last column of [bitmap] with a pixel that can be seen (alpha above a half). */
-    private fun rightmostInk(bitmap: Bitmap): Float {
-        for (x in bitmap.width - 1 downTo 0) for (y in 0 until bitmap.height) if (Color.alpha(bitmap.getPixel(x, y)) > 128) return x.toFloat()
-        return Float.NaN
     }
 
     /** The first column of [bitmap] with a pixel that can be seen (alpha above a half). */
@@ -636,15 +628,6 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
                 File(out, "slot_${key}_$type.png").writeBytes(pngBytes(drawn))
                 assertWithMessage("$key as $type").that(start).isWithin(1.5f).of(plain)
             }
-        // The battery number, two digits, sits in the middle of the outline, and nothing else of it shows
-        for (type in listOf(ComplicationType.RANGED_VALUE, ComplicationType.SHORT_TEXT)) {
-            val drawn = createBitmap(800, 800).apply { eraseColor(Color.TRANSPARENT) }
-            Canvas(drawn).withScale(SCALE, SCALE) { drawSlot(this, design.getJSONObject("complication5"), battery(66, type)) }
-            val middle = (leftmostInk(drawn) + rightmostInk(drawn)) / 2f / SCALE
-            println("battery as $type: middle of the text at $middle, of the outline at ${BATT_OUT_LEFT + BATT_OUT_WIDTH / 2f}")
-            assertWithMessage("battery as $type").that(middle).isWithin(2f).of(BATT_OUT_LEFT + BATT_OUT_WIDTH / 2f)
-            assertWithMessage("battery as $type").that(leftmostInk(drawn) / SCALE).isAtLeast(BATT_OUT_LEFT + 2f)
-        }
         // Same size, font and colour for all six values
         val views = (listOf("iob2", "cob2", "basalRate", "reservoir") + rowBoxKeys).map { design.getJSONObject(it) }
         assertThat(views.map { it.getInt("textsize") }.toSet()).hasSize(1)
@@ -690,10 +673,10 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
     fun noHandsNoSecondsAndFlatBoxes() {
         val design = design(defaultDesign())
         assertThat(design.getBoolean("enableSecond")).isFalse()
-        for (key in listOf("hour_hand", "minute_hand", "second_hand", "time", "second", "complication3", "complication4", "delta", "avg_delta", "bgi"))
+        for (key in listOf("hour_hand", "minute_hand", "second_hand", "time", "second", "complication3", "complication4", "complication5", "bgi"))
             assertWithMessage(key).that(design.getJSONObject(key).getString("visibility")).isEqualTo("gone")
         assertThat(design.getJSONObject("freetext1").getString("textvalue")).isEqualTo(":")
-        for (key in listOf("hour", "minute", "loop", "complication1", "complication2", "complication5"))
+        for (key in listOf("hour", "minute", "loop", "complication1", "complication2") + batteryKeys)
             assertWithMessage(key).that(design.getJSONObject(key).getString("visibility")).isEqualTo("visible")
         for (key in rowBoxKeys) {
             val r = rectOf(design.getJSONObject(key))
@@ -702,11 +685,7 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
             assertWithMessage(key).that(design.getJSONObject(key).getInt("borderRadius")).isAtMost(6)
             assertWithMessage(key).that(design.getJSONObject(key).getInt("textsize")).isAtLeast(16)
             assertWithMessage(key).that(design.getJSONObject(key).has("borderColor")).isFalse()
-        }
-        // Battery: icon and ring are invisible, only the text shows, inside the outline
-        for (key in listOf("iconColor", "ringPrimaryColor", "ringSecondaryColor"))
-            assertWithMessage(key).that(design.getJSONObject("complication5").getString(key)).isEqualTo(CLEAR)
-    }
+        }    }
 
     private fun renderSample(sample: Sample, fileName: String, bg: Char = 'G') {
         val default = defaultDesign(sample)

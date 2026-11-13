@@ -27,10 +27,13 @@ import kotlinx.coroutines.launch
  *
  * @param heartRate the latest measured heart rate, or null; read once per wake
  * @param chosenLengthMs the length chosen in the watch setting (see [WakeLength]); read once per wake
+ * @param value the value of a `dynData` value key, or null when there is none; decides which views
+ *   blink ([BlinkSpec]). Read once per wake: the battery values change slowly.
  */
 class WakeAnimator(
     private val heartRate: () -> Int?,
     chosenLengthMs: () -> Long? = { null },
+    private val value: (String) -> Double? = { null },
     private val timer: WakeTimer = WakeTimer(chosenLengthMs) { SystemClock.elapsedRealtime() },
     private val layers: WakeFrameLayers = WakeFrameLayers(),
     private val newScope: () -> CoroutineScope = { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
@@ -43,6 +46,9 @@ class WakeAnimator(
     private var bpm = PulseCurve.FALLBACK_BPM
     private var isHeadless = false
     private var scope: CoroutineScope? = null
+
+    /** The blinks whose value is low in this wake. */
+    private var lowBlinks: List<BlinkSpec> = emptyList()
 
     /** True while a wake plays, for tests and logging. */
     val isRunning: Boolean get() = timer.isRunning
@@ -117,6 +123,7 @@ class WakeAnimator(
             // A new wake: the heart rate of now, and pictures drawn fresh, since the face may have
             // changed in ways the kept states do not show while it was drawn the normal way.
             bpm = PulseCurve.bpmOrFallback(heartRate(), s.pulse?.fallbackBpm ?: PulseCurve.FALLBACK_BPM)
+            lowBlinks = s.blink.filter { it.isLow(value(it.valueKey)) }
             layers.invalidate()
         }
         val scale = width / DESIGN_SIZE
@@ -127,10 +134,19 @@ class WakeAnimator(
                 rain?.draw(c, elapsed, scale, strength)
                 glitch?.draw(c, elapsed, scale, strength)
             },
-            heart = { c -> pulse?.let { it.draw(c, PulseCurve.value(elapsed, bpm, s.pulse?.secondBeat ?: 0f) * strength, scale) } }
+            heart = { c -> pulse?.let { it.draw(c, PulseCurve.value(elapsed, bpm, s.pulse?.secondBeat ?: 0f) * strength, scale) } },
+            blinkViews = s.blinkViews,
+            shown = hiddenAt(elapsed).let { hidden -> if (hidden.isEmpty()) s.blinkViews else s.blinkViews - hidden }
         )
         return true
     }
+
+    /**
+     * The views that are hidden [elapsedMs] after the start of this wake: those of a low value, in the
+     * off half of a blink. None when no wake plays.
+     */
+    internal fun hiddenAt(elapsedMs: Long): Set<String> =
+        if (!timer.isRunning) emptySet() else lowBlinks.filter { it.isOff(elapsedMs) }.flatMapTo(HashSet()) { it.views }
 
     /** Stops watching and frees the pictures. */
     fun release() {

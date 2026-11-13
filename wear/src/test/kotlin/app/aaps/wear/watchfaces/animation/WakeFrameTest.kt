@@ -24,6 +24,7 @@ import androidx.core.graphics.createBitmap
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.utils.drawWithHidden
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,7 +71,8 @@ class WakeFrameTest {
         val parts = object : WakeFrameParts {
             override fun prepare() = layout()
             override fun background(canvas: Canvas) = drawOnly(canvas, 0)
-            override fun data(canvas: Canvas) = drawOnly(canvas, 1)
+            override fun data(canvas: Canvas, leaveOut: Set<String>) = drawOnly(canvas, *(listOf(1) - leaveOut.mapNotNull { it.toIntOrNull() }.toSet()).toIntArray())
+            override fun views(canvas: Canvas, keys: Set<String>) = drawOnly(canvas, *keys.mapNotNull { it.toIntOrNull() }.toIntArray())
             override fun clockText(canvas: Canvas) = drawOnly(canvas, 2)
             override fun top(canvas: Canvas) = drawOnly(canvas, 3, 4)
             override fun secondHand(canvas: Canvas) = drawOnly(canvas, 5)
@@ -314,5 +316,64 @@ class WakeFrameTest {
         clock = 6000
         assertThat(animator.drawFrame(Canvas(createBitmap(size, size)), size, size, t0 + 6000, 1, emptyList(), face.parts, true, true)).isFalse()
         println("FRAMES written to ${out.absolutePath}: ${times.size} frames at ms $times")
+    }
+
+    @Test
+    fun aLowValueBlinksItsViewsWhileTheWakePlaysAndOnlyThen() {
+        var clock = 0L
+        var level: Double? = 15.0
+        val face = Face(context, 120)
+        val bitmap = createBitmap(120, 120)
+        val canvas = Canvas(bitmap)
+        val blink = BlinkSpec(views = listOf("1"), valueKey = "battery", atOrBelow = 20.0)
+        fun animator() = WakeAnimator(heartRate = { 72 }, value = { if (it == "battery") level else null }, timer = WakeTimer { clock })
+            .apply { setDesign(WakeAnimationSpec(durationMs = 3000, blink = listOf(blink))) }
+
+        /** The colour in a corner of the data box that nothing else covers, after a frame [ms] into the wake, or null for a normal frame. */
+        fun WakeAnimator.boxAt(ms: Long): Int? {
+            clock = ms
+            return if (drawFrame(canvas, 120, 120, t0 + ms, 1, emptyList(), face.parts, true, true)) bitmap.getPixel(15, 15) else null
+        }
+
+        // Low: shown in the first half of each second, hidden (the background shows) in the second half
+        animator().apply {
+            assertThat(boxAt(0)).isEqualTo(Color.BLUE)
+            assertThat(boxAt(400)).isEqualTo(Color.BLUE)
+            assertThat(boxAt(600)).isEqualTo(Color.DKGRAY)
+            assertThat(boxAt(1100)).isEqualTo(Color.BLUE)
+            assertThat(boxAt(1700)).isEqualTo(Color.DKGRAY)
+            // After the wake the face is drawn the normal way, with the box
+            assertThat(boxAt(3100)).isNull()
+            assertThat(hiddenAt(600)).isEmpty()
+        }
+        // At the limit it still blinks
+        level = 20.0
+        animator().apply {
+            assertThat(boxAt(0)).isEqualTo(Color.BLUE)
+            assertThat(boxAt(600)).isEqualTo(Color.DKGRAY)
+        }
+        // Above the limit, or with no value, it never blinks
+        for (value in listOf(21.0, 100.0, null)) {
+            level = value
+            animator().apply {
+                for (ms in listOf(0L, 600L, 1100L, 1700L, 2600L)) assertWithMessage("$value at $ms").that(boxAt(ms)).isEqualTo(Color.BLUE)
+            }
+        }
+    }
+
+    @Test
+    fun blinkValuesAreKeptSafe() {
+        val blink = BlinkSpec(views = listOf("a", "", "a", "b"), valueKey = "v", atOrBelow = 20.0, periodMs = 10).normalized()
+        assertThat(blink.views).containsExactly("a", "b").inOrder()
+        assertThat(blink.periodMs).isEqualTo(BlinkSpec.MIN_PERIOD_MS)
+        assertThat(BlinkSpec(listOf("a"), "v", 20.0, periodMs = 60_000).normalized().periodMs).isEqualTo(BlinkSpec.MAX_PERIOD_MS)
+        assertThat(blink.isLow(null)).isFalse()
+        assertThat(blink.isLow(20.0)).isTrue()
+        assertThat(blink.isLow(20.5)).isFalse()
+        // A blink with no view or no value is dropped, and a blink alone is an animation
+        val spec = WakeAnimationSpec(blink = listOf(BlinkSpec(emptyList(), "v", 20.0), BlinkSpec(listOf("a"), "", 20.0), BlinkSpec(listOf("b"), "v", 20.0))).normalized()
+        assertThat(spec.blink).hasSize(1)
+        assertThat(spec.hasContent).isTrue()
+        assertThat(spec.blinkViews).containsExactly("b")
     }
 }

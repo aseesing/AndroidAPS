@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.wear.watchfaces
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -14,17 +15,14 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.graphics.drawable.Icon
+import android.os.BatteryManager
 import android.provider.Settings
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
-import androidx.wear.watchface.complications.data.MonochromaticImage
-import androidx.wear.watchface.complications.data.PlainComplicationText
-import androidx.wear.watchface.complications.data.RangedValueComplicationData
-import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.rendering.ComplicationDrawable
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
@@ -32,6 +30,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.rx.weardata.ResData
 import app.aaps.core.interfaces.rx.weardata.ResFormat
 import app.aaps.shared.impl.weardata.JsonKeyValues
+import app.aaps.shared.impl.weardata.JsonKeys
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import app.aaps.shared.impl.weardata.toDrawable
@@ -39,13 +38,16 @@ import app.aaps.wear.R
 import app.aaps.wear.health.HealthKind
 import app.aaps.wear.health.HealthReading
 import app.aaps.wear.health.healthComplicationData
+import app.aaps.wear.watchfaces.animation.BlinkSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.daynight.DayOverlay
 import app.aaps.wear.watchfaces.daynight.Orbit
 import app.aaps.wear.watchfaces.utils.ComplicationStyleValues
+import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Test
 import org.robolectric.RuntimeEnvironment
@@ -82,8 +84,8 @@ import kotlin.math.sqrt
  *
  * They all have the same layout ([layout]): no analog clock, no hands, no seconds. The time and the
  * glucose value with its arrow are the big things. Next to the glucose sits a small data table
- * (insulin, carbs, basal, reservoir, heart rate, steps). The watch battery sits in a small outline at
- * the top right, the graph in a framed panel at the bottom.
+ * (insulin, carbs, basal, reservoir, heart rate, steps). The batteries of the watch and the phone sit
+ * side by side at the top right (see [batteryViews]), the graph in a framed panel at the bottom.
  *
  * Each test class writes its zip and previews to `build/cwf-design`, and checks the copy kept in the
  * repository (`wear/cwf-designs`) is the same design. To change a design: change it, run its test and
@@ -146,7 +148,7 @@ abstract class CyberpunkDesignBase {
 
     protected fun newFace() = CustomWatchface().apply { prepareForRendering(RuntimeEnvironment.getApplication()) }
 
-    protected fun storeSampleData(face: CustomWatchface, sample: Sample = Sample(), bgAgeMin: Long = 2, loopAgeMin: Long = 3) = runBlocking {
+    protected fun storeSampleData(face: CustomWatchface, sample: Sample = Sample(), bgAgeMin: Long = 2, loopAgeMin: Long = 3, phoneBattery: String = PHONE_SAMPLE) = runBlocking {
         val now = System.currentTimeMillis()
         val repository = face.complicationDataRepository
         repository.updateBgData(
@@ -159,7 +161,7 @@ abstract class CyberpunkDesignBase {
         repository.updateStatusData(
             EventData.Status(
                 dataset = 0, externalStatus = "", iobSum = "1.25", iobDetail = "(0.90|0.35)", cob = "12g", currentBasal = "0.85U/h",
-                battery = "78", rigBattery = "--", openApsStatus = now - loopAgeMin * 60_000L, bgi = "-0.4", batteryLevel = 1,
+                battery = phoneBattery, rigBattery = "--", openApsStatus = now - loopAgeMin * 60_000L, bgi = "-0.4", batteryLevel = 1,
                 tempTarget = "100", tempTargetLevel = 0, reservoirString = "120U", reservoir = 120.0, reservoirLevel = 0
             )
         )
@@ -228,8 +230,14 @@ abstract class CyberpunkDesignBase {
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2.key, "true")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3.key, "false")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION4.key, "false")
-            .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5.key, "true")
+            // The watch battery is not a complication any more: the design reads it itself (see batteryViews)
+            .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5.key, "false")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DATE.key, "true")
+            // The four views that show the batteries only show when these are on
+            .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DELTA.key, "true")
+            .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_AVG_DELTA.key, "true")
+            .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_UPLOADER_BATTERY.key, "true")
+            .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_RIG_BATTERY.key, "true")
             // The table needs the plain IOB: with detailed IOB the label view shows the total and the value view the detail
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DETAILED_IOB.key, "false")
 
@@ -243,8 +251,8 @@ abstract class CyberpunkDesignBase {
 
         // Views this design does not use. The three hands are off; the digital time replaces them.
         for (hidden in listOf(
-            "time", "second", "timePeriod", "week_number", "patient_name", "status", "tempTarget", "uploader_battery", "rig_battery",
-            "bgi", "avg_delta", "delta", "complication3", "complication4", "hour_hand", "minute_hand", "second_hand"
+            "time", "second", "timePeriod", "week_number", "patient_name", "status", "tempTarget",
+            "bgi", "complication3", "complication4", "complication5", "hour_hand", "minute_hand", "second_hand"
         )) getJSONObject(hidden).put("visibility", "gone")
 
         // The background picture
@@ -256,9 +264,9 @@ abstract class CyberpunkDesignBase {
         text("month", 212, DATE_TOP, 34, DATE_HEIGHT, DATE_SIZE, "left", DATE_COLOR).put("allCaps", true)
         // The big digital time: hour, a fixed ":" and minute (the "time" view would show seconds).
         // The views are taller than the text line (1.15 x size), so no digit is cut.
-        text("hour", 114, TIME_TOP, 76, TIME_HEIGHT, TIME_SIZE, "right", TIME_COLOR)
-        text("freetext1", 190, TIME_TOP, 20, TIME_HEIGHT, TIME_SIZE, "center", TIME_COLOR).put("textvalue", ":")
-        text("minute", 210, TIME_TOP, 76, TIME_HEIGHT, TIME_SIZE, "left", TIME_COLOR)
+        text("hour", MINUTE_LEFT - 96, TIME_TOP, 76, TIME_HEIGHT, TIME_SIZE, "right", TIME_COLOR)
+        text("freetext1", MINUTE_LEFT - 20, TIME_TOP, 20, TIME_HEIGHT, TIME_SIZE, "center", TIME_COLOR).put("textvalue", ":")
+        text("minute", MINUTE_LEFT, TIME_TOP, MINUTE_WIDTH, TIME_HEIGHT, TIME_SIZE, "left", TIME_COLOR)
         // The loop status: no circle, only a small red warning under the glucose age when the loop has
         // not run for 15 minutes or more (see ageDynData). The empty pictures stop the watch drawing
         // its own circle.
@@ -283,20 +291,134 @@ abstract class CyberpunkDesignBase {
         rowBox("complication1", 4)
         rowBox("complication2", 5)
         // The logo is a picture in the cover plate (see drawEmblem)
-        // Watch battery: only the text shows (ring and icon are transparent). It sits inside the battery
-        // outline that the cover plate draws. The box starts left of the outline: the watch keeps a square at
-        // the left of the box for the ring or icon, and puts the text right of it.
-        place("complication5", BATT_BOX_LEFT, BATT_TOP, BATT_BOX_WIDTH, BATT_HEIGHT)
-            .put("color", CLEAR).put("iconColor", CLEAR).put("ringPrimaryColor", CLEAR).put("ringSecondaryColor", CLEAR)
-            .put("fontColor", "#FFFFFF").put("textsize", BATT_TEXT_SIZE)
-            .put("font", fontKey).put("fontStyle", "normal").put("gravity", "left")
+        // The batteries of the watch and the phone, side by side right of the time
+        batteryViews()
 
         // The graph in its framed panel
         place("chart", CHART_LEFT, CHART_TOP, CHART_WIDTH, CHART_HEIGHT)
 
         (optJSONObject("dynData") ?: JSONObject().also { put("dynData", it) })
             .put(AGE_DYN, ageDynData("timestamp", 5.0, ageColor))
-            .put(LOOP_DYN, ageDynData("loop", 15.0, ageColor).put("invalidImage", BLANK).put("image1", BLANK).put("image2", BLANK).put("invalidTextValue", "LOOP --"))
+            .put(LOOP_DYN, ageDynData("loop", 15.0, ageColor).put("invalidImage", BLANK).put("image1", BLANK).put("image2", BLANK).put("textvalue1", "LOOP %.0f'").put("invalidTextvalue", "LOOP --"))
+            .put(WATCH_ICON_DYN, batteryIconDynData(WatchBatteryLevel.KEY, BatteryShape.WATCH))
+            .put(PHONE_ICON_DYN, batteryIconDynData(PHONE_VALUE_KEY, BatteryShape.PHONE))
+            .put(WATCH_NUMBER_DYN, batteryNumberDynData(WatchBatteryLevel.KEY, VALUE_COLOR))
+            .put(PHONE_NUMBER_DYN, batteryNumberDynData(PHONE_VALUE_KEY, VALUE_COLOR))
+    }
+
+    /** The two kinds of battery icon: the shape of the watch and the shape of the phone. */
+    protected enum class BatteryShape(val picturePrefix: String) {
+
+        WATCH("BattWatch"),
+        PHONE("BattPhone");
+
+        /** The picture for [step] (1 to [BATT_STEPS], filled to step / steps), or 0 for no value. */
+        fun picture(step: Int): String = picturePrefix + step.toString().padStart(2, '0')
+    }
+
+    /**
+     * The batteries of the watch and the phone, side by side right of the time: in each column the icon
+     * (the shape of the watch, the shape of the phone) and the number under it.
+     *
+     * A Custom watch face has no free picture views, so four views that these designs do not use carry
+     * them: `delta` and `avg_delta` the icons, `rig_battery` and `uploader_battery` the numbers. The
+     * watch fills each in from its `dynData`: the icon shows the picture of its level, filled from the
+     * bottom, coloured by the level; the number shows the value itself. See [batteryIconDynData].
+     */
+    private fun JSONObject.batteryViews() {
+        for ((left, icon, number) in listOf(
+            Triple(BATT_WATCH_LEFT, WATCH_ICON_VIEW to WATCH_ICON_DYN, WATCH_NUMBER_VIEW to WATCH_NUMBER_DYN),
+            Triple(BATT_PHONE_LEFT, PHONE_ICON_VIEW to PHONE_ICON_DYN, PHONE_NUMBER_VIEW to PHONE_NUMBER_DYN)
+        )) {
+            place(icon.first, left, BATT_ICON_TOP, BATT_COL_WIDTH, BATT_ICON_HEIGHT).put("textvalue", "").put("dynData", icon.second)
+            text(number.first, left, BATT_NUMBER_TOP, BATT_COL_WIDTH, BATT_NUMBER_HEIGHT, BATT_TEXT_SIZE, "center", VALUE_COLOR)
+                .put("textvalue", "%.0f").put("dynValue", false).put("dynData", number.second)
+        }
+    }
+
+    /**
+     * The icon of a battery: [BATT_STEPS] pictures over 1 to 101, so each step is 5 % and the colour
+     * steps fall exactly on the limits: 1 to 20 red, 21 to 40 yellow, 41 and more green. A value below 1
+     * counts as 1. The pictures are white, so the watch colours them; their inside is see-through, so
+     * the empty part shows the background. No value: the empty outline in grey. In the night colours;
+     * a light look takes [batteryDayColours].
+     */
+    protected fun batteryIconDynData(valueKey: String, shape: BatteryShape): JSONObject = JSONObject()
+        .put("valueKey", valueKey).put("minData", 1).put("maxData", 101)
+        .put("invalidImage", shape.picture(0)).apply { for (step in 1..BATT_STEPS) put("image$step", shape.picture(step)) }
+        .mergeIn(batteryColours(BATT_RED, BATT_YELLOW, BATT_GREEN, BATT_GREY))
+
+    /** The colour steps of a battery icon: [red] up to 20 %, [yellow] up to 40 %, [green] above, [grey] without a value. */
+    private fun batteryColours(red: String, yellow: String, green: String, grey: String): JSONObject = JSONObject()
+        .put("invalidColor", grey).put("color1", red).put("color2", yellow).put("color3", green).put("color4", green).put("color5", green)
+
+    /**
+     * The battery icons of a light look, as `dynData` to lay over the design: the dark glucose colours of
+     * the light looks (amber for yellow), which can be read on a light background.
+     */
+    protected fun batteryDayColours(): JSONObject = JSONObject()
+        .put(WATCH_ICON_DYN, batteryColours(DAY_LOW, DAY_HIGH, DAY_MID, BATT_DAY_GREY))
+        .put(PHONE_ICON_DYN, batteryColours(DAY_LOW, DAY_HIGH, DAY_MID, BATT_DAY_GREY))
+
+    /**
+     * The number of a battery: the value itself in [color], `--` without a value. The watch needs the
+     * format as a step (`textvalue1`) too: with only `invalidTextvalue` it shows `--` for every value. The one colour step also
+     * stops the watch from turning the phone battery number red on its own when the phone says it is low.
+     */
+    protected fun batteryNumberDynData(valueKey: String, color: String): JSONObject = JSONObject()
+        .put("valueKey", valueKey).put("textvalue1", "%.0f").put("invalidTextvalue", "--").put("fontColor1", color)
+
+    /** The pictures of the battery icons: per shape the empty one and one per step. */
+    protected fun batteryImages(): Map<String, ByteArray> = BatteryShape.entries.flatMap { shape ->
+        (0..BATT_STEPS).map { step -> shape.picture(step) to batteryPicture(shape, if (step == 0) null else step / BATT_STEPS.toFloat()) }
+    }.toMap()
+
+    /**
+     * One battery icon, in white with a see-through inside, filled from the bottom to [fill] (0 to 1), or
+     * empty for null. The picture covers the whole icon view, at twice the design size.
+     */
+    protected fun batteryPicture(shape: BatteryShape, fill: Float?): ByteArray {
+        val s = SCALE
+        val image = createBitmap((BATT_COL_WIDTH * s).toInt(), (BATT_ICON_HEIGHT * s).toInt()).apply { eraseColor(Color.TRANSPARENT) }
+        val canvas = Canvas(image)
+        val white = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        val clear = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) }
+        val cx = BATT_COL_WIDTH / 2f
+        val inside: Path
+        val fillArea: Path
+        val bottom: Float
+        val top: Float
+        when (shape) {
+            BatteryShape.WATCH -> {
+                // A round watch: the strap above and below, the crown on the right
+                val cy = BATT_ICON_HEIGHT / 2f
+                canvas.drawRoundRect(RectF((cx - 3.5f) * s, 0f, (cx + 3.5f) * s, BATT_ICON_HEIGHT * s), 1.5f * s, 1.5f * s, white)
+                canvas.drawRoundRect(RectF((cx + 7f) * s, (cy - 1.6f) * s, (cx + 9.4f) * s, (cy + 1.6f) * s), 0.6f * s, 0.6f * s, white)
+                canvas.drawCircle(cx * s, cy * s, WATCH_CASE_RADIUS * s, white)
+                inside = Path().apply { addCircle(cx * s, cy * s, 6.5f * s, Path.Direction.CW) }
+                fillArea = Path().apply { addCircle(cx * s, cy * s, 5.2f * s, Path.Direction.CW) }
+                top = cy - 5.2f
+                bottom = cy + 5.2f
+            }
+
+            BatteryShape.PHONE -> {
+                // A phone: a tall rounded body with a wider edge at the top and the bottom
+                val half = 6f
+                canvas.drawRoundRect(RectF((cx - half) * s, 0.5f * s, (cx + half) * s, (BATT_ICON_HEIGHT - 0.5f) * s), 2.6f * s, 2.6f * s, white)
+                inside = Path().apply { addRoundRect(RectF((cx - half + 1.5f) * s, 3f * s, (cx + half - 1.5f) * s, (BATT_ICON_HEIGHT - 3f) * s), 1f * s, 1f * s, Path.Direction.CW) }
+                top = 4.2f
+                bottom = BATT_ICON_HEIGHT - 4.2f
+                fillArea = Path().apply { addRect(RectF((cx - half + 2.7f) * s, top * s, (cx + half - 2.7f) * s, bottom * s), Path.Direction.CW) }
+            }
+        }
+        canvas.drawPath(inside, clear)
+        if (fill != null && fill > 0f) {
+            canvas.save()
+            canvas.clipPath(fillArea)
+            canvas.drawRect(0f, (bottom - (bottom - top) * fill.coerceIn(0f, 1f)) * s, image.width.toFloat(), bottom * s, white)
+            canvas.restore()
+        }
+        return pngBytes(image)
     }
 
     /**
@@ -360,7 +482,7 @@ abstract class CyberpunkDesignBase {
         val logo get() = Ink(line = ink, lineShadow = LOW_COLOR, text = ink, textShadow1 = LOW_COLOR, textShadow2 = accent)
 
         /** The colours of the cover plate. */
-        val plate get() = Plate(frame = accent, thin = "#3C000000", battery = ink, label = label, logo = logo)
+        val plate get() = Plate(frame = accent, thin = "#3C000000", label = label, logo = logo)
     }
 
     /**
@@ -370,14 +492,16 @@ abstract class CyberpunkDesignBase {
     protected fun paletteColors(p: DayPalette): JSONObject = JSONObject().apply {
         put("day_name", JSONObject().put("fontColor", p.muted))
         put("month", JSONObject().put("fontColor", p.muted))
-        for (key in listOf("day", "hour", "minute", "complication5")) put(key, JSONObject().put("fontColor", p.ink))
+        for (key in listOf("day", "hour", "minute", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW)) put(key, JSONObject().put("fontColor", p.ink))
         put("freetext1", JSONObject().put("fontColor", p.colon))
         for (label in listOf("iob1", "cob1", "freetext2", "freetext3")) put(label, JSONObject().put("fontColor", p.label))
         for (value in listOf("iob2", "cob2", "basalRate", "reservoir", "complication1", "complication2")) put(value, JSONObject().put("fontColor", p.ink))
         put("timestamp", JSONObject().put("fontColor", DAY_LOW))
         put("loop", JSONObject().put("fontColor", DAY_LOW))
         put("dynData", JSONObject().put(AGE_DYN, JSONObject().put("invalidFontColor", DAY_LOW).put("fontColor2", DAY_LOW))
-            .put(LOOP_DYN, JSONObject().put("invalidFontColor", DAY_LOW).put("fontColor2", DAY_LOW)))
+            .put(LOOP_DYN, JSONObject().put("invalidFontColor", DAY_LOW).put("fontColor2", DAY_LOW))
+            .put(WATCH_NUMBER_DYN, JSONObject().put("fontColor1", p.ink)).put(PHONE_NUMBER_DYN, JSONObject().put("fontColor1", p.ink))
+            .mergeIn(batteryDayColours()))
         put("highColor", DAY_HIGH).put("midColor", DAY_MID).put("lowColor", DAY_LOW)
         // The app colours the reservoir itself: dark like the other values, amber and red when low
         put("reservoirColor", p.ink).put("reservoirWarningColor", DAY_HIGH).put("reservoirUrgentColor", DAY_LOW)
@@ -404,11 +528,16 @@ abstract class CyberpunkDesignBase {
         return JSONObject().put("durationMs", ANIMATION_MS).put("fps", 24).put("fadeMs", 600).apply {
             rain?.let { put("rain", it) }
             glitch?.let { put("glitch", it) }
-        }.put(
+        }.put("blink", batteryBlink()).put(
             "pulse", JSONObject().put("image", LOGO_PULSE).put("left", box.left).put("top", box.top).put("width", box.width).put("height", box.height)
                 .put("amplitude", PULSE_AMPLITUDE).put("secondBeat", 0.45).put("glowColor", HEART_COLOR).put("glowAlpha", 255).put("glowRadius", 11)
         )
     }
+
+    /** A battery at [BATT_LOW] % or less blinks, icon and number, while the wake-up animation plays. */
+    protected fun batteryBlink(): JSONArray = JSONArray()
+        .put(JSONObject().put("views", JSONArray().put(WATCH_ICON_VIEW).put(WATCH_NUMBER_VIEW)).put("valueKey", WatchBatteryLevel.KEY).put("atOrBelow", BATT_LOW))
+        .put(JSONObject().put("views", JSONArray().put(PHONE_ICON_VIEW).put(PHONE_NUMBER_VIEW)).put("valueKey", PHONE_VALUE_KEY).put("atOrBelow", BATT_LOW))
 
     /** The resources of a design: those of the Default design, [images] and the font. */
     protected fun resources(default: CwfData, images: Map<String, ByteArray>): MutableMap<String, ResData> = default.resData.toMutableMap().apply {
@@ -427,12 +556,18 @@ abstract class CyberpunkDesignBase {
 
     /**
      * A render-only face that shows [design], with 24 hour time as on the watch, as it looks at
-     * [instant] in [weather].
+     * [instant] in [weather], with the watch battery at [watchBattery] %.
      */
-    protected fun storedFace(design: JSONObject, default: CwfData, images: Map<String, ByteArray>, instant: Long, weather: String? = null): CustomWatchface {
+    protected fun storedFace(
+        design: JSONObject, default: CwfData, images: Map<String, ByteArray>, instant: Long, weather: String? = null, watchBattery: Int? = WATCH_SAMPLE
+    ): CustomWatchface {
+        setWatchBattery(watchBattery)
         val face = newFace()
         face.setRenderInstant(instant)
         face.sp.putBoolean(R.string.key_show_date, true)
+        // What the watch sets from the metadata of the design (see layout)
+        for (key in listOf(R.string.key_show_delta, R.string.key_show_avg_delta, R.string.key_show_uploader_battery, R.string.key_show_rig_battery))
+            face.sp.putBoolean(key, true)
         face.sp.putString(R.string.key_weather_kind, weather ?: "")
         face.sp.putLong(R.string.key_weather_time, instant)
         val resData = resources(default, images)
@@ -455,26 +590,23 @@ abstract class CyberpunkDesignBase {
     }
 
     /**
-     * A render-only face has no complication renderer, so this draws heart rate, steps and the watch
-     * battery with the library's own [ComplicationDrawable], styled the way the face styles its slots,
-     * and with the data the heart rate and steps sources send. In the design space.
+     * A render-only face has no complication renderer, so this draws heart rate and steps with the
+     * library's own [ComplicationDrawable], styled the way the face styles its slots, and with the data
+     * the heart rate and steps sources send. In the design space.
      */
     protected fun drawComplicationValues(canvas: Canvas, design: JSONObject, type: ComplicationType = ComplicationType.RANGED_VALUE) {
         drawSlot(canvas, design.getJSONObject("complication1"), health(HealthKind.HEART_RATE, 72, type))
         drawSlot(canvas, design.getJSONObject("complication2"), health(HealthKind.STEPS, 6482, type))
-        drawSlot(canvas, design.getJSONObject("complication5"), battery(66, type))
     }
 
     /**
-     * What a watch battery source sends: the level as a gauge or as text, the number without "%", and an
-     * icon. The icon here stands in for the system's battery icon; the design makes it transparent.
+     * Gives the watch battery [percent] (null: the system tells no level), as the last battery broadcast
+     * that the system keeps. A face reads it once and keeps it for a while, so set it before the face is made.
      */
-    protected fun battery(percent: Int, type: ComplicationType): ComplicationData {
-        val text = PlainComplicationText.Builder(percent.toString()).build()
-        val icon = MonochromaticImage.Builder(Icon.createWithResource(RuntimeEnvironment.getApplication(), R.drawable.ic_health_heart)).build()
-        return if (type == ComplicationType.RANGED_VALUE)
-            RangedValueComplicationData.Builder(percent.toFloat(), 0f, 100f, text).setText(text).setMonochromaticImage(icon).build()
-        else ShortTextComplicationData.Builder(text, text).setMonochromaticImage(icon).build()
+    protected fun setWatchBattery(percent: Int?) {
+        RuntimeEnvironment.getApplication().sendStickyBroadcast(
+            Intent(Intent.ACTION_BATTERY_CHANGED).putExtra(BatteryManager.EXTRA_LEVEL, percent ?: -1).putExtra(BatteryManager.EXTRA_SCALE, 100)
+        )
     }
 
     /** What the heart rate or steps source sends for [value] in a slot that asked for [type]. */
@@ -642,9 +774,9 @@ abstract class CyberpunkDesignBase {
 
     /**
      * The colours of the cover plate: the [frame] of the table and the graph, the [thin] lines between
-     * the rows, the [battery] outline, the [label] icons of heart rate and steps, and the [logo].
+     * the rows, the [label] icons of heart rate and steps, and the [logo].
      */
-    protected data class Plate(val frame: String, val thin: String, val battery: String, val label: String, val logo: Ink)
+    protected data class Plate(val frame: String, val thin: String, val label: String, val logo: Ink)
 
     /** Draws [block] twice, in design units: a [Ink.lineShadow] copy offset by 2,1 and the [Ink.line] one, as a glitch. */
     protected fun glitched(canvas: Canvas, width: Float, fillShape: Boolean = false, ink: Ink = NIGHT_INK, block: (Canvas, Paint) -> Unit) {
@@ -795,8 +927,8 @@ abstract class CyberpunkDesignBase {
 
     /**
      * The HUD frames, transparent everywhere else: a bar left of the table with thin row lines, a frame
-     * line on top of the graph with cut corners, the small battery outline the watch battery text sits
-     * in, the labels of heart rate and steps, and the logo. In the colours of [plate].
+     * line on top of the graph with cut corners, the labels of heart rate and steps, and the logo. In
+     * the colours of [plate].
      */
     protected fun coverPlate(plate: Plate = NIGHT_PLATE): ByteArray {
         val image = createBitmap(800, 800).apply { eraseColor(Color.TRANSPARENT) }
@@ -822,11 +954,6 @@ abstract class CyberpunkDesignBase {
             lineTo((CHART_LEFT + CHART_WIDTH - 2f) * s, (CHART_TOP + 22f) * s)
         }
         canvas.drawPath(top, frame)
-        // The battery outline with its small nub on the right
-        val battery = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(plate.battery); strokeWidth = 2f * s; style = Paint.Style.STROKE }
-        canvas.drawRect(BATT_OUT_LEFT * s, BATT_TOP * s, (BATT_OUT_LEFT + BATT_OUT_WIDTH) * s, (BATT_TOP + BATT_HEIGHT) * s, battery)
-        battery.style = Paint.Style.FILL
-        canvas.drawRect((BATT_OUT_LEFT + BATT_OUT_WIDTH) * s, (BATT_TOP + 6f) * s, (BATT_OUT_LEFT + BATT_OUT_WIDTH + 4f) * s, (BATT_TOP + BATT_HEIGHT - 6f) * s, battery)
         // The labels of the heart rate and steps rows, in the label colour like the other labels
         drawRowIcon(canvas, R.drawable.ic_health_heart, 4, plate.label)
         drawRowIcon(canvas, R.drawable.ic_health_steps, 5, plate.label)
@@ -975,6 +1102,7 @@ abstract class CyberpunkDesignBase {
     protected fun block(design: JSONObject, vararg keys: String): RectF = keys.map { rectOf(design.getJSONObject(it)) }.reduce { a, b -> RectF(a).apply { union(b) } }
 
     protected val rowBoxKeys = listOf("complication1", "complication2")
+    protected val batteryKeys = listOf(WATCH_ICON_VIEW, WATCH_NUMBER_VIEW, PHONE_ICON_VIEW, PHONE_NUMBER_VIEW)
     protected val tableKeys = listOf("iob1", "iob2", "cob1", "cob2", "freetext2", "basalRate", "freetext3", "reservoir")
 
     // ------------------------------------------------------------------------------------------
@@ -1013,7 +1141,11 @@ abstract class CyberpunkDesignBase {
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3]).isEqualTo("false")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION4]).isEqualTo("false")
-        assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5]).isEqualTo("true")
+        assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5]).isEqualTo("false")
+        for (key in listOf(
+            CwfMetadataKey.CWF_PREF_WATCH_SHOW_DELTA, CwfMetadataKey.CWF_PREF_WATCH_SHOW_AVG_DELTA,
+            CwfMetadataKey.CWF_PREF_WATCH_SHOW_UPLOADER_BATTERY, CwfMetadataKey.CWF_PREF_WATCH_SHOW_RIG_BATTERY
+        )) assertWithMessage("$key").that(loaded.cwfData.metadata[key]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_DATE]).isEqualTo("true")
         assertThat(loaded.cwfData.metadata[CwfMetadataKey.CWF_PREF_WATCH_SHOW_DETAILED_IOB]).isEqualTo("false")
         // Brings its own background, plate, arrows and beating drop; no hand pictures
@@ -1021,6 +1153,7 @@ abstract class CyberpunkDesignBase {
         assertThat(loaded.cwfData.resData.keys).doesNotContain(ResFileMap.SECOND_HAND.fileName)
         assertThat(loaded.cwfData.resData.keys).containsAtLeast("ArrowFlat", "ArrowDoubleDown", "ArrowSingleUp")
         assertThat(loaded.cwfData.resData.keys).containsAtLeastElementsIn(ownPictures)
+        assertThat(loaded.cwfData.resData.keys).containsAtLeastElementsIn(batteryImages().keys)
         if (fontFile.exists()) assertThat(loaded.cwfData.resData[CUSTOM_FONT]?.format).isEqualTo(ResFormat.TTF)
         // Every picture a look swaps in is in the zip
         design.optJSONObject(DayOverlay.WEATHER_KEY)?.let { weatherLooks ->
@@ -1056,7 +1189,7 @@ abstract class CyberpunkDesignBase {
         val bg = block(design, "sgv", "direction", "timestamp")
         val table = block(design, *(tableKeys + rowBoxKeys).toTypedArray())
         val loop = rectOf(design.getJSONObject("loop"))
-        val battery = rectOf(design.getJSONObject("complication5"))
+        val battery = block(design, *batteryKeys.toTypedArray())
         val logo = RectF(LOGO_LEFT.toFloat(), LOGO_TOP.toFloat(), (LOGO_LEFT + LOGO_WIDTH).toFloat(), (LOGO_TOP + LOGO_HEIGHT).toFloat())
         insideRound("logo", logo, margin = 6f)
         val chart = rectOf(design.getJSONObject("chart"))
@@ -1153,7 +1286,148 @@ abstract class CyberpunkDesignBase {
             assertWithMessage("$weather glitch").that(spec.glitch != null).isEqualTo(hasGlitch(weather))
             // The beating drop, with its picture
             assertWithMessage("$weather pulse").that(spec.pulse?.drawable).isNotNull()
+            // Each battery, icon and number, blinks at 20 % or less
+            assertWithMessage("$weather blink").that(spec.blink).containsExactly(
+                BlinkSpec(listOf(WATCH_ICON_VIEW, WATCH_NUMBER_VIEW), WatchBatteryLevel.KEY, BATT_LOW),
+                BlinkSpec(listOf(PHONE_ICON_VIEW, PHONE_NUMBER_VIEW), PHONE_VALUE_KEY, BATT_LOW)
+            )
         }
+    }
+
+    @Test
+    fun theBatteriesSitSideBySideRightOfTheTime() {
+        val design = design(defaultDesign())
+        val watchIcon = rectOf(design.getJSONObject(WATCH_ICON_VIEW))
+        val phoneIcon = rectOf(design.getJSONObject(PHONE_ICON_VIEW))
+        val watchNumber = rectOf(design.getJSONObject(WATCH_NUMBER_VIEW))
+        val phoneNumber = rectOf(design.getJSONObject(PHONE_NUMBER_VIEW))
+        // Side by side, the watch first, at the same height; each number under its icon
+        assertThat(watchIcon.right).isAtMost(phoneIcon.left)
+        assertThat(watchIcon.top).isEqualTo(phoneIcon.top)
+        for ((icon, number) in listOf(watchIcon to watchNumber, phoneIcon to phoneNumber)) {
+            assertThat(number.top).isAtLeast(icon.bottom)
+            assertThat(number.left).isEqualTo(icon.left)
+            assertThat(number.width()).isEqualTo(icon.width())
+        }
+        // Right of the time, above the table, on the round screen; the watch lines up with the values of the table
+        assertThat(watchIcon.left).isAtLeast(rectOf(design.getJSONObject("minute")).right)
+        assertThat(watchIcon.centerX() - WATCH_CASE_RADIUS).isWithin(1f).of(VAL_LEFT.toFloat())
+        assertThat(watchNumber.bottom).isAtMost(TABLE_TOP.toFloat())
+        for (key in batteryKeys) insideRound(key, rectOf(design.getJSONObject(key)), margin = 2f)
+        // "100" fits its column, and no number is cut
+        assertThat(textWidth("100", BATT_TEXT_SIZE)).isAtMost(BATT_COL_WIDTH.toFloat())
+        assertThat(watchNumber.height()).isAtLeast(BATT_TEXT_SIZE * 1.15f)
+        // The views show and are not used for anything else
+        for (key in batteryKeys) assertWithMessage(key).that(design.getJSONObject(key).getString("visibility")).isEqualTo("visible")
+        assertThat(design.getJSONObject("complication5").getString("visibility")).isEqualTo("gone")
+        // Without a value the numbers and the loop warning show "--", under the key the watch reads, and
+        // with a value the number (with only the "--" the watch would show it for every value)
+        for (dyn in listOf(WATCH_NUMBER_DYN, PHONE_NUMBER_DYN, LOOP_DYN)) {
+            val d = design.getJSONObject("dynData").getJSONObject(dyn)
+            assertWithMessage(dyn).that(d.getString(JsonKeys.INVALIDTEXTVALUE.key)).endsWith("--")
+            assertWithMessage(dyn).that(d.getString(JsonKeys.TEXTVALUE.key + "1")).contains("%.0f")
+        }
+        // The number has the colour of its view in every look: the colour step of its dynData is the one that shows
+        for (look in listOf(null, EventData.Weather.PARTLY, EventData.Weather.CLOUDY, EventData.Weather.RAIN).map { lookOf(design, it) })
+            for ((view, dyn) in listOf(WATCH_NUMBER_VIEW to WATCH_NUMBER_DYN, PHONE_NUMBER_VIEW to PHONE_NUMBER_DYN))
+                assertWithMessage(view).that(look.getJSONObject("dynData").getJSONObject(dyn).getString("fontColor1")).isEqualTo(look.getJSONObject(view).getString("fontColor"))
+    }
+
+    /** Renders [design] with the watch battery at [watch] and the phone battery at [phone] %. At twice the size. */
+    private fun renderBatteries(design: JSONObject, default: CwfData, images: Map<String, ByteArray>, watch: Int?, phone: String): Bitmap {
+        val face = storedFace(design, default, images, previewInstant, watchBattery = watch)
+        storeSampleData(face, phoneBattery = phone)
+        Thread.sleep(600)   // past the render data share window
+        face.refreshRenderData()
+        return face.renderToBitmap(800, 800)
+    }
+
+    /** True when [pixel] is [hex], give or take a little for the smoothed edges. */
+    private fun near(pixel: Int, hex: String): Boolean {
+        val c = Color.parseColor(hex)
+        return abs(Color.red(pixel) - Color.red(c)) <= 40 && abs(Color.green(pixel) - Color.green(c)) <= 40 && abs(Color.blue(pixel) - Color.blue(c)) <= 40
+    }
+
+    /** How many pixels of the column at [x] have the colour [hex], from [bottom] up, until the first other one. In the design space. */
+    private fun filledFromBottom(picture: Bitmap, x: Float, bottom: Float, top: Float, hex: String): Float {
+        var y = (bottom * SCALE).toInt()
+        var filled = 0
+        while (y >= (top * SCALE).toInt() && near(picture.getPixel((x * SCALE).toInt(), y), hex)) {
+            filled++
+            y--
+        }
+        return filled / SCALE
+    }
+
+    private fun hex(pixel: Int) = String.format("#%06X", pixel and 0xFFFFFF)
+
+    @Test
+    fun theBatteriesFillFromTheBottomInTheColourOfTheirLevel() {
+        val default = defaultDesign()
+        val design = design(default)
+        val images = images()
+        // Both icons have the same colours: red, yellow and green of the night, or the dark ones of a light look
+        val colours = design.getJSONObject("dynData").getJSONObject(WATCH_ICON_DYN)
+        for (key in listOf("invalidColor", "color1", "color2", "color3", "color4", "color5"))
+            assertWithMessage(key).that(design.getJSONObject("dynData").getJSONObject(PHONE_ICON_DYN).getString(key)).isEqualTo(colours.getString(key))
+        assertThat(listOf("color1", "color2", "color3").map { colours.getString(it) }).isAnyOf(listOf(BATT_RED, BATT_YELLOW, BATT_GREEN), listOf(DAY_LOW, DAY_HIGH, DAY_MID))
+        assertThat(colours.getString("color4")).isEqualTo(colours.getString("color3"))
+        assertThat(colours.getString("color5")).isEqualTo(colours.getString("color3"))
+        // The middle of each icon, and the top and bottom of the part that fills
+        val watchX = BATT_WATCH_LEFT + BATT_COL_WIDTH / 2f
+        val phoneX = BATT_PHONE_LEFT + BATT_COL_WIDTH / 2f
+        val watchBottom = BATT_ICON_TOP + BATT_ICON_HEIGHT / 2f + 4.6f
+        val watchTop = BATT_ICON_TOP + BATT_ICON_HEIGHT / 2f - 5.2f
+        val phoneBottom = BATT_ICON_TOP + BATT_ICON_HEIGHT - 4.8f
+        val phoneTop = BATT_ICON_TOP + 4.2f
+        // The outline has the level colour too: the strap of the watch, the top edge of the phone
+        val outlineY = BATT_ICON_TOP + 1.5f
+        // Left of the round watch case the icon is see-through: the background
+        val backgroundX = BATT_WATCH_LEFT + 1f
+        val backgroundY = BATT_ICON_TOP + BATT_ICON_HEIGHT / 2f
+        val pictures = mutableListOf<Pair<String, Bitmap>>()
+        val expected = listOf(5 to "color1", 20 to "color1", 21 to "color2", 40 to "color2", 41 to "color3", 66 to "color3", 100 to "color3")
+        var lastWatch = 0f
+        var lastPhone = 0f
+        for ((level, step) in expected) {
+            val colour = colours.getString(step)
+            val picture = renderBatteries(design, default, images, level, level.toString())
+            pictures += "$level %" to picture
+            fun at(x: Float, y: Float) = picture.getPixel((x * SCALE).toInt(), (y * SCALE).toInt())
+            assertWithMessage("watch at $level: ${hex(at(watchX, outlineY))}").that(near(at(watchX, outlineY), colour)).isTrue()
+            assertWithMessage("phone at $level: ${hex(at(phoneX, outlineY))}").that(near(at(phoneX, outlineY), colour)).isTrue()
+            if (level >= 20) {
+                assertWithMessage("watch fill at $level").that(near(at(watchX, watchBottom), colour)).isTrue()
+                assertWithMessage("phone fill at $level").that(near(at(phoneX, phoneBottom), colour)).isTrue()
+            }
+            // Easy to see on the background behind it
+            val background = hex(at(backgroundX, backgroundY))
+            assertWithMessage("$colour on $background").that(contrast(colour, background)).isAtLeast(3.0)
+            // The fill grows from the bottom up with the level
+            val watch = filledFromBottom(picture, watchX, watchBottom, watchTop, colour)
+            val phone = filledFromBottom(picture, phoneX, phoneBottom, phoneTop, colour)
+            println("$fileName battery $level %: watch filled $watch, phone filled $phone (design px)")
+            assertWithMessage("watch at $level").that(watch).isAtLeast(lastWatch)
+            assertWithMessage("phone at $level").that(phone).isAtLeast(lastPhone)
+            lastWatch = watch
+            lastPhone = phone
+        }
+        // Full is filled to the top, low is filled only at the bottom
+        assertThat(lastWatch).isAtLeast((watchBottom - watchTop) * 0.85f)
+        assertThat(lastPhone).isAtLeast((phoneBottom - phoneTop) * 0.85f)
+        // No value: the empty outline in grey, nothing filled
+        val none = renderBatteries(design, default, images, null, "")
+        pictures += "no value" to none
+        val grey = colours.getString("invalidColor")
+        fun noneAt(x: Float, y: Float) = none.getPixel((x * SCALE).toInt(), (y * SCALE).toInt())
+        assertThat(near(noneAt(watchX, watchBottom), grey)).isFalse()
+        assertThat(near(noneAt(phoneX, phoneBottom), grey)).isFalse()
+        assertThat(near(noneAt(watchX, outlineY), grey)).isTrue()
+        assertThat(near(noneAt(phoneX, outlineY), grey)).isTrue()
+        assertThat(contrast(grey, hex(noneAt(backgroundX, backgroundY)))).isAtLeast(3.0)
+        sheet(pictures.map { (name, picture) -> name to Bitmap.createBitmap(picture, 540, 100, 180, 120).scale(360, 240) }, "${fileName}_batteries.png")
+        // Leave the normal sample for the other tests
+        storeSampleData(newFace())
     }
 
     protected companion object {
@@ -1194,6 +1468,11 @@ abstract class CyberpunkDesignBase {
         const val TIME_TOP = 26
         const val TIME_HEIGHT = 74
         const val TIME_SIZE = 64
+
+        /** The minute view: as wide as "48" needs, and the batteries start right after it. */
+        const val TIME_SHIFT = 7
+        const val MINUTE_LEFT = 210 - TIME_SHIFT
+        const val MINUTE_WIDTH = 74
 
         const val SGV_LEFT = 28
         const val SGV_TOP = 102
@@ -1256,13 +1535,47 @@ abstract class CyberpunkDesignBase {
         /** How long one wake plays, unless the watch setting chooses another length. */
         const val ANIMATION_MS = 15_000L
 
-        const val BATT_OUT_LEFT = 298
-        const val BATT_OUT_WIDTH = 38
-        const val BATT_TOP = 70
-        const val BATT_HEIGHT = 20
-        const val BATT_BOX_LEFT = 286
-        const val BATT_BOX_WIDTH = 44
-        const val BATT_TEXT_SIZE = 17
+        /**
+         * The batteries: two columns right of the time, the icon on top and the number under it. The
+         * round case of the watch starts where the values of the table below start ([VAL_LEFT]).
+         */
+        const val BATT_COL_WIDTH = 26
+        const val WATCH_CASE_RADIUS = 8.2f
+        const val BATT_WATCH_LEFT = MINUTE_LEFT + MINUTE_WIDTH
+        const val BATT_PHONE_LEFT = BATT_WATCH_LEFT + BATT_COL_WIDTH + 1
+        const val BATT_ICON_TOP = 60
+        const val BATT_ICON_HEIGHT = 23
+        const val BATT_NUMBER_TOP = BATT_ICON_TOP + BATT_ICON_HEIGHT
+        const val BATT_NUMBER_HEIGHT = 17
+        const val BATT_TEXT_SIZE = 14
+
+        /** Fill steps of an icon: 5 % each. */
+        const val BATT_STEPS = 20
+
+        /** At this level and below a battery is red and blinks. */
+        const val BATT_LOW = 20.0
+        const val BATT_GREEN = MID_COLOR
+        const val BATT_YELLOW = HIGH_COLOR
+        const val BATT_RED = LOW_COLOR
+        const val BATT_GREY = "#8A8A99"
+        const val BATT_DAY_GREY = "#5E5E6B"
+
+        /** The views that carry the batteries, and their dynData. */
+        const val WATCH_ICON_VIEW = "delta"
+        const val WATCH_NUMBER_VIEW = "rig_battery"
+        const val PHONE_ICON_VIEW = "avg_delta"
+        const val PHONE_NUMBER_VIEW = "uploader_battery"
+        const val WATCH_ICON_DYN = "watchBatteryIcon"
+        const val WATCH_NUMBER_DYN = "watchBatteryNumber"
+        const val PHONE_ICON_DYN = "phoneBatteryIcon"
+        const val PHONE_NUMBER_DYN = "phoneBatteryNumber"
+
+        /** The value of the phone battery, as the phone sends it. */
+        const val PHONE_VALUE_KEY = "uploader_battery"
+
+        /** The battery levels of the samples. */
+        const val PHONE_SAMPLE = "78"
+        const val WATCH_SAMPLE = 66
 
         const val CHART_LEFT = 30
         const val CHART_TOP = 264
@@ -1304,7 +1617,7 @@ abstract class CyberpunkDesignBase {
         const val DAY_BASAL_CENTER = "#5B00B8"
 
         val NIGHT_INK = Ink(line = CYAN, lineShadow = LOW_COLOR, text = "#FFFFFF", textShadow1 = LOW_COLOR, textShadow2 = CYAN)
-        val NIGHT_PLATE = Plate(frame = CYAN, thin = LINE_COLOR, battery = "#E6E6F2", label = LABEL_COLOR, logo = NIGHT_INK)
+        val NIGHT_PLATE = Plate(frame = CYAN, thin = LINE_COLOR, label = LABEL_COLOR, logo = NIGHT_INK)
 
         /** The moments the pictures show: 11 November 2026 at 23:00 (night), at 09:00 and at noon (day), local time. */
         val NIGHT_MS: Long = LocalDateTime.of(2026, 11, 11, 23, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()

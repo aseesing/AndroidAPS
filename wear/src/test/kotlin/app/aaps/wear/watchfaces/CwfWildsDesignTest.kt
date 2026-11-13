@@ -107,7 +107,7 @@ class CwfWildsDesignTest : CyberpunkDesignBase() {
                 LOGO_PULSE to logoPulse(WILDS.logo),
                 SUN to wildsSunPng(),
                 BLANK to blankPng()
-            ) + arrowImages()
+            ) + arrowImages() + batteryImages()
 
     /**
      * The panel layer: only the table (the graph has its own parchment, see [chartParchment]). The
@@ -293,7 +293,7 @@ class CwfWildsDesignTest : CyberpunkDesignBase() {
             assertThat(look.getJSONObject("cover_chart").getString("visibility")).isEqualTo("visible")
         }
         // The texts that stand on the landscape itself: against every pixel behind them, in every weather
-        val darkTexts = listOf("hour", "minute", "day", "freetext1", "day_name", "month", "complication5", "timestamp", "loop")
+        val darkTexts = listOf("hour", "minute", "day", "freetext1", "day_name", "month", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW, "timestamp", "loop")
         for (weather in listOf(EventData.Weather.CLEAR, EventData.Weather.PARTLY, EventData.Weather.CLOUDY, EventData.Weather.RAIN)) {
             val png = landscape(weather)
             assertWithMessage("$weather is a jpg").that(isJpeg(png)).isTrue()
@@ -312,6 +312,10 @@ class CwfWildsDesignTest : CyberpunkDesignBase() {
                 val big = key in listOf("hour", "minute", "freetext1")
                 assertWithMessage("$weather $key").that(worst(key, look.getJSONObject(key).getString("fontColor"))).isAtLeast(if (big) 3.0 else 4.5)
             }
+            // The battery icons in every level colour, against the landscape behind them
+            for ((view, dyn) in listOf(WATCH_ICON_VIEW to WATCH_ICON_DYN, PHONE_ICON_VIEW to PHONE_ICON_DYN))
+                for (key in listOf("invalidColor", "color1", "color2", "color3"))
+                    assertWithMessage("$weather $view $key").that(worst(view, look.getJSONObject("dynData").getJSONObject(dyn).getString(key))).isAtLeast(3.0)
             // The glucose value in all three colours
             for (color in listOf("midColor", "highColor", "lowColor")) assertWithMessage("$weather sgv $color").that(worst("sgv", look.getString(color))).isAtLeast(4.5)
         }

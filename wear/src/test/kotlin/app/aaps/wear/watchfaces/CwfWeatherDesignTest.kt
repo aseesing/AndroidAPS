@@ -79,7 +79,7 @@ class CwfWeatherDesignTest : CyberpunkDesignBase() {
     }
 
     override fun images(): Map<String, ByteArray> = palettePictures(SUNNY, "") + palettePictures(PARTLY, PARTLY.name) + palettePictures(CLOUDY, CLOUDY.name) +
-        mapOf(SUN to sunPng(), BLANK to blankPng()) + arrowImages()
+        mapOf(SUN to sunPng(), BLANK to blankPng()) + arrowImages() + batteryImages()
 
     /** The background, the cover plate and the beating drop of [p], with [suffix] after their names. */
     private fun palettePictures(p: DayPalette, suffix: String): Map<String, ByteArray> = mapOf(
@@ -145,9 +145,14 @@ class CwfWeatherDesignTest : CyberpunkDesignBase() {
             val look = lookOf(design, weather)
             val name = "$weather"
             // Texts on the background
-            for (key in listOf("hour", "minute", "day", "complication5"))
+            for (key in listOf("hour", "minute", "day", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW))
                 assertWithMessage("$name $key").that(contrast(look.getJSONObject(key).getString("fontColor"), p.bg)).isAtLeast(7.0)
             for (key in listOf("day_name", "month")) assertWithMessage("$name $key").that(contrast(look.getJSONObject(key).getString("fontColor"), p.bg)).isAtLeast(4.5)
+            // The battery icons: every level colour can be seen on the background
+            for (dyn in listOf(WATCH_ICON_DYN, PHONE_ICON_DYN)) for (key in listOf("invalidColor", "color1", "color2", "color3")) {
+                val colour = look.getJSONObject("dynData").getJSONObject(dyn).getString(key)
+                assertWithMessage("$name $dyn $key").that(contrast(colour, p.bg)).isAtLeast(3.0)
+            }
             // The colon is big: 3 is enough
             assertWithMessage("$name colon").that(contrast(look.getJSONObject("freetext1").getString("fontColor"), p.bg)).isAtLeast(3.0)
             // Texts and glucose colours on the light panels
