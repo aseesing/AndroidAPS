@@ -5,7 +5,6 @@
 package app.aaps.plugins.sync.wear.compose
 
 import android.content.res.Configuration
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +27,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.plugins.sync.wear.preview.CwfLivePreview
+import app.aaps.plugins.sync.wear.preview.PreviewSlot
 
 /**
  * The night face on the Wear screen, see `CwfNight`.
@@ -95,13 +96,15 @@ internal fun NightWatchfaceCard(
 
             state.nightWatchfaceImage?.let { image ->
                 Spacer(modifier = Modifier.height(AapsSpacing.small))
-                Image(
+                // Live, as the main face: drawn by the watch's code, the static picture until then
+                CwfLivePreview(
                     bitmap = image,
                     contentDescription = state.nightWatchfaceName,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = AapsSpacing.extraLarge),
-                    contentScale = ContentScale.FillWidth
+                    contentScale = ContentScale.FillWidth,
+                    slot = PreviewSlot.NIGHT
                 )
             }
         }

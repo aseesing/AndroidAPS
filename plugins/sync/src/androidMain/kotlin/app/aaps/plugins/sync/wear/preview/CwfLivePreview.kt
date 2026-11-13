@@ -26,16 +26,18 @@ import app.aaps.core.ui.compose.metroViewModel
  * The Custom watch face as it looks on the watch now: drawn live by the watch's own code, with the
  * current values, the moving clock and the wake-up animation. A tap plays the animation again.
  *
- * Takes the place of the static picture of the design, with the same parameters as [Image]. Shows
- * [bitmap], the static picture, until the first frame is drawn, and for good if the preview fails.
- * Frames are only drawn while the screen is visible.
+ * Takes the place of the static picture of the design, with the same parameters as [Image], and
+ * [slot] for the face it shows. Shows [bitmap], the static picture, until the first frame is drawn,
+ * while the whole design is not on the phone, and for good if the preview fails. Frames are only
+ * drawn while the screen is visible.
  */
 @Composable
 fun CwfLivePreview(
     bitmap: ImageBitmap,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Fit
+    contentScale: ContentScale = ContentScale.Fit,
+    slot: PreviewSlot = PreviewSlot.DAY
 ) {
     // Compose previews have no app graph: the static picture
     if (LocalInspectionMode.current) {
@@ -45,7 +47,7 @@ fun CwfLivePreview(
     val viewModel: CwfLivePreviewViewModel = metroViewModel()
     BoxWithConstraints(modifier = modifier) {
         val sizePx = with(LocalDensity.current) { maxWidth.roundToPx() }.coerceIn(1, MAX_SIZE_PX)
-        val frames = remember(sizePx) { viewModel.frames(sizePx) }
+        val frames = remember(sizePx, slot) { viewModel.frames(sizePx, slot) }
         val frame by frames.collectAsStateWithLifecycle(initialValue = null)
         val live = frame
         if (live == null)
@@ -58,7 +60,7 @@ fun CwfLivePreview(
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .clip(CircleShape)
-                    .clickable { viewModel.wake() },
+                    .clickable { viewModel.wake(slot) },
                 contentScale = contentScale
             )
     }

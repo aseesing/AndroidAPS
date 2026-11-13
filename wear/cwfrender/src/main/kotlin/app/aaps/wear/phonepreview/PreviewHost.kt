@@ -31,16 +31,23 @@ import java.io.File
  *
  * Everything the face stores is kept apart from the phone's own data:
  * - files (the face's DataStore) go to their own folder, see [getFilesDir];
- * - preferences go to files with their own prefix, see [getSharedPreferences];
+ * - preferences go to files that start with the [name], see [getSharedPreferences];
  * - events go to an own [RxBus], so nothing the face sends reaches the phone's bus.
  *
  * The watch settings the face reads (show seconds, which fields to show, ...) are in [watchSettings].
  *
- * Only one instance may exist in a process: the face's DataStore allows one owner per file.
+ * Only one instance per [name] may exist in a process: the face's DataStore allows one owner per
+ * file. Two previews at once (the day face and the night face) each have their own [name].
+ *
+ * @param name the folder of the files and the start of the preferences file names
  */
-class PreviewHost(base: Context, private val logger: AAPSLogger) : ContextWrapper(base.applicationContext), MetroMemberInjector {
+class PreviewHost(
+    base: Context,
+    private val logger: AAPSLogger,
+    private val name: String = DEFAULT_NAME
+) : ContextWrapper(base.applicationContext), MetroMemberInjector {
 
-    private val ownFilesDir: File by lazy { File(baseContext.filesDir, FOLDER).apply { mkdirs() } }
+    private val ownFilesDir: File by lazy { File(baseContext.filesDir, name).apply { mkdirs() } }
 
     /** The preferences of the watch face: the watch settings on the watch, these settings on the phone. */
     val watchSettings: SharedPreferences by lazy { getSharedPreferences(SETTINGS_FILE, MODE_PRIVATE) }
@@ -56,7 +63,7 @@ class PreviewHost(base: Context, private val logger: AAPSLogger) : ContextWrappe
     override fun getFilesDir(): File = ownFilesDir
 
     override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences =
-        baseContext.getSharedPreferences(PREFIX + name, mode)
+        baseContext.getSharedPreferences("${this.name}_$name", mode)
 
     override fun injectMembers(target: Any): Boolean {
         if (target !is BaseWatchFace) return false
@@ -72,13 +79,10 @@ class PreviewHost(base: Context, private val logger: AAPSLogger) : ContextWrappe
 
     companion object {
 
-        /** The folder under the phone's files folder where the face keeps its DataStore. */
-        const val FOLDER = "cwf_preview"
+        /** The name of the first preview: its folder under the phone's files folder, and its preferences prefix. */
+        const val DEFAULT_NAME = "cwf_preview"
 
-        /** Put before every preferences file name the face asks for. */
-        const val PREFIX = "cwf_preview_"
-
-        /** The watch settings, without [PREFIX]. */
+        /** The watch settings file, after the name of the preview. */
         const val SETTINGS_FILE = "watch_settings"
     }
 }

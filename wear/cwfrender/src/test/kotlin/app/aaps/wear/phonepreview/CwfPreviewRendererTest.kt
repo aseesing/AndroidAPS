@@ -7,7 +7,9 @@ package app.aaps.wear.phonepreview
 import android.app.Application
 import android.graphics.Bitmap
 import app.aaps.core.interfaces.logging.AAPSLogger
+import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.EventData
+import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import app.aaps.wear.R
 import com.google.common.truth.Truth.assertThat
@@ -86,6 +88,41 @@ class CwfPreviewRendererTest {
         }
         PreviewThread().executor.execute(frame)
         assertThat(frame.get(30, TimeUnit.SECONDS).width).isEqualTo(SIZE)
+    }
+
+    @Test
+    fun twoPreviewsWithTheirOwnStorageDrawTheirOwnFaceAtTheSameTime() {
+        // The day face and the night face: the face's storage allows one owner per file
+        val day = stillRenderer("Cyberpunk_Tech")
+        val night = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_night")
+        night.watchSettings.edit().putString(lengthKey, "0").commit()
+        val now = System.currentTimeMillis()
+        values(now).forEach(night::apply)
+        night.setDesign(design("Wilds_Weather"))
+        val dayFrame = day.frame(SIZE, now)
+        val nightFrame = night.frame(SIZE, now)
+        save(nightFrame, "night")
+        assertThat(nightFrame.sameAs(dayFrame)).isFalse()
+        // Each keeps its own design
+        assertThat(day.frame(SIZE, now).sameAs(dayFrame)).isTrue()
+    }
+
+    @Test
+    fun theShortCopyOfTheWatchMissesThePicturesAndFonts() {
+        // What the watch sends to the phone: the json, the metadata and the preview picture only.
+        // Drawn from it, the face lacks its background and fonts, as first seen on the phone.
+        val whole = design("Cyberpunk_Tech")
+        val preview = ResFileMap.CUSTOM_WATCHFACE.fileName
+        val shortCopy = CwfData(whole.json, whole.metadata, mutableMapOf(preview to whole.resData.getValue(preview)))
+        val now = System.currentTimeMillis()
+        val withWhole = stillRenderer("Cyberpunk_Tech").frame(SIZE, now)
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_short")
+        renderer.watchSettings.edit().putString(lengthKey, "0").commit()
+        values(now).forEach(renderer::apply)
+        renderer.setDesign(shortCopy)
+        val withShort = renderer.frame(SIZE, now)
+        save(withShort, "short_copy")
+        assertThat(withShort.sameAs(withWhole)).isFalse()
     }
 
     @Test

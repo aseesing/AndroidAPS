@@ -22,7 +22,8 @@ import kotlinx.coroutines.withContext
 /**
  * Owns the one [CwfPreviewRenderer] of the phone app and the one thread it runs on.
  *
- * - One renderer for the whole app: the watch face's storage allows one owner per file.
+ * - One renderer per preview ([PreviewSlot]) for the whole app: the watch face's storage allows one
+ *   owner per file, so each preview has its own.
  * - One thread: the renderer is not thread safe, and drawing off the main thread keeps the screen smooth.
  * - Never a crash: the preview is a nice-to-have in an app that doses insulin. If the renderer fails,
  *   for any reason, out of memory included, it is logged once and switched off ([failed]), and the
@@ -41,7 +42,8 @@ class CwfPreviewEngine(
     /** An Android thread with a `Looper`: the face's views need one, see [PreviewThread]. */
     private val dispatcher = PreviewThread().executor.asCoroutineDispatcher()
 
-    private var renderer: CwfPreviewRenderer? = null
+    /** One renderer per preview, each with its own storage. Only touched on the renderer's thread. */
+    private val renderers = HashMap<PreviewSlot, CwfPreviewRenderer>()
 
     /** For [release], on the renderer's thread. */
     private val releaseScope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -50,11 +52,11 @@ class CwfPreviewEngine(
     @Volatile var failed = false
         private set
 
-    /** Runs [block] with the renderer, on its own thread. Null when the preview is off or [block] failed. */
-    suspend fun <T> use(block: (CwfPreviewRenderer) -> T): T? = withContext(dispatcher) {
+    /** Runs [block] with the renderer of [slot], on its own thread. Null when the preview is off or [block] failed. */
+    suspend fun <T> use(slot: PreviewSlot, block: (CwfPreviewRenderer) -> T): T? = withContext(dispatcher) {
         if (failed) return@withContext null
         try {
-            block(renderer ?: CwfPreviewRenderer(context, aapsLogger).also { renderer = it })
+            block(renderers.getOrPut(slot) { CwfPreviewRenderer(context, aapsLogger, slot.storageName) })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -65,13 +67,13 @@ class CwfPreviewEngine(
     }
 
     /**
-     * Frees the face and its pictures while no preview is shown, on the renderer's thread. Never
+     * Frees the faces and their pictures while no preview is shown, on the renderer's thread. Never
      * makes a renderer. Runs in its own scope: it is called when the screen's scope is already cancelled.
      */
     fun release() {
         releaseScope.launch {
             try {
-                renderer?.release()
+                renderers.values.forEach { it.release() }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {

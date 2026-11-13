@@ -36,12 +36,12 @@ import org.json.JSONObject
  * Not thread safe: call everything from one thread. Drawing works on views, so it is not done on
  * the main thread, to keep the phone's screen smooth.
  *
- * Only one instance may exist in a process, see [PreviewHost].
+ * Only one instance per name may exist in a process, see [PreviewHost].
  */
-class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger) {
+class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name: String = PreviewHost.DEFAULT_NAME) {
 
     /** Kept for the whole run: the face's storage allows one owner per file, see [PreviewHost]. */
-    private val host = PreviewHost(context, logger)
+    private val host = PreviewHost(context, logger, name)
 
     /**
      * The part that draws: the face with its views, the kept layer pictures and the animation. Made
