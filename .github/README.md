@@ -183,6 +183,9 @@ Merged from the open upstream pull request
 - Start, warm-up (with pre-soak), calibration, sensor status and a driver log are in the plugin.
 - CGM alarms for this source, also on the watch, and *direct to watch*: the watch can read the
   sensor itself when the phone is away.
+- **The CGM alarm settings** have their own card in the settings, *CGM alarms*, with one section
+  per alarm (switch, level, delay, repeat, sound). The glucose alarms (urgent low, low, high, fast
+  fall and rise) are **off** by default: turn on the ones you need.
 - **It changes insulin delivery:** while no reading arrives in closed loop, it ends a temp basal
   that is above the profile basal. It never raises delivery.
 
@@ -195,10 +198,6 @@ Our changes to it (marked `PERSONAL PATCH`):
   logged, and the app (and so the loop) goes on. A failed Bluetooth step fails the connection, so
   the driver tries again. Each step of the plugin start is guarded on its own. A review found no
   place where the driver blocks the main thread, the loop or the pump command queue.
-- **The CGM alarm settings can be reached.** They sit under *Local alerts* → *CGM alarms* → one
-  section per alarm (switch, level, delay, repeat, sound). The settings screen drew only two levels
-  of sections, so only *Mute and test* showed. Now every level opens. The glucose alarms (urgent
-  low, low, high, fast fall and rise) are **off** by default: turn on the ones you need.
 
 ### 10. Speak glucose in the car (phone)
 
