@@ -491,7 +491,16 @@ sealed class EventData : Event() {
          * read it, and from an older sender.
          */
         val latitude: Double? = null,
-        val longitude: Double? = null
+        val longitude: Double? = null,
+        /**
+         * Private patch: the phone's choice for the watch setting "Day / night look" (`auto`, `day`
+         * or `night`) and "Always-on look" (`night`, `day` or `active`), see `CwfNight`. Null when
+         * the phone has no choice, and from an older sender. The watch takes a value only when it
+         * differs from the last one the phone sent, so a change made on the watch itself stays until
+         * the phone setting changes.
+         */
+        val dayNightLook: String? = null,
+        val alwaysOnLook: String? = null
     ) : EventData()
 
     @Serializable
