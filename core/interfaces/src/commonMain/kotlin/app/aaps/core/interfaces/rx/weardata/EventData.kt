@@ -561,10 +561,18 @@ sealed class EventData : Event() {
     }
 
     @Serializable
-    data class ActionSetCustomWatchface(val customWatchfaceData: CwfData) : EventData()
+    data class ActionSetCustomWatchface(val customWatchfaceData: CwfData, val night: Boolean = false) : EventData()
 
     @Serializable
-    data class ActionUpdateCustomWatchface(val customWatchfaceData: CwfData) : EventData()
+    data class ActionUpdateCustomWatchface(val customWatchfaceData: CwfData, val night: Boolean = false) : EventData()
+
+    /**
+     * Private patch: the phone asks the watch to forget its night face, so it shows the main face
+     * day and night again (see `CwfNight`). The watch answers with an [ActionUpdateCustomWatchface]
+     * of its main face.
+     */
+    @Serializable
+    data class ActionClearNightWatchface(val timeStamp: Long) : EventData()
 
     @Serializable
     data class ActionrequestCustomWatchface(val exportFile: Boolean) : EventData()
