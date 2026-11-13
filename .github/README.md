@@ -20,9 +20,10 @@ The full upstream README is in [`/README.md`](../README.md).
 ## Base and branches
 
 The changes 1 to 8 are made on top of upstream **4.0.0** (`master` at `f77abd9b82`). The Dexcom
-ONE+ / G7 driver (see 9) is built on upstream `dev`, so merging it also brought about 170 commits of
-upstream `dev` that came after 4.0.0. The base of `local/personal` is now upstream `dev` at
-`99408ea5c2`, not 4.0.0. Change 10 is made on top of that.
+ONE+ / G7 driver (see 9) is built on upstream `dev`, so merging it also brought the commits of
+upstream `dev` that came after 4.0.0. Merged now: upstream **4.0.0** (`master` at `f77abd9b82`) and
+pull request #5431 at `13005dae25` (2026-11-12), which holds upstream `dev` up to `951df2fa89`. So
+the base of `local/personal` is upstream `dev`, not 4.0.0. Change 10 is made on top of that.
 
 Upstream `dev` calls itself `4.0.1-dev-a`. AAPS sees the `-dev` and then turns the closed loop off
 unless engineering mode is on. This fork sets the version to **`4.0.1`**, so the closed loop works
@@ -176,7 +177,7 @@ starts with the next frame.
 
 Merged from the open upstream pull request
 [nightscout/AndroidAPS#5431](https://github.com/nightscout/AndroidAPS/pull/5431) by MTR93600 (head
-`2d799d46`, 2026-11-10). It is not our code; see the pull request for the details.
+`13005dae`, 2026-11-12). It is not our code; see the pull request for the details.
 
 - A new BG source **Dexcom ONE+ / G7** talks to the sensor over Bluetooth itself, so xDrip+ or
   the Dexcom app is not needed.
