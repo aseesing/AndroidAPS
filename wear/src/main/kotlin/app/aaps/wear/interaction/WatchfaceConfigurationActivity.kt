@@ -31,6 +31,7 @@ class WatchfaceConfigurationActivity : WearPreferenceActivity(), SharedPreferenc
 
     // See the same override in ConfigurationActivity for why this blocks.
     override fun storedWatchfaceConfiguration(): String? = runBlocking { complicationDataRepository.getCustomWatchface()?.json }
+    override fun hasNightWatchface(): Boolean = runBlocking { complicationDataRepository.getNightWatchface() != null } // Private patch
 
     @Suppress("PrivatePropertyName")
     private val PHYSICAL_ACTIVITY = 1

@@ -52,6 +52,14 @@ class WakeAnimationJsonTest {
     }
 
     @Test
+    fun theDayNightSettingsAreOfferedWithANightFaceEvenWithoutADayLook() {
+        val dayNight = listOf(R.string.key_day_night_look, R.string.key_day_night_always_on)
+        val design = """{"metadata": {}}"""
+        assertThat(CustomWatchface.settingRows(design, systemEditor = false, hasNightFace = true).map { it.key }).containsAtLeastElementsIn(dayNight)
+        assertThat(CustomWatchface.settingRows(design, systemEditor = false, hasNightFace = false).map { it.key }).containsNoneIn(dayNight)
+    }
+
+    @Test
     fun noAnimationKeyMeansNoAnimation() {
         assertThat(read("""{"metadata": {}, "time": {"width": 100}}""")).isNull()
     }

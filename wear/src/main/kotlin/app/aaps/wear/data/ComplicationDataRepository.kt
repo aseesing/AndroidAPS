@@ -279,22 +279,23 @@ class ComplicationDataRepository(
     suspend fun updateCustomWatchfaceMetadata(newMetadata: Map<CwfMetadataKey, String>) {
         try {
             dataStore.updateData { current ->
-                current.customWatchface?.let { savedCwf ->
-                    // Check if name and version match before updating
-                    if (newMetadata[CwfMetadataKey.CWF_NAME] == savedCwf.metadata[CwfMetadataKey.CWF_NAME] &&
-                        newMetadata[CwfMetadataKey.CWF_AUTHOR_VERSION] == savedCwf.metadata[CwfMetadataKey.CWF_AUTHOR_VERSION]
-                    ) {
-                        val updatedCwf = CwfData(savedCwf.json, newMetadata.toMutableMap(), savedCwf.resData)
-                        aapsLogger.debug(LTag.WEAR, "Updated custom watchface metadata: $newMetadata")
-                        current.copy(customWatchface = updatedCwf)
-                    } else {
-                        current
-                    }
-                } ?: current
+                current.customWatchface?.let { withMetadata(it, newMetadata) }?.let { current.copy(customWatchface = it) } ?: current
             }
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to update custom watchface metadata", e)
         }
+    }
+
+    /**
+     * [saved] with [newMetadata], or null when the metadata is for another design (name or version
+     * differ).
+     */
+    private fun withMetadata(saved: CwfData, newMetadata: Map<CwfMetadataKey, String>): CwfData? {
+        if (newMetadata[CwfMetadataKey.CWF_NAME] != saved.metadata[CwfMetadataKey.CWF_NAME] ||
+            newMetadata[CwfMetadataKey.CWF_AUTHOR_VERSION] != saved.metadata[CwfMetadataKey.CWF_AUTHOR_VERSION]
+        ) return null
+        aapsLogger.debug(LTag.WEAR, "Updated custom watchface metadata: $newMetadata")
+        return CwfData(saved.json, newMetadata.toMutableMap(), saved.resData)
     }
 
     /**
@@ -347,16 +348,67 @@ class ComplicationDataRepository(
                 current.customWatchface
             }
 
-            source?.let { cwf ->
-                // Simplify by keeping only the main CUSTOM_WATCHFACE resource
-                cwf.resData[ResFileMap.CUSTOM_WATCHFACE.fileName]?.let { mainRes ->
-                    val simplifiedResData = mutableMapOf(ResFileMap.CUSTOM_WATCHFACE.fileName to mainRes)
-                    CwfData(cwf.json, cwf.metadata, simplifiedResData)
-                }
-            }
+            source?.let { simplified(it) }
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to get simplified custom watchface", e)
             null
+        }
+    }
+
+    /** [cwf] with only the main CUSTOM_WATCHFACE resource, or null when it has none. */
+    private fun simplified(cwf: CwfData): CwfData? =
+        cwf.resData[ResFileMap.CUSTOM_WATCHFACE.fileName]?.let { mainRes ->
+            CwfData(cwf.json, cwf.metadata, mutableMapOf(ResFileMap.CUSTOM_WATCHFACE.fileName to mainRes))
+        }
+
+    // ----------------------------------------------------------------------------------------
+    // Private patch: the optional night face, see CwfNight. The main face above is not touched.
+    // ----------------------------------------------------------------------------------------
+
+    /** Stores [cwf] as the night face. */
+    suspend fun storeNightWatchface(cwf: CwfData) {
+        try {
+            dataStore.updateData { it.copy(customWatchfaceNight = cwf) }
+            aapsLogger.debug(LTag.WEAR, "Stored night watchface: ${cwf.metadata}")
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Failed to store night watchface", e)
+        }
+    }
+
+    /** Forgets the night face, so the main face shows day and night again. */
+    suspend fun clearNightWatchface() {
+        try {
+            dataStore.updateData { it.copy(customWatchfaceNight = null) }
+            aapsLogger.debug(LTag.WEAR, "Cleared night watchface")
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Failed to clear night watchface", e)
+        }
+    }
+
+    /** The night face, or null when there is none. */
+    suspend fun getNightWatchface(): CwfData? =
+        try {
+            complicationData.first().customWatchfaceNight
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Failed to get night watchface", e)
+            null
+        }
+
+    /**
+     * The night face for the phone, with only its main picture, or null when there is none. A night
+     * face without a main picture comes without pictures, so the phone still learns its name.
+     */
+    suspend fun getSimplifiedNightWatchface(): CwfData? =
+        getNightWatchface()?.let { simplified(it) ?: CwfData(it.json, it.metadata, mutableMapOf()) }
+
+    /** Like [updateCustomWatchfaceMetadata], for the night face. */
+    suspend fun updateNightWatchfaceMetadata(newMetadata: Map<CwfMetadataKey, String>) {
+        try {
+            dataStore.updateData { current ->
+                current.customWatchfaceNight?.let { withMetadata(it, newMetadata) }?.let { current.copy(customWatchfaceNight = it) } ?: current
+            }
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Failed to update night watchface metadata", e)
         }
     }
 }

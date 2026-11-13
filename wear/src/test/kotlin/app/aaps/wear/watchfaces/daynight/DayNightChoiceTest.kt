@@ -55,4 +55,20 @@ class DayNightChoiceTest {
         DayNightChoice.showDay(DayNightChoice.AUTO, null, ambient = false) { asked++; true }
         assertThat(asked).isEqualTo(1)
     }
+
+    @Test
+    fun aValueFromThePhoneIsTakenOnlyWhenThePhoneChangedIt() {
+        val allowed = DayNightChoice.ACTIVE_VALUES
+        // First time, or the phone setting changed: taken
+        assertThat(DayNightChoice.fromPhone(DayNightChoice.NIGHT, null, allowed)).isEqualTo(DayNightChoice.NIGHT)
+        assertThat(DayNightChoice.fromPhone(DayNightChoice.NIGHT, "", allowed)).isEqualTo(DayNightChoice.NIGHT)
+        assertThat(DayNightChoice.fromPhone(DayNightChoice.DAY, DayNightChoice.NIGHT, allowed)).isEqualTo(DayNightChoice.DAY)
+        // The same as last time: the watch keeps what the wearer chose there
+        assertThat(DayNightChoice.fromPhone(DayNightChoice.NIGHT, DayNightChoice.NIGHT, allowed)).isNull()
+        // An older phone sends nothing, and an unknown value is never stored
+        assertThat(DayNightChoice.fromPhone(null, DayNightChoice.NIGHT, allowed)).isNull()
+        assertThat(DayNightChoice.fromPhone("something else", null, allowed)).isNull()
+        assertThat(DayNightChoice.fromPhone(DayNightChoice.AS_ACTIVE, null, allowed)).isNull()
+        assertThat(DayNightChoice.fromPhone(DayNightChoice.AS_ACTIVE, null, DayNightChoice.ALWAYS_ON_VALUES)).isEqualTo(DayNightChoice.AS_ACTIVE)
+    }
 }
