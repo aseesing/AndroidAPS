@@ -24,7 +24,7 @@ watches too.
 
 ## What is new
 
-| | | |
+| | Feature | What it does |
 |---|---|---|
 | 🎬 | **[Wake-up animation](#3-wake-up-animation)** | Rain, glitch bands and a heart that beats at your heart rate, when you raise your wrist or tap. |
 | 📱 | **[Live preview on the phone](#12-live-watch-face-preview-and-its-settings-phone-and-watch)** | The wear screen in AAPS shows the face as it looks on the watch now, moving clock and animation included. |
