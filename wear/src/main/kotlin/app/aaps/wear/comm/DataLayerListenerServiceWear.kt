@@ -16,6 +16,7 @@ import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventWearDataToMobile
 import app.aaps.core.interfaces.rx.events.EventWearToMobile
+import app.aaps.core.interfaces.rx.weardata.CwfNight
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
@@ -70,6 +71,8 @@ class DataLayerListenerServiceWear : WearableListenerService() {
 
     private val rxPath get() = getString(app.aaps.core.interfaces.R.string.path_rx_bridge)
     private val rxDataPath get() = getString(app.aaps.core.interfaces.R.string.path_rx_data_bridge)
+    // Private patch: a night face zip, see CwfNight
+    private val rxNightDataPath get() = rxDataPath + CwfNight.PATH_SUFFIX
 
     @ExperimentalSerializationApi
     override fun onCreate() {
@@ -137,10 +140,10 @@ class DataLayerListenerServiceWear : WearableListenerService() {
                 aapsLogger.debug(LTag.WEAR, "Updated node: $transcriptionNodeId")
             }
 
-            rxDataPath -> {
+            rxDataPath, rxNightDataPath -> {
                 aapsLogger.debug(LTag.WEAR, "onMessageReceived: ${messageEvent.data.size}")
                 ZipWatchfaceFormat.loadCustomWatchface(messageEvent.data, "", false)?.let {
-                    val command = EventData.ActionSetCustomWatchface(it.cwfData)
+                    val command = EventData.ActionSetCustomWatchface(it.cwfData, night = messageEvent.path == rxNightDataPath)
                     rxBus.send(command.also { it.sourceNodeId = messageEvent.sourceNodeId })
                 }
                 // Use this sender

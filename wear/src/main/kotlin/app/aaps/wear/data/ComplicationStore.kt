@@ -129,7 +129,10 @@ data class ComplicationData(
     val customWatchface: CwfData? = null,
     val customWatchfaceDefault: CwfData? = null,
     val customWatchfaceDefaultFull: CwfData? = null,
-    val lastUpdateTimestamp: Long = 0L
+    val lastUpdateTimestamp: Long = 0L,
+    // Private patch: the optional night face, shown at night instead of customWatchface. Last, so
+    // its protobuf number is new and a file written before it still reads. See CwfNight.
+    val customWatchfaceNight: CwfData? = null
 )
 
 /**

@@ -495,7 +495,16 @@ sealed class EventData : Event() {
          * read it, and from an older sender.
          */
         val latitude: Double? = null,
-        val longitude: Double? = null
+        val longitude: Double? = null,
+        /**
+         * Private patch: the phone's choice for the watch setting "Day / night look" (`auto`, `day`
+         * or `night`) and "Always-on look" (`night`, `day` or `active`), see `CwfNight`. Null when
+         * the phone has no choice, and from an older sender. The watch takes a value only when it
+         * differs from the last one the phone sent, so a change made on the watch itself stays until
+         * the phone setting changes.
+         */
+        val dayNightLook: String? = null,
+        val alwaysOnLook: String? = null
     ) : EventData()
 
     @Serializable
@@ -565,10 +574,18 @@ sealed class EventData : Event() {
     }
 
     @Serializable
-    data class ActionSetCustomWatchface(val customWatchfaceData: CwfData) : EventData()
+    data class ActionSetCustomWatchface(val customWatchfaceData: CwfData, val night: Boolean = false) : EventData()
 
     @Serializable
-    data class ActionUpdateCustomWatchface(val customWatchfaceData: CwfData) : EventData()
+    data class ActionUpdateCustomWatchface(val customWatchfaceData: CwfData, val night: Boolean = false) : EventData()
+
+    /**
+     * Private patch: the phone asks the watch to forget its night face, so it shows the main face
+     * day and night again (see `CwfNight`). The watch answers with an [ActionUpdateCustomWatchface]
+     * of its main face.
+     */
+    @Serializable
+    data class ActionClearNightWatchface(val timeStamp: Long) : EventData()
 
     @Serializable
     data class ActionrequestCustomWatchface(val exportFile: Boolean) : EventData()

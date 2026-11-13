@@ -13,7 +13,8 @@ import org.json.JSONObject
  * A design can have two optional objects:
  * - [JSON_KEY] (`dayLook`): laid over the design from sunrise to sunset,
  * - [WEATHER_KEY] (`weatherLooks`): looks for the weather, by the name [lookName] gives, like
- *   `day_cloudy` or `night_rain`. The one that fits is laid over the result last.
+ *   `day_cloudy` or `night_rain`, or by the weather alone (`cloudy`) for every time of day. The
+ *   one that fits is laid over the result last.
  *
  * Laying one object over another:
  * - an object is merged key by key into the object of the same key, as deep as it goes,
@@ -61,7 +62,8 @@ object DayOverlay {
         result.remove(WEATHER_KEY)
         result.remove(IMAGES_KEY)
         if (day) design.optJSONObject(JSON_KEY)?.let { merge(result, it) }
-        weather?.let { design.optJSONObject(WEATHER_KEY)?.optJSONObject(lookName(day, it)) }?.let { merge(result, it) }
+        // The look for day or night in this weather, else the look for this weather at any time
+        weather?.let { design.optJSONObject(WEATHER_KEY)?.let { looks -> looks.optJSONObject(lookName(day, it)) ?: looks.optJSONObject(it) } }?.let { merge(result, it) }
         return result
     }
 

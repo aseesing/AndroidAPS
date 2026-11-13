@@ -33,6 +33,9 @@ internal interface CustomWatchfaceSettingsHost {
      * offering something that cannot be acted on.
      */
     fun isSystemEditor(): Boolean = false
+
+    /** Private patch: true when a night face is stored besides the main one (see `CwfNight`). */
+    fun hasNightWatchface(): Boolean = false
 }
 
 /**
@@ -65,7 +68,9 @@ class CustomWatchfaceConfigurationFragment : PreferenceFragmentCompat() {
             CustomWatchface.subScreenRows(subScreenKey)
         } else {
             (activity as? CustomWatchfaceSettingsHost).let { host ->
-                CustomWatchface.settingRows(host?.storedWatchfaceConfiguration(), systemEditor = host?.isSystemEditor() == true)
+                CustomWatchface.settingRows(
+                    host?.storedWatchfaceConfiguration(), systemEditor = host?.isSystemEditor() == true, hasNightFace = host?.hasNightWatchface() == true
+                )
             }
         }
         buildScreen(rows)

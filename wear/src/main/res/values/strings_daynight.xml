@@ -6,6 +6,9 @@
     <!-- Day look of the Custom watch face -->
     <string name="key_day_night_look" translatable="false">day_night_look</string>
     <string name="key_day_night_always_on" translatable="false">day_night_always_on</string>
+    <!-- The last values the phone sent for the two settings above -->
+    <string name="key_day_night_look_phone" translatable="false">day_night_look_phone</string>
+    <string name="key_day_night_always_on_phone" translatable="false">day_night_always_on_phone</string>
     <!-- The phone's last known place, rounded, for sunrise and sunset -->
     <string name="key_location_latitude" translatable="false">location_latitude</string>
     <string name="key_location_longitude" translatable="false">location_longitude</string>

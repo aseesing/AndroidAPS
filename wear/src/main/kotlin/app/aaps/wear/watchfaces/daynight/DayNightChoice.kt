@@ -22,6 +22,23 @@ internal object DayNightChoice {
     const val NIGHT = "night"
     const val AS_ACTIVE = "active"
 
+    /** The values "Day / night look" can have. */
+    val ACTIVE_VALUES = setOf(AUTO, DAY, NIGHT)
+
+    /** The values "Always-on look" can have. */
+    val ALWAYS_ON_VALUES = setOf(NIGHT, DAY, AS_ACTIVE)
+
+    /**
+     * The value to store for a setting the phone sent (see `CwfNight`), or null to leave the watch
+     * setting as it is.
+     *
+     * A value is taken only when it differs from the one the phone sent last time ([lastSent]), so a
+     * change made on the watch stays until the phone setting changes. Null and unknown values are
+     * never taken: an older phone sends none.
+     */
+    fun fromPhone(sent: String?, lastSent: String?, allowed: Set<String>): String? =
+        sent?.takeIf { it in allowed && it != lastSent }
+
     /**
      * True when the day look shows.
      *

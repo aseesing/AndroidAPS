@@ -433,6 +433,7 @@ class DataHandlerMobile(
             .chunkedOnQuietPeriod(HEALTH_EVENT_QUIET_PERIOD_MS)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { handleStepsCountBatch(it) }
         onEventSync<EventData.ActionGetCustomWatchface>(detail = { " watchface=${it.customWatchface}" }) { handleGetCustomWatchface(it) }
+        onEventSync<EventData.ActionUpdateCustomWatchface>(detail = { " night=${it.night}" }) { handleUpdateCustomWatchfaceFromWatch(it) } // PERSONAL PATCH: day and night face
     }
 
     private fun maxOfNullable(vararg values: Long?): Long? {
@@ -1346,6 +1347,7 @@ class DataHandlerMobile(
                 pushedWatchface = preferences.get(StringKey.WearPushedWatchface),
                 alertOverrideDnd = preferences.get(BooleanKey.AlertOverrideDoNotDisturb)
             ).let { prefs -> roughLocation()?.let { (latitude, longitude) -> prefs.copy(latitude = latitude, longitude = longitude) } ?: prefs }
+                .let { nightFace.withDayNightLooks(it) } // PERSONAL PATCH: day and night face settings
         )
         // The last weather, so a watch that restarted has it at once
         lastWeather?.let { rxBus.send(EventMobileToWear(it)) }
@@ -2022,6 +2024,7 @@ class DataHandlerMobile(
     }
 
     private fun handleGetCustomWatchface(command: EventData.ActionGetCustomWatchface) {
+        if (command.customWatchface.night) return handleGetNightWatchface(command) // PERSONAL PATCH: day and night face
         val customWatchface = command.customWatchface
         aapsLogger.debug(LTag.WEAR, "Custom Watchface received from ${command.sourceNodeId}")
         val cwfData = customWatchface.customWatchfaceData
@@ -2038,6 +2041,28 @@ class DataHandlerMobile(
             importExportPrefs.exportCustomWatchface(cwfData, command.withDate)
     }
 
+    // ---- PERSONAL PATCH: day and night face, see WearNightFace.kt ----
+
+    private val nightFace = WearNightFacePreferences(preferences)
+
+    /** The watch's night face: kept apart from the main face and its keys. */
+    private fun handleGetNightWatchface(command: EventData.ActionGetCustomWatchface) {
+        val cwfData = command.customWatchface.customWatchfaceData
+        aapsLogger.debug(LTag.WEAR, "Night watchface received from ${command.sourceNodeId}")
+        if (command.exportFile) {
+            importExportPrefs.exportCustomWatchface(cwfData, command.withDate)
+            return
+        }
+        nightFace.rememberIfNew(cwfData.metadata)
+        rxBus.send(EventWearNightWatchface(cwfData))
+    }
+
+    /** The watch may answer with ActionUpdateCustomWatchface: the design it now has in that slot. */
+    private fun handleUpdateCustomWatchfaceFromWatch(update: EventData.ActionUpdateCustomWatchface) =
+        handleGetCustomWatchface(
+            EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(update.customWatchfaceData, update.night))
+                .also { it.sourceNodeId = update.sourceNodeId }
+        )
 }
 
 /**
