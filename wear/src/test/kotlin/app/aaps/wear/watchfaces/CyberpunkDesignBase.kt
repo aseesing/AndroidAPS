@@ -464,19 +464,18 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         close()
     }
 
-    /** The table panel. Its right edge follows the round screen, row by row, with a slanted step between rows. */
-    protected fun tablePanel(): Path {
-        val points = mutableListOf(TABLE_LEFT - 8f to TABLE_TOP.toFloat())
-        for (k in 0 until TABLE_ROWS) {
-            val top = (TABLE_TOP + k * ROW_HEIGHT).toFloat()
-            val bottom = top + ROW_HEIGHT
-            val right = rowRight(k).toFloat()
-            points += right to (if (k == 0) top else top + 6f)
-            points += right to (if (k == TABLE_ROWS - 1) bottom else bottom - 6f)
-        }
-        points += TABLE_LEFT - 8f to TABLE_BOTTOM.toFloat()
-        return shape(points)
-    }
+    /**
+     * The table panel: a plain rectangle that goes past the right side of the screen, so the round
+     * screen cuts it off and the panel fills every row up to the edge. Its right side lies outside the
+     * picture, so a frame drawn around the panel shows no line there. The values still end at
+     * [rowRight], a margin inside the edge.
+     */
+    protected fun tablePanel(): Path = shape(
+        listOf(
+            TABLE_LEFT - 8f to TABLE_TOP.toFloat(), TABLE_PANEL_RIGHT to TABLE_TOP.toFloat(),
+            TABLE_PANEL_RIGHT to TABLE_BOTTOM.toFloat(), TABLE_LEFT - 8f to TABLE_BOTTOM.toFloat()
+        )
+    )
 
     protected fun chartPanel() = shape(
         listOf(
@@ -1195,6 +1194,9 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         const val TABLE_ROWS = 6
         const val ROW_HEIGHT = 26
         const val TABLE_BOTTOM = TABLE_TOP + TABLE_ROWS * ROW_HEIGHT
+
+        /** The right side of the table panel: a little outside the 400 wide screen, so its frame line is not seen. */
+        const val TABLE_PANEL_RIGHT = 404f
         const val ICON_WIDTH = 30
         const val ROW_ICON_SIZE = 18
 

@@ -558,9 +558,9 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         for ((k, pair) in pairs.withIndex()) {
             val row = block(design, pair.first, pair.second)
             insideRound("row $k", row, margin = 6f)
-            // The panel edge is drawn at rowRight, a little outside the value box
+            // The values end at rowRight, which keeps a margin to the round edge (the panel itself goes to the edge)
             assertWithMessage("row $k").that(row.right).isAtMost(rowRight(k).toFloat())
-            insideRound("row $k panel edge", RectF(row.left, row.top, rowRight(k).toFloat(), row.bottom), margin = 6f)
+            insideRound("row $k right limit", RectF(row.left, row.top, rowRight(k).toFloat(), row.bottom), margin = 6f)
         }
         // Heart rate and steps are rows 4 and 5 of the table, inside the panel, with the same margin
         for ((i, key) in rowBoxKeys.withIndex()) {
@@ -569,7 +569,7 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
             assertWithMessage(key).that(r.left).isAtLeast(TABLE_LEFT.toFloat())
             assertWithMessage(key).that(r.right).isAtMost(rowRight(4 + i).toFloat())
             assertWithMessage(key).that(r.top).isEqualTo((TABLE_TOP + (4 + i) * ROW_HEIGHT).toFloat())
-            insideRound("$key panel edge", RectF(r.left, r.top, rowRight(4 + i).toFloat(), r.bottom), margin = 6f)
+            insideRound("$key right limit", RectF(r.left, r.top, rowRight(4 + i).toFloat(), r.bottom), margin = 6f)
         }
     }
 
