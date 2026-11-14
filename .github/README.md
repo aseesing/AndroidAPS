@@ -13,8 +13,11 @@
 </tr>
 <tr>
 <td align="center" width="33%"><img src="images/wilds_weather.gif" width="220" alt="Wilds Weather: a beating heart, sun and weather"><br><b>Wilds Weather</b><br><sub>a beating heart, sun and weather</sub></td>
-<td align="center" width="33%"><img src="images/aaps_hr_steps.gif" width="220" alt="AAPS HR Steps: an analog clock, heart rate and steps on the watch"><br><b>AAPS HR Steps</b><br><sub>an analog clock, heart rate and steps on the watch</sub></td>
-<td align="center" width="33%"><sub>Each picture is drawn by the watch's own code, wake-up animation and all, by <code>ReadmeAnimationsTest</code>. The same code draws the live preview on the phone.</sub></td>
+<td align="center" width="33%"><img src="images/grand_complication_day.gif" width="220" alt="Grand Complication Day: a dress watch, the real sun and moon over a horizon"><br><b>Grand Complication Day</b><br><sub>a dress watch, the real sun and moon</sub></td>
+<td align="center" width="33%"><img src="images/grand_complication_night.gif" width="220" alt="Grand Complication Night: midnight blue and gold, a low battery hand blinks"><br><b>Grand Complication Night</b><br><sub>midnight blue and gold, a low battery blinks</sub></td>
+</tr>
+<tr>
+<td align="center" colspan="3"><sub>Each picture is drawn by the watch's own code, wake-up animation and all, by <code>ReadmeAnimationsTest</code>. The same code draws the live preview on the phone.</sub></td>
 </tr>
 </table>
 
@@ -29,7 +32,8 @@ OnePlus Watch 2R and other round Wear OS watches.
 | 📱 | **Live preview in AAPS** | The phone shows your watch face as it looks on the watch now, animation and all. |
 | ⚙️ | **Watch face settings in AAPS** | Set up the watch face on the phone and see it at once. Changes on the watch come back. |
 | 🌗 | **Day face and night face** | One face for the day, one for the night, with the weather, the sun and the moon. |
-| 🎨 | **Five designs** | Cyberpunk Tech, Weather and Yellow, Wilds Weather and AAPS HR Steps. |
+| 🎨 | **Six designs** | Cyberpunk Tech, Weather and Yellow, Wilds Weather, and the analog Grand Complication for day and night. |
+| 🌙 | **The real sun and moon** | They rise and set over a horizon as in the sky, the moon in its real phase, worked out on the watch. |
 | 🔋 | **Battery on the face** | Phone and watch battery side by side. A low one blinks. |
 | ❤️ | **Heart rate and steps** | On the watch face, from what the watch measures anyway. |
 | 🪫 | **Longer watch battery** | Fewer redraws and fewer messages from the phone. |
