@@ -33,6 +33,7 @@ as before.
 | `local/wear-phone-battery` | Phone and watch battery icons on the Cyberpunk and Wilds designs, blinking when low |
 | `local/wear-live-preview` | Phone: live preview of the Custom watch face, its settings set on the phone and synced with the watch |
 | `local/wear-grand-complication` | The analog *Grand Complication* designs (day and night, Bodoni Moda), the real sun and moon (`sun_cycle`, `moon_cycle`); *AAPS HR Steps* removed |
+| `local/wear-preview-slots` | Phone: the live preview draws the complication slots (heart rate, steps) where the watch's system draws them |
 
 `master` of this fork is a plain copy of upstream `master`.
 
