@@ -741,9 +741,6 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         }
     }
 
-    /** A 1 x 1 transparent picture: shown where the watch would otherwise draw its own picture. */
-    protected fun blankPng(): ByteArray = pngBytes(createBitmap(1, 1).apply { eraseColor(Color.TRANSPARENT) })
-
     /**
      * The sun, in the style of the logo: a warm yellow disc with a dark ring, and a red and a cyan
      * copy of the ring just beside it, like a glitch. [SUN_PX] pixels for the [SUN_SIZE] view.

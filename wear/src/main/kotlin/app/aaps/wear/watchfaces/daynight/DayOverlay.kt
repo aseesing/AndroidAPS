@@ -90,7 +90,8 @@ object DayOverlay {
         return result
     }
 
-    private fun merge(target: JSONObject, overlay: JSONObject) {
+    /** Merges [overlay] into [target], as described above. Also used for the colour looks (`ColourLooks`). */
+    internal fun merge(target: JSONObject, overlay: JSONObject) {
         overlay.keys().forEach { key ->
             val value = overlay.opt(key)
             val current = target.optJSONObject(key)

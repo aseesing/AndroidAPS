@@ -59,6 +59,7 @@ val wearShared = listOf(
     "watchfaces/animation/WakeFrameLayers.kt",
     "watchfaces/animation/WakeLength.kt",
     "watchfaces/animation/WakeTimer.kt",
+    "watchfaces/colour/ColourLooks.kt",
     "watchfaces/daynight/DayNightChoice.kt",
     "watchfaces/daynight/DayNightClock.kt",
     "watchfaces/daynight/DayOverlay.kt",

@@ -77,6 +77,7 @@ import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeFrameParts
 import app.aaps.wear.watchfaces.animation.WakeLength
+import app.aaps.wear.watchfaces.colour.ColourLooks
 import app.aaps.wear.watchfaces.daynight.DayNightChoice
 import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.DayOverlay
@@ -149,6 +150,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private val parsedNightJson = ParsedJsonCache()
     /** The look the views carry: day or night, and the weather (see [DayOverlay]). */
     private var styleLook: Pair<Boolean, String?> = Pair(false, null)
+    private val colourLooks = ColourLooks() // PERSONAL PATCH: the colours chosen on the watch
+    private var styleColours: List<String> = emptyList() // PERSONAL PATCH
     /** The look [styleLook] of [lookJsonSource], made once per design and look. */
     private var lookJson: JSONObject? = null
     private var lookJsonSource: JSONObject? = null
@@ -321,6 +324,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     add(DayNightChoice.activeRow())
                     add(DayNightChoice.alwaysOnRow())
                 }
+                addAll(ColourLooks.rows(json)) // PERSONAL PATCH: colours, only those the design offers
             }
         }
 
@@ -437,7 +441,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
          */
         internal const val USE_DEFAULT_TYPE_PRIORITY = "default"
 
-
+        /**
+         * PERSONAL PATCH: every on/off preference that a design can carry in its metadata, with that
+         * metadata entry, as the watch labels it. The phone offers all of them (`CwfSyncedSettings`).
+         */
+        internal fun metadataToggles(): List<Pair<CwfMetadataKey, WatchFaceSettingRow.Toggle>> =
+            PrefMap.entries.mapNotNull { pref -> pref.metadataKey?.let { key -> pref.toggle()?.let { key to it } } }
     }
 
     override fun createUserStyleSchema(): UserStyleSchema = complications.createUserStyleSchema()
@@ -1232,7 +1241,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 }
                 val face = NightFace.choose(main, nightFace) { showDay }
                 showsNightFace = face !== main
-                val design = (if (showsNightFace) parsedNightJson else parsedJson).parse(face.json)
+                val colours = ColourLooks.choices { key, default -> sp.getString(key, default) } // PERSONAL PATCH
+                val design = colourLooks.apply((if (showsNightFace) parsedNightJson else parsedJson).parse(face.json), colours) // PERSONAL PATCH: colours
                 val day = DayOverlay.hasDayLook(design) && showDay
                 // And the weather, when the design has looks for it
                 val weather = if (DayOverlay.hasWeatherLooks(design)) storedWeather() else null
@@ -1253,11 +1263,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     jsonString = ""
                     styleOwner = this
                 }
-                if (!sourceResData.isEquals(face.resData) || jsonString != face.json || styleLook != look) {
+                if (!sourceResData.isEquals(face.resData) || jsonString != face.json || styleLook != look || styleColours != colours) { // PERSONAL PATCH: colours
                     sourceResData = face.resData
                     resDataMap = if (json !== design) DayOverlay.resources(face.resData, json, day) else face.resData
                     jsonString = face.json
                     styleLook = look
+                    styleColours = colours // PERSONAL PATCH
                     // The views now carry a different design. Anything holding pictures drawn from
                     // the previous one can tell by comparing this, without having to be told - see
                     // [styleId].
