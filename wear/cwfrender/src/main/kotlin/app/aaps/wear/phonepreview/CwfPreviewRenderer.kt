@@ -15,6 +15,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.toDrawable
 import app.aaps.wear.R
 import app.aaps.wear.complications.cwf.CwfFramePipeline
+import app.aaps.wear.health.HealthValues
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeLength
@@ -50,7 +51,16 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
      */
     private inner class Drawing {
 
-        val face = CustomWatchface().apply { prepareForRendering(host) }
+        /** The time of the frame being drawn, for the complication slots. */
+        var frameTime = System.currentTimeMillis()
+
+        private val slots = PreviewSlots(host, HealthValues.of(host), logger)
+
+        val face = CustomWatchface().apply {
+            prepareForRendering(host)
+            // The system draws the slots on the watch; here the preview draws them itself
+            slotPainter = { canvas -> slots.draw(canvas, this, frameTime) }
+        }
         val pipeline = CwfFramePipeline(host, logger) { face }
         val wakeAnimator = WakeAnimator(
             heartRate = { null }, // the phone does not measure it; the pulse uses the design's fallback
@@ -151,6 +161,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
     /** The face at [nowMs], [size] pixels wide and high: a frame of the animation while it plays. */
     fun frame(size: Int, nowMs: Long = System.currentTimeMillis()): Bitmap {
         val drawing = drawing()
+        drawing.frameTime = nowMs
         // The kept layer pictures have the old size: the screen turned, or another screen shows the preview
         if (size != drawing.size) {
             drawing.size = size
