@@ -7,13 +7,12 @@ package app.aaps.wear.watchfaces.settingsync
 import android.content.res.Resources
 import androidx.annotation.ArrayRes
 import androidx.annotation.StringRes
-import app.aaps.core.interfaces.InterfacesStringIds
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.sharedPreferences.SP
-import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.wear.R
 import app.aaps.wear.watchfaces.CustomWatchface
-import app.aaps.wear.watchfaces.animation.WakeLength
+import app.aaps.wear.watchfaces.colour.ColourLooks
+import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
 
 /*
  * The settings of the Custom watch face that the phone can set too, see `CwfSettingsSync`.
@@ -69,45 +68,39 @@ sealed interface CwfSyncedSetting {
 object CwfSyncedSettings {
 
     /**
-     * How the face looks: the rows of the watch's own settings menu of the Custom watch face, without
-     * the complication pickers (they need the watch) and without the day / night look (the phone
-     * has its own settings for those, sent in `EventData.Preferences`).
+     * Watch settings the phone does not offer, though the watch menu has them: the simplified view
+     * (it needs the watch), and the day / night look (the phone has its own settings for those, sent in
+     * `EventData.Preferences`). The complication pickers and the type priority have no value, so they
+     * are never offered.
      */
-    val faceLook: List<CwfSyncedSetting> = listOf(
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_SECONDS, R.string.key_show_seconds, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_WEEK_NUMBER, R.string.key_show_week_number, false),
-        CwfSyncedSetting.Toggle(R.string.key_dark, R.string.pref_dark, true),
-        CwfSyncedSetting.Toggle(R.string.key_match_divider, R.string.pref_matching_divider, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DATE, R.string.key_show_date, false),
-        CwfSyncedSetting.Toggle(R.string.key_switch_external, R.string.pref_switch_external, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION1, R.string.key_show_complication_1, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2, R.string.key_show_complication_2, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3, R.string.key_show_complication_3, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION4, R.string.key_show_complication_4, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5, R.string.key_show_complication_5, false),
-        CwfSyncedSetting.Toggle(R.string.key_include_external, R.string.pref_include_external, false),
-        WakeLength.row().let { CwfSyncedSetting.Choice(it.key, it.title, it.entries, it.entryValues, it.defaultValue) }
-    )
+    private val NOT_SYNCED = setOf(R.string.key_simplify_ui, R.string.key_day_night_look, R.string.key_day_night_always_on)
 
-    /** Which values the face shows: the watch's "Display" settings, which a design can also carry. */
-    val shownValues: List<CwfSyncedSetting.Toggle> = listOf(
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_BG, R.string.key_show_bg, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DIRECTION, R.string.key_show_direction, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_AGO, R.string.key_show_ago, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DELTA, R.string.key_show_delta, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_AVG_DELTA, R.string.key_show_avg_delta, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DETAILED_DELTA, R.string.key_show_detailed_delta, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_IOB, R.string.key_show_iob, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_DETAILED_IOB, R.string.key_show_detailed_iob, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COB, R.string.key_show_cob, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_BGI, R.string.key_show_bgi, false),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_TEMP_BASAL, R.string.key_show_temp_basal, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_TEMP_TARGET, R.string.key_show_temp_target, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_RESERVOIR_LEVEL, R.string.key_show_reservoir_level, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_LOOP_STATUS, R.string.key_show_external_status, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_UPLOADER_BATTERY, R.string.key_show_uploader_battery, true),
-        metadataToggle(CwfMetadataKey.CWF_PREF_WATCH_SHOW_RIG_BATTERY, R.string.key_show_rig_battery, false)
-    )
+    /**
+     * How the face looks: every setting row of the watch's own Custom watch face menu, read from that
+     * menu, so a new row there (like the colours of [ColourLooks]) is offered by the phone too, with no
+     * change here. Those of [NOT_SYNCED] are left out. [faceLookFor] keeps the ones a design uses.
+     */
+    val faceLook: List<CwfSyncedSetting> = run {
+        val metadataKeys = CustomWatchface.metadataToggles().associate { (metadataKey, toggle) -> toggle.key to metadataKey }
+        CustomWatchface.settingRows(null, systemEditor = true, hasNightFace = false).filter { it.key !in NOT_SYNCED }.mapNotNull { row ->
+            when (row) {
+                is WatchFaceSettingRow.Toggle -> CwfSyncedSetting.Toggle(row.key, row.title, row.defaultValue, metadataKeys[row.key])
+                is WatchFaceSettingRow.Choice -> CwfSyncedSetting.Choice(row.key, row.title, row.entries, row.entryValues, row.defaultValue)
+                else                          -> null
+            }
+        }
+    }
+
+    /**
+     * Which values the face shows: the watch's "Display" settings, which a design can also carry. Every
+     * on/off setting a design can carry in its metadata ([CustomWatchface.metadataToggles]) that is not
+     * already in [faceLook].
+     */
+    val shownValues: List<CwfSyncedSetting.Toggle> = run {
+        val inFaceLook = faceLook.map { it.key }.toSet()
+        CustomWatchface.metadataToggles().filter { (_, toggle) -> toggle.key !in inFaceLook && toggle.key !in NOT_SYNCED }
+            .map { (metadataKey, toggle) -> CwfSyncedSetting.Toggle(toggle.key, toggle.title, toggle.defaultValue, metadataKey) }
+    }
 
     val all: List<CwfSyncedSetting> = faceLook + shownValues
 
@@ -119,14 +112,6 @@ object CwfSyncedSettings {
         val used = CustomWatchface.settingRows(json, systemEditor = true, hasNightFace = false).map { it.key }.toSet()
         return faceLook.filter { it.key in used }
     }
-
-    /** A toggle a design can carry: labelled with the same string the phone and the watch use for it. */
-    private fun metadataToggle(metadataKey: CwfMetadataKey, @StringRes key: Int, default: Boolean): CwfSyncedSetting.Toggle =
-        CwfSyncedSetting.Toggle(key, titleOf(metadataKey), default, metadataKey)
-
-    @StringRes private fun titleOf(metadataKey: CwfMetadataKey): Int =
-        (metadataKey.label as? TextRef.Named)?.let { InterfacesStringIds.idOf(it.name) }
-            ?: error("No string for ${metadataKey.name}")
 }
 
 /**

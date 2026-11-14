@@ -9,6 +9,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.BatteryManager
@@ -44,10 +46,12 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * What every design test of a Custom watch face shares: sample data, a render-only face that shows a
@@ -257,6 +261,74 @@ abstract class CwfDesignBase {
     }
 
 
+
+    // ------------------------------------------------------------------------------------------
+    // Drawing helpers that several designs share
+    // ------------------------------------------------------------------------------------------
+
+    /** A 1 x 1 transparent picture: shown where the watch would otherwise draw its own picture. */
+    protected fun blankPng(): ByteArray = pngBytes(createBitmap(1, 1).apply { eraseColor(Color.TRANSPARENT) })
+
+    /** A point at [radius] and [angle] (degrees from straight up, clockwise) around [cx], [cy], in the design space. */
+    protected fun polar(cx: Float, cy: Float, radius: Float, angle: Float): Pair<Float, Float> {
+        val a = Math.toRadians(angle.toDouble())
+        return Pair(cx + radius * sin(a).toFloat(), cy - radius * cos(a).toFloat())
+    }
+
+    /**
+     * Where a text view of [size] in [typeface] goes so that its digits and capitals stand in the middle of [box]: its
+     * top and its height. Measured with the font itself, the way the watch lays the text out:
+     *
+     * - A TextView centres its whole line, with the room the font keeps above for accents and below for
+     *   descenders (the font padding). Digits and capitals have neither, so they would stand too low: the
+     *   view is moved up by the difference.
+     * - A TextView only centres when the line fits in the view; otherwise it puts the text at the top. So
+     *   the view is as high as the whole line, which can be higher than [box].
+     */
+    protected fun centredText(box: RectF, size: Int, typeface: Typeface): Pair<Int, Int> {
+        val paint = Paint().apply { textSize = size.toFloat(); this.typeface = typeface }
+        val line = paint.fontMetricsInt
+        val height = maxOf(box.height().toInt(), line.bottom - line.top + 2)
+        val glyphs = Rect().also { paint.getTextBounds("0H", 0, 2, it) }
+        val baseline = (height - (line.bottom - line.top)) / 2 - line.top
+        val middle = baseline + (glyphs.top + glyphs.bottom) / 2f
+        return Pair(Math.round(box.centerY() - middle), height)
+    }
+
+    /**
+     * The moon at [phase] (0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter): the lit part in pale
+     * gold, lit on the right while it grows (as seen from the north). The dark part is only a faint disc,
+     * so the moon can be found even at new moon. A view of [viewSize] at 2 x.
+     */
+    protected fun moonPicture(phase: Double, viewSize: Int): ByteArray {
+        val size = (viewSize * SCALE).toInt()
+        val image = createBitmap(size, size).apply { eraseColor(Color.TRANSPARENT) }
+        val canvas = Canvas(image)
+        val c = size / 2f
+        val r = c * 0.7f
+        canvas.drawCircle(c, c, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 241, 230, 192) })
+        val k = cos(2 * PI * phase).toFloat()
+        val waxing = phase < 0.5
+        val lit = Path()
+        val steps = 40
+        // The lit edge: half the rim on the lit side, from the top to the bottom
+        for (i in 0..steps) {
+            val a = -PI / 2 + PI * i / steps
+            val x = r * cos(a).toFloat()
+            val y = r * sin(a).toFloat()
+            val px = if (waxing) c + x else c - x
+            if (i == 0) lit.moveTo(px, c + y) else lit.lineTo(px, c + y)
+        }
+        // Back along the shadow line, an ellipse, from the bottom to the top
+        for (i in 0..steps) {
+            val y = r - 2 * r * i / steps
+            val half = k * sqrt((r * r - y * y).coerceAtLeast(0f))
+            lit.lineTo(if (waxing) c + half else c - half, c + y)
+        }
+        lit.close()
+        canvas.drawPath(lit, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F1E6C0") })
+        return pngBytes(image)
+    }
 
     protected fun rectOf(view: JSONObject) = RectF(
         view.getInt("leftmargin").toFloat(), view.getInt("topmargin").toFloat(),
