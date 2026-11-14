@@ -46,6 +46,7 @@ import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin.Companion.RESEND_DEBOUNCE
 import app.aaps.plugins.sync.wear.compose.WearComposeContent
 import app.aaps.plugins.sync.wear.keys.WearDayNightKey
+import app.aaps.plugins.sync.wear.keys.WearDesignImportKey // PERSONAL PATCH: design import
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
 import app.aaps.plugins.sync.wear.receivers.WearDataReceiver
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
@@ -104,7 +105,7 @@ class WearPlugin(
         .pluginName(CoreUiStrings.wear)
         .description(SyncStrings.description_wear)
         .composeContent { WearComposeContent() },
-    ownPreferences = WearDayNightKey.entries + WearNightFaceKey.entries, // PERSONAL PATCH: day and night face
+    ownPreferences = WearDayNightKey.entries + WearNightFaceKey.entries + WearDesignImportKey.entries, // PERSONAL PATCH: day and night face, design import
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
 
