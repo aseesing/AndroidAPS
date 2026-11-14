@@ -6,12 +6,19 @@ package app.aaps.wear.phonepreview
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Color
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import app.aaps.wear.R
+import app.aaps.wear.health.HealthValues
+import app.aaps.wear.watchfaces.COB_SLOT_ID
+import app.aaps.wear.watchfaces.HEART_RATE_SLOT_ID
+import app.aaps.wear.watchfaces.IOB_SLOT_ID
+import app.aaps.wear.watchfaces.STEPS_SLOT_ID
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,6 +33,7 @@ import java.time.Duration
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
 
 /**
@@ -181,6 +189,72 @@ class CwfPreviewRendererTest {
         val after = renderer.frame(SIZE, now)
         save(after, "new_value")
         assertThat(after.sameAs(before)).isFalse()
+    }
+
+    /** A still renderer named [name] with [designName], and the heart rate and steps kept in its health values when given. */
+    private fun slotRenderer(name: String, designName: String, heartRate: Int?, steps: Long?): CwfPreviewRenderer {
+        val now = System.currentTimeMillis()
+        RuntimeEnvironment.getApplication().getSharedPreferences("${name}_aaps_health_values", Application.MODE_PRIVATE).edit().apply {
+            heartRate?.let { putInt("heart_rate", it).putLong("heart_rate_at", now) }
+            steps?.let { putLong("steps", it).putLong("steps_at", now) }
+        }.commit()
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), name)
+        renderer.watchSettings.edit().putString(lengthKey, "0").commit()
+        values(now).forEach(renderer::apply)
+        renderer.setDesign(design(designName))
+        return renderer
+    }
+
+    /** How many pixels in the box (left, top, right, bottom in the 400 design space) of [frame] have about the colour [hex]. */
+    private fun count(frame: Bitmap, box: IntArray, hex: String): Int {
+        val c = Color.parseColor(hex)
+        var n = 0
+        for (y in box[1] * SIZE / 400 until box[3] * SIZE / 400) for (x in box[0] * SIZE / 400 until box[2] * SIZE / 400) {
+            val p = frame.getPixel(x, y)
+            if (abs(Color.red(p) - Color.red(c)) < 50 && abs(Color.green(p) - Color.green(c)) < 50 && abs(Color.blue(p) - Color.blue(c)) < 50) n++
+        }
+        return n
+    }
+
+    @Test
+    fun theStepsSlotShowsTheKeptValueOrNoValue() {
+        // Grand Complication: the steps window at 6 o'clock is slot 2, in the ink of the design
+        val window = intArrayOf(144, 320, 256, 348)
+        val ink = "#1C2A5A"
+        val now = System.currentTimeMillis()
+        val withSteps = slotRenderer("cwf_preview_steps", "Grand_Complication_Day", heartRate = null, steps = 6482).frame(SIZE, now)
+        val without = slotRenderer("cwf_preview_no_steps", "Grand_Complication_Day", heartRate = null, steps = null).frame(SIZE, now)
+        save(withSteps, "slot_steps")
+        save(without, "slot_no_steps")
+        // The number and the icon of the source are drawn; without a value only the icon and the source's "no value" text
+        assertThat(count(withSteps, window, ink)).isGreaterThan(count(without, window, ink) + 40)
+        assertThat(count(without, window, ink)).isGreaterThan(0)
+    }
+
+    @Test
+    fun theHeartRateRowOfACyberpunkDesignIsDrawn() {
+        // Cyberpunk Tech: heart rate is slot 1, a row of the table, in white
+        val row = intArrayOf(254, 204, 359, 230)
+        val now = System.currentTimeMillis()
+        val withHeart = slotRenderer("cwf_preview_heart", "Cyberpunk_Tech", heartRate = 72, steps = null).frame(SIZE, now)
+        val without = slotRenderer("cwf_preview_no_heart", "Cyberpunk_Tech", heartRate = null, steps = null).frame(SIZE, now)
+        save(withHeart, "slot_heart")
+        assertThat(count(withHeart, row, "#FFFFFF")).isGreaterThan(count(without, row, "#FFFFFF") + 20)
+    }
+
+    @Test
+    fun eachSlotShowsItsDefaultSource() {
+        val app = RuntimeEnvironment.getApplication()
+        app.getSharedPreferences("slots_test_aaps_health_values", Application.MODE_PRIVATE).edit()
+            .putInt("heart_rate", 72).putLong("heart_rate_at", System.currentTimeMillis()).commit()
+        val slots = PreviewSlots(PreviewHost(app, mock(), "slots_test"), HealthValues.of(PreviewHost(app, mock(), "slots_test")), mock())
+        // Heart rate and steps, in the type the source sends by default
+        val heart = slots.dataFor(HEART_RATE_SLOT_ID) as RangedValueComplicationData
+        assertThat(heart.value).isEqualTo(72f)
+        assertThat(slots.dataFor(STEPS_SLOT_ID)).isInstanceOf(RangedValueComplicationData::class.java)
+        // Carbs and insulin come from other sources: the phone does not stand in for them, as before
+        assertThat(slots.dataFor(COB_SLOT_ID)).isNull()
+        assertThat(slots.dataFor(IOB_SLOT_ID)).isNull()
     }
 
     private fun bg(now: Long, text: String, mgdl: Double) = EventData.SingleBg(
