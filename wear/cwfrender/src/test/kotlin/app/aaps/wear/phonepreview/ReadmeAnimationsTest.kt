@@ -63,7 +63,8 @@ class ReadmeAnimationsTest {
         Face("Cyberpunk_Weather", "cyberpunk_weather", weather = EventData.Weather.PARTLY),
         Face("Cyberpunk_Yellow", "cyberpunk_yellow", phoneBattery = 15),
         Face("Wilds_Weather", "wilds_weather"),
-        Face("AAPS_HR_Steps", "aaps_hr_steps", animated = false)
+        Face("Grand_Complication_Day", "grand_complication_day", animated = false),
+        Face("Grand_Complication_Night", "grand_complication_night", weather = EventData.Weather.PARTLY, phoneBattery = 15)
     )
 
     @Test

@@ -2232,7 +2232,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         WATCH_BATTERY(WatchBatteryLevel.KEY, 0.0, 100.0), // PERSONAL PATCH
         MOON_PHASE(JsonKeyValues.MOON_PHASE.key, 0.0, 1.0),
         SUN_PROGRESS(JsonKeyValues.SUN_PROGRESS.key, 0.0, 1.0),
-        NIGHT_PROGRESS(JsonKeyValues.NIGHT_PROGRESS.key, 0.0, 1.0);
+        NIGHT_PROGRESS(JsonKeyValues.NIGHT_PROGRESS.key, 0.0, 1.0),
+        SUN_CYCLE(JsonKeyValues.SUN_CYCLE.key, 0.0, 1.0), // PERSONAL PATCH
+        MOON_CYCLE(JsonKeyValues.MOON_CYCLE.key, 0.0, 1.0); // PERSONAL PATCH
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2333,6 +2335,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.MOON_PHASE       -> MoonPhase.at(cwf.renderNow())
             ValueMap.SUN_PROGRESS     -> cwf.dayNight.sunProgress(cwf.renderNow())
             ValueMap.NIGHT_PROGRESS   -> cwf.dayNight.nightProgress(cwf.renderNow())
+            ValueMap.SUN_CYCLE        -> cwf.dayNight.sunCycle(cwf.renderNow()) // PERSONAL PATCH
+            ValueMap.MOON_CYCLE       -> cwf.dayNight.moonCycle(cwf.renderNow()) // PERSONAL PATCH
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->

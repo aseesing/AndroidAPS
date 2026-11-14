@@ -67,6 +67,38 @@ class DayNightClock(
         return ((epochMs - start.toEpochMilli()).toDouble() / length).coerceIn(0.0, 1.0)
     }
 
+    /**
+     * Where the sun is in its round at [epochMs] (see [SkyCycle]): 0 at sunrise, 0.5 at sunset, 1 at
+     * the next sunrise. The day is the first half, the night the second, so a picture of the sun can go
+     * over the horizon by day and under it at night.
+     */
+    fun sunCycle(epochMs: Long): Double =
+        if (isDay(epochMs)) sunProgress(epochMs) / 2 else 0.5 + nightProgress(epochMs) / 2
+
+    private var cachedMoonMinute = Long.MIN_VALUE
+    private var cachedMoonPlace: GeoPoint? = null
+    private var cachedMoon = 0.0
+
+    /**
+     * Where the moon is in its round at [epochMs] (see [SkyCycle]): 0 at moonrise, 0.5 at moonset, 1
+     * at the next moonrise. Worked out for the stored place, once per minute. The real moon rises at
+     * any hour: a full moon around sunset, a new moon around sunrise.
+     *
+     * Without a place the moon follows the sun, late by its phase: a day of 24 hours for a whole cycle
+     * of the moon. That is close to the real moon at a place near the equator.
+     */
+    fun moonCycle(epochMs: Long): Double {
+        val place = location()?.takeIf { it.isValid() }
+            ?: return sunCycle(epochMs - (MoonPhase.at(epochMs) * DAY_MS).toLong())
+        val minute = epochMs / MINUTE_MS
+        if (minute == cachedMoonMinute && place == cachedMoonPlace) return cachedMoon
+        return SkyCycle.at(epochMs) { MoonPosition.heightAboveRise(it, place.latitude, place.longitude) }.also {
+            cachedMoonMinute = minute
+            cachedMoonPlace = place
+            cachedMoon = it
+        }
+    }
+
     /** From when to when the sun is up. */
     private data class Daylight(val start: Instant, val end: Instant)
 
@@ -103,5 +135,8 @@ class DayNightClock(
 
         val FALLBACK_DAY_START: LocalTime = LocalTime.of(7, 0)
         val FALLBACK_DAY_END: LocalTime = LocalTime.of(19, 0)
+
+        private const val MINUTE_MS = 60_000L
+        private const val DAY_MS = 24 * 60 * MINUTE_MS
     }
 }
