@@ -35,6 +35,7 @@ as before.
 | `local/wear-grand-complication` | The analog *Grand Complication* designs (day and night, Bodoni Moda), the real sun and moon (`sun_cycle`, `moon_cycle`); *AAPS HR Steps* removed |
 | `local/wear-preview-slots` | Phone: the live preview draws the complication slots (heart rate, steps) where the watch's system draws them |
 | `local/wear-loop-time` | Phone: the loop time sent to the watch is kept across loop runs, so the face does not show "LOOP --" while a run waits for the pump |
+| `local/wear-design-import` | Phone: a button in the list of watch face designs imports zips from Google Drive (file picker) into AAPS/export, replacing the old ones |
 
 `master` of this fork is a plain copy of upstream `master`.
 

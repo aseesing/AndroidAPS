@@ -580,6 +580,7 @@ wear_custom_watchface_autorization|BooleanKey|true
 wear_cwf_always_on_look|WearDayNightKey|true
 wear_cwf_author_version|StringNonKey|true
 wear_cwf_day_night_look|WearDayNightKey|true
+wear_cwf_design_import_last_picked|WearDesignImportKey|false
 wear_cwf_filename|StringNonKey|true
 wear_cwf_night_author_version|WearNightFaceKey|true
 wear_cwf_night_filename|WearNightFaceKey|true

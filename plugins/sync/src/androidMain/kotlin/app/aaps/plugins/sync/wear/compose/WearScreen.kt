@@ -138,6 +138,7 @@ internal fun WearScreen(
                             )
                         }
                     }
+                    if (subScreen == SubScreen.IMPORT_LIST) DesignImportAction(viewModel) // PERSONAL PATCH: import designs from Google Drive
                 }
             )
         )

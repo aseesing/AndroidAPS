@@ -1,6 +1,8 @@
 package app.aaps.plugins.sync.wear.compose
 
+import android.content.ContentResolver // PERSONAL PATCH: import designs from Google Drive
 import android.graphics.BitmapFactory
+import android.net.Uri // PERSONAL PATCH: import designs from Google Drive
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
@@ -395,5 +397,21 @@ class WearViewModel(
     /** The watch forgets its night face and shows the main face day and night. */
     fun clearNightWatchface() {
         wearPlugin.clearNightWatchface(dateUtil.now())
+    }
+
+    // ---- PERSONAL PATCH: import designs from Google Drive, see CwfDesignImport.kt ----
+
+    private val designImport = CwfDesignImport(fileListProvider, preferences, rh, aapsLogger)
+
+    /** The last zip picked for import, so the file picker opens in its folder again. */
+    fun lastPickedDesign(): String? = designImport.lastPicked()
+
+    /** Copies the picked zips into AAPS/export, says how it went, and shows the list again with the new designs. */
+    fun importDesigns(contentResolver: ContentResolver, uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            _toastEvent.emit(designImport.importFrom(contentResolver, uris))
+            loadWatchfaceFiles()
+        }
     }
 }

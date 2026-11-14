@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
+<!--
+    Personal strings for the import of watch face designs from Google Drive, not in upstream AAPS.
+    Kept apart from strings.xml so that a new AAPS release merges without conflicts in that file.
+    English only.
+-->
+<resources>
+    <string name="wear_design_import" comment="Button in the list of watch face designs: opens the file picker to copy new design zips into AAPS/export">Import designs from Google Drive or files</string>
+    <string name="wear_design_import_done" comment="%1$d=number of design zips copied into AAPS/export. Example: Designs imported: 6">Designs imported: %1$d</string>
+    <string name="wear_design_import_partly" comment="%1$d=number of design zips copied, %2$s=file names that were left out. Example: Designs imported: 5. Not imported: notes.txt">Designs imported: %1$d. Not imported: %2$s</string>
+    <string name="wear_design_import_no_folder">Choose the AAPS directory first. The designs are copied to its export folder.</string>
+</resources>
