@@ -24,7 +24,7 @@ as before.
 |---|---|
 | `local/personal` | **The branch to build.** All changes below, merged. |
 | `local/wear-battery` | Less battery use on the watch, fewer messages from the phone |
-| `local/wear-hr-steps-design` | Heart rate and steps on the watch face, design *AAPS HR Steps* |
+| `local/wear-hr-steps-design` | Heart rate and steps on the watch face (its design *AAPS HR Steps* was removed later) |
 | `local/wear-wake-animation` | Wake-up animation, design *AAPS Tech* (now *Cyberpunk*), and later design updates |
 | `local/wear-day-night` | Day and weather looks, sun and moon on the edge |
 | `local/wear-day-night-faces` | A day face and a night face, chosen in AAPS; the four Cyberpunk and Wilds designs |
@@ -32,15 +32,16 @@ as before.
 | `local/wear-fast-wake` | Fast first frame after a wake, and the header that marks our own files |
 | `local/wear-phone-battery` | Phone and watch battery icons on the Cyberpunk and Wilds designs, blinking when low |
 | `local/wear-live-preview` | Phone: live preview of the Custom watch face, its settings set on the phone and synced with the watch |
+| `local/wear-grand-complication` | The analog *Grand Complication* designs (day and night, Bodoni Moda), the real sun and moon (`sun_cycle`, `moon_cycle`); *AAPS HR Steps* removed |
 
 `master` of this fork is a plain copy of upstream `master`.
 
 ## Tests
 
 All changes have JVM / Robolectric tests in the `wear`, `plugins/sync` and `ui` modules. The designs are
-built by tests (`CwfTechDesignTest`, `CwfHrStepsDesignTest`) that render the real watch face. These
-tests check, for example, that no text is cut off, that all values in the table line up, and that
-the rain does not make the table hard to read.
+built by tests (`CwfTechDesignTest`, `CwfGrandDayDesignTest`, ...) that render the real watch face.
+These tests check, for example, that no text is cut off, that all values in the table line up, that
+the rain does not make the table hard to read, and that the glucose hand points at the value.
 
 ## Updating to a new upstream version
 
