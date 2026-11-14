@@ -117,6 +117,7 @@ import app.aaps.core.ui.compose.LightGeneralColors
 import app.aaps.core.ui.extensions.generateCOBString
 import app.aaps.core.ui.extensions.toStringShort
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.plugins.sync.wear.LastLoopEnact // PERSONAL PATCH
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -1680,7 +1681,7 @@ class DataHandlerMobile(
         val rigBattery = processedDeviceStatusData.uploaderStatus.trim { it <= ' ' }
         //OpenAPS status
         val openApsStatus =
-            if (config.APS) loop.lastRun?.let { if (it.lastTBREnact != 0L) it.lastTBREnact else -1 } ?: -1
+            if (config.APS) lastLoopEnact.remember(loop.lastRun?.let { if (it.lastTBREnact != 0L) it.lastTBREnact else -1 } ?: -1) // PERSONAL PATCH: not "--" while a run waits for the pump
             else processedDeviceStatusData.openApsTimestamp
         // Instance name for followers
         val instanceName = preferences.get(StringKey.GeneralInstanceName)
@@ -2065,6 +2066,8 @@ class DataHandlerMobile(
         )
 
     internal fun lastSentToWear(): List<EventData> = unchangedToWear.lastSeen() + listOfNotNull(lastWeather) // PERSONAL PATCH: live watch face preview
+
+    private val lastLoopEnact = LastLoopEnact() // PERSONAL PATCH: the loop time for the watch, kept across loop runs
 }
 
 /**
