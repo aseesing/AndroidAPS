@@ -71,6 +71,7 @@ import app.aaps.wear.tile.UserActionTileService
 import app.aaps.wear.watchfaces.PushedFace
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import app.aaps.wear.watchfaces.daynight.DayNightChoice
+import app.aaps.wear.watchfaces.daynight.StoredWeather
 import com.google.android.gms.wearable.WearableListenerService
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -312,10 +313,7 @@ class DataHandlerWear(
         }
         // Private patch: the weather for the look of the Custom watch face. The face reads it on its
         // next refresh (every minute), so nothing else needs to be told.
-        onEvent<EventData.Weather> {
-            if (sp.getString(R.string.key_weather_kind, "") != it.kind) sp.putString(R.string.key_weather_kind, it.kind)
-            sp.putLong(R.string.key_weather_time, it.timeStamp)
-        }
+        onEvent<EventData.Weather> { StoredWeather.save(sp, it) }
         onEvent<EventData.QuickWizard> {
             val serialized = it.serialize()
             if (serialized != sp.getString(R.string.key_quick_wizard_data, "")) {

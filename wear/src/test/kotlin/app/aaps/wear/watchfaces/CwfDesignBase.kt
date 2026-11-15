@@ -94,26 +94,34 @@ abstract class CwfDesignBase {
 
     protected val out = File("build/cwf-design").apply { mkdirs() }
 
-    /** One glucose sample: text, arrow, mg/dL value and level (1 high, 0 in range, -1 low). */
-    protected data class Sample(val text: String = "6,7", val arrow: String = "→", val mgdl: Double = 120.0, val level: Long = 0)
+    /** One glucose sample: text, arrow, mg/dL value, level (1 high, 0 in range, -1 low) and the delta in mg/dL (null: not sent). */
+    protected data class Sample(
+        val text: String = "6,7", val arrow: String = "→", val mgdl: Double = 120.0, val level: Long = 0, val deltaMgdl: Double? = null
+    )
 
     protected fun newFace() = CustomWatchface().apply { prepareForRendering(RuntimeEnvironment.getApplication()) }
 
-    protected fun storeSampleData(face: CustomWatchface, sample: Sample = Sample(), bgAgeMin: Long = 2, loopAgeMin: Long = 3, phoneBattery: String = PHONE_SAMPLE) = runBlocking {
+    /** Stores sample data in [face]. [adjustStatus] can change the status before it is stored, for values a design needs in addition. */
+    protected fun storeSampleData(
+        face: CustomWatchface, sample: Sample = Sample(), bgAgeMin: Long = 2, loopAgeMin: Long = 3, phoneBattery: String = PHONE_SAMPLE,
+        adjustStatus: (EventData.Status) -> EventData.Status = { it }
+    ) = runBlocking {
         val now = System.currentTimeMillis()
         val repository = face.complicationDataRepository
         repository.updateBgData(
             EventData.SingleBg(
                 dataset = 0, timeStamp = now - bgAgeMin * 60_000L, sgvString = sample.text, glucoseUnits = "mmol", slopeArrow = sample.arrow,
                 delta = "+0,2", deltaDetailed = "+0,2", avgDelta = "+0,1", avgDeltaDetailed = "+0,1", sgvLevel = sample.level, sgv = sample.mgdl,
-                high = 180.0, low = 70.0, color = 0
+                high = 180.0, low = 70.0, color = 0, deltaMgdl = sample.deltaMgdl
             )
         )
         repository.updateStatusData(
-            EventData.Status(
-                dataset = 0, externalStatus = "", iobSum = "1.25", iobDetail = "(0.90|0.35)", cob = "12g", currentBasal = "0.85U/h",
-                battery = phoneBattery, rigBattery = "--", openApsStatus = now - loopAgeMin * 60_000L, bgi = "-0.4", batteryLevel = 1,
-                tempTarget = "100", tempTargetLevel = 0, reservoirString = "120U", reservoir = 120.0, reservoirLevel = 0
+            adjustStatus(
+                EventData.Status(
+                    dataset = 0, externalStatus = "", iobSum = "1.25", iobDetail = "(0.90|0.35)", cob = "12g", currentBasal = "0.85U/h",
+                    battery = phoneBattery, rigBattery = "--", openApsStatus = now - loopAgeMin * 60_000L, bgi = "-0.4", batteryLevel = 1,
+                    tempTarget = "100", tempTargetLevel = 0, reservoirString = "120U", reservoir = 120.0, reservoirLevel = 0
+                )
             )
         )
         val points = ArrayList((0 until 36).map { i ->

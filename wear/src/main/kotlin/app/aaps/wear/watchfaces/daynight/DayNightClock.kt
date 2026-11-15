@@ -99,6 +99,22 @@ class DayNightClock(
         }
     }
 
+    /**
+     * The time of the next sunrise or sunset after [epochMs] at the stored place, whichever comes
+     * first. Null without a place (the fixed hours are no real sun times), and in a polar day or night
+     * when the sun does not rise or set in the next days.
+     */
+    fun nextSunEvent(epochMs: Long): Long? {
+        val place = location()?.takeIf { it.isValid() } ?: return null
+        val instant = Instant.ofEpochMilli(epochMs)
+        val today = instant.atZone(zone()).toLocalDate()
+        for (days in 0L..2L) {
+            val sun = sunOn(today.plusDays(days), place) as? SunTimes.Result.RiseAndSet ?: continue
+            listOf(sun.rise, sun.set).sorted().firstOrNull { it > instant }?.let { return it.toEpochMilli() }
+        }
+        return null
+    }
+
     /** From when to when the sun is up. */
     private data class Daylight(val start: Instant, val end: Instant)
 
@@ -132,6 +148,9 @@ class DayNightClock(
     private fun GeoPoint.isValid() = latitude in -90.0..90.0 && longitude in -180.0..180.0
 
     companion object {
+
+        /** The value of [nextSunEvent] for a design (`dynData`): a time, shown with `@time` (see `DesignTimeText`). */
+        const val NEXT_SUN_EVENT_KEY = "sun_next_time"
 
         val FALLBACK_DAY_START: LocalTime = LocalTime.of(7, 0)
         val FALLBACK_DAY_END: LocalTime = LocalTime.of(19, 0)

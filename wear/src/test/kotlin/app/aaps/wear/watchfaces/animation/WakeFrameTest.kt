@@ -72,7 +72,14 @@ class WakeFrameTest {
             override fun prepare() = layout()
             override fun background(canvas: Canvas) = drawOnly(canvas, 0)
             override fun data(canvas: Canvas, leaveOut: Set<String>) = drawOnly(canvas, *(listOf(1) - leaveOut.mapNotNull { it.toIntOrNull() }.toSet()).toIntArray())
-            override fun views(canvas: Canvas, keys: Set<String>) = drawOnly(canvas, *keys.mapNotNull { it.toIntOrNull() }.toIntArray())
+            override fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>) {
+                val turned = turns.mapNotNull { (key, degrees) -> key.toIntOrNull()?.let { views[it] }?.let { view -> Triple(view, view.rotation, degrees) } }
+                turned.forEach { (view, rotation, degrees) -> view.rotation = rotation + degrees }
+                drawOnly(canvas, *keys.mapNotNull { it.toIntOrNull() }.toIntArray())
+                turned.forEach { (view, rotation, _) -> view.rotation = rotation }
+            }
+
+            override fun rotation(key: String): Float? = key.toIntOrNull()?.let { views.getOrNull(it) }?.rotation
             override fun clockText(canvas: Canvas) = drawOnly(canvas, 2)
             override fun top(canvas: Canvas) = drawOnly(canvas, 3, 4)
             override fun secondHand(canvas: Canvas) = drawOnly(canvas, 5)
@@ -359,6 +366,61 @@ class WakeFrameTest {
                 for (ms in listOf(0L, 600L, 1100L, 1700L, 2600L)) assertWithMessage("$value at $ms").that(boxAt(ms)).isEqualTo(Color.BLUE)
             }
         }
+    }
+
+    @Test
+    fun aSweptHandTurnsUpAndComesBackToItsValue() {
+        var clock = 0L
+        val face = Face(context, 120)
+        val bitmap = createBitmap(120, 120)
+        val canvas = Canvas(bitmap)
+        // The blue box turns from 0 to 45 degrees and back: turned, its corner shows the background
+        val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { clock }).apply {
+            setDesign(WakeAnimationSpec(durationMs = 1000, sweep = listOf(SweepSpec(listOf("1"), emptyAngle = 0f, fullAngle = 45f, upMs = 200, settleMs = 300))))
+        }
+
+        fun cornerAt(ms: Long): Int? {
+            clock = ms
+            return if (animator.drawFrame(canvas, 120, 120, t0 + ms, 1, emptyList(), face.parts, true, true)) bitmap.getPixel(15, 15) else null
+        }
+        assertThat(cornerAt(0)).isEqualTo(Color.BLUE)
+        assertThat(cornerAt(200)).isEqualTo(Color.DKGRAY)
+        assertThat(cornerAt(600)).isEqualTo(Color.BLUE)
+        // The view itself is never left turned
+        assertThat(face.views[1].rotation).isEqualTo(0f)
+    }
+
+    @Test
+    fun aTracedViewShowsFromTheLeft() {
+        var clock = 0L
+        val face = Face(context, 120)
+        val bitmap = createBitmap(120, 120)
+        val canvas = Canvas(bitmap)
+        // The blue box is 10..70 px of 120, so 33..233 of the design
+        val trace = TraceSpec(view = "1", rect = DesignRect(33f, 33f, 200f, 200f), durationMs = 1000, alpha = 0)
+        val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { clock }).apply { setDesign(WakeAnimationSpec(durationMs = 2000, trace = trace)) }
+
+        fun at(ms: Long, x: Int): Int {
+            clock = ms
+            assertThat(animator.drawFrame(canvas, 120, 120, t0 + ms, 1, emptyList(), face.parts, true, true)).isTrue()
+            return bitmap.getPixel(x, 15)
+        }
+        // Nothing at the start, the left half halfway, all of it at the end
+        assertThat(at(0, 15)).isEqualTo(Color.DKGRAY)
+        assertThat(at(500, 15)).isEqualTo(Color.BLUE)
+        assertThat(at(500, 65)).isEqualTo(Color.DKGRAY)
+        assertThat(at(1200, 65)).isEqualTo(Color.BLUE)
+    }
+
+    @Test
+    fun theGlintLightsOnlyItsShapes() {
+        val bitmap = createBitmap(200, 200).apply { eraseColor(Color.BLACK) }
+        val glint = GlintSpec(rings = listOf(DesignRing(200f, 200f, 150f, 190f)), angle = 0f, width = 400f, alpha = 255)
+        GlintBand(glint).draw(Canvas(bitmap), 0.5f, 0.5f)
+        // On the ring at the top, not in the middle, not outside it in the corner
+        assertThat(Color.red(bitmap.getPixel(100, 15))).isGreaterThan(150)
+        assertThat(bitmap.getPixel(100, 100)).isEqualTo(Color.BLACK)
+        assertThat(bitmap.getPixel(3, 3)).isEqualTo(Color.BLACK)
     }
 
     @Test

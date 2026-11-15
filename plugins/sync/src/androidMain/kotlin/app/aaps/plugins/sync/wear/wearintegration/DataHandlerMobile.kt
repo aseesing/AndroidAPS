@@ -1280,6 +1280,9 @@ class DataHandlerMobile(
         return Pair((newest.latitude * 10).roundToInt() / 10.0, (newest.longitude * 10).roundToInt() / 10.0)
     }
 
+    /** Private patch: when the sensor and the pod or cannula stop, for the gauges of the Custom watch face. */
+    private val partTimes = WearPartTimes(persistenceLayer, activePlugin, preferences)
+
     /** Private patch: the weather for the look of the Custom watch face, see [OpenMeteoWeather]. */
     private val weather = OpenMeteoWeather(::httpGet)
     @Volatile private var lastWeather: EventData.Weather? = null
@@ -1296,9 +1299,9 @@ class DataHandlerMobile(
         val (latitude, longitude) = roughLocation() ?: return
         weatherAskedAt = now
         scope.launch {
-            val kind = weather.read(latitude, longitude) ?: return@launch
-            aapsLogger.debug(LTag.WEAR, "Weather for the watch: $kind")
-            EventData.Weather(now, kind).also {
+            val reading = weather.read(latitude, longitude) ?: return@launch
+            aapsLogger.debug(LTag.WEAR, "Weather for the watch: $reading")
+            EventData.Weather(now, reading.kind, reading.temperature).also {
                 lastWeather = it
                 rxBus.send(EventMobileToWear(it))
             }
@@ -1734,6 +1737,8 @@ class DataHandlerMobile(
         val runningModeRecord = loop.runningModeRecord()
         // The "time to eat" timer, on a client the copy of the master's
         val eatReminderState = eatReminder.state.value
+        val sensorEndsAt = partTimes.sensorEnd() // PERSONAL PATCH
+        val pumpEndsAt = partTimes.pumpEnd() // PERSONAL PATCH
 
         sendToWear(
             EventData.Status(
@@ -1760,7 +1765,8 @@ class DataHandlerMobile(
                 modeEndTime = runningModeRecord.endTimeForWatch(),
                 modeFromScene = runningModeRecord.id == activeSceneSync.getActiveState()?.scopedRecords?.rmId,
                 eatReminderStartedAt = eatReminderState?.startedAt,
-                eatReminderEndsAt = eatReminderState?.endsAt
+                eatReminderEndsAt = eatReminderState?.endsAt,
+                sensorEndsAt = sensorEndsAt, pumpEndsAt = pumpEndsAt // PERSONAL PATCH
             )
         )
     }

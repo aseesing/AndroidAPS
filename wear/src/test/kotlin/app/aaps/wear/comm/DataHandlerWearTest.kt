@@ -112,6 +112,15 @@ internal class DataHandlerWearTest : WearTestBase() {
 
         verify(sp, timeout(HANDLER_TIMEOUT_MS)).putString(R.string.key_weather_kind, EventData.Weather.RAIN)
         verify(sp, timeout(HANDLER_TIMEOUT_MS)).putLong(R.string.key_weather_time, 1_000L)
+        // No temperature (an older phone): the old one is cleared
+        verify(sp, timeout(HANDLER_TIMEOUT_MS)).putString(R.string.key_weather_temperature, "")
+    }
+
+    @Test
+    fun `weather event stores the temperature`() {
+        rxBus.send(EventData.Weather(1_000L, EventData.Weather.CLEAR, 7.4))
+
+        verify(sp, timeout(HANDLER_TIMEOUT_MS)).putString(R.string.key_weather_temperature, "7.4")
     }
 
     @Test
