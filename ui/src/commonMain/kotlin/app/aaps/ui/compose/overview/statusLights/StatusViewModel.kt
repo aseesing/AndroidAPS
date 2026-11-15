@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.aaps.core.data.model.DeviceLifetime
 import app.aaps.core.data.model.TE
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.interfaces.concurrent.aapsIoDispatcher

@@ -27,6 +27,25 @@ class DayNightClockTest {
     }
 
     @Test
+    fun theNextSunEventIsTheNextSunriseOrSunset() {
+        val clock = DayNightClock(location = { GeoPoint(52.37, 4.90) }, zone = { amsterdam })
+        fun minutesTo(from: String, expected: String) = (clock.nextSunEvent(ms(from))!! - ms(expected)) / 60_000.0
+        // 21 December: sunrise about 07:48 UTC, sunset about 15:29 UTC
+        assertThat(minutesTo("2024-12-21T03:00:00Z", "2024-12-21T07:48:00Z")).isWithin(5.0).of(0.0)
+        assertThat(minutesTo("2024-12-21T12:00:00Z", "2024-12-21T15:29:00Z")).isWithin(5.0).of(0.0)
+        // After sunset: the sunrise of the next day
+        assertThat(minutesTo("2024-12-21T20:00:00Z", "2024-12-22T07:48:00Z")).isWithin(5.0).of(0.0)
+    }
+
+    @Test
+    fun withoutAPlaceOrInAPolarNightThereIsNoSunEvent() {
+        assertThat(DayNightClock(location = { null }, zone = { amsterdam }).nextSunEvent(ms("2024-12-21T12:00:00Z"))).isNull()
+        // Tromsø in December: the sun does not rise
+        val tromso = DayNightClock(location = { GeoPoint(69.65, 18.96) }, zone = { ZoneId.of("Europe/Oslo") })
+        assertThat(tromso.nextSunEvent(ms("2024-12-21T12:00:00Z"))).isNull()
+    }
+
+    @Test
     fun withoutAPlaceTheDayIsSevenToSevenLocal() {
         val clock = DayNightClock(location = { null }, zone = { amsterdam })
         // Winter time is UTC+1

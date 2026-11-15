@@ -6,6 +6,7 @@ package app.aaps.wear.watchfaces.animation
 
 import android.graphics.Canvas
 import android.os.SystemClock
+import androidx.core.graphics.withClip
 import androidx.wear.watchface.WatchState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,8 +15,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
- * The wake-up animation of the Custom watch face: rain or glitch bands, and a beating heart, for a
- * few seconds after the wrist is raised. Private patch, see [WakeAnimationSpec] for what a design can set.
+ * The wake-up animation of the Custom watch face: rain or glitch bands, a beating heart, hands that
+ * swing or shake, a view that draws itself in and a light over the shiny parts, for a few seconds
+ * after the wrist is raised. Private patch, see [WakeAnimationSpec] for what a design can set.
  *
  * The watch face hands over the design's values ([setDesign]), the watch state ([watch]), asks for
  * each plain interactive frame whether this one draws it ([drawFrame]), and asks for the time to the
@@ -43,6 +45,8 @@ class WakeAnimator(
     private var rain: RainField? = null
     private var glitch: GlitchField? = null
     private var pulse: HeartPulse? = null
+    private var beam: TraceBeam? = null
+    private var light: GlintBand? = null
     private var bpm = PulseCurve.FALLBACK_BPM
     private var isHeadless = false
     private var scope: CoroutineScope? = null
@@ -71,6 +75,8 @@ class WakeAnimator(
             glitch = s?.glitch?.let { GlitchField(it) }
             pulse?.release()
             pulse = s?.pulse?.let { HeartPulse(it) }
+            beam = s?.trace?.let { TraceBeam(it) }
+            light = s?.glint?.let { GlintBand(it) }
             layers.invalidate()
         }
         spec = s
@@ -134,11 +140,41 @@ class WakeAnimator(
                 rain?.draw(c, elapsed, scale, strength)
                 glitch?.draw(c, elapsed, scale, strength)
             },
-            heart = { c -> pulse?.let { it.draw(c, PulseCurve.value(elapsed, bpm, s.pulse?.secondBeat ?: 0f) * strength, scale) } },
-            blinkViews = s.blinkViews,
-            shown = hiddenAt(elapsed).let { hidden -> if (hidden.isEmpty()) s.blinkViews else s.blinkViews - hidden }
+            heart = { c ->
+                pulse?.let { it.draw(c, PulseCurve.value(elapsed, bpm, s.pulse?.secondBeat ?: 0f) * strength, scale) }
+                s.glint?.progressAt(elapsed)?.let { light?.draw(c, it, scale) }
+            },
+            leaveOut = s.liveViews,
+            live = { c -> drawLive(c, s, elapsed, scale, height, parts) }
         )
         return true
+    }
+
+    /**
+     * The views that are drawn live: the view that draws itself in, cut at how far it is, with its bright
+     * line; then the views that blink, unless in their off half, and the hands, turned where they are now.
+     */
+    private fun drawLive(canvas: Canvas, s: WakeAnimationSpec, elapsedMs: Long, scale: Float, height: Int, parts: WakeFrameParts) {
+        s.trace?.let { trace ->
+            val progress = trace.progressAt(elapsedMs)
+            val edge = beam?.edge(progress, scale) ?: 0f
+            if (progress > 0f) canvas.withClip(0f, 0f, edge, height.toFloat()) { parts.views(this, setOf(trace.view)) }
+            beam?.draw(canvas, progress, scale)
+        }
+        val hidden = hiddenAt(elapsedMs)
+        val views = s.blinkViews - hidden + s.movingViews - listOfNotNull(s.trace?.view).toSet()
+        if (views.isNotEmpty()) parts.views(canvas, views, turnsAt(elapsedMs, s, parts))
+    }
+
+    /** How many degrees each moving hand is turned off its value [elapsedMs] after the start of this wake. */
+    internal fun turnsAt(elapsedMs: Long, s: WakeAnimationSpec, parts: WakeFrameParts): Map<String, Float> {
+        val turns = HashMap<String, Float>()
+        for (sweep in s.sweep) for (key in sweep.views) {
+            val value = parts.rotation(key) ?: continue
+            turns[key] = (turns[key] ?: 0f) + sweep.angleAt(elapsedMs, value) - value
+        }
+        for (wobble in s.wobble) for (key in wobble.views) turns[key] = (turns[key] ?: 0f) + wobble.offsetAt(elapsedMs)
+        return turns
     }
 
     /**

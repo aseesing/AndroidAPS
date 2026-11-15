@@ -70,13 +70,18 @@ import app.aaps.wear.watchfaces.CustomWatchface.Companion.TEMPLE_RESOLUTION
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.complicationSlots
 import app.aaps.wear.watchfaces.animation.BlinkSpec
 import app.aaps.wear.watchfaces.animation.DesignRect
+import app.aaps.wear.watchfaces.animation.DesignRing
+import app.aaps.wear.watchfaces.animation.GlintSpec
 import app.aaps.wear.watchfaces.animation.GlitchSpec
 import app.aaps.wear.watchfaces.animation.PulseSpec
 import app.aaps.wear.watchfaces.animation.RainSpec
+import app.aaps.wear.watchfaces.animation.SweepSpec
+import app.aaps.wear.watchfaces.animation.TraceSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeFrameParts
 import app.aaps.wear.watchfaces.animation.WakeLength
+import app.aaps.wear.watchfaces.animation.WobbleSpec
 import app.aaps.wear.watchfaces.colour.ColourLooks
 import app.aaps.wear.watchfaces.daynight.DayNightChoice
 import app.aaps.wear.watchfaces.daynight.DayNightClock
@@ -85,14 +90,18 @@ import app.aaps.wear.watchfaces.daynight.GeoPoint
 import app.aaps.wear.watchfaces.daynight.MoonPhase
 import app.aaps.wear.watchfaces.daynight.NightFace
 import app.aaps.wear.watchfaces.daynight.Orbit
+import app.aaps.wear.watchfaces.daynight.StoredWeather
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.ComplicationImageFit
 import app.aaps.wear.watchfaces.utils.ComplicationRender
 import app.aaps.wear.watchfaces.utils.ComplicationSlotInfo
 import app.aaps.wear.watchfaces.utils.ComplicationStyleValues
 import app.aaps.wear.watchfaces.utils.ComplicationTypePriority
+import app.aaps.wear.watchfaces.utils.DesignTimeText
 import app.aaps.wear.watchfaces.utils.LayeredFrameCache
 import app.aaps.wear.watchfaces.utils.ParsedJsonCache
+import app.aaps.wear.watchfaces.utils.PartTimeLeft
+import app.aaps.wear.watchfaces.utils.SecondSpin
 import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
 import app.aaps.wear.watchfaces.utils.WatchFaceComplicationSlots
 import app.aaps.wear.watchfaces.utils.WatchFaceComplications
@@ -172,6 +181,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         val age = renderNow() - sp.getLong(R.string.key_weather_time, 0L)
         return kind.takeIf { age in 0..WEATHER_MAX_AGE_MS }
     }
+
+    /** Private patch: the temperature the phone sent with the weather, in °C; null when there is none or the weather is too old. */
+    private fun storedTemperature(): Double? = if (storedWeather() != null) StoredWeather.temperature(sp) else null
     /**
      * A real [ImageView] for background, deliberately not part of `activity_custom.xml`: background
      * must paint before complications and everything in that layout paints after them (see
@@ -971,6 +983,20 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         drawWithHidden(binding.mainLayout, hide, canvas)
     }
 
+    /** The view of the design key [key], or null when there is none. */
+    private fun viewOfKey(key: String): View? = ViewMap.entries.firstOrNull { it.key == key }?.let { binding.mainLayout.findViewById<View>(it.id) }
+
+    /** Like [drawOnly], with each view in [turns] turned that many degrees more for this draw only. */
+    private fun drawTurned(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>) {
+        val turned = turns.mapNotNull { (key, degrees) -> viewOfKey(key)?.let { Triple(it, it.rotation, degrees) } }
+        turned.forEach { (view, rotation, degrees) -> view.rotation = rotation + degrees }
+        try {
+            drawOnly(canvas, keys)
+        } finally {
+            turned.forEach { (view, rotation, _) -> view.rotation = rotation }
+        }
+    }
+
     /** Like `drawLayer`, with the views of the design keys [leaveOut] left out as well. */
     private fun drawLayerWithout(canvas: Canvas, layer: RenderLayer, leaveOut: Set<String>) {
         if (leaveOut.isEmpty()) return drawLayer(canvas, layer)
@@ -994,7 +1020,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             drawLayerWithout(canvas, RenderLayer.DATA_BASE, leaveOut)
         }
 
-        override fun views(canvas: Canvas, keys: Set<String>) = drawOnly(canvas, keys)
+        override fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>) = drawTurned(canvas, keys, turns)
+        override fun rotation(key: String): Float? = viewOfKey(key)?.rotation
 
         override fun clockText(canvas: Canvas) = drawLayer(canvas, RenderLayer.CLOCK_TEXT)
         override fun top(canvas: Canvas) {
@@ -1037,6 +1064,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         val pulse = PulseSpec()
         val glitch = GlitchSpec()
         fun JSONObject.float(key: String, default: Float) = optDouble(key, default.toDouble()).toFloat()
+        fun JSONObject.objects(key: String) = optJSONArray(key)?.let { list -> (0 until list.length()).mapNotNull { list.optJSONObject(it) } } ?: emptyList()
+        fun JSONObject.strings(key: String) = optJSONArray(key)?.let { list -> (0 until list.length()).map { list.optString(it) } } ?: emptyList()
         fun JSONObject.rect(default: DesignRect) =
             DesignRect(float("left", default.left), float("top", default.top), float("width", default.width), float("height", default.height))
         WakeAnimationSpec(
@@ -1071,15 +1100,40 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     alpha = it.optInt("alpha", glitch.alpha), region = it.optJSONObject("region")?.rect(glitch.region) ?: glitch.region
                 )
             },
-            blink = animation.optJSONArray("blink")?.let { list ->
-                (0 until list.length()).mapNotNull { list.optJSONObject(it) }.map {
-                    val views = it.optJSONArray("views")
-                    BlinkSpec(
-                        views = (0 until (views?.length() ?: 0)).map { i -> views!!.optString(i) }, valueKey = it.optString("valueKey"),
-                        atOrBelow = it.optDouble("atOrBelow", 0.0), periodMs = it.optLong("periodMs", 1000)
-                    )
-                }
-            } ?: emptyList()
+            blink = animation.objects("blink").map {
+                BlinkSpec(views = it.strings("views"), valueKey = it.optString("valueKey"), atOrBelow = it.optDouble("atOrBelow", 0.0), periodMs = it.optLong("periodMs", 1000))
+            },
+            sweep = animation.objects("sweep").map {
+                val sweep = SweepSpec(emptyList(), 0f, 0f)
+                SweepSpec(
+                    views = it.strings("views"), emptyAngle = it.float("emptyAngle", 0f), fullAngle = it.float("fullAngle", 0f),
+                    delayMs = it.optLong("delayMs", sweep.delayMs), upMs = it.optLong("upMs", sweep.upMs), settleMs = it.optLong("settleMs", sweep.settleMs)
+                )
+            },
+            wobble = animation.objects("wobble").map {
+                val wobble = WobbleSpec(emptyList())
+                WobbleSpec(
+                    views = it.strings("views"), delayMs = it.optLong("delayMs", wobble.delayMs), amplitude = it.float("amplitude", wobble.amplitude),
+                    hz = it.float("hz", wobble.hz), decayMs = it.optLong("decayMs", wobble.decayMs)
+                )
+            },
+            trace = animation.optJSONObject("trace")?.let {
+                val trace = TraceSpec(rect = DesignRect.FULL)
+                TraceSpec(
+                    view = it.optString("view", trace.view), rect = it.optJSONObject("rect")?.rect(trace.rect) ?: trace.rect,
+                    delayMs = it.optLong("delayMs", trace.delayMs), durationMs = it.optLong("durationMs", trace.durationMs),
+                    color = getColor(it.optString("color"), trace.color), alpha = it.optInt("alpha", trace.alpha), width = it.float("width", trace.width)
+                )
+            },
+            glint = animation.optJSONObject("glint")?.let {
+                val glint = GlintSpec()
+                GlintSpec(
+                    rings = it.objects("rings").map { r -> DesignRing(r.float("cx", 200f), r.float("cy", 200f), r.float("inner", 0f), r.float("outer", 0f)) },
+                    boxes = it.objects("boxes").map { b -> b.rect(DesignRect(0f, 0f, 0f, 0f)) }, cornerRadius = it.float("cornerRadius", glint.cornerRadius),
+                    delayMs = it.optLong("delayMs", glint.delayMs), durationMs = it.optLong("durationMs", glint.durationMs), angle = it.float("angle", glint.angle),
+                    width = it.float("width", glint.width), color = getColor(it.optString("color"), glint.color), alpha = it.optInt("alpha", glint.alpha)
+                )
+            }
         )
     }.getOrNull()
 
@@ -1098,6 +1152,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         binding.secondHand.rotation = now.second * 6f
         binding.minuteHand.rotation = now.minute * 6f + now.second * 0.1f
         binding.hourHand.rotation = now.hour * 30f + now.minute * 0.5f + now.second * (0.5f / 60f)
+        SecondSpin.rotation(ViewMap.SECOND.viewJson, now.second)?.let { binding.second.rotation = it } // PERSONAL PATCH: a picture in the seconds that turns
     }
 
     override fun setDataFields() {
@@ -1974,7 +2029,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     if (viewJson.has(JsonKeys.DYNVALUE.key)) {
                         dynData?.getDynValue(viewJson.optBoolean(JsonKeys.DYNVALUE.key, false), cwf)?.let {
                             try {   // try - catch block if wrong format provided not consistent with double values, to avoid crash
-                                view.text = String.format(cwf.context.resources.configuration.locales[0], dynData?.getTextValueStep(cwf) ?: viewJson.optString(JsonKeys.TEXTVALUE.key, "%.0f"), it)
+                                view.text = DesignTimeText.of(dynData?.getTextValueStep(cwf) ?: viewJson.optString(JsonKeys.TEXTVALUE.key, "%.0f"), it, cwf.dateUtil::timeString) // PERSONAL PATCH: "@time"
+                                    ?: String.format(cwf.context.resources.configuration.locales[0], dynData?.getTextValueStep(cwf) ?: viewJson.optString(JsonKeys.TEXTVALUE.key, "%.0f"), it)
                             } catch (_: Exception) {
                                 view.text = String.format(cwf.context.resources.configuration.locales[0], "%.0f", it)
                             }
@@ -2247,7 +2303,11 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         SUN_PROGRESS(JsonKeyValues.SUN_PROGRESS.key, 0.0, 1.0),
         NIGHT_PROGRESS(JsonKeyValues.NIGHT_PROGRESS.key, 0.0, 1.0),
         SUN_CYCLE(JsonKeyValues.SUN_CYCLE.key, 0.0, 1.0), // PERSONAL PATCH
-        MOON_CYCLE(JsonKeyValues.MOON_CYCLE.key, 0.0, 1.0); // PERSONAL PATCH
+        MOON_CYCLE(JsonKeyValues.MOON_CYCLE.key, 0.0, 1.0), // PERSONAL PATCH
+        WEATHER_TEMPERATURE(StoredWeather.JSON_VALUE_KEY, -50.0, 50.0), // PERSONAL PATCH
+        NEXT_SUN_EVENT(DayNightClock.NEXT_SUN_EVENT_KEY, 0.0, 1.0), // PERSONAL PATCH: a time, for "@time"
+        SENSOR_LEFT(PartTimeLeft.SENSOR_KEY, 0.0, 72.0), // PERSONAL PATCH: hours
+        PUMP_LEFT(PartTimeLeft.PUMP_KEY, 0.0, 72.0); // PERSONAL PATCH: hours
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2350,6 +2410,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.NIGHT_PROGRESS   -> cwf.dayNight.nightProgress(cwf.renderNow())
             ValueMap.SUN_CYCLE        -> cwf.dayNight.sunCycle(cwf.renderNow()) // PERSONAL PATCH
             ValueMap.MOON_CYCLE       -> cwf.dayNight.moonCycle(cwf.renderNow()) // PERSONAL PATCH
+            ValueMap.WEATHER_TEMPERATURE -> cwf.storedTemperature() // PERSONAL PATCH
+            ValueMap.NEXT_SUN_EVENT   -> cwf.dayNight.nextSunEvent(cwf.renderNow())?.toDouble() // PERSONAL PATCH
+            ValueMap.SENSOR_LEFT      -> PartTimeLeft.hours(cwf.status[0].sensorEndsAt, cwf.renderNow()) // PERSONAL PATCH
+            ValueMap.PUMP_LEFT        -> PartTimeLeft.hours(cwf.status[0].pumpEndsAt, cwf.renderNow()) // PERSONAL PATCH
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->

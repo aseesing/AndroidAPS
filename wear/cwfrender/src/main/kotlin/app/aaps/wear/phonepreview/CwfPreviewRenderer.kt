@@ -20,6 +20,7 @@ import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeLength
 import app.aaps.wear.watchfaces.daynight.DayNightChoice
+import app.aaps.wear.watchfaces.daynight.StoredWeather
 import app.aaps.wear.watchfaces.settingsync.CwfSettingNames
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -126,10 +127,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
             is EventData.GraphData     -> runBlocking { repository.updateGraphData(event) }
             is EventData.TreatmentData -> runBlocking { repository.updateTreatmentData(event) }
 
-            is EventData.Weather       -> {
-                sp.putString(R.string.key_weather_kind, event.kind)
-                sp.putLong(R.string.key_weather_time, event.timeStamp)
-            }
+            is EventData.Weather       -> StoredWeather.save(sp, event)
 
             is EventData.Preferences   -> {
                 sp.putBoolean(R.string.key_units_mgdl, event.unitsMgdl)

@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.ui.compose.overview.statusLights
 
+import app.aaps.core.data.model.DeviceLifetime
 import app.aaps.core.data.model.TE
 import app.aaps.core.interfaces.resources.TextResolver
 import app.aaps.core.interfaces.utils.DateUtil
@@ -38,11 +39,11 @@ class StatusTimeLeft(
         val start = change.timestamp
         val now = dateUtil.now()
         if (lifetime == null) {
-            val end = start + preferences.get(criticalKey) * HOUR
+            val end = DeviceLifetime.endOf(start, null, preferences.get(criticalKey))
             return View(format(now, end), thresholdStatus(now - start, warnKey, criticalKey), thresholdPercent(now - start, criticalKey))
         }
         val graceStart = start + lifetime.lifetimeHours * HOUR
-        val end = graceStart + lifetime.graceHours * HOUR
+        val end = DeviceLifetime.endOf(start, lifetime, preferences.get(criticalKey))
         val status = when {
             now >= graceStart -> StatusLevel.CRITICAL
             end - now < DAY   -> StatusLevel.WARNING

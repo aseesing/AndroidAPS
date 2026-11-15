@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.ui.compose.overview.statusLights
 
+import app.aaps.core.data.model.DeviceLifetime
 import app.aaps.core.data.model.GlucoseUnit
 import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TE

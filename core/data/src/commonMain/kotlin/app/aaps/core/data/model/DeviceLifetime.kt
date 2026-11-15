@@ -2,9 +2,8 @@
 // PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
 // Own file: keep upstream files to small hooks that call into here.
 // ============================================================================================
-package app.aaps.ui.compose.overview.statusLights
+package app.aaps.core.data.model
 
-import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.pump.defs.PumpType
 
 /**
@@ -12,7 +11,9 @@ import app.aaps.core.data.pump.defs.PumpType
  * until it stops by itself.
  *
  * Only models whose lifetime is certain are listed. For everything else [of] gives null, and the
- * status lights count down to the user's own critical threshold as before.
+ * status lights (and the watch) count down to the user's own critical threshold as before.
+ *
+ * In `:core:data`, so that the status lights (`:ui`) and the data for the watch (`:plugins:sync`) share it.
  *
  * This is a personal addition, not in upstream AAPS. The table lives here, in its own file, and not
  * in the [SourceSensor] and [PumpType] enums, so that a new AAPS release merges without conflicts.
@@ -20,6 +21,15 @@ import app.aaps.core.data.pump.defs.PumpType
 class DeviceLifetime(val lifetimeHours: Int, val graceHours: Int) {
 
     companion object {
+
+        private const val HOUR_MS = 60 * 60 * 1000L
+
+        /**
+         * When a part that was changed at [changedAt] stops: after its [lifetime] and grace period when they
+         * are known, else after [fallbackHours], the user's own critical threshold.
+         */
+        fun endOf(changedAt: Long, lifetime: DeviceLifetime?, fallbackHours: Int): Long =
+            changedAt + (lifetime?.let { it.lifetimeHours + it.graceHours } ?: fallbackHours) * HOUR_MS
 
         /** The sensor of the newest BG reading. */
         fun of(sensor: SourceSensor?): DeviceLifetime? = when (sensor) {

@@ -462,7 +462,11 @@ sealed class EventData : Event() {
         // The "time to eat" timer: when it was started and when it rings. Null when none runs, or from an older sender.
         // The watch draws the end in its BG graph and rings itself at that time.
         val eatReminderStartedAt: Long? = null,
-        val eatReminderEndsAt: Long? = null
+        val eatReminderEndsAt: Long? = null,
+        // Private patch: when the sensor and the pod (or cannula) stop, for the time-left gauges of the Custom watch
+        // face. Null when not known, or from an older sender.
+        val sensorEndsAt: Long? = null,
+        val pumpEndsAt: Long? = null
     ) : EventData(), EventDataSet
 
     @Serializable
@@ -560,9 +564,10 @@ sealed class EventData : Event() {
      *
      * @param timeStamp when the phone read it; the watch treats it as unknown after a few hours
      * @param kind one of [CLEAR], [PARTLY], [CLOUDY] or [RAIN]
+     * @param temperature the air temperature in °C, or null when not known (also from an older phone)
      */
     @Serializable
-    data class Weather(val timeStamp: Long, val kind: String) : EventData() {
+    data class Weather(val timeStamp: Long, val kind: String, val temperature: Double? = null) : EventData() {
 
         companion object {
 
