@@ -241,7 +241,7 @@ class CwfD2DesignTest : CwfDesignBase() {
 
         // The mark over this month: moved to the right by the month. In the view of the month, so "show date" hides it with the
         // date; its own text (the name of the month) is see-through.
-        picture(MONTH_VIEW, monthMarkBox(1), MONTH_MARK).put("fontColor", CLEAR).put("leftOffset", true).put("dynData", MONTH_DYN)
+        picture(MONTH_VIEW, monthMarkBox(1), MONTH_MARK).put("fontColor", CLEAR).put("dynData", MONTH_DYN)
 
         // The two pointers: one picture of the whole dial, turned by the watch round the middle
         picture(BG_NEEDLE_VIEW, NEEDLE_BOX, NEEDLE).put("rotationOffset", true).put("dynData", BG_NEEDLE_DYN)
@@ -270,8 +270,7 @@ class CwfD2DesignTest : CwfDesignBase() {
             .put(LOOP_DYN, ageColourDynData("loop", LOOP_LIMIT, MID).put("invalidImage", BLANK).put("image1", BLANK).put("image2", BLANK))
             .put(AGE_DYN, ageColourDynData("timestamp", AGE_LIMIT, VALUE))
             .put(MOON_DYN, moonDynData())
-            .put(MONTH_DYN, JSONObject().put("valueKey", "month").put("minData", 1).put("maxData", 12)
-                .put("leftOffset", JSONObject().put("minValue", 0).put("maxValue", 11 * MONTH_STEP).put("invalidValue", 0)))
+            .put(MONTH_DYN, monthDynData())
             .put(BG_NEEDLE_DYN, JSONObject().put("valueKey", "sgv").put("minData", BG_MIN).put("maxData", BG_MAX)
                 .put("rotationOffset", JSONObject().put("minValue", BG_FROM).put("maxValue", BG_TO).put("invalidValue", BG_FROM))
                 .put("invalidImage", BLANK).put("image1", NEEDLE))
@@ -384,6 +383,15 @@ class CwfD2DesignTest : CwfDesignBase() {
     /** The angle of the glucose pointer at [mgdl], in degrees from straight up, clockwise. */
     private fun bgAngle(mgdl: Double): Double = BG_FROM + (mgdl.coerceIn(BG_MIN, BG_MAX) - BG_MIN) * (BG_TO - BG_FROM) / (BG_MAX - BG_MIN)
 
+
+    /**
+     * Moves the month mark: one step per month, `leftOffset1` (January) to `leftOffset12`. Not a range with `minValue` and
+     * `maxValue`: the watch scales such an offset twice, so on a screen that is not 400 pixels the mark lands on the wrong
+     * month. A step offset is scaled once.
+     */
+    private fun monthDynData(): JSONObject = JSONObject().put("valueKey", "month").put("minData", 1).put("maxData", 12).put("invalidLeftOffset", 0).apply {
+        for (month in 1..12) put("leftOffset$month", (month - 1) * MONTH_STEP)
+    }
 
     /** Where the month mark is over [month] (1 to 12). */
     private fun monthMarkBox(month: Int): RectF {
@@ -1194,10 +1202,10 @@ class CwfD2DesignTest : CwfDesignBase() {
         sample: Sample = Sample(deltaMgdl = DELTA_SAMPLE), bgAgeMin: Long = 2, loopAgeMin: Long = 3, watch: Int? = WATCH_SAMPLE, phone: String = PHONE_SAMPLE,
         colours: Pair<String, String> = Pair(ColourLooks.AS_DESIGNED, ColourLooks.AS_DESIGNED), hours24: Boolean = true, instant: Long = PREVIEW_MS,
         weather: String? = EventData.Weather.PARTLY, temperature: Double? = TEMPERATURE_SAMPLE, place: Boolean = true,
-        sensorHours: Double? = SENSOR_HOURS_SAMPLE, pumpHours: Double? = PUMP_HOURS_SAMPLE
+        sensorHours: Double? = SENSOR_HOURS_SAMPLE, pumpHours: Double? = PUMP_HOURS_SAMPLE, size: Int = 400
     ): Bitmap {
         val (face, design) = preparedFace(sample, bgAgeMin, loopAgeMin, watch, phone, colours, hours24, instant, weather, temperature, place, sensorHours, pumpHours)
-        val picture = face.renderToBitmap(400, 400)
+        val picture = face.renderToBitmap(size, size)
         drawComplicationValues(Canvas(picture), design)
         Settings.System.putString(RuntimeEnvironment.getApplication().contentResolver, Settings.System.TIME_12_24, "24")
         return picture
@@ -1415,6 +1423,23 @@ class CwfD2DesignTest : CwfDesignBase() {
         val month = LocalDateTime.now().monthValue
         assertThat(countNear(picture, monthMarkBox(month), NEEDLE_RED, 70)).isGreaterThan(20)
         assertThat(countNear(picture, monthMarkBox(if (month == 1) 2 else 1), NEEDLE_RED, 70)).isEqualTo(0)
+    }
+
+    /**
+     * Also on a screen that is not 400 pixels, like the 466 of a OnePlus Watch 2R. The watch scales an offset from a range
+     * (`minValue` to `maxValue`) twice, so the mark moves by steps, which it scales once.
+     */
+    @Test
+    fun theMonthMarkIsOverThisMonthOnABiggerScreen() {
+        val size = 466
+        val picture = render(size = size)
+        val scale = size / 400f
+        fun scaled(r: RectF) = RectF(r.left * scale, r.top * scale, r.right * scale, r.bottom * scale)
+        val month = LocalDateTime.now().monthValue
+        for (m in 1..12) {
+            val red = countNear(picture, scaled(monthMarkBox(m)), NEEDLE_RED, 70)
+            if (m == month) assertWithMessage("month $m").that(red).isGreaterThan(20) else assertWithMessage("month $m").that(red).isEqualTo(0)
+        }
     }
 
     @Test
