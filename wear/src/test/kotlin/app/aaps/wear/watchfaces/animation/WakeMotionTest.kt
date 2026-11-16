@@ -80,12 +80,45 @@ class WakeMotionTest {
     }
 
     @Test
+    fun aSlideGoesToTheEndOfItsScaleAndBackToItsValue() {
+        val slide = SlideSpec(listOf("month"), fullDx = 220f, delayMs = 100, upMs = 600, settleMs = 900)
+        // Waits at the design place, runs to the end, settles on the value with a bounce past it
+        assertThat(slide.dxAt(0, 132f)).isEqualTo(0f)
+        assertThat(slide.dxAt(100, 132f)).isEqualTo(0f)
+        assertThat(slide.dxAt(700, 132f)).isEqualTo(220f)
+        assertThat((700L..1600L step 10).minOf { slide.dxAt(it, 132f) }).isLessThan(132f)
+        assertThat(slide.dxAt(1600, 132f)).isEqualTo(132f)
+        assertThat(slide.dxAt(5000, 132f)).isEqualTo(132f)
+        // Limits as for a sweep; empty views are dropped
+        assertThat(SlideSpec(listOf("a", "", "a"), 10f, delayMs = -5, upMs = 1).normalized().let { Triple(it.views, it.delayMs, it.upMs) })
+            .isEqualTo(Triple(listOf("a"), 0L, SweepSpec.MIN_PART_MS))
+        assertThat(WakeAnimationSpec(slide = listOf(SlideSpec(emptyList(), 10f))).normalized().hasContent).isFalse()
+        assertThat(WakeAnimationSpec(slide = listOf(slide)).liveViews).containsExactly("month")
+    }
+
+    @Test
+    fun aSlidViewIsMovedFromWhereItsValuePutsIt() {
+        val parts = object : WakeFrameParts {
+            override fun background(canvas: Canvas) {}
+            override fun data(canvas: Canvas, leaveOut: Set<String>) {}
+            override fun clockText(canvas: Canvas) {}
+            override fun top(canvas: Canvas, leaveOut: Set<String>) {}
+            override fun secondHand(canvas: Canvas) {}
+            override fun offsetX(key: String): Float? = if (key == "month") 132f else null
+        }
+        val spec = WakeAnimationSpec(slide = listOf(SlideSpec(listOf("month", "gone"), fullDx = 220f, upMs = 600)))
+        val shifts = WakeAnimator(heartRate = { null }).shiftsAt(600, spec, parts)
+        // At the end of the scale: 220 from the design place, so 88 right of the value
+        assertThat(shifts).containsExactly("month", 88f)
+    }
+
+    @Test
     fun theMovingHandsAddUp() {
         val parts = object : WakeFrameParts {
             override fun background(canvas: Canvas) {}
             override fun data(canvas: Canvas, leaveOut: Set<String>) {}
             override fun clockText(canvas: Canvas) {}
-            override fun top(canvas: Canvas) {}
+            override fun top(canvas: Canvas, leaveOut: Set<String>) {}
             override fun secondHand(canvas: Canvas) {}
             override fun rotation(key: String): Float? = if (key == "hand") -45f else null
         }

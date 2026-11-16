@@ -75,6 +75,7 @@ import app.aaps.wear.watchfaces.animation.GlintSpec
 import app.aaps.wear.watchfaces.animation.GlitchSpec
 import app.aaps.wear.watchfaces.animation.PulseSpec
 import app.aaps.wear.watchfaces.animation.RainSpec
+import app.aaps.wear.watchfaces.animation.SlideSpec
 import app.aaps.wear.watchfaces.animation.SweepSpec
 import app.aaps.wear.watchfaces.animation.TraceSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
@@ -988,14 +989,20 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     /** The view of the design key [key], or null when there is none. */
     private fun viewOfKey(key: String): View? = ViewMap.entries.firstOrNull { it.key == key }?.let { binding.mainLayout.findViewById<View>(it.id) }
 
-    /** Like [drawOnly], with each view in [turns] turned that many degrees more for this draw only. */
-    private fun drawTurned(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>) {
+    /**
+     * Like [drawOnly], with each view in [turns] turned that many degrees more, and each view in [shifts]
+     * moved that many design pixels right, for this draw only.
+     */
+    private fun drawTurned(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>, shifts: Map<String, Float> = emptyMap()) {
         val turned = turns.mapNotNull { (key, degrees) -> viewOfKey(key)?.let { Triple(it, it.rotation, degrees) } }
+        val shifted = shifts.mapNotNull { (key, dx) -> viewOfKey(key)?.let { Triple(it, it.translationX, dx) } }
         turned.forEach { (view, rotation, degrees) -> view.rotation = rotation + degrees }
+        shifted.forEach { (view, translation, dx) -> view.translationX = translation + (dx * zoomFactor).toFloat() }
         try {
             drawOnly(canvas, keys)
         } finally {
             turned.forEach { (view, rotation, _) -> view.rotation = rotation }
+            shifted.forEach { (view, translation, _) -> view.translationX = translation }
         }
     }
 
@@ -1022,13 +1029,17 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             drawLayerWithout(canvas, RenderLayer.DATA_BASE, leaveOut)
         }
 
-        override fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>) = drawTurned(canvas, keys, turns)
+        override fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>, shifts: Map<String, Float>) = drawTurned(canvas, keys, turns, shifts)
         override fun rotation(key: String): Float? = viewOfKey(key)?.rotation
+        override fun offsetX(key: String): Float? = viewOfKey(key)?.let { view ->
+            val designLeft = ViewMap.entries.firstOrNull { it.key == key }?.viewJson?.optDouble(JsonKeys.LEFTMARGIN.key, 0.0) ?: 0.0
+            (view.left / zoomFactor - designLeft).toFloat()
+        }
 
         override fun clockText(canvas: Canvas) = drawLayer(canvas, RenderLayer.CLOCK_TEXT)
-        override fun top(canvas: Canvas) {
-            drawLayer(canvas, RenderLayer.MIDDLE)
-            drawLayer(canvas, RenderLayer.HANDS)
+        override fun top(canvas: Canvas, leaveOut: Set<String>) {
+            drawLayerWithout(canvas, RenderLayer.MIDDLE, leaveOut)
+            drawLayerWithout(canvas, RenderLayer.HANDS, leaveOut)
         }
 
         override fun secondHand(canvas: Canvas) = drawLayer(canvas, RenderLayer.SECOND_HAND)
@@ -1110,6 +1121,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 SweepSpec(
                     views = it.strings("views"), emptyAngle = it.float("emptyAngle", 0f), fullAngle = it.float("fullAngle", 0f),
                     delayMs = it.optLong("delayMs", sweep.delayMs), upMs = it.optLong("upMs", sweep.upMs), settleMs = it.optLong("settleMs", sweep.settleMs)
+                )
+            },
+            slide = animation.objects("slide").map {
+                val slide = SlideSpec(emptyList(), 0f)
+                SlideSpec(
+                    views = it.strings("views"), fullDx = it.float("fullDx", 0f),
+                    delayMs = it.optLong("delayMs", slide.delayMs), upMs = it.optLong("upMs", slide.upMs), settleMs = it.optLong("settleMs", slide.settleMs)
                 )
             },
             wobble = animation.objects("wobble").map {

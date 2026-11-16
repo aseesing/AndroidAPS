@@ -22,6 +22,7 @@ import kotlin.math.ceil
  * @param blink views that blink while their value is low, for example a battery at 20 % or less
  * @param sweep hands that swing up to full scale and back to their value
  * @param wobble hands that shake and settle on their value
+ * @param slide views that slide to the end of their scale and back to their value
  * @param trace a view that draws itself in from left to right
  * @param glint a light that slides once over the shiny parts
  */
@@ -35,6 +36,7 @@ data class WakeAnimationSpec(
     val blink: List<BlinkSpec> = emptyList(),
     val sweep: List<SweepSpec> = emptyList(),
     val wobble: List<WobbleSpec> = emptyList(),
+    val slide: List<SlideSpec> = emptyList(),
     val trace: TraceSpec? = null,
     val glint: GlintSpec? = null
 ) {
@@ -50,6 +52,7 @@ data class WakeAnimationSpec(
         blink = blink.map { it.normalized() }.filter { it.views.isNotEmpty() && it.valueKey.isNotEmpty() },
         sweep = sweep.map { it.normalized() }.filter { it.views.isNotEmpty() },
         wobble = wobble.map { it.normalized() }.filter { it.views.isNotEmpty() },
+        slide = slide.map { it.normalized() }.filter { it.views.isNotEmpty() },
         trace = trace?.normalized()?.takeIf { it.view.isNotEmpty() },
         glint = glint?.normalized()?.takeIf { it.hasShape }
     )
@@ -70,13 +73,13 @@ data class WakeAnimationSpec(
 
     /** True when there is something to draw at all. */
     val hasContent: Boolean
-        get() = rain != null || pulse != null || glitch != null || blink.isNotEmpty() || sweep.isNotEmpty() || wobble.isNotEmpty() || trace != null || glint != null
+        get() = rain != null || pulse != null || glitch != null || blink.isNotEmpty() || sweep.isNotEmpty() || wobble.isNotEmpty() || slide.isNotEmpty() || trace != null || glint != null
 
     /** The keys of all views that may blink. */
     val blinkViews: Set<String> get() = blink.flatMapTo(LinkedHashSet()) { it.views }
 
     /** The keys of all hands that swing or shake. */
-    val movingViews: Set<String> get() = (sweep.flatMap { it.views } + wobble.flatMap { it.views }).toCollection(LinkedHashSet())
+    val movingViews: Set<String> get() = (sweep.flatMap { it.views } + wobble.flatMap { it.views } + slide.flatMap { it.views }).toCollection(LinkedHashSet())
 
     /** The keys of all views that are drawn live while the animation plays, instead of in the kept picture. */
     val liveViews: Set<String> get() = blinkViews + movingViews + listOfNotNull(trace?.view)

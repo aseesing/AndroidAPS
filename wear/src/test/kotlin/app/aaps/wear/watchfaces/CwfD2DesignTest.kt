@@ -110,7 +110,7 @@ import kotlin.math.sqrt
  * - what slots 1 and 2 show, in the watch face editor, and whether each one shows at all;
  * - each value on its own (seconds, delta, IOB, basal, batteries, loop, ...) in the face settings.
  *
- * The texts and the numbers on the dial are in Saira Condensed Medium, which the zip brings; the words
+ * The texts and the numbers on the dial are in D2 Text (a cut-down Saira Condensed Medium), which the zip brings; the words
  * printed on the dial in Michroma (in the pictures only). Both are in `cwf-designs/fonts`, with their licences.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -123,8 +123,9 @@ class CwfD2DesignTest : CwfDesignBase() {
 
     /**
      * The font of every text, and of the numbers printed on the dial: Saira Condensed Medium, tall and narrow
-     * like the digits of the original. The zip brings it, unchanged: its licence keeps the name "Saira" for
-     * the font as made, so it is not cut down to fewer letters.
+     * like the digits of the original, cut down to the Latin letters and signs (41 KB instead of 96 KB, see
+     * `.claude/procedures/font-subset.md`). Its licence keeps the name "Saira" for the font as made, so the
+     * cut-down font is named D2 Text.
      */
     private val textFile = File("cwf-designs/fonts/$TEXT_FONT.ttf")
     private fun textFont(): Typeface = Typeface.createFromFile(textFile)
@@ -325,6 +326,9 @@ class CwfD2DesignTest : CwfDesignBase() {
                 .put(sweep(BG_NEEDLE_VIEW, BG_FROM, BG_TO, 0))
                 .put(sweep(SENSOR_NEEDLE_VIEW, HOURS_EMPTY_ANGLE, HOURS_FULL_ANGLE, SENSOR_SWEEP_DELAY_MS))
                 .put(sweep(PUMP_NEEDLE_VIEW, HOURS_EMPTY_ANGLE, HOURS_FULL_ANGLE, PUMP_SWEEP_DELAY_MS)))
+            // The month mark runs to December and back to this month, like the needles
+            .put("slide", JSONArray().put(JSONObject().put("views", views(MONTH_VIEW)).put("fullDx", 11 * MONTH_STEP)
+                .put("delayMs", MONTH_SLIDE_DELAY_MS).put("upMs", SWEEP_UP_MS).put("settleMs", SWEEP_SETTLE_MS)))
             .put("wobble", JSONArray().put(JSONObject().put("views", views(TREND_HAND_VIEW))
                 .put("delayMs", WOBBLE_DELAY_MS).put("amplitude", WOBBLE_DEGREES).put("hz", WOBBLE_HZ).put("decayMs", WOBBLE_DECAY_MS)))
             .put("trace", JSONObject().put("view", "chart").put("rect", box(GRAPH_BOX)).put("delayMs", TRACE_DELAY_MS).put("durationMs", TRACE_MS)
@@ -601,6 +605,69 @@ class CwfD2DesignTest : CwfDesignBase() {
         canvas.drawLine(x1 * s, y1 * s, x2 * s, y2 * s, paint("#2E3135", width = 0.8f))
     }
 
+    /** The holes of the metal frame: the pockets and the panels, which lie lower than the frame. */
+    private fun frameHoles(): List<Path> = listOf(
+        topPocket(), bottomPocket(),
+        sidePanel(TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT),
+        sidePanel(LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT),
+        roundRect(LINE_PANEL, 12f), roundRect(TIME_PANEL, 16f), roundRect(MONTH_PANEL, 10f)
+    )
+
+    /**
+     * The frame between the panels and the pockets, inside the rim: raised steel, brushed side to side, lighter at
+     * the top. Returns its shape, for [frameBevel].
+     */
+    private fun metalFrame(canvas: Canvas): Path {
+        val s = SCALE
+        val frame = Path().apply { addCircle(200f * s, 200f * s, RIM_INNER * s, Path.Direction.CW) }
+        for (hole in frameHoles()) frame.op(hole, Path.Op.DIFFERENCE)
+        canvas.save()
+        canvas.clipPath(frame)
+        canvas.drawPaint(Paint().apply { shader = LinearGradient(0f, 0f, 0f, 400f * s, color(FRAME_TOP), color(FRAME_BOTTOM), Shader.TileMode.CLAMP) })
+        // Brushing: fine lines side to side, each a little lighter or darker
+        val random = Random(2307)
+        val line = Paint().apply { strokeWidth = 1f }
+        var y = 0f
+        while (y < 400f * s) {
+            line.color = if (random.nextBoolean()) Color.argb(random.nextInt(26), 255, 255, 255) else Color.argb(random.nextInt(34), 0, 0, 0)
+            canvas.drawLine(0f, y, 400f * s, y, line)
+            y += 1f
+        }
+        canvas.restore()
+        return frame
+    }
+
+    /**
+     * The edges of the raised [frame] round its holes, lit from the top left: a light edge where the frame faces up
+     * (below a hole) and a shadow where it faces down (above a hole).
+     */
+    private fun frameBevel(canvas: Canvas, frame: Path) {
+        val s = SCALE
+        canvas.save()
+        canvas.clipPath(frame)
+        for (hole in frameHoles()) {
+            canvas.save()
+            canvas.translate(0.7f * s, 1.1f * s)
+            canvas.drawPath(hole, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.4f * s; color = Color.argb(130, 255, 255, 255) })
+            canvas.restore()
+            canvas.save()
+            canvas.translate(-0.6f * s, -1f * s)
+            canvas.drawPath(hole, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.6f * s; color = Color.argb(190, 0, 0, 0) })
+            canvas.restore()
+        }
+        canvas.restore()
+    }
+
+    /** A small round pin head at [x], [y] with radius [r]: domed steel lit from the top left, with a dark ring and a shadow. */
+    private fun pin(canvas: Canvas, x: Float, y: Float, r: Float) {
+        val s = SCALE
+        canvas.drawCircle((x + 0.3f) * s, (y + 0.5f) * s, (r + 0.4f) * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(160, 0, 0, 0) })
+        canvas.drawCircle(x * s, y * s, r * s, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient((x - r * 0.4f) * s, (y - r * 0.4f) * s, r * 1.5f * s, color("#FFFFFF"), color("#5A5F66"), Shader.TileMode.CLAMP)
+        })
+        canvas.drawCircle(x * s, y * s, r * s, paint("#2A2D31", Paint.Style.STROKE, 0.4f))
+    }
+
     private fun roundRect(r: RectF, radius: Float) = Path().apply { addRoundRect(scaled(r), radius * SCALE, radius * SCALE, Path.Direction.CW) }
 
     /** A panel that a slanted line cuts on the left, from [topLeft] to [bottomLeft], between [top] and [bottom], round on the right. */
@@ -654,6 +721,8 @@ class CwfD2DesignTest : CwfDesignBase() {
         metalRim(canvas)
         // Screws at the inner corners of the pockets
         for ((x, y) in POCKET_SCREWS) screw(canvas, x, y, 2.6f, 35f)
+        // Between the panels and the pockets: a raised frame of brushed steel
+        val frame = metalFrame(canvas)
 
         // The panels
         canvas.panel(sidePanel(TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT))
@@ -666,6 +735,10 @@ class CwfD2DesignTest : CwfDesignBase() {
         canvas.panel(roundRect(LINE_PANEL, 12f))
         canvas.panel(roundRect(TIME_PANEL, 16f))
         canvas.panel(roundRect(MONTH_PANEL, 10f))
+        // The edges of the frame round the panels and pockets, and its pins
+        frameBevel(canvas, frame)
+        for ((x, y) in FRAME_PINS) pin(canvas, x, y, FRAME_PIN_R)
+        for ((x, y) in FRAME_SCREWS) screw(canvas, x, y, FRAME_SCREW_R, 30f)
         // A thin light along the top of the time panel, and the line between date and time
         canvas.drawLine((TIME_PANEL.left + 16f) * s, (TIME_PANEL.top + 2.5f) * s, (TIME_PANEL.right - 16f) * s, (TIME_PANEL.top + 2.5f) * s, paint("#3A3E44", width = 1f))
         canvas.drawLine(DATE_LINE_X * s, (TIME_PANEL.top + 10f) * s, DATE_LINE_X * s, (TIME_PANEL.bottom - 10f) * s, paint(ROW_LINE, width = 1.5f))
@@ -1564,6 +1637,34 @@ class CwfD2DesignTest : CwfDesignBase() {
         return box
     }
 
+    /** The strips between the panels are raised brushed steel, not the dark dial, with small domed pins in them. */
+    @Test
+    fun theStripsBetweenThePanelsAreRaisedMetalWithPins() {
+        val picture = render()
+        // Steel half way between two pins, in each strip: grey and of middle brightness (the dark dial was about 45)
+        for ((x, y) in listOf(70f to 155f, 150f to 155f, 250f to 155f, 70f to 247f, 330f to 247f, 210f to 124f, 270f to 278f)) {
+            val c = picture.getPixel(x.toInt(), y.toInt())
+            assertWithMessage("steel at $x, $y").that(brightness(c)).isIn(Range.closed(80, 200))
+            assertWithMessage("grey at $x, $y").that(maxOf(abs(Color.red(c) - Color.green(c)), abs(Color.green(c) - Color.blue(c)))).isAtMost(20)
+        }
+        // Each pin: a bright highlight on its top left, and it lies in a strip, between the panels
+        val gaps = listOf(TOP_PANEL_BOTTOM to LINE_PANEL.top, LINE_PANEL.bottom to TIME_PANEL.top, TIME_PANEL.bottom to MONTH_PANEL.top, MONTH_PANEL.bottom to LOW_PANEL_TOP)
+        for ((x, y) in FRAME_PINS) {
+            val brightest = (-2..1).flatMap { dy -> (-2..1).map { dx -> brightness(picture.getPixel(x.toInt() + dx, y.toInt() + dy)) } }.max()
+            assertWithMessage("pin highlight at $x, $y").that(brightest).isAtLeast(180)
+            assertWithMessage("pin $x, $y in a strip").that(gaps.any { (top, bottom) -> y - FRAME_PIN_R >= top && y + FRAME_PIN_R <= bottom }).isTrue()
+            assertWithMessage("pin $x, $y inside the rim").that(hypot(x - 200f, y - 200f) + FRAME_PIN_R).isLessThan(RIM_INNER)
+        }
+        // The screws on the wider steel: a bright head, clear of the rim and of the panels beside them
+        for ((x, y) in FRAME_SCREWS) {
+            val brightest = (-3..1).flatMap { dy -> (-3..1).map { dx -> brightness(picture.getPixel(x.toInt() + dx, y.toInt() + dy)) } }.max()
+            assertWithMessage("screw head at $x, $y").that(brightest).isAtLeast(180)
+            assertWithMessage("screw $x, $y inside the rim").that(hypot(x - 200f, y - 200f) + FRAME_SCREW_R).isLessThan(RIM_INNER - 1f)
+            val head = RectF(x - FRAME_SCREW_R, y - FRAME_SCREW_R, x + FRAME_SCREW_R, y + FRAME_SCREW_R)
+            for (panel in listOf(LINE_PANEL, TIME_PANEL, MONTH_PANEL)) assertWithMessage("screw $x, $y and a panel").that(RectF.intersects(head, panel)).isFalse()
+        }
+    }
+
     @Test
     fun theTrendArrowTurnsWithTheDelta() {
         for ((delta, angle) in listOf(0.0 to 90f, 7.5 to 45f, 15.0 to 0f, 30.0 to 0f, -3.0 to 108f, -7.5 to 135f, -20.0 to 180f)) {
@@ -1712,13 +1813,20 @@ class CwfD2DesignTest : CwfDesignBase() {
         val halfTrace = TRACE_DELAY_MS + TRACE_MS / 2
         val glint = GLINT_DELAY_MS + GLINT_MS / 2
         val settled = GLINT_DELAY_MS + GLINT_MS + 50
-        val frames = wakeFrames(listOf(0L, upBg, upSensor, halfTrace, glint, settled, ANIMATION_MS + 50))
+        val upMonth = MONTH_SLIDE_DELAY_MS + SWEEP_UP_MS
+        val frames = wakeFrames(listOf(0L, upBg, upMonth, upSensor, halfTrace, glint, settled, ANIMATION_MS + 50))
         val still = render()
         // At the start the pointer waits at the bottom of its scale, then it is at the top: 18 mmol/L
         assertThat(needleRedAt(frames.getValue(0L)!!, BG_FROM)).isGreaterThan(3)
         assertThat(needleRedAt(frames.getValue(upBg)!!, BG_TO)).isGreaterThan(3)
         assertThat(needleRedAt(frames.getValue(upBg)!!, bgAngle(Sample().mgdl))).isEqualTo(0)
-        // The sensor hand at 72 hours, where it does not show (54)
+        // The month mark: at January at the start, at December at the top of its run, then back on this month
+        val month = LocalDateTime.now().monthValue
+        assertWithMessage("month mark at January").that(countNear(frames.getValue(0L)!!, monthMarkBox(1), NEEDLE_RED, 70)).isGreaterThan(20)
+        assertWithMessage("month mark at December").that(countNear(frames.getValue(upMonth)!!, monthMarkBox(12), NEEDLE_RED, 70)).isGreaterThan(20)
+        assertWithMessage("month mark on this month").that(countNear(frames.getValue(settled)!!, monthMarkBox(month), NEEDLE_RED, 70)).isGreaterThan(20)
+        if (month != 12) assertWithMessage("not at December when settled").that(countNear(frames.getValue(settled)!!, monthMarkBox(12), NEEDLE_RED, 70)).isEqualTo(0)
+        // The sensor hand at 96 hours, where it does not show (54)
         assertThat(handAt(frames.getValue(upSensor)!!, HOURS_MAX, SENSOR_COLOUR)).isGreaterThan(3)
         assertThat(handAt(still, HOURS_MAX, SENSOR_COLOUR)).isEqualTo(0)
         // Halfway, the graph shows on the left and not yet on the right
@@ -1845,7 +1953,7 @@ class CwfD2DesignTest : CwfDesignBase() {
 
     private companion object {
 
-        const val TEXT_FONT = "SairaCondensedMedium"
+        const val TEXT_FONT = "D2Text"
         const val PRINT_FONT = "Michroma"
         const val JPEG_QUALITY = 90
 
@@ -1881,6 +1989,24 @@ class CwfD2DesignTest : CwfDesignBase() {
 
         /** The room between a pocket and the panels beside it. */
         const val POCKET_GAP = 2f
+
+        /** The raised steel frame between the panels: its colour at the top and the bottom of the face, and its pins. */
+        const val FRAME_TOP = "#9CA2A9"
+        const val FRAME_BOTTOM = "#5E636A"
+        const val FRAME_PIN_R = 1.6f
+
+        /** Screws in the wider steel left and right of the ends of the line panel and of the month panel. */
+        const val FRAME_SCREW_R = 3f
+        val FRAME_SCREWS = listOf(32f to 141f, 368f to 141f, 29f to 262f, 371f to 262f)
+        val FRAME_PINS = listOf(
+            // Under the top right panel, above the line under the glucose
+            180f to 124f, 240f to 124f, 300f to 124f, 355f to 124f,
+            // Between the line panel and the time panel, and between the time panel and the months
+            110f to 155f, 200f to 155f, 290f to 155f,
+            110f to 247f, 200f to 247f, 290f to 247f,
+            // Under the months, above the bottom right panel
+            180f to 278f, 240f to 278f, 300f to 278f, 355f to 278f
+        )
         const val ROW_LINE = "#2A2D32"
         const val NEEDLE_RED = "#FF2A2A"
         const val LOW = "#FF3B3B"
@@ -2130,6 +2256,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val SWEEP_SETTLE_MS = 900L
         const val SENSOR_SWEEP_DELAY_MS = 150L
         const val PUMP_SWEEP_DELAY_MS = 300L
+        const val MONTH_SLIDE_DELAY_MS = 200L
         const val WOBBLE_DELAY_MS = 250L
         const val WOBBLE_DEGREES = 22.0
         const val WOBBLE_HZ = 2.8
