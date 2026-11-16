@@ -102,6 +102,7 @@ import app.aaps.wear.watchfaces.utils.ComplicationSlotInfo
 import app.aaps.wear.watchfaces.utils.ComplicationStyleValues
 import app.aaps.wear.watchfaces.utils.ComplicationTypePriority
 import app.aaps.wear.watchfaces.utils.DesignTimeText
+import app.aaps.wear.watchfaces.utils.GlucoseLine
 import app.aaps.wear.watchfaces.utils.LayeredFrameCache
 import app.aaps.wear.watchfaces.utils.LogTimeGraph
 import app.aaps.wear.watchfaces.utils.ParsedJsonCache
@@ -1388,6 +1389,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 basalBackgroundColor = getColor(jsonColor.optString(JsonKeys.BASALBACKGROUNDCOLOR.key), ContextCompat.getColor(this, R.color.basal_dark))
                 basalCenterColor = getColor(jsonColor.optString(JsonKeys.BASALCENTERCOLOR.key), ContextCompat.getColor(this, R.color.basal_light))
                 gridColor = getColor(jsonColor.optString(JsonKeys.GRIDCOLOR.key), Color.WHITE)
+                glucoseLine = GlucoseLine.of(json.optInt(GlucoseLine.WIDTH_KEY), jsonColor.optString(GlucoseLine.COLOUR_KEY).takeIf { it.isNotEmpty() }?.let { getColor(it, midColor) }) // PERSONAL PATCH
                 tempTargetProfileColor = getColor(jsonColor.optString(JsonKeys.TEMPTARGETPROFILECOLOR.key), Color.WHITE)
                 tempTargetLoopColor = getColor(jsonColor.optString(JsonKeys.TEMPTARGETLOOPCOLOR.key), ContextCompat.getColor(this, R.color.dark_tempTarget_Loop))
                 tempTargetColor = getColor(jsonColor.optString(JsonKeys.TEMPTARGETCOLOR.key), ContextCompat.getColor(this, R.color.dark_tempTarget))

@@ -152,6 +152,7 @@ abstract class BaseWatchFace : WatchFace() {
     var bIsRound = false
     var dividerMatchesBg = false
     var pointSize = 2
+    var glucoseLine: GlucoseLine? = null // PERSONAL PATCH: set by the design, see GlucoseLine
     var enableSecond = false
     var detailedIob = false
     var externalStatus = ""
@@ -912,6 +913,7 @@ abstract class BaseWatchFace : WatchFace() {
                         sp, dateUtil, graphData.entries, treatmentData.predictions, treatmentData.temps, treatmentData.basals, treatmentData.boluses,
                         pointSize, highColor, lowColor, midColor, gridColor, basalBackgroundColor, basalCenterColor, bolusColor, carbColor, timeframe
                     )
+            bgGraphBuilder.glucoseLine = glucoseLine?.let { if (lowResMode) it.copy(colour = null) else it } // PERSONAL PATCH: ambient has one colour
             binding.chart?.lineChartData = bgGraphBuilder.lineData()
             if (LogTimeGraph.isOn(sp)) binding.chart?.let { it.lineChartData = LogTimeGraph(resources).label(it.lineChartData, gridColor, LogTimeGraph.labelsOnTop(it, displayWidth, displayHeight)) } // PERSONAL PATCH
             binding.chart?.isViewportCalculationEnabled = true
