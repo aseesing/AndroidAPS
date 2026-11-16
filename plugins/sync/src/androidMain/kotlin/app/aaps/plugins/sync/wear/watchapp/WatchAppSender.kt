@@ -51,7 +51,8 @@ sealed class WatchAppUpdateState {
 
     data object Idle : WatchAppUpdateState()
     data object Connecting : WatchAppUpdateState()
-    data class Sending(val watchName: String, val percent: Int) : WatchAppUpdateState()
+    /** @param secondsLeft estimate from the speed so far; null while too little is sent to tell */
+    data class Sending(val watchName: String, val percent: Int, val secondsLeft: Int? = null) : WatchAppUpdateState()
 
     /** All sent, the watch is writing the APK to its package installer */
     data class Installing(val watchName: String) : WatchAppUpdateState()
@@ -93,6 +94,7 @@ sealed class WatchAppUpdateState {
  * @param answerTimeoutMs how long the watch may take to say it is ready
  * @param stallTimeoutMs how long a running transfer may stand still
  * @param installTimeoutMs how long the watch may take to give the APK to its installer
+ * @param nowMs a clock in milliseconds, for the time estimate and the watchdog
  */
 class WatchAppSender(
     private val source: EmbeddedWatchAppSource,
@@ -100,7 +102,8 @@ class WatchAppSender(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val answerTimeoutMs: Long = 30_000,
     private val stallTimeoutMs: Long = 60_000,
-    private val installTimeoutMs: Long = 120_000
+    private val installTimeoutMs: Long = 120_000,
+    private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 }
 ) {
 
     /**
@@ -118,7 +121,7 @@ class WatchAppSender(
             return finish(WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.NO_WATCH, e.message ?: ""))
         } ?: return finish(WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.NO_WATCH))
 
-        val watchdog = Watchdog(channel)
+        val watchdog = Watchdog(channel, nowMs)
         return try {
             coroutineScope {
                 val watchdogJob = launch { watchdog.run() }
@@ -150,15 +153,17 @@ class WatchAppSender(
             else            -> throw IOException("Unexpected reply $reply")
         }
 
-        var percent = -1
+        var percent = 0
+        val start = nowMs()
         watchdog.extend(stallTimeoutMs)
+        onState(WatchAppUpdateState.Sending(channel.watchName, 0))
         source.open().use { body ->
             WatchAppUpdateProtocol.copyBody(body, channel.output, app.bodySize) { copied ->
                 watchdog.extend(stallTimeoutMs)
                 val now = (copied * 100 / app.bodySize).toInt()
                 if (now != percent) {
                     percent = now
-                    onState(WatchAppUpdateState.Sending(channel.watchName, now))
+                    onState(WatchAppUpdateState.Sending(channel.watchName, now, secondsLeft(copied, app.bodySize, nowMs() - start)))
                 }
             }
         }
@@ -172,8 +177,25 @@ class WatchAppSender(
         }
     }
 
+    companion object {
+
+        /** No estimate before this much is sent: the start of a transfer is not a good measure of its speed */
+        const val ESTIMATE_AFTER_PERCENT = 3
+        const val ESTIMATE_AFTER_MS = 3_000L
+
+        /**
+         * The time left at the speed so far, or null while too little is sent to tell.
+         *
+         * @param elapsedMs time since the first byte of the body
+         */
+        fun secondsLeft(copied: Long, size: Long, elapsedMs: Long): Int? {
+            if (copied <= 0 || copied * 100 < size * ESTIMATE_AFTER_PERCENT || elapsedMs < ESTIMATE_AFTER_MS) return null
+            return ((size - copied) * elapsedMs / copied / 1000).toInt()
+        }
+    }
+
     /** Closes [channel] when the deadline passes without [extend] */
-    private class Watchdog(private val channel: WatchChannel) {
+    private class Watchdog(private val channel: WatchChannel, private val nowMs: () -> Long) {
 
         @Volatile private var deadline = Long.MAX_VALUE
         @Volatile var fired = false
@@ -192,7 +214,7 @@ class WatchAppSender(
             runCatching { channel.close() }
         }
 
-        private fun now() = System.nanoTime() / 1_000_000
+        private fun now() = nowMs()
 
         companion object {
 

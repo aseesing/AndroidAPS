@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,10 +67,13 @@ import app.aaps.core.ui.compose.LocalSnackbarHostState
 import app.aaps.core.ui.compose.ToolbarConfig
 import app.aaps.core.ui.compose.dialogs.OkCancelDialog
 import app.aaps.core.ui.compose.dialogs.OkDialog
+import app.aaps.core.ui.compose.metroViewModel
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.R
 import app.aaps.plugins.sync.SyncStrings
-import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateSection
+import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateButton
+import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateContent
+import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateViewModel
 
 @Composable
 internal fun WearScreen(
@@ -89,16 +93,23 @@ internal fun WearScreen(
         }
     }
 
+    // The watch app update page; its button shows only in a phone app built with the watch app inside
+    val watchAppUpdateViewModel: WatchAppUpdateViewModel = metroViewModel()
+    var showWatchAppUpdate by rememberSaveable { mutableStateOf(false) }
+
     // Back handler for sub-screens
+    BackHandler(enabled = showWatchAppUpdate) { showWatchAppUpdate = false }
     BackHandler(enabled = uiState.showInfos) { viewModel.hideCwfInfos() }
     BackHandler(enabled = uiState.showImportList) { viewModel.hideImportList() }
 
     // Only title needs pre-resolving (plain String used in LaunchedEffect suspend block)
     val wearTitle = stringResource(CoreUiStrings.wear)
     val importTitle = stringResource(SyncStrings.wear_import_custom_watchface_title)
+    val watchAppUpdateTitle = stringResource(SyncStrings.wear_app_update_button)
 
     // Determine current sub-screen
     val subScreen = when {
+        showWatchAppUpdate     -> SubScreen.WATCH_APP_UPDATE
         uiState.showImportList -> SubScreen.IMPORT_LIST
         uiState.showInfos      -> SubScreen.INFOS
         else                   -> SubScreen.MAIN
@@ -109,16 +120,18 @@ internal fun WearScreen(
         setToolbarConfig(
             ToolbarConfig(
                 title = when (subScreen) {
-                    SubScreen.IMPORT_LIST -> importTitle
-                    SubScreen.INFOS       -> uiState.cwfInfosState?.title ?: ""
-                    SubScreen.MAIN        -> wearTitle
+                    SubScreen.IMPORT_LIST      -> importTitle
+                    SubScreen.INFOS            -> uiState.cwfInfosState?.title ?: ""
+                    SubScreen.WATCH_APP_UPDATE -> watchAppUpdateTitle
+                    SubScreen.MAIN             -> wearTitle
                 },
                 navigationIcon = {
                     IconButton(onClick = {
                         when (subScreen) {
-                            SubScreen.IMPORT_LIST -> viewModel.hideImportList()
-                            SubScreen.INFOS       -> viewModel.hideCwfInfos()
-                            SubScreen.MAIN        -> onNavigateBack()
+                            SubScreen.IMPORT_LIST      -> viewModel.hideImportList()
+                            SubScreen.INFOS            -> viewModel.hideCwfInfos()
+                            SubScreen.WATCH_APP_UPDATE -> showWatchAppUpdate = false
+                            SubScreen.MAIN             -> onNavigateBack()
                         }
                     }) {
                         Icon(
@@ -166,10 +179,12 @@ internal fun WearScreen(
                 }
             }
 
+            SubScreen.WATCH_APP_UPDATE -> WatchAppUpdateContent(viewModel = watchAppUpdateViewModel, modifier = modifier)
+
             SubScreen.MAIN        -> {
                 WearMainContent(
                     uiState = uiState,
-                    watchAppUpdate = { WatchAppUpdateSection() },
+                    onWatchAppUpdate = if (watchAppUpdateViewModel.embedded != null) ({ showWatchAppUpdate = true }) else null,
                     onResendData = { viewModel.resendData() },
                     onOpenSettings = { viewModel.openSettingsOnWear() },
                     onLoadWatchface = { viewModel.loadWatchfaceFiles() },
@@ -187,7 +202,7 @@ internal fun WearScreen(
     }
 }
 
-private enum class SubScreen { MAIN, INFOS, IMPORT_LIST }
+private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, WATCH_APP_UPDATE }
 
 /**
  * @see WearMainContentPreview
@@ -196,7 +211,7 @@ private enum class SubScreen { MAIN, INFOS, IMPORT_LIST }
 @Composable
 internal fun WearMainContent(
     uiState: WearUiState,
-    watchAppUpdate: @Composable () -> Unit = {},
+    onWatchAppUpdate: (() -> Unit)? = null,
     onResendData: () -> Unit,
     onOpenSettings: () -> Unit,
     onLoadWatchface: () -> Unit,
@@ -268,11 +283,9 @@ internal fun WearMainContent(
                     button1 = ButtonDef(Icons.Default.Refresh, stringResource(SyncStrings.resend_all_data), onResendData),
                     button2 = ButtonDef(Icons.Default.Settings, stringResource(SyncStrings.open_settings_on_wear), onOpenSettings)
                 )
+                onWatchAppUpdate?.let { WatchAppUpdateButton(it) }
             }
         }
-
-        // Watch App Card: only in a phone app built with the watch app inside
-        watchAppUpdate()
 
         // Pushed Watchface Card: only on a watch that reported Watch Face Push (Wear OS 6+). Below
         // that the pushed faces cannot exist, and a choice that does nothing would only mislead.
