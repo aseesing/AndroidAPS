@@ -113,7 +113,7 @@ class ReadmeAnimationsTest {
         EventData.SingleBg(
             dataset = 0, timeStamp = now - 120_000L, sgvString = "6,7", glucoseUnits = "mmol", slopeArrow = "→",
             delta = "+0,1", deltaDetailed = "+0,12", avgDelta = "+0,1", avgDeltaDetailed = "+0,08", sgvLevel = 0, sgv = 121.0,
-            high = 180.0, low = 70.0, color = 0
+            high = 180.0, low = 70.0, color = 0, deltaMgdl = 1.8, avgDeltaMgdl = 1.4
         ),
         EventData.Status(
             dataset = 0, externalStatus = "", iobSum = "1.25", iobDetail = "(0.90|0.35)", cob = "12g", currentBasal = "0.85U/h",
