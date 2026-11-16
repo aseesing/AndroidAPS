@@ -18,7 +18,7 @@
 </tr>
 <tr>
 <td></td>
-<td align="center" width="33%"><img src="images/d2.gif" width="220" alt="D2: steel and glass, a turning seconds wheel, a graph of the whole day"><br><b>D2</b><br><sub>steel and glass, a turning seconds wheel</sub></td>
+<td align="center" width="33%"><img src="images/d2.gif" width="220" alt="D2: steel and glass, a big trend arrow, a graph of the whole day"><br><b>D2</b><br><sub>steel and glass, a big trend arrow</sub></td>
 <td></td>
 </tr>
 <tr>
