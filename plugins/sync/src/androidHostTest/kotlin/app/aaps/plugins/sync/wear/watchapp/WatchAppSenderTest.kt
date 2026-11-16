@@ -13,6 +13,7 @@ import java.io.OutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 /**
@@ -85,7 +86,9 @@ class WatchAppSenderTest {
         assertThat(received.toByteArray()).isEqualTo(body)
         assertThat(label).isEqualTo(app.label)
         assertThat(states.first()).isEqualTo(WatchAppUpdateState.Connecting)
-        assertThat(states).contains(WatchAppUpdateState.Sending("Test Watch", 100))
+        // Sending shows at once, before the first block is through
+        assertThat(states[1]).isEqualTo(WatchAppUpdateState.Sending("Test Watch", 0))
+        assertThat(states.filterIsInstance<WatchAppUpdateState.Sending>().last().percent).isEqualTo(100)
         assertThat(states).contains(WatchAppUpdateState.Installing("Test Watch"))
         assertThat(states.last()).isEqualTo(result)
         val percents = states.filterIsInstance<WatchAppUpdateState.Sending>().map { it.percent }
@@ -149,6 +152,41 @@ class WatchAppSenderTest {
 
         assertThat(result).isEqualTo(WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.TIMEOUT))
         assertThat(states).contains(WatchAppUpdateState.Installing("Test Watch"))
+    }
+
+    @Test
+    fun `the time left comes from the speed so far`() = runBlocking {
+        // A slow link: every reading of the clock is one second later
+        val clock = AtomicLong(0)
+        val result = WatchAppSender(source, channel { input, output ->
+            val header = WatchAppUpdateProtocol.readHeader(input)
+            WatchAppUpdateProtocol.writeReply(output, Reply.Ready)
+            WatchAppUpdateProtocol.copyBody(input, OutputStream.nullOutputStream(), header.bodySize)
+            WatchAppUpdateProtocol.writeReply(output, Reply.Committed)
+        }, answerTimeoutMs = 60_000_000, stallTimeoutMs = 60_000_000, installTimeoutMs = 60_000_000, nowMs = { clock.getAndAdd(1000) }).send { states += it }
+
+        assertThat(result).isEqualTo(WatchAppUpdateState.Sent("Test Watch"))
+        val sending = states.filterIsInstance<WatchAppUpdateState.Sending>()
+        assertThat(sending.first().secondsLeft).isNull()
+        val estimates = sending.mapNotNull { it.secondsLeft }
+        assertThat(estimates).isNotEmpty()
+        assertThat(estimates.last()).isEqualTo(0)
+    }
+
+    @Test
+    fun `no estimate at the very start`() {
+        // Under 3 percent sent
+        assertThat(WatchAppSender.secondsLeft(copied = 2, size = 100, elapsedMs = 60_000)).isNull()
+        // Under 3 seconds gone
+        assertThat(WatchAppSender.secondsLeft(copied = 50, size = 100, elapsedMs = 2_000)).isNull()
+        assertThat(WatchAppSender.secondsLeft(copied = 0, size = 100, elapsedMs = 60_000)).isNull()
+    }
+
+    @Test
+    fun `half sent after a minute leaves a minute`() {
+        assertThat(WatchAppSender.secondsLeft(copied = 50, size = 100, elapsedMs = 60_000)).isEqualTo(60)
+        assertThat(WatchAppSender.secondsLeft(copied = 25, size = 100, elapsedMs = 60_000)).isEqualTo(180)
+        assertThat(WatchAppSender.secondsLeft(copied = 100, size = 100, elapsedMs = 60_000)).isEqualTo(0)
     }
 
     @Test
