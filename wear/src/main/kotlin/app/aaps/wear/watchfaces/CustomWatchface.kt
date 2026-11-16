@@ -3,6 +3,7 @@ package app.aaps.wear.watchfaces
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -11,6 +12,7 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.text.format.DateFormat
 import android.util.TypedValue
@@ -89,6 +91,7 @@ import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.DayOverlay
 import app.aaps.wear.watchfaces.daynight.GeoPoint
 import app.aaps.wear.watchfaces.daynight.MoonPhase
+import app.aaps.wear.watchfaces.daynight.MoonPicture
 import app.aaps.wear.watchfaces.daynight.NightFace
 import app.aaps.wear.watchfaces.daynight.Orbit
 import app.aaps.wear.watchfaces.daynight.StoredWeather
@@ -175,6 +178,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         val longitude = sp.getDouble(R.string.key_location_longitude, Double.NaN)
         return if (latitude.isNaN() || longitude.isNaN()) null else GeoPoint(latitude, longitude)
     }
+
+    // PERSONAL PATCH: the moon drawn on the watch, for a view with `"moonLight": true` (see MoonPicture)
+    private val moonPicture = MoonPicture { BitmapFactory.decodeResource(resources, R.drawable.personal_moon_full) }
+
+    private fun moonDrawable(view: JSONObject?, width: Int, height: Int): Drawable? =
+        if (MoonPicture.isOn(view)) moonPicture.bitmap(renderNow(), storedLocation(), minOf(width, height))?.let { BitmapDrawable(resources, it) } else null
 
     /** The weather the phone sent last (see `EventData.Weather`), or null when there is none or it is too old. */
     private fun storedWeather(): String? {
@@ -2059,7 +2068,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                         view.text = dynData?.getTextValueStep(cwf) ?: viewJson.optString(JsonKeys.TEXTVALUE.key)
                     }
                 }
-                (dynData?.getDrawable(cwf) ?: textDrawable(cwf))?.let {
+                (cwf.moonDrawable(viewJson, width, height) ?: dynData?.getDrawable(cwf) ?: textDrawable(cwf))?.let { // PERSONAL PATCH: moonDrawable
                     if (viewJson.has(JsonKeys.COLOR.key) || (dynData?.stepColor ?: 0) > 0)           // Note only works on bitmap (png or jpg)  not for svg files
                         it.colorFilter = cwf.changeDrawableColor(dynData?.getColorStep(cwf) ?: cwf.getColor(viewJson.optString(JsonKeys.COLOR.key)))
                     else
