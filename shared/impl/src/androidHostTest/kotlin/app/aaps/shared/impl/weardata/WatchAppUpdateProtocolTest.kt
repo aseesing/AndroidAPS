@@ -2,6 +2,7 @@ package app.aaps.shared.impl.weardata
 
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.Header
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.Reply
+import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -38,7 +39,72 @@ class WatchAppUpdateProtocolTest {
         }
 
         val e = assertThrows<IOException> { WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray())) }
-        assertThat(e.message).contains("format")
+        // The phone looks for this text to try an older version
+        assertThat(e.message).contains(WatchAppUpdateProtocol.UNKNOWN_FORMAT)
+    }
+
+    @Test
+    fun `a header with a hash and a Wi-Fi offer is read back as written`() {
+        val written = Header(
+            label = "4.0.1 (aaps-wear.apk)",
+            bodySize = 20_000_000,
+            sha256 = "ab".repeat(32),
+            wifi = WifiOffer(listOf("192.168.1.20", "10.0.0.5"), 45_123, "00112233445566778899aabbccddeeff")
+        )
+        val buffer = ByteArrayOutputStream()
+        WatchAppUpdateProtocol.writeHeader(buffer, written)
+
+        val header = WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray()))
+
+        assertThat(header).isEqualTo(written)
+        assertThat(header.version).isEqualTo(WatchAppUpdateProtocol.VERSION)
+    }
+
+    @Test
+    fun `a version 1 header is still read, without hash and Wi-Fi`() {
+        val buffer = ByteArrayOutputStream()
+        // What a phone app with version 1 wrote
+        DataOutputStream(buffer).apply {
+            writeInt(WatchAppUpdateProtocol.MAGIC)
+            writeInt(1)
+            writeUTF("old")
+            writeLong(10)
+        }
+
+        val header = WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray()))
+
+        assertThat(header).isEqualTo(Header("old", 10, version = WatchAppUpdateProtocol.VERSION_CHANNEL_ONLY))
+    }
+
+    @Test
+    fun `a version 1 header is written the way version 1 reads it`() {
+        val buffer = ByteArrayOutputStream()
+        WatchAppUpdateProtocol.writeHeader(buffer, Header("old", 10, sha256 = "ignored", version = WatchAppUpdateProtocol.VERSION_CHANNEL_ONLY))
+
+        // magic, version, label (2 + 3 bytes), size, and nothing more
+        assertThat(buffer.size()).isEqualTo(4 + 4 + 5 + 8)
+    }
+
+    @Test
+    fun `a Wi-Fi request is read back as written`() {
+        val buffer = ByteArrayOutputStream()
+        WatchAppUpdateProtocol.writeWifiRequest(buffer, "secret")
+
+        assertThat(WatchAppUpdateProtocol.readWifiRequest(ByteArrayInputStream(buffer.toByteArray()))).isEqualTo("secret")
+        assertThrows<IOException> { WatchAppUpdateProtocol.readWifiRequest(ByteArrayInputStream("GET / HTTP/1.1".toByteArray())) }
+    }
+
+    @Test
+    fun `sha256 is the standard one`() {
+        assertThat(WatchAppUpdateProtocol.sha256(ByteArrayInputStream("abc".toByteArray())))
+            .isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    @Test
+    fun `tokens match only when equal`() {
+        assertThat(WatchAppUpdateProtocol.sameToken("abc", "abc")).isTrue()
+        assertThat(WatchAppUpdateProtocol.sameToken("abc", "abd")).isFalse()
+        assertThat(WatchAppUpdateProtocol.sameToken("abc", "abcd")).isFalse()
     }
 
     @Test
@@ -52,7 +118,7 @@ class WatchAppUpdateProtocolTest {
 
     @Test
     fun `every reply is read back as written`() {
-        val replies = listOf(Reply.Ready, Reply.Committed, Reply.Failed("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
+        val replies = listOf(Reply.Ready, Reply.WifiStarted, Reply.Committed, Reply.Failed("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
         val buffer = ByteArrayOutputStream()
         replies.forEach { WatchAppUpdateProtocol.writeReply(buffer, it) }
 

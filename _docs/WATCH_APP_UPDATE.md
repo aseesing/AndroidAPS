@@ -29,21 +29,38 @@ and it comes back with every new version. With this feature it is needed **once*
    drops the extension.
 
 2. **Phone.** The Wear screen shows a small **Update watch app** button in the connection card. It
-   opens a page with the included version, a hint (several minutes, keep the watch close), a
-   **Send to watch** button, a progress bar with the time left, and the result.
+   opens a page with the included version, a hint (several minutes over Bluetooth, much faster
+   with Wi-Fi, keep the watch close), a **Send to watch** button, a progress bar with the time left
+   and the way the body goes (Wi-Fi or Bluetooth), and the result.
    `WatchAppUpdater` (one app-wide instance, so the transfer goes on when the page is left) opens a
    Wear OS `ChannelClient` channel to the watch and `WatchAppSender` runs the protocol.
 
 3. **Protocol** (`WatchAppUpdateProtocol` in `:shared:impl`, path `/aaps/watch_app_update`):
-   phone sends a header (magic, version, label, size); the watch answers *Ready*; the phone sends the
-   gzip body; the watch answers *Committed* or *Failed*. A watch app that is too old for this feature
-   never answers, and the phone says so after 30 seconds. A watchdog closes the channel when nothing
-   moves for too long, because reads and writes on a channel block and cannot be cancelled.
+   phone sends a header (magic, version, label, size, SHA-256 of the body, and a Wi-Fi offer); the
+   watch answers *Ready* and the phone sends the gzip body over the channel; the watch answers
+   *Committed* or *Failed*. A watch app that is too old for this feature never answers, and the
+   phone says so after 30 seconds. A watchdog closes the channel when nothing moves for too long,
+   because reads and writes on a channel block and cannot be cancelled.
+
+   **Wi-Fi.** The channel goes over Bluetooth, about 70 KB/s: 5 minutes for 21 MB. So when the
+   phone has a Wi-Fi address (its Wi-Fi, or its hotspot), it starts a one-time TCP server
+   (`SocketWifiBodyServer`) and puts its addresses, the port and a random token in the header. The
+   watch answers *WifiStarted*, asks Android for a Wi-Fi network (Wear OS then turns on the Wi-Fi of
+   the watch, if the user allows Wi-Fi and the watch knows a network), connects, sends the token
+   and reads the body (`NetworkWifiBodyFetcher`). When any of that fails, the watch answers *Ready*
+   and the body comes over the channel after all. The token keeps other devices on the network
+   from fetching the APK; the SHA-256 from the channel keeps them from giving the watch another one.
+
+   Version 1 of the protocol (the first watch app with this feature) had no hash and no Wi-Fi. Such
+   a watch app answers a version 2 header with *Failed* "Unknown update format"; the phone then waits
+   12 seconds (the old watch app is busy for 10 seconds after an answer) and sends again in version 1.
 
 4. **Watch.** `DataLayerListenerServiceWear.onChannelOpened` hands the channel to
-   `WatchAppSelfUpdate`. `WatchAppReceiveTask` unpacks the APK while it arrives, straight into a
+   `WatchAppSelfUpdate`. `WatchAppReceiveTask` unpacks the APK while it arrives, over Wi-Fi or over
+   the channel, straight into a
    `PackageInstaller` session that is limited to the app's own package
-   (`setAppPackageName`). gzip checks its CRC, so a damaged transfer is never installed. Android
+   (`setAppPackageName`). gzip checks its CRC and the watch checks the SHA-256, so a damaged
+   transfer is never installed. Android
    refuses an APK that is not signed with the same key as the installed watch app. The session asks
    for no user action (`USER_ACTION_NOT_REQUIRED`, allowed for an app that updates itself). Where
    the watch still wants a confirmation, `WatchAppInstallStatusReceiver` opens it and posts a
@@ -112,5 +129,7 @@ protocol to the watch over Wi-Fi, like those apps do.
   setup, and what the watch shows.
 - Decide whether release builds of AAPS should always carry the watch app (a bigger phone APK, about
   +21 MB) or whether it stays an option for people who build themselves.
+- Test the Wi-Fi path on more watches: whether Wear OS turns on the Wi-Fi for the request on
+  every model, and how fast it is. Also with the phone as a hotspot for the watch.
 - Run the full CI command from `CLAUDE.md` before pushing.
 - Remove this "Before the upstream pull request" part once the points above are done or dropped.

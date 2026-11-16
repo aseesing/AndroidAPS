@@ -114,6 +114,11 @@ internal fun WatchAppUpdatePage(
                             progress = { state.percent / 100f },
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Text(
+                            text = stringResource(if (state.overWifi) SyncStrings.wear_app_update_over_wifi else SyncStrings.wear_app_update_over_bluetooth),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     stateText(state)?.let { text ->
                         Text(
@@ -172,7 +177,7 @@ internal fun WatchAppUpdatePagePreview() {
     MaterialTheme {
         WatchAppUpdatePage(
             embedded = EmbeddedWatchApp("4.0.1 (aaps-wear-4.0.1.apk)", 20_000_000),
-            state = WatchAppUpdateState.Sending("Pixel Watch 3", 42, secondsLeft = 170),
+            state = WatchAppUpdateState.Sending("Pixel Watch 3", 42, secondsLeft = 20, overWifi = true),
             onSend = {}
         )
     }

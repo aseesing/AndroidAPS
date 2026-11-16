@@ -12,7 +12,10 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
+import java.net.InetAddress
+import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
@@ -60,8 +63,11 @@ class WatchAppSenderTest {
         }
     }
 
-    private fun sender(source: EmbeddedWatchAppSource = this.source, opener: WatchChannelOpener) =
-        WatchAppSender(source, opener, answerTimeoutMs = 500, stallTimeoutMs = 500, installTimeoutMs = 500)
+    private fun sender(source: EmbeddedWatchAppSource = this.source, opener: WatchChannelOpener, wifiServers: WifiBodyServerFactory? = null) =
+        WatchAppSender(source, opener, wifiServers, answerTimeoutMs = 500, stallTimeoutMs = 500, installTimeoutMs = 500, wifiTimeoutMs = 2_000, retryDelayMs = 0)
+
+    /** A real server, on the loopback address of the test machine */
+    private val loopbackServer = WifiBodyServerFactory { SocketWifiBodyServer(listOf("127.0.0.1"), InetAddress.getLoopbackAddress()) }
 
     private fun channel(pipeSize: Int = 1024 * 1024, watch: (InputStream, OutputStream) -> Unit) =
         WatchChannelOpener { path ->
@@ -171,6 +177,109 @@ class WatchAppSenderTest {
         val estimates = sending.mapNotNull { it.secondsLeft }
         assertThat(estimates).isNotEmpty()
         assertThat(estimates.last()).isEqualTo(0)
+    }
+
+    @Test
+    fun `a watch on Wi-Fi fetches the body from the phone's server`() = runBlocking {
+        val received = ByteArrayOutputStream()
+        var header: WatchAppUpdateProtocol.Header? = null
+
+        val result = sender(opener = channel { input, output ->
+            val read = WatchAppUpdateProtocol.readHeader(input)
+            header = read
+            WatchAppUpdateProtocol.writeReply(output, Reply.WifiStarted)
+            val offer = checkNotNull(read.wifi)
+            Socket(offer.addresses.first(), offer.port).use { socket ->
+                WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), offer.token)
+                WatchAppUpdateProtocol.copyBody(socket.getInputStream(), received, read.bodySize)
+            }
+            WatchAppUpdateProtocol.writeReply(output, Reply.Committed)
+        }, wifiServers = loopbackServer).send { states += it }
+
+        assertThat(result).isEqualTo(WatchAppUpdateState.Sent("Test Watch"))
+        assertThat(received.toByteArray()).isEqualTo(body)
+        assertThat(header?.sha256).isEqualTo(WatchAppUpdateProtocol.sha256(ByteArrayInputStream(body)))
+        assertThat(header?.wifi?.token).hasLength(32)
+        val sending = states.filterIsInstance<WatchAppUpdateState.Sending>()
+        assertThat(sending.all { it.overWifi }).isTrue()
+        assertThat(sending.last().percent).isEqualTo(100)
+        assertThat(states).contains(WatchAppUpdateState.Installing("Test Watch"))
+        assertThat(states.last()).isEqualTo(result)
+    }
+
+    @Test
+    fun `when Wi-Fi does not work on the watch the body comes over the channel`() = runBlocking {
+        val received = ByteArrayOutputStream()
+
+        val result = sender(opener = channel { input, output ->
+            val header = WatchAppUpdateProtocol.readHeader(input)
+            WatchAppUpdateProtocol.writeReply(output, Reply.WifiStarted)
+            // No Wi-Fi on the watch: it never connects, and asks for the channel
+            WatchAppUpdateProtocol.writeReply(output, Reply.Ready)
+            WatchAppUpdateProtocol.copyBody(input, received, header.bodySize)
+            WatchAppUpdateProtocol.writeReply(output, Reply.Committed)
+        }, wifiServers = loopbackServer).send { states += it }
+
+        assertThat(result).isEqualTo(WatchAppUpdateState.Sent("Test Watch"))
+        assertThat(received.toByteArray()).isEqualTo(body)
+        val sending = states.filterIsInstance<WatchAppUpdateState.Sending>()
+        assertThat(sending.first().overWifi).isTrue()
+        assertThat(sending.last()).isEqualTo(sending.last().copy(percent = 100, overWifi = false))
+    }
+
+    @Test
+    fun `a phone without Wi-Fi offers none`() = runBlocking {
+        var offer: WatchAppUpdateProtocol.WifiOffer? = WatchAppUpdateProtocol.WifiOffer(emptyList(), 1, "")
+
+        val result = sender(opener = channel { input, output ->
+            val header = WatchAppUpdateProtocol.readHeader(input)
+            offer = header.wifi
+            WatchAppUpdateProtocol.writeReply(output, Reply.Ready)
+            WatchAppUpdateProtocol.copyBody(input, OutputStream.nullOutputStream(), header.bodySize)
+            WatchAppUpdateProtocol.writeReply(output, Reply.Committed)
+        }, wifiServers = { null }).send { states += it }
+
+        assertThat(result).isEqualTo(WatchAppUpdateState.Sent("Test Watch"))
+        assertThat(offer).isNull()
+    }
+
+    @Test
+    fun `a watch app with only version 1 gets the update again in version 1`() = runBlocking {
+        val channels = AtomicInteger()
+        val received = ByteArrayOutputStream()
+        val versions = CopyOnWriteArrayList<Int>()
+
+        val result = sender(opener = { _ ->
+            channels.incrementAndGet()
+            FakeChannel(1024 * 1024) { input, output ->
+                val header = WatchAppUpdateProtocol.readHeader(input)
+                versions += header.version
+                if (header.version != 1) {
+                    // What a watch app with version 1 answers
+                    WatchAppUpdateProtocol.writeReply(output, Reply.Failed("Wrong update: Unknown update format ${header.version}, expected 1"))
+                    return@FakeChannel
+                }
+                WatchAppUpdateProtocol.writeReply(output, Reply.Ready)
+                WatchAppUpdateProtocol.copyBody(input, received, header.bodySize)
+                WatchAppUpdateProtocol.writeReply(output, Reply.Committed)
+            }
+        }, wifiServers = loopbackServer).send { states += it }
+
+        assertThat(result).isEqualTo(WatchAppUpdateState.Sent("Test Watch"))
+        assertThat(channels.get()).isEqualTo(2)
+        assertThat(versions).containsExactly(WatchAppUpdateProtocol.VERSION, WatchAppUpdateProtocol.VERSION_CHANNEL_ONLY).inOrder()
+        assertThat(received.toByteArray()).isEqualTo(body)
+    }
+
+    @Test
+    fun `a watch that stops on Wi-Fi and never answers times out`() = runBlocking {
+        val result = sender(opener = channel { input, output ->
+            WatchAppUpdateProtocol.readHeader(input)
+            WatchAppUpdateProtocol.writeReply(output, Reply.WifiStarted)
+            Thread.sleep(10_000)
+        }, wifiServers = loopbackServer).send { states += it }
+
+        assertThat(result).isEqualTo(WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.TIMEOUT))
     }
 
     @Test
