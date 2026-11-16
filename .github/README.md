@@ -39,7 +39,7 @@ OnePlus Watch 2R and other round Wear OS watches.
 | 🌗 | **Day face and night face** | One face for the day, one for the night, with the weather, the sun and the moon. |
 | 🎨 | **Seven designs** | Cyberpunk Tech, Weather and Yellow, Wilds Weather, the analog Grand Complication for day and night, and D2. |
 | 📈 | **Log time graph** | The last hour in detail and the whole day behind it, with the time ago under the graph. On every face with a graph. |
-| 🌙 | **The real sun and moon** | They rise and set over a horizon as in the sky, the moon in its real phase, worked out on the watch. On D2 the watch draws the moon from a NASA photo, lit and turned as you see it in your sky. |
+| 🌙 | **The real sun and moon** | They rise and set over a horizon as in the sky, the moon in its real phase, worked out on the watch. The watch draws the moon from a NASA photo, lit and turned as you see it in your sky. |
 | 🔋 | **Battery on the face** | Phone and watch battery side by side. A low one blinks. |
 | ❤️ | **Heart rate and steps** | On the watch face, from what the watch measures anyway. |
 | 🪫 | **Longer watch battery** | Fewer redraws and fewer messages from the phone. |

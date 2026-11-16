@@ -28,6 +28,7 @@ import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeTimer
 import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.DayOverlay
+import app.aaps.wear.watchfaces.daynight.MoonPicture
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.json.JSONObject
@@ -40,11 +41,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Base64
 import java.util.Random
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan
 import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -55,8 +54,8 @@ import kotlin.math.sqrt
  * the glucose value in neon green, yellow or red, white values in the table, a dark navy background
  * with a faint weave.
  *
- * The moon goes along the edge through the night, from sunset (left) to sunrise (right), and shows
- * the picture nearest to the phase of now. When the weather is cloudy a cloud covers part of it
+ * The moon goes along the edge through the night, from sunset (left) to sunrise (right), drawn by
+ * the watch from a NASA photo, lit and turned as it is in the sky now. When the weather is cloudy a cloud covers part of it
  * (partly) or most of it (cloudy, rain).
  *
  * The wake-up animation: rain under the data and the drop of the logo beating at the heart rate. The
@@ -75,7 +74,7 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
     override val fileName = "Cyberpunk_Tech"
     override val previewInstant = NIGHT_MS
     override val ageColor = LOW_COLOR
-    override val ownPictures get() = (1..MOON_STEPS).map { moonName(it) } + listOf(CLOUD_NIGHT_PARTLY, CLOUD_NIGHT_FULL)
+    override val ownPictures get() = listOf(CLOUD_NIGHT_PARTLY, CLOUD_NIGHT_FULL)
     override val looks = listOf(
         Look("night clear", NIGHT_MS, EventData.Weather.CLEAR), Look("night partly", NIGHT_MS, EventData.Weather.PARTLY),
         Look("night cloudy", NIGHT_MS, EventData.Weather.CLOUDY), Look("night rain", NIGHT_MS, EventData.Weather.RAIN),
@@ -89,17 +88,16 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
     override fun design(default: CwfData): JSONObject = layout(
         default, "Cyberpunk HUD for the night: big time and glucose, a small data table and the graph, the moon on the edge. No hands, no seconds"
     ).apply {
-        // The moon goes along the edge through the night, from sunset (left) to sunrise (right). It
-        // shows one of MOON_STEPS pictures, chosen by the phase of today. The place in the json is the
-        // middle of its way; the watch moves it (see orbit).
+        // The moon goes along the edge through the night, from sunset (left) to sunrise (right). The
+        // watch draws it from its photo, lit and turned as it is in the sky now (see MoonPicture). The
+        // place in the json is the middle of its way; the watch moves it (see orbit).
         val top = orbit(JsonKeyValues.NIGHT_PROGRESS.key).point(0.5)
         place("freetext4", (top.first - MOON_SIZE / 2f).toInt(), (top.second - MOON_SIZE / 2f).toInt(), MOON_SIZE)
-            .put("textvalue", "").put("dynData", MOON_DYN).put("orbit", orbitJson(JsonKeyValues.NIGHT_PROGRESS.key))
+            .put("textvalue", "").put(MoonPicture.JSON_KEY, true).put("orbit", orbitJson(JsonKeyValues.NIGHT_PROGRESS.key))
         // A cloud in front of the moon, only when the weather is cloudy (see the weather looks)
         place("patient_name", (top.first - CLOUD_SIZE / 2f).toInt(), (top.second - CLOUD_SIZE / 2f).toInt(), CLOUD_SIZE)
             .put("visibility", "gone").put("textvalue", "").put("fontColor", CLEAR).put("background", CLOUD_NIGHT_PARTLY)
             .put("orbit", orbitJson(JsonKeyValues.NIGHT_PROGRESS.key))
-        getJSONObject("dynData").put(MOON_DYN, moonDynData())
 
         // Rain and the beating drop for a few seconds after the wrist is raised
         put("animation", animation(rain = rain(RAIN_COLOR, RAIN_ALPHA)))
@@ -122,7 +120,7 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         ResFileMap.BACKGROUND.fileName to background(bg),
         ResFileMap.COVER_PLATE.fileName to coverPlate(),
         LOGO_PULSE to logoPulse()
-    ) + arrowImages() + moonImages() + mapOf(
+    ) + arrowImages() + mapOf(
         CLOUD_NIGHT_PARTLY to cloudNightPng(full = false),
         CLOUD_NIGHT_FULL to cloudNightPng(full = true),
         BLANK to blankPng()
@@ -133,10 +131,10 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         File(out, "${fileName}_night.png").writeBytes(pngBytes(clear))
         // Left of the glucose panel: dark
         assertThat(luminance(clear.getPixel(16, 200))).isLessThan(0.05)
-        // On 11 November at 23:00 the moon is 2 days old, so the watch itself must pick the thin crescent, not the dark new moon picture
+        // On 11 November at 23:00 the moon is 2 days old: the thin crescent must still be seen
         val clock = DayNightClock(location = { null })
         val moon = orbit(JsonKeyValues.NIGHT_PROGRESS.key).point(clock.nightProgress(NIGHT_MS))
-        assertThat(brightestAround(clear, moon, MOON_SIZE / 2)).isGreaterThan(0.6)
+        assertThat(brightestAround(clear, moon, MOON_SIZE / 2)).isGreaterThan(CRESCENT_LIGHT)
         // A cloud in front of the moon when it is cloudy: the place of the moon changes
         val box = Rect(moon.first.toInt() - CLOUD_SIZE / 2, moon.second.toInt() - CLOUD_SIZE / 2, moon.first.toInt() + CLOUD_SIZE / 2, moon.second.toInt() + CLOUD_SIZE / 2)
         assertThat(maxDifference(pictures[2], clear, only = box)).isGreaterThan(60)
@@ -144,87 +142,21 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         // In the evening the moon is on the left
         val evening = orbit(JsonKeyValues.NIGHT_PROGRESS.key).point(clock.nightProgress(EVENING_MS))
         assertThat(evening.first).isLessThan(moon.first)
-        assertThat(brightestAround(pictures[5], evening, MOON_SIZE / 2)).isGreaterThan(0.6)
+        assertThat(brightestAround(pictures[5], evening, MOON_SIZE / 2)).isGreaterThan(CRESCENT_LIGHT)
     }
 
     // ------------------------------------------------------------------------------------------
     // The moon
     // ------------------------------------------------------------------------------------------
 
-    /**
-     * The moon view shows the picture nearest to the phase of now. Picture k shows the phase
-     * (k - 1) / [MOON_STEPS], so the watch must round, not cut: the data range starts half a step
-     * before 0 and ends half a step after 1, and there is one entry more than there are pictures. The
-     * last entry, around the next new moon, is the new moon picture again.
-     *
-     * `invalidImage` is needed even though the phase is always known: without it the watch counts one
-     * step less than there are entries (`DynProvider.stepDraw` is the number of pictures minus one,
-     * the invalid picture included), so the last entry is never shown and every step is too wide.
-     */
-    private fun moonDynData(): JSONObject = JSONObject().put("valueKey", JsonKeyValues.MOON_PHASE.key)
-        .put("minData", -0.5 / MOON_STEPS).put("maxData", 1 + 0.5 / MOON_STEPS).put("invalidImage", moonName(1)).apply {
-            for (k in 1..MOON_STEPS) put("image$k", moonName(k))
-            put("image${MOON_STEPS + 1}", moonName(1))
-        }
-
-    /** The picture [phase] gets on the watch, in the same way the watch picks it (see `DynProvider.stepValue`). */
-    private fun moonPictureFor(phase: Double): Int {
-        val min = -0.5 / MOON_STEPS
-        val max = 1 + 0.5 / MOON_STEPS
-        val steps = MOON_STEPS + 1
-        val entry = 1 + ((phase - min) * steps / (max - min)).toInt()
-        return if (entry > MOON_STEPS) 1 else entry
-    }
-
-    private fun moonImages(): Map<String, ByteArray> = (1..MOON_STEPS).associate { moonName(it) to moonPng(moonPhaseOf(it)) }
-
-    /** The name of moon picture [k] (1 .. [MOON_STEPS]). */
-    private fun moonName(k: Int) = "Moon%02d".format(k)
-
-    /** The phase moon picture [k] shows: 0 (new moon) for the first, then one step more for each. */
-    private fun moonPhaseOf(k: Int): Double = (k - 1.0) / MOON_STEPS
-
-    /**
-     * The part of the moon that is lit at [phase] (0 new, 0.5 full), as seen from the north: the light
-     * grows from the right. A half circle on the lit side and half an ellipse (the line between light
-     * and dark), in a circle of radius [r] around [c], [c]. A crescent is never thinner than
-     * [MOON_MIN_CRESCENT] (in design units), so it can be seen on the small screen; the new moon stays dark.
-     */
-    private fun moonLit(phase: Double, c: Float, r: Float): Path {
-        val litRight = phase < 0.5
-        val k = cos(2 * PI * phase).toFloat()
-        val rx = when {
-            phase <= 0.0 -> r                               // new moon: nothing lit
-            k > 0        -> min(k * r, r - MOON_MIN_CRESCENT)
-            else         -> abs(k) * r
-        }
-        // A crescent bulges to the lit side, a gibbous moon to the dark side
-        val bulgeRight = litRight == (k > 0)
-        return Path().apply {
-            moveTo(c, c - r)
-            arcTo(RectF(c - r, c - r, c + r, c + r), -90f, if (litRight) 180f else -180f)
-            arcTo(RectF(c - rx, c - r, c + rx, c + r), 90f, if (bulgeRight) -180f else 180f)
-            close()
-        }
-    }
-
-    /**
-     * One moon picture, [MOON_PX] pixels for the [MOON_SIZE] view: a dark navy disc with a faint cyan
-     * ring, and the lit part in ice white drawn over the ring, so a thin crescent at the edge is not
-     * hidden by it. No glow: a soft glow makes each picture about three times larger, and the zip must
-     * stay small.
-     */
-    private fun moonPng(phase: Double): ByteArray {
-        val image = createBitmap(MOON_PX, MOON_PX).apply { eraseColor(Color.TRANSPARENT) }
-        val canvas = Canvas(image)
-        canvas.scale(MOON_PX / MOON_SIZE.toFloat(), MOON_PX / MOON_SIZE.toFloat())
-        val c = MOON_SIZE / 2f
-        val r = MOON_RADIUS
-        canvas.drawCircle(c, c, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#141B30") })
-        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.5f; color = Color.argb(115, 0, 240, 255) }
-        canvas.drawCircle(c, c, r, ring)
-        canvas.drawPath(moonLit(phase, c, r + 0.75f), Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(MOON_LIGHT) })
-        return pngBytes(image)
+    /** The moon is drawn by the watch from its photo, lit and turned as it is in the sky now: no moon pictures in the zip. */
+    @Test
+    fun theWatchDrawsTheMoon() {
+        val moon = design(defaultDesign()).getJSONObject("freetext4")
+        assertThat(moon.optBoolean(MoonPicture.JSON_KEY)).isTrue()
+        assertThat(moon.has("dynData")).isFalse()
+        assertThat(moon.getInt("width")).isEqualTo(MOON_SIZE)
+        assertThat(images().keys.filter { it.startsWith("Moon") }).isEmpty()
     }
 
     /**
@@ -241,89 +173,6 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         val top = if (full) CLOUD_SIZE / 2f - 2.2f * unit else CLOUD_SIZE / 2f
         drawCloud(canvas, left, top, unit, Color.parseColor("#2A3147"), Color.argb(200, 0, 240, 255), Color.argb(160, 255, 0, 60))
         return pngBytes(image)
-    }
-
-    /** Moon picture [phase] drawn on black, the way it shows at night. */
-    private fun moonOnBlack(phase: Double): Bitmap {
-        val png = moonPng(phase)
-        val moon = BitmapFactory.decodeByteArray(png, 0, png.size)
-        return createBitmap(MOON_PX, MOON_PX).apply { eraseColor(Color.BLACK); Canvas(this).drawBitmap(moon, 0f, 0f, null) }
-    }
-
-    /** The part of the disc of [bitmap] that is lit (on the [side] given), from 0 to 1. */
-    private fun litShare(bitmap: Bitmap, side: IntRange = 0 until MOON_PX): Double {
-        val radius = MOON_PX / 2f * MOON_RADIUS / (MOON_SIZE / 2f)
-        var lit = 0
-        var all = 0
-        for (y in 0 until MOON_PX) for (x in side) {
-            if (hypot(x + 0.5f - MOON_PX / 2f, y + 0.5f - MOON_PX / 2f) > radius) continue
-            all++
-            if (luminance(bitmap.getPixel(x, y)) > 0.5) lit++
-        }
-        return lit.toDouble() / all
-    }
-
-    /** The widest run of lit pixels on the middle row of [bitmap]. */
-    private fun litWidth(bitmap: Bitmap): Int {
-        var widest = 0
-        var run = 0
-        for (x in 0 until MOON_PX) {
-            run = if (luminance(bitmap.getPixel(x, MOON_PX / 2)) > 0.5) run + 1 else 0
-            widest = max(widest, run)
-        }
-        return widest
-    }
-
-    @Test
-    fun theMoonPicturesFollowThePhase() {
-        // New moon is dark; from the next picture on there is always light to see
-        assertThat(litShare(moonOnBlack(0.0))).isLessThan(0.01)
-        for (k in 2..MOON_STEPS) {
-            val moon = moonOnBlack(moonPhaseOf(k))
-            // At least about 3 pixels on a 466 pixel watch, where the moon is about 28 pixels wide
-            assertWithMessage("moon $k").that(litWidth(moon) * 28f / MOON_PX).isAtLeast(2.5f)
-        }
-        assertThat(litShare(moonOnBlack(0.5))).isGreaterThan(0.9)
-        assertThat(litShare(moonOnBlack(0.25))).isWithin(0.08).of(0.5)
-        // Waxing: light on the right; waning: on the left
-        val left = 0 until MOON_PX / 2
-        val right = MOON_PX / 2 until MOON_PX
-        assertThat(litShare(moonOnBlack(0.25), right)).isGreaterThan(0.9)
-        assertThat(litShare(moonOnBlack(0.25), left)).isLessThan(0.1)
-        assertThat(litShare(moonOnBlack(0.75), left)).isGreaterThan(0.9)
-        assertThat(litShare(moonOnBlack(0.75), right)).isLessThan(0.1)
-        // Gibbous is more than half, crescent less
-        assertThat(litShare(moonOnBlack(0.375))).isGreaterThan(0.7)
-        assertThat(litShare(moonOnBlack(0.125))).isLessThan(0.3)
-        File(out, "${fileName}_moons.png").writeBytes(pngBytes(createBitmap(MOON_PX * MOON_STEPS, MOON_PX).apply {
-            val canvas = Canvas(this)
-            for (k in 1..MOON_STEPS) canvas.drawBitmap(moonOnBlack(moonPhaseOf(k)), (k - 1f) * MOON_PX, 0f, null)
-        }))
-    }
-
-    @Test
-    fun theWatchShowsTheNearestMoonPicture() {
-        // The phase on 12 November 2026 at 09:34 local time: 2.4 days after new moon
-        assertThat(moonPictureFor(0.0827)).isEqualTo(2)
-        assertThat(moonPictureFor(0.0)).isEqualTo(1)
-        assertThat(moonPictureFor(0.04)).isEqualTo(1)
-        assertThat(moonPictureFor(0.5)).isEqualTo(MOON_STEPS / 2 + 1)
-        // Just before the next new moon: the new moon picture again
-        assertThat(moonPictureFor(0.97)).isEqualTo(1)
-        // Never more than half a step off
-        var phase = 0.0
-        while (phase < 1.0) {
-            val shown = moonPhaseOf(moonPictureFor(phase))
-            val off = abs(phase - shown).let { minOf(it, 1 - it) }
-            assertWithMessage("phase $phase").that(off).isAtMost(0.5 / MOON_STEPS + 1e-9)
-            phase += 0.001
-        }
-        val dyn = design(defaultDesign()).getJSONObject("dynData").getJSONObject(MOON_DYN)
-        assertThat(dyn.getString("valueKey")).isEqualTo(JsonKeyValues.MOON_PHASE.key)
-        assertThat(dyn.getString("image${MOON_STEPS + 1}")).isEqualTo(moonName(1))
-        // Without it the watch would use one step less (see moonDynData)
-        assertThat(dyn.has("invalidImage")).isTrue()
-        assertThat(dyn.has("image${MOON_STEPS + 2}")).isFalse()
     }
 
     @Test
@@ -930,15 +779,11 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         /** The time of frame [i]. */
         fun frameMs(i: Int): Long = i * 1000L / FRAME_FPS
 
-        /** The moon and its pictures: one per 1/12 of the cycle, about 2.5 days. */
+        /** The moon, drawn by the watch to fill this square. */
         const val MOON_SIZE = 24
-        const val MOON_RADIUS = 10.5f
-        const val MOON_PX = 48
-        const val MOON_STEPS = 12
-        /** The thinnest crescent, in design units: about 3 pixels on a 466 pixel watch. */
-        const val MOON_MIN_CRESCENT = 2.8f
-        const val MOON_LIGHT = "#DDF9FF"
-        const val MOON_DYN = "moon"
+
+        /** The light of a crescent of two days, as the watch draws it: a thin line, far brighter than the dark side (about 0.1). */
+        const val CRESCENT_LIGHT = 0.3
 
         /** The cloud in front of the moon. */
         const val CLOUD_SIZE = 40

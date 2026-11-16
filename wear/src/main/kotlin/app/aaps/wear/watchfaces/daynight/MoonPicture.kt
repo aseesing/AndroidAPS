@@ -54,7 +54,13 @@ class MoonPicture(private val loadPhoto: () -> Bitmap?) {
         const val REDRAW_MS = 15 * 60_000L
 
         /** How bright the dark part is, so the moon can still be found at new moon (the light of the earth). */
-        const val DARK = 0.16
+        const val DARK = 0.3
+
+        /**
+         * How much the dark part covers what is behind it. Partly see-through, as in the real sky: by day
+         * the blue shows through it, at night it is a faint grey (about [DARK] x [DARK_COVER] on black).
+         */
+        const val DARK_COVER = 0.45
 
         /** True when [view] asks for the moon. */
         fun isOn(view: JSONObject?): Boolean = view?.optBoolean(JSON_KEY) == true
@@ -95,9 +101,10 @@ class MoonPicture(private val loadPhoto: () -> Bitmap?) {
                 val halfWidth = sqrt((1 - across * across).coerceAtLeast(0.0))
                 val light = ((along - look.terminator * halfWidth) * r + 0.5).coerceIn(0.0, 1.0)
                 val shade = DARK + (1 - DARK) * light
+                val cover = DARK_COVER + (1 - DARK_COVER) * light
                 val pixel = pixels[index]
                 pixels[index] = Color.argb(
-                    (rim * 255).toInt(),
+                    (rim * cover * 255).toInt(),
                     (Color.red(pixel) * shade).toInt(),
                     (Color.green(pixel) * shade).toInt(),
                     (Color.blue(pixel) * shade).toInt()

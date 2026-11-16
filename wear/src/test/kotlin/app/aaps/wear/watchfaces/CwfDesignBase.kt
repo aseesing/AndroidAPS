@@ -9,7 +9,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -51,7 +50,6 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * What every design test of a Custom watch face shares: sample data, a render-only face that shows a
@@ -301,41 +299,6 @@ abstract class CwfDesignBase {
         val baseline = (height - (line.bottom - line.top)) / 2 - line.top
         val middle = baseline + (glyphs.top + glyphs.bottom) / 2f
         return Pair(Math.round(box.centerY() - middle), height)
-    }
-
-    /**
-     * The moon at [phase] (0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter): the lit part in pale
-     * gold, lit on the right while it grows (as seen from the north). The dark part is only a faint disc,
-     * so the moon can be found even at new moon. A view of [viewSize] at 2 x.
-     */
-    protected fun moonPicture(phase: Double, viewSize: Int): ByteArray {
-        val size = (viewSize * SCALE).toInt()
-        val image = createBitmap(size, size).apply { eraseColor(Color.TRANSPARENT) }
-        val canvas = Canvas(image)
-        val c = size / 2f
-        val r = c * 0.7f
-        canvas.drawCircle(c, c, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 241, 230, 192) })
-        val k = cos(2 * PI * phase).toFloat()
-        val waxing = phase < 0.5
-        val lit = Path()
-        val steps = 40
-        // The lit edge: half the rim on the lit side, from the top to the bottom
-        for (i in 0..steps) {
-            val a = -PI / 2 + PI * i / steps
-            val x = r * cos(a).toFloat()
-            val y = r * sin(a).toFloat()
-            val px = if (waxing) c + x else c - x
-            if (i == 0) lit.moveTo(px, c + y) else lit.lineTo(px, c + y)
-        }
-        // Back along the shadow line, an ellipse, from the bottom to the top
-        for (i in 0..steps) {
-            val y = r - 2 * r * i / steps
-            val half = k * sqrt((r * r - y * y).coerceAtLeast(0f))
-            lit.lineTo(if (waxing) c + half else c - half, c + y)
-        }
-        lit.close()
-        canvas.drawPath(lit, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F1E6C0") })
-        return pngBytes(image)
     }
 
     protected fun rectOf(view: JSONObject) = RectF(

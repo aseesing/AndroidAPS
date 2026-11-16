@@ -17,6 +17,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.math.hypot
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -37,8 +38,8 @@ class MoonPictureTest {
         var disc = 0
         var lit = 0
         for (y in 0 until size) for (x in 0 until size) {
+            if (hypot(x + 0.5 - size / 2.0, y + 0.5 - size / 2.0) > size / 2.0 - 1) continue
             val pixel = image.getPixel(x, y)
-            if (Color.alpha(pixel) < 128) continue
             disc++
             if (brightness(pixel) > 128) lit++
         }
@@ -51,10 +52,12 @@ class MoonPictureTest {
         val image = MoonPicture.draw(photo(), size, MoonLight.Look(terminator = 0.0, limbAngle = 270.0, northAngle = 0.0))
         assertThat(litPart(image)).isWithin(0.03).of(0.5)
         assertThat(brightness(image.getPixel(48, 40))).isGreaterThan(200)
-        // The dark side is dim, not black, so the moon can still be found
-        val dark = brightness(image.getPixel(16, 40))
-        assertThat(dark).isGreaterThan(20)
-        assertThat(dark).isLessThan(60)
+        // The dark side is dim, not black, so the moon can still be found; and partly see-through, so a day sky shows through it
+        val darkPixel = image.getPixel(16, 40)
+        val onBlack = brightness(darkPixel) * Color.alpha(darkPixel) / 255
+        assertThat(onBlack).isGreaterThan(20)
+        assertThat(onBlack).isLessThan(60)
+        assertThat(Color.alpha(darkPixel)).isLessThan(160)
         // Round: the corners are see-through
         assertThat(Color.alpha(image.getPixel(0, 0))).isEqualTo(0)
         assertThat(Color.alpha(image.getPixel(size / 2, size / 2))).isEqualTo(255)
