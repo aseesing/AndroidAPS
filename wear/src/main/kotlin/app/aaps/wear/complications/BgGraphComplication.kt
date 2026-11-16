@@ -22,6 +22,7 @@ import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.R
 import app.aaps.wear.interaction.activities.renderBgGraph
 import dev.zacsweers.metro.Inject
+import java.io.ByteArrayOutputStream
 import kotlin.math.sin
 import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 import app.aaps.wear.data.ComplicationData as ComplicationStore
@@ -38,6 +39,12 @@ class BgGraphComplication : ModernBaseComplicationProviderService() {
 
     @Inject lateinit var sp: SP
 
+    companion object {
+
+        /** Starting size for the compression buffer - only avoids a few reallocations. */
+        private const val COMPRESS_HINT_BYTES = 64 * 1024
+    }
+
     override fun buildComplicationData(
         type: ComplicationType,
         data: ComplicationStore,
@@ -47,7 +54,7 @@ class BgGraphComplication : ModernBaseComplicationProviderService() {
 
         return when (type) {
             ComplicationType.SMALL_IMAGE -> {
-                val icon = Icon.createWithBitmap(renderGraphBitmap(data))
+                val icon = renderGraphIcon(data)
                 SmallImageComplicationData.Builder(
                     smallImage = SmallImage.Builder(image = icon, type = SmallImageType.PHOTO).build(),
                     contentDescription = contentDescription
@@ -57,7 +64,7 @@ class BgGraphComplication : ModernBaseComplicationProviderService() {
             }
 
             ComplicationType.PHOTO_IMAGE -> {
-                val icon = Icon.createWithBitmap(renderGraphBitmap(data))
+                val icon = renderGraphIcon(data)
                 PhotoImageComplicationData.Builder(
                     photoImage = icon,
                     contentDescription = contentDescription
@@ -71,6 +78,22 @@ class BgGraphComplication : ModernBaseComplicationProviderService() {
                 null
             }
         }
+    }
+
+    // An image complication ships its picture to the watch face over Binder on every update. Sent
+    // raw (Icon.createWithBitmap) that is the whole bitmap - screen width x half, about 400 kB of
+    // pixels at 450 px wide. The CWF face learned the hard way that repeating a raw frame across
+    // Binder has the system kill the process (see `_docs/Complication_Libraries.md` and
+    // CwfFramePipeline.encode), so compress here the same way: WEBP lossless cuts it to tens of kB
+    // with no quality loss, and keeps the transparent background so the graph still blends into the
+    // face behind it.
+    private fun renderGraphIcon(data: ComplicationStore): Icon {
+        val bitmap = renderGraphBitmap(data)
+        val stream = ByteArrayOutputStream(COMPRESS_HINT_BYTES)
+        bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 100, stream)
+        bitmap.recycle()
+        val bytes = stream.toByteArray()
+        return Icon.createWithData(bytes, 0, bytes.size)
     }
 
     // Rendered at screen width and 2:1 so the dp-based sizes inside renderBgGraph (hour labels,
