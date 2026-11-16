@@ -1156,8 +1156,9 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         const val LOW_COLOR = "#FF003C"
 
         /**
-         * The graph's grid lines and its hour and "now" labels. Transparent: the labels sit at the bottom edge,
-         * where the round screen cuts them off, so they could never be read; the time is at the top.
+         * The graph's grid lines. Transparent: no grid. With the log time scale the watch still draws the time
+         * lines and labels, in grey, on the top edge of the graph, where the round screen does not cut them
+         * (see `LogTimeGraph`).
          */
         const val GRID_COLOR = CLEAR
         const val CARBS_COLOR = "#FF4FD8"
@@ -1189,7 +1190,7 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         const val TABLE_LEFT = 244
         const val TABLE_TOP = 100
         const val TABLE_ROWS = 6
-        const val ROW_HEIGHT = 26
+        const val ROW_HEIGHT = 24
         const val TABLE_BOTTOM = TABLE_TOP + TABLE_ROWS * ROW_HEIGHT
 
         /** The right side of the table panel: a little outside the 400 wide screen, so its frame line is not seen. */
@@ -1225,7 +1226,7 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         const val LOGO_LEFT = 54
         const val LOGO_TOP = 207
         const val LOGO_WIDTH = 124
-        const val LOGO_HEIGHT = 52
+        const val LOGO_HEIGHT = 38
 
         /** The picture of the beating drop, and its box in the 48 high space of the logo: the drop with its outline, red copy and pointed tip. */
         const val LOGO_PULSE = "LogoPulse"
@@ -1279,9 +1280,9 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
 
 
         const val CHART_LEFT = 30
-        const val CHART_TOP = 264
+        const val CHART_TOP = 250
         const val CHART_WIDTH = 340
-        const val CHART_HEIGHT = 136
+        const val CHART_HEIGHT = 140
 
         /** The arc along the edge that the sun and the moon follow: from the left over the top to the right. */
         const val ORBIT_RADIUS = 187f

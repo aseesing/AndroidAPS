@@ -734,7 +734,7 @@ class CwfTechDesignTest : CyberpunkDesignBase() {
         assertThat(rain.angle.toDouble()).isWithin(0.5).of(Math.toDegrees(atan(-0.25)))
         val pulse = spec.pulse!!
         assertThat(pulse.drawable).isNotNull()
-        assertThat(pulse.rect).isEqualTo(DesignRect(50.75f, 199.417f, 41.167f, 60.667f))
+        assertThat(pulse.rect).isEqualTo(DesignRect(51.625f, 201.458f, 30.083f, 44.333f))
         // The picture has the shape of its box
         val png = images()[LOGO_PULSE]!!
         val picture = BitmapFactory.decodeByteArray(png, 0, png.size)

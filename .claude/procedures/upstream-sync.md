@@ -39,6 +39,7 @@ as before.
 | `local/wear-log-graph` | The glucose graph of every watch face on a log time scale: a whole day, the last minutes in detail, lines and labels for 1, 3, 6 and 12 hours ago; a watch setting, also in AAPS; the phone then sends a day of history, thinned further back |
 | `local/wear-d2` | The digital design *D2* (glucose and trend scales, three complications, weather, sunrise and sunset, sensor and pump time left, a BG graph); a main and a second colour, chosen on the watch or in AAPS; the phone offers every setting of the watch face menu by itself; the wake-up animation can swing hands, shake hands, draw a view in and slide a light over the face; a picture in the seconds that turns each second, drawn smaller with 12 hours; sensor and pump time left up to 4 days on a log scale; raised steel strips with pins and screws between the panels; the wake-up animation can also slide a view (the month mark); a cut-down font (D2 Text) |
 | `local/watch-app-update` | The phone updates the watch app over the Wear OS connection, no adb on the watch: build the phone with `-PembedWearApk=<signed watch APK>`. Made upstream-ready on `origin/master`, without our other changes, for a pull request |
+| `local/wear-graph-top-labels` | The time labels of the log graph go on its top edge when the round screen cuts its bottom edge; the graph of the Cyberpunk and Wilds designs sits higher |
 
 `master` of this fork is a plain copy of upstream `master`.
 

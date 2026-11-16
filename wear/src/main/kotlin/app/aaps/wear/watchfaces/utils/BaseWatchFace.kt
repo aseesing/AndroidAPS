@@ -913,7 +913,7 @@ abstract class BaseWatchFace : WatchFace() {
                         pointSize, highColor, lowColor, midColor, gridColor, basalBackgroundColor, basalCenterColor, bolusColor, carbColor, timeframe
                     )
             binding.chart?.lineChartData = bgGraphBuilder.lineData()
-            if (LogTimeGraph.isOn(sp)) binding.chart?.let { it.lineChartData = LogTimeGraph(resources).label(it.lineChartData, gridColor) } // PERSONAL PATCH
+            if (LogTimeGraph.isOn(sp)) binding.chart?.let { it.lineChartData = LogTimeGraph(resources).label(it.lineChartData, gridColor, LogTimeGraph.labelsOnTop(it, displayWidth, displayHeight)) } // PERSONAL PATCH
             binding.chart?.isViewportCalculationEnabled = true
         }
     }
