@@ -55,10 +55,13 @@ class WatchAppSelfUpdate(
                 val input = client.getInputStream(channel).await()
                 val output = client.getOutputStream(channel).await()
                 notifier.showProgress(0)
-                val task = WatchAppReceiveTask { PackageInstallerSession(context) }
+                val task = WatchAppReceiveTask(
+                    wifi = NetworkWifiBodyFetcher(context),
+                    log = { aapsLogger.warn(LTag.WEAR, "Watch app update: $it") }
+                ) { PackageInstallerSession(context) }
                 when (val result = task.receive(input, output) { notifier.showProgress(it) }) {
                     is WatchAppReceiveTask.Result.Committed -> {
-                        aapsLogger.info(LTag.WEAR, "Watch app update: ${result.label} given to the installer")
+                        aapsLogger.info(LTag.WEAR, "Watch app update: ${result.label} given to the installer, over ${if (result.overWifi) "Wi-Fi" else "the channel"}")
                         notifier.showInstalling()
                     }
 

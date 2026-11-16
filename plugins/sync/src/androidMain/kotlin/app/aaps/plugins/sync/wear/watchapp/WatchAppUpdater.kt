@@ -40,7 +40,7 @@ class WatchAppUpdater(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val source = AssetWatchAppSource(context)
-    private val sender = WatchAppSender(source, WearableChannelOpener(context))
+    private val sender = WatchAppSender(source, WearableChannelOpener(context), AndroidWifiBodyServerFactory(context))
 
     private val _state = MutableStateFlow<WatchAppUpdateState>(WatchAppUpdateState.Idle)
     val state: StateFlow<WatchAppUpdateState> = _state.asStateFlow()
