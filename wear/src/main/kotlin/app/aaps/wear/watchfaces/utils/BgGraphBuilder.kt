@@ -84,6 +84,7 @@ class BgGraphBuilder(
     private val inRangeValues: MutableList<PointValue> = ArrayList()
     private val highValues: MutableList<PointValue> = ArrayList()
     private val lowValues: MutableList<PointValue> = ArrayList()
+    var glucoseLine: GlucoseLine? = null // PERSONAL PATCH: the glucose as a line, see GlucoseLine
 
     private val predictionEndTime: Long
         get() {
@@ -171,6 +172,7 @@ class BgGraphBuilder(
         lines.add(inRangeValuesLine())
         lines.add(lowValuesLine())
         lines.add(highValuesLine())
+        glucoseLine?.replaceDots(lines, lines.takeLast(3), bgDataList.map { it.timeStamp }, ::fuzz) // PERSONAL PATCH: the glucose as a line, see GlucoseLine
         var minChart = lowMark
         var maxChart = highMark
         for ((_, _, _, _, _, _, _, _, _, _, sgv) in bgDataList) {

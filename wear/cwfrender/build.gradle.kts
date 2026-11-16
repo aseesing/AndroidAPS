@@ -79,6 +79,7 @@ val wearShared = listOf(
     "watchfaces/utils/BgGraphBuilder.kt",
     "watchfaces/utils/DesignTimeText.kt",
     "watchfaces/utils/FirstFrameAfterWake.kt",
+    "watchfaces/utils/GlucoseLine.kt",
     "watchfaces/utils/LayeredFrame.kt",
     "watchfaces/utils/LogTimeGraph.kt",
     "watchfaces/utils/LogTimeScale.kt",

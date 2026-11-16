@@ -33,6 +33,7 @@ import app.aaps.wear.health.HealthKind
 import app.aaps.wear.watchfaces.animation.BlinkSpec
 import app.aaps.wear.watchfaces.daynight.DayOverlay
 import app.aaps.wear.watchfaces.daynight.Orbit
+import app.aaps.wear.watchfaces.utils.GlucoseLine
 import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
@@ -177,7 +178,9 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         put("highColor", HIGH_COLOR).put("midColor", MID_COLOR).put("lowColor", LOW_COLOR)
         put("gridColor", GRID_COLOR).put("carbColor", CARBS_COLOR)
         put("basalBackgroundColor", BASAL_BACK_COLOR).put("basalCenterColor", CYAN)
-        put("pointSize", 3)
+        // The glucose is a line in the range colours, see GlucoseLine. The point size is for the markers of bolus and carbs and for the predictions
+        put("pointSize", 2)
+        put(GlucoseLine.WIDTH_KEY, GRAPH_LINE_WIDTH)
 
         // Views this design does not use. The three hands are off; the digital time replaces them.
         for (hidden in listOf(
@@ -1161,6 +1164,10 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
          * (see `LogTimeGraph`).
          */
         const val GRID_COLOR = CLEAR
+
+        /** The width of the glucose line, in dp. */
+        const val GRAPH_LINE_WIDTH = 2
+
         const val CARBS_COLOR = "#FF4FD8"
         const val BASAL_BACK_COLOR = "#7A1FA2"
         const val HEART_COLOR = "#FF4F7B"
