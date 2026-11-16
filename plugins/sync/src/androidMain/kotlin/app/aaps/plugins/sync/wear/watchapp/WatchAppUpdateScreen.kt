@@ -70,6 +70,9 @@ internal fun WatchAppUpdateContent(viewModel: WatchAppUpdateViewModel, modifier:
 }
 
 /**
+ * The information scrolls; the send button stays at the bottom, always visible, and disabled while an
+ * update runs, as in `.claude/procedures/dialog-design.md`.
+ *
  * @see WatchAppUpdatePagePreview
  */
 @Composable
@@ -79,57 +82,62 @@ internal fun WatchAppUpdatePage(
     onSend: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(AapsSpacing.extraLarge),
-        verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    Column(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(AapsSpacing.extraLarge),
+            verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(AapsSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
             ) {
-                Text(
-                    text = stringResource(SyncStrings.wear_app_update_embedded, embedded.label),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Text(
-                    text = stringResource(SyncStrings.wear_app_update_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (state is WatchAppUpdateState.Sending) {
-                    LinearProgressIndicator(
-                        progress = { state.percent / 100f },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                stateText(state)?.let { text ->
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (state is WatchAppUpdateState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Button(
-                    onClick = onSend,
-                    enabled = !state.isBusy,
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(AapsSpacing.large),
+                    verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
                 ) {
-                    Icon(Icons.Default.SystemUpdate, contentDescription = null)
                     Text(
-                        text = stringResource(SyncStrings.wear_app_update_send),
-                        modifier = Modifier.padding(start = AapsSpacing.small)
+                        text = stringResource(SyncStrings.wear_app_update_embedded, embedded.label),
+                        style = MaterialTheme.typography.bodyLarge
                     )
+                    Text(
+                        text = stringResource(SyncStrings.wear_app_update_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (state is WatchAppUpdateState.Sending) {
+                        LinearProgressIndicator(
+                            progress = { state.percent / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    stateText(state)?.let { text ->
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (state is WatchAppUpdateState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
+        }
+        // Fixed at the bottom, always visible; disabled while an update runs
+        Button(
+            onClick = onSend,
+            enabled = !state.isBusy,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = AapsSpacing.extraLarge, vertical = AapsSpacing.medium)
+        ) {
+            Icon(Icons.Default.SystemUpdate, contentDescription = null)
+            Text(
+                text = stringResource(SyncStrings.wear_app_update_send),
+                modifier = Modifier.padding(start = AapsSpacing.small)
+            )
         }
     }
 }
