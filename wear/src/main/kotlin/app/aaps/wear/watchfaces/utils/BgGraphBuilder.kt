@@ -172,7 +172,6 @@ class BgGraphBuilder(
         lines.add(inRangeValuesLine())
         lines.add(lowValuesLine())
         lines.add(highValuesLine())
-        glucoseLine?.replaceDots(lines, lines.takeLast(3), bgDataList.map { it.timeStamp }, ::fuzz) // PERSONAL PATCH: the glucose as a line, see GlucoseLine
         var minChart = lowMark
         var maxChart = highMark
         for ((_, _, _, _, _, _, _, _, _, _, sgv) in bgDataList) {
@@ -209,6 +208,7 @@ class BgGraphBuilder(
             lines.add(bolusLine(minChart.toFloat()))
             lines.add(smbLine(minChart.toFloat()))
         }
+        glucoseLine?.replaceDots(lines, lines.subList(2, 5).toList(), bgDataList.map { it.timeStamp }, ::fuzz) // PERSONAL PATCH: the glucose as a line on top, see GlucoseLine
         return lines
     }
 

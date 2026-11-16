@@ -44,6 +44,7 @@ import org.robolectric.RuntimeEnvironment
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipInputStream
+import kotlinx.coroutines.runBlocking
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -976,6 +977,52 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         storeSampleData(newFace())
     }
 
+    /**
+     * A day of glucose with a new temp basal every 15 minutes, as a loop sets them. The temp basals are
+     * see-through and under the glucose line, so the whole line shows over them.
+     */
+    @Test
+    fun theGlucoseLineShowsOverTheTempBasals() {
+        val default = defaultDesign()
+        val design = design(default)
+        val images = images()
+        val chart = rectOf(design.getJSONObject("chart"))
+        val mid = design.getString("midColor")
+        fun linePixels(picture: Bitmap): Int {
+            var count = 0
+            for (y in chart.top.toInt() until chart.bottom.toInt()) for (x in chart.left.toInt() until chart.right.toInt())
+                if (near(picture.getPixel(x, y), mid)) count++
+            return count
+        }
+        val face = newFace()
+        storeSampleData(face, graph = ::dayOfGlucose)
+        val plain = preview(design, default, images, previewInstant)
+        runBlocking { face.complicationDataRepository.updateTreatmentData(dayOfTempBasals(System.currentTimeMillis())) }
+        val withBasal = preview(design, default, images, previewInstant)
+        sheet(listOf("glucose" to plain, "with temp basals" to withBasal), "${fileName}_basal.png")
+        assertWithMessage("line pixels without temp basals").that(linePixels(plain)).isGreaterThan(300)
+        assertWithMessage("line pixels with temp basals").that(linePixels(withBasal).toDouble()).isAtLeast(linePixels(plain) * 0.9)
+        // Leave the normal sample for the other tests
+        runBlocking { face.complicationDataRepository.updateTreatmentData(EventData.TreatmentData(ArrayList(), ArrayList(), ArrayList(), ArrayList())) }
+        storeSampleData(newFace())
+    }
+
+    /** A day of glucose, one reading every 5 minutes up to [now], going up and down between about 90 and 160 mg/dL. */
+    private fun dayOfGlucose(now: Long): List<EventData.SingleBg> = (0 until 288).map { i ->
+        EventData.SingleBg(dataset = 0, timeStamp = now - (287 - i) * 5 * 60_000L, sgv = 125.0 + 35.0 * sin(i * PI / 20.0), high = 180.0, low = 70.0)
+    }
+
+    /** A day of temp basals up to [now], a new one every 15 minutes between 0 and 3.4 U/h, over a profile basal of 1 U/h. */
+    private fun dayOfTempBasals(now: Long): EventData.TreatmentData {
+        val step = 15 * 60_000L
+        val temps = (0 until 96).map { i ->
+            val start = now - (96 - i) * step
+            EventData.TreatmentData.TempBasal(startTime = start, startBasal = 1.0, endTime = start + step, endBasal = 1.0, amount = if (i % 3 == 0) 0.0 else 1.0 + (i % 5) * 0.6)
+        }
+        val basals = listOf(EventData.TreatmentData.Basal(startTime = now - 96 * step, endTime = now, amount = 1.0))
+        return EventData.TreatmentData(ArrayList(temps), ArrayList(basals), ArrayList(), ArrayList())
+    }
+
     @Test
     fun rendersEveryLook() {
         val default = defaultDesign()
@@ -1169,7 +1216,8 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         const val GRAPH_LINE_WIDTH = 2
 
         const val CARBS_COLOR = "#FF4FD8"
-        const val BASAL_BACK_COLOR = "#7A1FA2"
+        /** The temp basals: see-through, so they do not hide the time lines where they are dense. */
+        const val BASAL_BACK_COLOR = "#667A1FA2"
         const val HEART_COLOR = "#FF4F7B"
 
         const val DATE_TOP = 6
@@ -1321,7 +1369,7 @@ abstract class CyberpunkDesignBase : CwfDesignBase() {
         const val DAY_HIGH = "#8A4A00"
         const val DAY_LOW = "#A0001F"
         const val DAY_CARBS = "#C2008C"
-        const val DAY_BASAL_BACK = "#CDB4EA"
+        const val DAY_BASAL_BACK = "#99CDB4EA"
         const val DAY_BASAL_CENTER = "#5B00B8"
 
         val NIGHT_INK = Ink(line = CYAN, lineShadow = LOW_COLOR, text = "#FFFFFF", textShadow1 = LOW_COLOR, textShadow2 = CYAN)
