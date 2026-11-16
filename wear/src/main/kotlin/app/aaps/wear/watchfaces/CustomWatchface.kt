@@ -1629,6 +1629,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         updateSecondVisibility()
         setSecond() // Update second visibility for time view
         binding.timePeriod.visibility = (binding.timePeriod.isVisible && DateFormat.is24HourFormat(this).not()).toVisibility()
+        SecondSpin.place(binding.second, SecondSpin.placement(ViewMap.SECOND.viewJson, DateFormat.is24HourFormat(this)), zoomFactor) // PERSONAL PATCH
     }
 
     // background is drawn on the Canvas by onDraw() from a View kept outside mainLayout, so it paints
