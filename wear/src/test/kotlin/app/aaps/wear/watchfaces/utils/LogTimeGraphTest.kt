@@ -5,6 +5,7 @@
 package app.aaps.wear.watchfaces.utils
 
 import android.graphics.Color
+import androidx.core.graphics.ColorUtils
 import app.aaps.wear.R
 import com.google.common.truth.Truth.assertThat
 import lecho.lib.hellocharts.model.Axis
@@ -68,6 +69,16 @@ class LogTimeGraphTest {
         assertThat(Color.green(label)).isGreaterThan(Color.green(GRID) + 60)
         assertThat(Color.alpha(label)).isEqualTo(255)
         assertThat(Color.alpha(LogTimeGraph.labelColour(Color.argb(128, 38, 48, 43)))).isEqualTo(128)
+    }
+
+    /** Many designs hide the grid with a see-through grid colour; the time must still show there, on light and dark graphs. */
+    @Test
+    fun withoutAGridTheTimeIsGrey() {
+        val none = Color.TRANSPARENT
+        assertThat(LogTimeGraph.labelColour(none)).isEqualTo(LogTimeGraph.NO_GRID_GREY)
+        assertThat(LogTimeGraph.lineColour(none)).isEqualTo(ColorUtils.setAlphaComponent(LogTimeGraph.NO_GRID_GREY, LogTimeGraph.NO_GRID_LINE_ALPHA))
+        // A real grid keeps its colour for the lines
+        assertThat(LogTimeGraph.lineColour(GRID)).isEqualTo(GRID)
     }
 
     @Test

@@ -49,16 +49,15 @@ class LogTimeGraph(private val resources: Resources) {
     internal fun timeLines(bottom: Float, top: Float, colour: Int): List<Line> =
         (listOf(0f) + LogTimeScale.LABEL_AGES_MS.map { LogTimeScale.xOfOffset(-it) }).map { x ->
             Line(listOf(PointValue(x, bottom), PointValue(x, top))).apply {
-                color = colour
+                color = lineColour(colour)
                 strokeWidth = 1
                 setHasPoints(false)
             }
         }
 
     /**
-     * The labels of how long ago, drawn inside the graph, at the label ages. In [colour] made lighter
-     * ([labelColour]): the grid colour of a design is often nearly the colour of the graph's background,
-     * fine for a line, but text in it cannot be read on a watch.
+     * The labels of how long ago, drawn inside the graph, at the label ages, in [labelColour] of the grid
+     * colour [colour].
      */
     internal fun timeAxis(colour: Int): Axis {
         val values = LogTimeScale.LABEL_AGES_MS.map { age -> AxisValue(LogTimeScale.xOfOffset(-age)).setLabel(ageLabel(age)) }
@@ -92,8 +91,31 @@ class LogTimeGraph(private val resources: Resources) {
         /** How far the labels are taken from the grid colour toward white. */
         const val LABEL_LIGHTER = 0.4f
 
-        /** The colour of the labels for the grid colour [colour]: lighter, with its own alpha. */
-        fun labelColour(colour: Int): Int = ColorUtils.blendARGB(colour, Color.WHITE, LABEL_LIGHTER).let { ColorUtils.setAlphaComponent(it, Color.alpha(colour)) }
+        /**
+         * The grey of the time lines and labels on a design without a grid: many designs make the grid colour
+         * see-through to hide the grid. A middle grey reads on light and on dark graphs alike.
+         */
+        val NO_GRID_GREY = Color.rgb(0x8A, 0x90, 0x99)
+
+        /** The alpha of the time lines in [NO_GRID_GREY]: faint, like a grid. */
+        const val NO_GRID_LINE_ALPHA = 110
+
+        /** Below this alpha the grid colour counts as no grid at all. */
+        private const val MIN_GRID_ALPHA = 64
+
+        private fun hasGrid(colour: Int) = Color.alpha(colour) >= MIN_GRID_ALPHA
+
+        /** The colour of the time lines for the grid colour [colour]: that colour, or a faint grey without a grid. */
+        fun lineColour(colour: Int): Int = if (hasGrid(colour)) colour else ColorUtils.setAlphaComponent(NO_GRID_GREY, NO_GRID_LINE_ALPHA)
+
+        /**
+         * The colour of the labels for the grid colour [colour]: lighter, with its own alpha. The grid colour of a
+         * design is often nearly the colour of the graph's background, fine for a line, but text in it cannot be
+         * read on a watch. Without a grid: [NO_GRID_GREY].
+         */
+        fun labelColour(colour: Int): Int =
+            if (hasGrid(colour)) ColorUtils.blendARGB(colour, Color.WHITE, LABEL_LIGHTER).let { ColorUtils.setAlphaComponent(it, Color.alpha(colour)) }
+            else NO_GRID_GREY
         private const val MAX_LABEL_CHARS = 2
         private const val MINUTE_MS = 60_000L
         private const val HOUR_MS = 60 * MINUTE_MS
