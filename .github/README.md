@@ -2,7 +2,8 @@
 
 <p align="center">
   <b>Watch faces that wake up.</b> Rain, glitch bands and a beating heart when you raise your wrist.<br>
-  A live preview of the watch face in AAPS on the phone. The Dexcom ONE+ / G7 read without xDrip+.
+  A live preview of the watch face in AAPS on the phone. The Dexcom ONE+ / G7 read without xDrip+.<br>
+  New versions of the watch app go from the phone to the watch with one button, no adb.
 </p>
 
 <table align="center">
@@ -42,7 +43,7 @@ OnePlus Watch 2R and other round Wear OS watches.
 | 🚗 | **Glucose in the car** | AAPS says your glucose value over the car speakers. |
 | 🚦 | **Status lights count down** | The sensor and pod lights show the time that is really left. |
 | 📄 | **Logs to Downloads** | Save the logs without email. |
-| ⌚ | **Update the watch from the phone** | One button in AAPS sends a new watch app to the watch. No debugging on the watch. |
+| ⌚ | **Update the watch from the phone** | The phone app carries the watch app. One button sends it to the watch, which installs it after you confirm. After the first install, no more debugging on the watch. |
 
 > [!WARNING]
 > **Not an official AAPS release.** Not reviewed by the AAPS team. AAPS doses insulin: use this
@@ -57,7 +58,8 @@ OnePlus Watch 2R and other round Wear OS watches.
 2. Sign the phone app with the same key as the AAPS you have now, and install with `adb install -r`, so
    your data and settings stay. Install the watch app once with adb and allow it to install updates:
    `adb shell appops set info.nightscout.androidaps REQUEST_INSTALL_PACKAGES allow`. Later updates:
-   AAPS → Wear → **Update watch app**.
+   AAPS → Wear → **Update watch app** → **Send to watch** (several minutes, keep the watch close), then
+   confirm on the watch.
 3. In AAPS, load a design from `wear/cwf-designs` as the day face, and another one as the night face
    if you like.
 
