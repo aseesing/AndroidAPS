@@ -15,6 +15,7 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.SweepGradient
@@ -37,6 +38,7 @@ import app.aaps.wear.watchfaces.animation.WakeTimer
 import app.aaps.wear.watchfaces.colour.ColourLooks
 import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.DayOverlay
+import app.aaps.wear.watchfaces.daynight.MoonPicture
 import app.aaps.wear.watchfaces.daynight.StoredWeather
 import app.aaps.wear.watchfaces.utils.DesignTimeText
 import app.aaps.wear.watchfaces.utils.LogTimeGraph
@@ -57,6 +59,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Random
@@ -95,7 +98,8 @@ import kotlin.math.sqrt
  * - a line with the age of the value (red from 10 minutes), the IOB, the carbs and the basal rate;
  * - the batteries of the watch and the phone (red at 20 % or less);
  * - all texts under a fine dark mesh, so they look like LED displays;
- * - the big time with seconds and AM/PM, the day, the date and the moon phase, the months of the year
+ * - the big time with seconds and AM/PM, the day, the date and the moon: drawn by the watch from a NASA photo,
+ *   lit and turned as it stands in the sky now (see `MoonPicture`), the months of the year
  *   with a mark on this month;
  * - a **graph** of the glucose of the last hours (as set on the watch, 3 by default) in a small sunk window at
  *   the bottom right, like the display of an instrument: dark tinted glass, a faint grid and dim dots in
@@ -239,7 +243,8 @@ class CwfD2DesignTest : CwfDesignBase() {
         // The date with the moon, and the time
         text("day_name", DAY_NAME_BOX, DAY_NAME_SIZE, "center", WHITE).put("allCaps", true)
         text("day", DAY_BOX, DAY_SIZE, "center", COLOUR_2)
-        picture(MOON_VIEW, MOON_BOX, moonName(MOON_STEPS / 2 + 1)).put("dynData", MOON_DYN)
+        // The moon is drawn by the watch, from a photo it carries: lit and turned as it is in the sky now
+        place(MOON_VIEW, MOON_BOX.left.toInt(), MOON_BOX.top.toInt(), MOON_BOX.width().toInt(), MOON_BOX.height().toInt()).put("textvalue", "").put(MoonPicture.JSON_KEY, true)
         // The colon between them is a picture (see colonPicture), in the same colour
         text("hour", HOUR_BOX, TIME_SIZE, "right", COLOUR_1)
         text("minute", MINUTE_BOX, TIME_SIZE, "left", COLOUR_1)
@@ -279,7 +284,6 @@ class CwfD2DesignTest : CwfDesignBase() {
             .put(DELTA_PLACE_DYN, JSONObject().put("valueKey", "delta").put("minData", -1).put("maxData", 1)
                 .put("topOffset1", -DELTA_UP).put("topOffset2", 0).put("invalidTopOffset", 0))
             .put(AGE_DYN, ageColourDynData("timestamp", AGE_LIMIT, VALUE))
-            .put(MOON_DYN, moonDynData())
             .put(MONTH_DYN, monthDynData())
             .put(BG_NEEDLE_DYN, JSONObject().put("valueKey", "sgv").put("minData", BG_MIN).put("maxData", BG_MAX)
                 .put("rotationOffset", JSONObject().put("minValue", BG_FROM).put("maxValue", BG_TO).put("invalidValue", BG_FROM))
@@ -402,12 +406,6 @@ class CwfD2DesignTest : CwfDesignBase() {
         .put("valueKey", JsonKeyValues.NIGHT_PROGRESS.key).put("minData", 0).put("maxData", 2 * NIGHT_STEP)
         .put("invalidImage", BLANK).put("image1", day).put("image2", night)
 
-    private fun moonDynData(): JSONObject = JSONObject().put("valueKey", JsonKeyValues.MOON_PHASE.key)
-        .put("minData", -0.5 / MOON_STEPS).put("maxData", 1 + 0.5 / MOON_STEPS).put("invalidImage", moonName(MOON_STEPS / 2 + 1))
-        .apply { for (k in 1..MOON_STEPS + 1) put("image$k", moonName(if (k == MOON_STEPS + 1) 1 else k)) }
-
-    private fun moonName(k: Int) = "Moon" + k.toString().padStart(2, '0')
-
     /** The angle of the glucose pointer at [mgdl], in degrees from straight up, clockwise. */
     private fun bgAngle(mgdl: Double): Double = BG_FROM + (mgdl.coerceIn(BG_MIN, BG_MAX) - BG_MIN) * (BG_TO - BG_FROM) / (BG_MAX - BG_MIN)
 
@@ -482,7 +480,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         PERIOD_FRAME to periodFrame(),
         ResFileMap.SECOND_HAND.fileName to runnerPicture(),
         BLANK to blankPng()
-    ) + (1..MOON_STEPS).associate { moonName(it) to moonPicture((it - 1).toDouble() / MOON_STEPS, MOON_BOX.width().toInt()) } + weatherIcons()
+    ) + weatherIcons()
 
     private fun color(hex: String) = Color.parseColor(hex)
     private fun paint(hex: String, style: Paint.Style = Paint.Style.FILL, width: Float = 0f) =
@@ -1618,6 +1616,40 @@ class CwfD2DesignTest : CwfDesignBase() {
         assertWithMessage("dark lines between them").that(dark).isGreaterThan(100)
     }
 
+    /**
+     * The moon is drawn by the watch from its photo, as it is in the sky now: a thin crescent on the
+     * preview (13 November 2026, 15 % lit), nearly all lit at full moon. It stays clear of the day.
+     */
+    @Test
+    fun theMoonIsDrawnByTheWatchAsItIsNow() {
+        val view = design(defaultDesign()).getJSONObject(MOON_VIEW)
+        assertThat(view.optBoolean(MoonPicture.JSON_KEY)).isTrue()
+        assertThat(view.has("dynData")).isFalse()
+        assertWithMessage("moon and the widest day").that(MOON_BOX.right).isAtMost(DAY_BOX.centerX() - (1..31).maxOf { textWidth("$it", DAY_SIZE) } / 2 - 4f)
+        assertWithMessage("moon and the panel edge").that(MOON_BOX.left).isAtLeast(TIME_PANEL.left + 3f)
+        assertThat(TIME_PANEL.contains(MOON_BOX)).isTrue()
+        // Moon light: grey, brighter than the dim dark side
+        fun lit(picture: Bitmap): Int {
+            var count = 0
+            for (y in MOON_BOX.top.toInt() until MOON_BOX.bottom.toInt()) for (x in MOON_BOX.left.toInt() until MOON_BOX.right.toInt())
+                if (brightness(picture.getPixel(x, y)) > 110) count++
+            return count
+        }
+        val disc = (PI * MOON_BOX.width() * MOON_BOX.width() / 4).toInt()
+        val crescent = render()
+        val full = render(instant = Instant.parse("2026-11-24T14:53:00Z").toEpochMilli())
+        val half = render(instant = Instant.parse("2026-11-17T12:00:00Z").toEpochMilli())
+        assertWithMessage("crescent").that(lit(crescent)).isIn(Range.closed(disc / 20, disc / 4))
+        assertWithMessage("half").that(lit(half)).isIn(Range.closed(disc * 2 / 5, disc * 3 / 4))
+        assertWithMessage("full").that(lit(full)).isGreaterThan(disc * 3 / 4)
+        // For the eye: the moon of each, four times bigger
+        val sheet = createBitmap(3 * 4 * 40, 4 * 40)
+        val canvas = Canvas(sheet)
+        val area = Rect(MOON_BOX.left.toInt() - 6, MOON_BOX.top.toInt() - 6, MOON_BOX.left.toInt() + 34, MOON_BOX.top.toInt() + 34)
+        listOf(crescent, half, full).forEachIndexed { i, picture -> canvas.drawBitmap(picture, area, Rect(i * 160, 0, i * 160 + 160, 160), null) }
+        File(out, "${fileName}_moon.png").writeBytes(pngBytes(sheet))
+    }
+
     /** The strips between the panels are raised brushed steel, not the dark dial, with small domed pins in them. */
     @Test
     fun theStripsBetweenThePanelsAreRaisedMetalWithPins() {
@@ -2040,7 +2072,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val DAY_NAME_SIZE = 26
         val DAY_BOX = RectF(52f, 198f, 98f, 240f)
         const val DAY_SIZE = 38
-        val MOON_BOX = RectF(26f, 207f, 50f, 231f)
+        val MOON_BOX = RectF(22f, 205f, 50f, 233f)
         val HOUR_BOX = RectF(89f, 162f, 188f, 240f)
         val COLON_BOX = RectF(188f, 162f, 206f, 240f)
         val MINUTE_BOX = RectF(206f, 162f, 305f, 240f)
@@ -2160,7 +2192,6 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val PHONE_NUMBER_DYN = "phoneBatteryNumber"
         const val DELTA_PLACE_DYN = "deltaPlace"
         const val AGE_DYN = "bgAge"
-        const val MOON_DYN = "moonPhase"
         const val MONTH_DYN = "monthMark"
         const val BG_NEEDLE_DYN = "bgNeedle"
         const val SENSOR_NEEDLE_DYN = "sensorNeedle"
@@ -2187,7 +2218,6 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val PUMP_COLOUR = "#FF9F1C"
         const val MONTH_MARK = "MonthMark"
         const val PERIOD_FRAME = "PeriodFrame"
-        const val MOON_STEPS = 16
         const val WX_SUN = "WxSun"
         const val WX_MOON = "WxMoon"
         const val WX_SUN_CLOUD = "WxSunCloud"

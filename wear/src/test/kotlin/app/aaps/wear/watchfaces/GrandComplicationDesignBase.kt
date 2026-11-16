@@ -27,6 +27,7 @@ import app.aaps.wear.health.HealthKind
 import app.aaps.wear.watchfaces.animation.BlinkSpec
 import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.DayOverlay
+import app.aaps.wear.watchfaces.daynight.MoonPicture
 import app.aaps.wear.watchfaces.daynight.Orbit
 import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
 import com.google.common.truth.Truth.assertThat
@@ -53,7 +54,8 @@ import kotlin.math.sin
  *   window under the centre, with its arrow;
  * - a **sky disc** at 9 o'clock with a horizon: the sun and the moon go round it as they really do
  *   (`sun_cycle`, `moon_cycle`): over the horizon while they are up, under it, darker, while they are
- *   down. The moon shows its real phase. A cloud or rain lies over them in that weather;
+ *   down. The watch draws the moon from a NASA photo, lit and turned as it is in the sky now. A cloud
+ *   or rain lies over them in that weather;
  * - the **date** in a window at 3 o'clock;
  * - the **steps** in a window at 6 o'clock (complication 2);
  * - two small **power reserve** dials for the battery of the watch and of the phone, with a hand and
@@ -205,14 +207,16 @@ abstract class GrandComplicationDesignBase : CwfDesignBase() {
         place("cover_chart", (SKY_X - SKY_R).toInt(), (SKY_Y - SKY_R).toInt(), (2 * SKY_R).toInt()).put("visibility", "visible")
         for ((view, key, size, picture) in listOf(
             Quad(SUN_VIEW, JsonKeyValues.SUN_CYCLE.key, BODY_SIZE, SUN),
-            Quad(MOON_VIEW, JsonKeyValues.MOON_CYCLE.key, BODY_SIZE, moonName(MOON_STEPS / 2 + 1)),
             Quad(SUN_CLOUD_VIEW, JsonKeyValues.SUN_CYCLE.key, CLOUD_SIZE, CLOUD),
             Quad(MOON_CLOUD_VIEW, JsonKeyValues.MOON_CYCLE.key, CLOUD_SIZE, CLOUD)
         )) {
             val top = skyOrbit(key).point(0.25)
             picture(view, top.first, top.second, size, picture).put("orbit", skyOrbitJson(key))
         }
-        getJSONObject(MOON_VIEW).put("dynData", MOON_DYN)
+        // The moon is drawn by the watch from its photo, lit and turned as it is in the sky now (see MoonPicture)
+        val moonTop = skyOrbit(JsonKeyValues.MOON_CYCLE.key).point(0.25)
+        place(MOON_VIEW, (moonTop.first - MOON_DISC / 2f).toInt(), (moonTop.second - MOON_DISC / 2f).toInt(), MOON_DISC)
+            .put("textvalue", "").put(MoonPicture.JSON_KEY, true).put("orbit", skyOrbitJson(JsonKeyValues.MOON_CYCLE.key))
 
         // The glucose hand on its scale, and the two battery hands: pictures that the watch turns with the value
         picture(BG_HAND_VIEW, FAN_X, FAN_Y, BG_HAND_BOX, BG_HAND).put("rotationOffset", true).put("dynData", BG_HAND_DYN)
@@ -225,7 +229,6 @@ abstract class GrandComplicationDesignBase : CwfDesignBase() {
                 LOOP_DYN, ageDynData("loop", 15.0, p.alarm).put("invalidImage", BLANK).put("image1", BLANK).put("image2", BLANK)
                     .put("textvalue1", "LOOP %.0f'").put("invalidTextvalue", "LOOP --")
             )
-            .put(MOON_DYN, moonDynData())
             .put(BG_HAND_DYN, bgHandDynData())
             .put(WATCH_HAND_DYN, batteryHandDynData(WatchBatteryLevel.KEY))
             .put(PHONE_HAND_DYN, batteryHandDynData(PHONE_VALUE_KEY))
@@ -277,16 +280,6 @@ abstract class GrandComplicationDesignBase : CwfDesignBase() {
         .put("invalidColor", palette.noValue).put("color1", palette.alarm)
         .apply { for (step in 2..5) put("color$step", palette.hand) }
 
-    /**
-     * The moon shows the picture nearest to its phase. Picture k shows the phase (k - 1) / [MOON_STEPS]; the
-     * last one, around the next new moon, is the new moon again.
-     */
-    private fun moonDynData(): JSONObject = JSONObject().put("valueKey", JsonKeyValues.MOON_PHASE.key)
-        .put("minData", -0.5 / MOON_STEPS).put("maxData", 1 + 0.5 / MOON_STEPS).put("invalidImage", moonName(MOON_STEPS / 2 + 1))
-        .apply { for (k in 1..MOON_STEPS + 1) put("image$k", moonName(if (k == MOON_STEPS + 1) 1 else k)) }
-
-    protected fun moonName(k: Int) = "Moon" + k.toString().padStart(2, '0')
-
     // ------------------------------------------------------------------------------------------
     // The pictures
     // ------------------------------------------------------------------------------------------
@@ -307,7 +300,7 @@ abstract class GrandComplicationDesignBase : CwfDesignBase() {
         CLOUD_CLOUDY to cloudPicture(CloudKind.CLOUDY),
         CLOUD_RAIN to cloudPicture(CloudKind.RAIN),
         BLANK to blankPng()
-    ) + (1..MOON_STEPS).associate { moonName(it) to moonPicture((it - 1).toDouble() / MOON_STEPS, BODY_SIZE) } + arrowImages()
+    ) + arrowImages()
 
     private fun color(hex: String) = Color.parseColor(hex)
     private fun paint(hex: String, style: Paint.Style = Paint.Style.FILL, width: Float = 0f) =
@@ -739,7 +732,11 @@ abstract class GrandComplicationDesignBase : CwfDesignBase() {
         for (key in listOf(SUN_VIEW, MOON_VIEW, SUN_CLOUD_VIEW, MOON_CLOUD_VIEW)) {
             val view = design.getJSONObject(key)
             val orbit = Orbit.read(view)!!
-            val half = if (key == SUN_VIEW || key == MOON_VIEW) BODY_SIZE * 0.35f else 0f
+            val half = when (key) {
+                SUN_VIEW  -> BODY_SIZE * 0.35f
+                MOON_VIEW -> MOON_DISC / 2f
+                else      -> 0f
+            }
             var v = 0.0
             while (v <= 1.0) {
                 val (x, y) = orbit.point(v)
@@ -1058,6 +1055,9 @@ abstract class GrandComplicationDesignBase : CwfDesignBase() {
         /** How much the land covers what is below the horizon: 0 nothing, 255 all. */
         const val LAND_ALPHA = 150
         const val BODY_SIZE = 26
+
+        /** The moon: as big as the moon pictures drew it in a [BODY_SIZE] view, the watch draws it to fill its view. */
+        const val MOON_DISC = 18
         const val CLOUD_SIZE = 40
 
         /** The two power reserves at 4:30 and 7:30: the watch left, the phone right. */
@@ -1084,7 +1084,6 @@ abstract class GrandComplicationDesignBase : CwfDesignBase() {
         const val PHONE_HAND_VIEW = "avg_delta"
         const val AGE_DYN = "bgAge"
         const val LOOP_DYN = "loopAge"
-        const val MOON_DYN = "moonPhase"
         const val BG_HAND_DYN = "bgHand"
         const val WATCH_HAND_DYN = "watchHand"
         const val PHONE_HAND_DYN = "phoneHand"
@@ -1099,7 +1098,6 @@ abstract class GrandComplicationDesignBase : CwfDesignBase() {
         const val SKY_RAIN = "SkyRain"
         const val BG_HAND = "BgHand"
         const val BATT_HAND = "BattHand"
-        const val MOON_STEPS = 16
 
         /** An afternoon with the sun and the moon both up, and an evening with the sun down and the moon high (moon about 11 days old). */
         val AFTERNOON_MS: Long = LocalDateTime.of(2026, 11, 16, 14, 10).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
