@@ -108,7 +108,7 @@ class GlucoseLineTest {
     }
 
     @Test
-    fun theLineTakesThePlaceOfTheDots() {
+    fun theLineReplacesTheDotsAndIsDrawnLast() {
         val before = Line(emptyList())
         val after = Line(emptyList())
         val times = listOf(NOW - 10 * minute, NOW - 5 * minute, NOW)
@@ -117,9 +117,10 @@ class GlucoseLineTest {
         val high = Line(listOf(PointValue(0f, 200f))).apply { color = yellow }
         val lines = mutableListOf(before, inRange, Line(emptyList()).apply { color = red }, high, after)
         GlucoseLine(2, null).replaceDots(lines, lines.subList(1, 4).toList(), times, xOf)
-        assertThat(lines.first()).isSameInstanceAs(before)
-        assertThat(lines.last()).isSameInstanceAs(after)
-        val glucose = lines.subList(1, lines.size - 1)
+        // The other lines keep their order, the glucose comes last, over them
+        assertThat(lines[0]).isSameInstanceAs(before)
+        assertThat(lines[1]).isSameInstanceAs(after)
+        val glucose = lines.drop(2)
         assertThat(glucose.none { it === inRange || it === high }).isTrue()
         assertThat(glucose.flatMap { it.xs() }).containsAtLeast(-10f, -5f, 0f).inOrder()
         assertThat(glucose.map { it.color }).containsExactly(green, yellow, yellow).inOrder()
@@ -144,6 +145,8 @@ class GlucoseLineTest {
         assertThat(glucose[0].hasLines()).isTrue()
         assertThat(glucose[0].hasPoints()).isFalse()
         assertThat(glucose[1].values).hasSize(1)
+        // Drawn last, over the basal and treatment lines that the builder adds after the glucose
+        assertThat(lines.takeLast(2)).containsExactlyElementsIn(glucose).inOrder()
     }
 
     private companion object {

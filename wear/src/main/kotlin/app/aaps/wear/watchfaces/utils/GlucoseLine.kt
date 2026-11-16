@@ -26,16 +26,16 @@ data class GlucoseLine(val width: Int, val colour: Int?) {
 
     /**
      * Takes the glucose [dots] (lines of [lines], one per colour, as `BgGraphBuilder` makes them) out of
-     * [lines] and puts the glucose line in their place. [times] are the times of the readings and
-     * [xOf] gives where a time is drawn: the dots do not carry their time.
+     * [lines] and puts the glucose line at the end of [lines]: it is drawn last, over the basal and the
+     * treatments, so they never hide it. [times] are the times of the readings and [xOf] gives where a
+     * time is drawn: the dots do not carry their time.
      */
     fun replaceDots(lines: MutableList<Line>, dots: List<Line>, times: List<Long>, xOf: (Long) -> Float) {
-        val index = lines.indexOfFirst { line -> dots.any { it === line } }
-        if (index < 0) return
+        if (dots.none { dot -> lines.any { it === dot } }) return
         val timeAt = times.associateBy(xOf)
         val points = dots.flatMap { dot -> dot.values.mapNotNull { value -> timeAt[value.x]?.let { Point(it, value.x, value.y, dot.color) } } }
         lines.removeAll { line -> dots.any { it === line } }
-        lines.addAll(index, lines(points))
+        lines.addAll(lines(points))
     }
 
     /** The lines that draw [points], in any order. */
