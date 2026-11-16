@@ -71,6 +71,7 @@ import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.R
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.cwfsettings.CwfPreviewAndSettings // PERSONAL PATCH: live watch face preview and its settings
+import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateSection
 
 @Composable
 internal fun WearScreen(
@@ -172,6 +173,7 @@ internal fun WearScreen(
             SubScreen.MAIN        -> {
                 WearMainContent(
                     uiState = uiState,
+                    watchAppUpdate = { WatchAppUpdateSection() },
                     onResendData = { viewModel.resendData() },
                     onOpenSettings = { viewModel.openSettingsOnWear() },
                     onLoadWatchface = { viewModel.loadWatchfaceFiles() },
@@ -204,6 +206,7 @@ private enum class SubScreen { MAIN, INFOS, IMPORT_LIST }
 @Composable
 internal fun WearMainContent(
     uiState: WearUiState,
+    watchAppUpdate: @Composable () -> Unit = {},
     onResendData: () -> Unit,
     onOpenSettings: () -> Unit,
     onLoadWatchface: () -> Unit,
@@ -279,6 +282,9 @@ internal fun WearMainContent(
                 )
             }
         }
+
+        // Watch App Card: only in a phone app built with the watch app inside
+        watchAppUpdate()
 
         // Pushed Watchface Card: only on a watch that reported Watch Face Push (Wear OS 6+). Below
         // that the pushed faces cannot exist, and a choice that does nothing would only mislead.

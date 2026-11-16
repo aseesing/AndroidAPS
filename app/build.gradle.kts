@@ -302,6 +302,10 @@ dependencies {
 }
 
 
+// Optional: the phone app carries a signed watch APK and can update the watch app with it.
+// Build with -PembedWearApk=<file>, see EmbedWatchAppTask.
+EmbedWatchAppTask.register(project)
+
 println("-------------------")
 println("isMaster: ${isMaster()}")
 println("gitAvailable: ${gitAvailable()}")
