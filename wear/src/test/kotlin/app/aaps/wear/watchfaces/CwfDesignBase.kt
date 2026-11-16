@@ -104,7 +104,7 @@ abstract class CwfDesignBase {
     /** Stores sample data in [face]. [adjustStatus] can change the status before it is stored, for values a design needs in addition. */
     protected fun storeSampleData(
         face: CustomWatchface, sample: Sample = Sample(), bgAgeMin: Long = 2, loopAgeMin: Long = 3, phoneBattery: String = PHONE_SAMPLE,
-        adjustStatus: (EventData.Status) -> EventData.Status = { it }
+        adjustStatus: (EventData.Status) -> EventData.Status = { it }, graph: ((now: Long) -> List<EventData.SingleBg>)? = null
     ) = runBlocking {
         val now = System.currentTimeMillis()
         val repository = face.complicationDataRepository
@@ -124,7 +124,7 @@ abstract class CwfDesignBase {
                 )
             )
         )
-        val points = ArrayList((0 until 36).map { i ->
+        val points = graph?.let { ArrayList(it(now)) } ?: ArrayList((0 until 36).map { i ->
             EventData.SingleBg(dataset = 0, timeStamp = now - (35 - i) * 5 * 60_000L, sgv = 125.0 + 35.0 * sin(i * PI / 14.0), high = 180.0, low = 70.0)
         })
         repository.updateGraphData(EventData.GraphData(points))

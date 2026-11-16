@@ -39,9 +39,11 @@ import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.DayOverlay
 import app.aaps.wear.watchfaces.daynight.StoredWeather
 import app.aaps.wear.watchfaces.utils.DesignTimeText
+import app.aaps.wear.watchfaces.utils.LogTimeScale
 import app.aaps.wear.watchfaces.utils.PartTimeLeft
 import app.aaps.wear.watchfaces.utils.SecondSpin
 import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
+import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.json.JSONArray
@@ -62,9 +64,13 @@ import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageTypeSpecifier
 import javax.imageio.metadata.IIOMetadataNode
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.ln
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -233,8 +239,10 @@ class CwfD2DesignTest : CwfDesignBase() {
         // The colon between them is a picture (see colonPicture), in the same colour
         text("hour", HOUR_BOX, TIME_SIZE, "right", COLOUR_1)
         text("minute", MINUTE_BOX, TIME_SIZE, "left", COLOUR_1)
-        // The seconds: a small gilt wheel in a sunk window that turns a step each second (see SecondSpin). Its own text is see-through.
+        // The seconds: a gilt wheel in a sunk window that turns a step each second (see SecondSpin). Its own text is see-through.
+        // With 12 hours the watch draws it smaller at the top of the window, over AM / PM.
         picture("second", wheelBox(), WHEEL).put("fontColor", CLEAR).put(SecondSpin.JSON_KEY, WHEEL_STEP)
+            .put(SecondSpin.BOX_12H_KEY, JSONObject().put("left", WHEEL_X - WHEEL_12H_R).put("top", WHEEL_12H_Y - WHEEL_12H_R).put("width", 2 * WHEEL_12H_R))
         // And a lit marker that runs round the rim, a tick each second: the second hand, a picture of the whole face, in the main colour
         place("second_hand", 0, 0, 400, 400).put("color", COLOUR_1)
         text("timePeriod", PERIOD_BOX, PERIOD_SIZE, "center", WHITE).put("background", PERIOD_FRAME)
@@ -246,8 +254,8 @@ class CwfD2DesignTest : CwfDesignBase() {
         // The two pointers: one picture of the whole dial, turned by the watch round the middle
         picture(BG_NEEDLE_VIEW, NEEDLE_BOX, NEEDLE).put("rotationOffset", true).put("dynData", BG_NEEDLE_DYN)
         // The time-left hands of the sensor and the pump: like the glucose pointer, turned round the middle of the dial
-        picture(SENSOR_NEEDLE_VIEW, NEEDLE_BOX, SENSOR_HAND).put("rotationOffset", true).put("dynData", SENSOR_NEEDLE_DYN)
-        picture(PUMP_NEEDLE_VIEW, NEEDLE_BOX, PUMP_HAND).put("rotationOffset", true).put("dynData", PUMP_NEEDLE_DYN)
+        picture(SENSOR_NEEDLE_VIEW, NEEDLE_BOX, SENSOR_HAND).put("dynData", SENSOR_NEEDLE_DYN)
+        picture(PUMP_NEEDLE_VIEW, NEEDLE_BOX, PUMP_HAND).put("dynData", PUMP_NEEDLE_DYN)
             .put("fontColor", CLEAR).put("dynValue", false)
         // The trend arrow, turned round the middle of the straight side of its half dial by the delta of the glucose
         picture(TREND_HAND_VIEW, trendDialBox(), TREND_HAND).put("rotationOffset", true).put("fontColor", CLEAR).put("dynValue", false)
@@ -260,7 +268,8 @@ class CwfD2DesignTest : CwfDesignBase() {
         text(SUN_TIME_VIEW, SUN_TIME_BOX, SUN_TIME_SIZE, "left", VALUE).put("textvalue", DesignTimeText.TOKEN).put("dynValue", false).put("dynData", SUN_TIME_DYN)
         slot(STEPS_VIEW, STEPS_BOX, STEPS_SIZE)
         // The graph, in its window
-        place("chart", GRAPH_BOX.left.toInt(), GRAPH_BOX.top.toInt(), GRAPH_BOX.width().toInt(), GRAPH_BOX.height().toInt())
+        // The view is taller than the glass: the chart keeps an empty margin round the plot, so the plot fills the glass
+        place("chart", CHART_VIEW.left.toInt(), CHART_VIEW.top.toInt(), CHART_VIEW.width().toInt(), CHART_VIEW.height().toInt())
 
         (optJSONObject("dynData") ?: JSONObject().also { put("dynData", it) })
             .put(SGV_DYN, JSONObject().put("valueKey", JsonKeyValues.SGV_LEVEL.key).put("minData", -1).put("maxData", 1)
@@ -337,18 +346,33 @@ class CwfD2DesignTest : CwfDesignBase() {
 
     /**
      * A time-left hand for the part [valueKey] (see [PartTimeLeft]), with the picture [hand]: turned from 0 hours at
-     * [HOURS_EMPTY_ANGLE] (the end, or past it) to [HOURS_MAX] at [HOURS_FULL_ANGLE]; more hours stay there. No hand
-     * when it is not known. No text and no colour of its own: the pump hand is the view of the reservoir, whose text
-     * the watch fills in.
+     * [HOURS_EMPTY_ANGLE] (the end, or past it) to [HOURS_MAX] at [HOURS_FULL_ANGLE] on the log scale of [hoursAngle];
+     * more hours stay there. No hand when it is not known. No text and no colour of its own: the pump hand is the view
+     * of the reservoir, whose text the watch fills in.
+     *
+     * The watch only turns a view in a straight line with the value, so the hand turns by steps: one per
+     * [HOURS_PER_STEP], each with the angle of the middle of its step. The watch rounds an angle to whole degrees anyway.
      */
-    private fun hoursHandDynData(valueKey: String, hand: String): JSONObject = JSONObject().put("valueKey", valueKey).put("minData", 0).put("maxData", HOURS_MAX)
-        .put("rotationOffset", JSONObject().put("minValue", HOURS_EMPTY_ANGLE).put("maxValue", HOURS_FULL_ANGLE).put("invalidValue", HOURS_EMPTY_ANGLE))
-        .put("invalidImage", BLANK).put("image1", hand)
-        .put("textvalue1", "").put("invalidTextvalue", "").put("fontColor1", CLEAR).put("invalidFontColor", CLEAR)
+    private fun hoursHandDynData(valueKey: String, hand: String): JSONObject {
+        val steps = (HOURS_MAX / HOURS_PER_STEP).toInt()
+        return JSONObject().put("valueKey", valueKey).put("minData", 0).put("maxData", HOURS_MAX)
+            .put("invalidRotationOffset", HOURS_EMPTY_ANGLE.roundToInt())
+            .put("invalidImage", BLANK).put("image1", hand)
+            .put("textvalue1", "").put("invalidTextvalue", "").put("fontColor1", CLEAR).put("invalidFontColor", CLEAR)
+            .apply { for (i in 1..steps) put("rotationOffset$i", hoursAngle((i - 0.5) * HOURS_PER_STEP).roundToInt()) }
+    }
 
-    /** The angle of a time-left hand at [hours] left. */
-    private fun hoursAngle(hours: Double): Float =
-        (HOURS_EMPTY_ANGLE + hours.coerceIn(0.0, HOURS_MAX) / HOURS_MAX * (HOURS_FULL_ANGLE - HOURS_EMPTY_ANGLE)).toFloat()
+    /**
+     * The angle of a time-left hand at [hours] left: a mild log scale, so the last day takes half of the scale and
+     * the last 12 hours a third.
+     */
+    private fun hoursAngle(hours: Double): Float {
+        val part = ln(1 + hours.coerceIn(0.0, HOURS_MAX) / HOURS_DETAIL) / ln(1 + HOURS_MAX / HOURS_DETAIL)
+        return (HOURS_EMPTY_ANGLE + part * (HOURS_FULL_ANGLE - HOURS_EMPTY_ANGLE)).toFloat()
+    }
+
+    /** The hours at [part] (0 to 1) of the time-left scale: the opposite of [hoursAngle]. */
+    private fun hoursAtPart(part: Double): Double = HOURS_DETAIL * ((1 + HOURS_MAX / HOURS_DETAIL).pow(part) - 1)
 
     /**
      * The trend arrow: turned by the delta of the glucose (mg/dL in 5 minutes), [TREND_DEGREES_PER_MGDL] degrees for
@@ -816,36 +840,36 @@ class CwfD2DesignTest : CwfDesignBase() {
     }
 
     /**
-     * The time-left scale along the edge at the bottom left: ticks every 6 hours from 0 (bottom) to 72 (top), the
-     * numbers 0, 24, 48 and 72, a band that is red for the last 12 hours and amber up to 24, and a legend of the
-     * two hands.
+     * The time-left scale along the edge at the bottom left, on the log scale of [hoursAngle]: ticks every 3 hours up to
+     * 24 and every 12 hours after that, up to 96 (top); the numbers 0, 12, 24, 48 and 96; a band that is red for the
+     * last 12 hours and amber up to 24; and a legend of the two hands.
      */
     private fun hoursScale(canvas: Canvas) {
-        var hours = 0
-        while (hours <= HOURS_MAX.toInt()) {
+        val ticks = (0..24 step 3) + (36..HOURS_MAX.toInt() step 12)
+        for (hours in ticks) {
             val angle = hoursAngle(hours.toDouble())
-            val major = hours % 24 == 0
+            val major = hours in HOURS_NUMBERS
             canvas.line(polar(200f, 200f, SCALE_OUTER, angle), polar(200f, 200f, if (major) SCALE_OUTER - 12f else SCALE_OUTER - 6f, angle),
                         paint(if (major) WHITE else "#8A9099", width = if (major) 2f else 1.2f))
             if (major) {
                 val (x, y) = polar(200f, 200f, SCALE_LABEL_R, angle)
                 canvas.label(hours.toString(), x, y, SCALE_LABEL_SIZE, WHITE, angle + 180f, shadow = true, face = textFont())
             }
-            hours += 6
         }
-        var h = 0.0
-        while (h <= HOURS_MAX) {
-            val angle = hoursAngle(h)
+        // The band: lines at even angles, each in the colour of its hours
+        for (i in 0..BAND_LINES) {
+            val part = i.toDouble() / BAND_LINES
+            val h = hoursAtPart(part)
             val hex = when {
                 h < 12.0 -> LOW
                 h < 24.0 -> HIGH
                 else     -> "#9AA0A8"
             }
+            val angle = hoursAngle(h)
             canvas.line(polar(200f, 200f, BAND_OUTER, angle), polar(200f, 200f, BAND_INNER, angle), paint(hex, width = 1.4f))
-            h += 1.5
         }
-        legend(canvas, "SENSOR", SENSOR_COLOUR, hoursAngle(HOURS_MAX * 0.25))
-        legend(canvas, "PUMP", PUMP_COLOUR, hoursAngle(HOURS_MAX * 0.72))
+        legend(canvas, "SENSOR", SENSOR_COLOUR, hoursAngle(hoursAtPart(0.25)))
+        legend(canvas, "PUMP", PUMP_COLOUR, hoursAngle(hoursAtPart(0.72)))
     }
 
     /** A dot in [hex] and the word [text], along the time-left scale at [angle], inside its band. */
@@ -1202,11 +1226,13 @@ class CwfD2DesignTest : CwfDesignBase() {
         sample: Sample = Sample(deltaMgdl = DELTA_SAMPLE), bgAgeMin: Long = 2, loopAgeMin: Long = 3, watch: Int? = WATCH_SAMPLE, phone: String = PHONE_SAMPLE,
         colours: Pair<String, String> = Pair(ColourLooks.AS_DESIGNED, ColourLooks.AS_DESIGNED), hours24: Boolean = true, instant: Long = PREVIEW_MS,
         weather: String? = EventData.Weather.PARTLY, temperature: Double? = TEMPERATURE_SAMPLE, place: Boolean = true,
-        sensorHours: Double? = SENSOR_HOURS_SAMPLE, pumpHours: Double? = PUMP_HOURS_SAMPLE, size: Int = 400
+        sensorHours: Double? = SENSOR_HOURS_SAMPLE, pumpHours: Double? = PUMP_HOURS_SAMPLE, size: Int = 400,
+        graph: ((now: Long) -> List<EventData.SingleBg>)? = null, logGraph: Boolean = true
     ): Bitmap {
-        val (face, design) = preparedFace(sample, bgAgeMin, loopAgeMin, watch, phone, colours, hours24, instant, weather, temperature, place, sensorHours, pumpHours)
+        val (face, design) = preparedFace(sample, bgAgeMin, loopAgeMin, watch, phone, colours, hours24, instant, weather, temperature, place, sensorHours, pumpHours, graph, logGraph)
         val picture = face.renderToBitmap(size, size)
-        drawComplicationValues(Canvas(picture), design)
+        // The values of the complication slots, drawn the way the phone shows them; they are in 400 x 400 places
+        if (size == 400) drawComplicationValues(Canvas(picture), design)
         Settings.System.putString(RuntimeEnvironment.getApplication().contentResolver, Settings.System.TIME_12_24, "24")
         return picture
     }
@@ -1216,7 +1242,8 @@ class CwfD2DesignTest : CwfDesignBase() {
         sample: Sample = Sample(deltaMgdl = DELTA_SAMPLE), bgAgeMin: Long = 2, loopAgeMin: Long = 3, watch: Int? = WATCH_SAMPLE, phone: String = PHONE_SAMPLE,
         colours: Pair<String, String> = Pair(ColourLooks.AS_DESIGNED, ColourLooks.AS_DESIGNED), hours24: Boolean = true, instant: Long = PREVIEW_MS,
         weather: String? = EventData.Weather.PARTLY, temperature: Double? = TEMPERATURE_SAMPLE, place: Boolean = true,
-        sensorHours: Double? = SENSOR_HOURS_SAMPLE, pumpHours: Double? = PUMP_HOURS_SAMPLE
+        sensorHours: Double? = SENSOR_HOURS_SAMPLE, pumpHours: Double? = PUMP_HOURS_SAMPLE,
+        graph: ((now: Long) -> List<EventData.SingleBg>)? = null, logGraph: Boolean = true
     ): Pair<CustomWatchface, JSONObject> {
         val default = defaultDesign()
         val design = design(default)
@@ -1227,11 +1254,12 @@ class CwfD2DesignTest : CwfDesignBase() {
         face.sp.putDouble(R.string.key_location_longitude, if (place) 4.90 else Double.NaN)
         face.sp.putString(R.string.key_cwf_colour_1, colours.first)
         face.sp.putString(R.string.key_cwf_colour_2, colours.second)
+        face.sp.putBoolean(R.string.key_graph_log_time, logGraph)
         Settings.System.putString(RuntimeEnvironment.getApplication().contentResolver, Settings.System.TIME_12_24, if (hours24) "24" else "12")
         // The sensor and the pod stop [sensorHours] and [pumpHours] after [instant]
-        storeSampleData(face, sample, bgAgeMin, loopAgeMin, phone) {
+        storeSampleData(face, sample, bgAgeMin, loopAgeMin, phone, adjustStatus = {
             it.copy(sensorEndsAt = sensorHours?.let { h -> instant + (h * HOUR_MS).toLong() }, pumpEndsAt = pumpHours?.let { h -> instant + (h * HOUR_MS).toLong() })
-        }
+        }, graph = graph)
         Thread.sleep(600)   // past the render data share window
         face.refreshRenderData()
         return face to design
@@ -1393,9 +1421,15 @@ class CwfD2DesignTest : CwfDesignBase() {
         assertThat(handAt(picture, 10.0, SENSOR_COLOUR)).isEqualTo(0)
         assertThat(handAt(picture, 10.0, PUMP_COLOUR)).isGreaterThan(3)
         assertThat(handAt(picture, 60.0, PUMP_COLOUR)).isEqualTo(0)
-        // More than 72 hours shows at 72; past the end at 0
+        // A mild log scale: a day is the middle of the scale, 12 hours a third
+        assertThat(hoursAngle(24.0)).isWithin(0.01f).of(((HOURS_EMPTY_ANGLE + HOURS_FULL_ANGLE) / 2).toFloat())
+        assertThat((hoursAngle(12.0) - HOURS_EMPTY_ANGLE) / (HOURS_FULL_ANGLE - HOURS_EMPTY_ANGLE)).isWithin(0.02).of(0.32)
+        val day = render(sensorHours = 24.0, pumpHours = 90.0)
+        assertThat(handAt(day, 24.0, SENSOR_COLOUR)).isGreaterThan(3)
+        assertThat(handAt(day, 90.0, PUMP_COLOUR)).isGreaterThan(3)
+        // More than 96 hours shows at 96; past the end at 0
         val far = render(sensorHours = 200.0, pumpHours = -5.0)
-        assertThat(handAt(far, 72.0, SENSOR_COLOUR)).isGreaterThan(3)
+        assertThat(handAt(far, 96.0, SENSOR_COLOUR)).isGreaterThan(3)
         assertThat(handAt(far, 0.0, PUMP_COLOUR)).isGreaterThan(3)
         // Not known: no hands; the reservoir text does not show
         val unknown = render(sensorHours = null, pumpHours = null)
@@ -1403,6 +1437,122 @@ class CwfD2DesignTest : CwfDesignBase() {
             assertWithMessage("sensor $h").that(handAt(unknown, h, SENSOR_COLOUR)).isEqualTo(0)
             assertWithMessage("pump $h").that(handAt(unknown, h, PUMP_COLOUR)).isEqualTo(0)
         }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // The graph on the watch: 466 pixels at the density of a watch, where the chart's labels and margins are twice as big
+    // ------------------------------------------------------------------------------------------
+
+    /** The graph of the watch: a log time scale, and a plot that fills most of the glass. */
+    @Test
+    @Config(qualifiers = "xhdpi")
+    fun theGraphFillsItsGlassOnTheWatch() {
+        val picture = render(size = WATCH_SIZE)
+        File(out, "${fileName}_watch.png").writeBytes(pngBytes(picture))
+        val glass = onWatch(GRAPH_WINDOW)
+        val dots = dotsBox(picture, glass)
+        assertWithMessage("glucose dots in the glass").that(dots).isNotNull()
+        // The sample goes from 90 to 160 mg/dL between the lines at 70 and 180: 64 % of the plot. On the old graph the
+        // margins left the plot a strip of a few pixels.
+        assertWithMessage("height of the dots").that(dots!!.height() / glass.height()).isAtLeast(0.45f)
+        // Three hours of glucose start halfway on the log scale, and end at the right
+        assertWithMessage("oldest dot").that((dots.left - glass.left) / glass.width()).isIn(Range.closed(0.35f, 0.62f))
+        assertWithMessage("newest dot").that((dots.right - glass.left) / glass.width()).isAtLeast(0.85f)
+    }
+
+    /** A day of glucose spans the log graph; the plain graph shows its hours over the whole width. */
+    @Test
+    @Config(qualifiers = "xhdpi")
+    fun theLogGraphShowsADayAndThePlainGraphItsHours() {
+        val glass = onWatch(GRAPH_WINDOW)
+        val day = dotsBox(render(size = WATCH_SIZE, graph = ::dayOfGlucose), glass)!!
+        assertWithMessage("a day, oldest").that((day.left - glass.left) / glass.width()).isLessThan(0.12f)
+        assertWithMessage("a day, newest").that((day.right - glass.left) / glass.width()).isAtLeast(0.85f)
+        val plain = dotsBox(render(size = WATCH_SIZE, logGraph = false), glass)!!
+        assertWithMessage("plain, oldest").that((plain.left - glass.left) / glass.width()).isLessThan(0.15f)
+    }
+
+    /** The log graph has a line at 1, 3, 6 and 12 hours ago, where the scale puts them. */
+    @Test
+    @Config(qualifiers = "xhdpi")
+    fun theTimeAxisMarksTheHoursOnTheWatch() {
+        val picture = render(size = WATCH_SIZE)
+        val glass = onWatch(GRAPH_WINDOW)
+        // The high line runs over the whole time of the graph: a day back to 5 minutes ahead
+        val highY = (glass.top.toInt() until glass.bottom.toInt()).maxBy { y -> (glass.left.toInt() until glass.right.toInt()).count { x -> near(picture.getPixel(x, y), GRAPH_HIGH, 40) } }
+        val highXs = (glass.left.toInt() until glass.right.toInt()).filter { x -> near(picture.getPixel(x, highY), GRAPH_HIGH, 40) }
+        val left = highXs.first().toFloat()
+        val right = highXs.last().toFloat()
+        val from = LogTimeScale.xOfOffset(-LogTimeScale.PAST_MS)
+        val to = LogTimeScale.xOfOffset(LogTimeScale.MIN_FUTURE_MS)
+        // The line itself is in the grid colour; the glass beside it is darker
+        fun lineAt(px: Int) = (glass.top.toInt() until glass.bottom.toInt()).count { y -> (px - 1..px + 1).any { x -> brightness(picture.getPixel(x, y)) > brightness(picture.getPixel(x + 5, y)) + 6 } }
+        for (age in LogTimeScale.LABEL_AGES_MS) {
+            val px = (left + (LogTimeScale.xOfOffset(-age) - from) / (to - from) * (right - left)).roundToInt()
+            assertWithMessage("line at ${age / HOUR_MS} h, x $px").that(lineAt(px)).isGreaterThan((glass.height() * 0.3f).toInt())
+        }
+    }
+
+    /** The bounding box of the in-range glucose dots inside [glass], or null when there are none. Green, not the grey of the frame. */
+    private fun dotsBox(picture: Bitmap, glass: RectF): RectF? {
+        var box: RectF? = null
+        fun isDot(c: Int) = near(c, GRAPH_MID, 30) && Color.green(c) - Color.red(c) > 15 && Color.green(c) - Color.blue(c) > 12
+        for (y in glass.top.toInt() until glass.bottom.toInt()) for (x in glass.left.toInt() until glass.right.toInt())
+            if (isDot(picture.getPixel(x, y))) box = (box ?: RectF(x.toFloat(), y.toFloat(), x.toFloat(), y.toFloat())).apply { union(x.toFloat(), y.toFloat()) }
+        return box
+    }
+
+    /** [r], from the 400 x 400 design to the watch's [WATCH_SIZE]. */
+    private fun onWatch(r: RectF): RectF {
+        val k = WATCH_SIZE / 400f
+        return RectF(r.left * k, r.top * k, r.right * k, r.bottom * k)
+    }
+
+    private fun brightness(color: Int): Int = (Color.red(color) + Color.green(color) + Color.blue(color)) / 3
+
+    /** Glucose of a whole day, every 5 minutes, slow waves between 90 and 160 mg/dL. */
+    private fun dayOfGlucose(now: Long): List<EventData.SingleBg> = (0 until 288).map { i ->
+        EventData.SingleBg(dataset = 0, timeStamp = now - (287 - i) * 5 * 60_000L, sgv = 125.0 + 35.0 * sin(i * PI / 20.0), high = 180.0, low = 70.0)
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // The seconds wheel: big with 24 hours, small over AM / PM with 12
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    fun theWheelIsBigWith24HoursAndSmallOverAmPmWith12() {
+        val window = RectF(WHEEL_X - WHEEL_WINDOW_R, WHEEL_Y - WHEEL_WINDOW_R, WHEEL_X + WHEEL_WINDOW_R, WHEEL_Y + WHEEL_WINDOW_R)
+        // 24 hours: the wheel fills its window
+        val big = giltBox(render(hours24 = true), window)!!
+        assertWithMessage("24 h wheel width").that(big.width()).isAtLeast(2 * WHEEL_R * 0.85f)
+        assertWithMessage("24 h wheel height").that(big.height()).isAtLeast(2 * WHEEL_R * 0.85f)
+        // 12 hours: small, at the top of the window, and AM / PM in white under it
+        val twelve = render(hours24 = false)
+        File(out, "${fileName}_12h.png").writeBytes(pngBytes(twelve))
+        val small = giltBox(twelve, window)!!
+        assertWithMessage("12 h wheel width").that(small.width()).isAtMost(2 * WHEEL_12H_R + 2f)
+        assertWithMessage("12 h wheel top").that(small.top).isAtLeast(WHEEL_12H_Y - WHEEL_12H_R - 2f)
+        assertWithMessage("12 h wheel bottom").that(small.bottom).isAtMost(WHEEL_12H_Y + WHEEL_12H_R + 2f)
+        assertWithMessage("12 h wheel above AM / PM").that(small.bottom).isAtMost(PERIOD_BOX.top + 1f)
+        assertWithMessage("AM / PM text").that(countNear(twelve, AM_PM_TEXT, WHITE, 60)).isGreaterThan(10)
+        assertWithMessage("no AM / PM with 24 h").that(countNear(render(hours24 = true), AM_PM_TEXT, WHITE, 60)).isEqualTo(0)
+        // The window lies in the time panel, right of the widest minutes, and holds the small wheel and AM / PM
+        insideRound("wheel window", window)
+        assertThat(TIME_PANEL.contains(window)).isTrue()
+        assertWithMessage("minutes and window").that(window.left).isAtLeast(MINUTE_BOX.left + (0..59).maxOf { textWidth("%02d".format(it), TIME_SIZE) } + 2f)
+        assertWithMessage("hours and the date line").that(HOUR_BOX.right - (0..23).maxOf { textWidth("%02d".format(it), TIME_SIZE) }).isAtLeast(DATE_LINE_X + 2f)
+        for ((x, y) in listOf(PERIOD_BOX.left to PERIOD_BOX.top, PERIOD_BOX.right to PERIOD_BOX.top, PERIOD_BOX.left to PERIOD_BOX.bottom, PERIOD_BOX.right to PERIOD_BOX.bottom))
+            assertWithMessage("AM / PM corner $x, $y in the window").that(hypot(x - WHEEL_X, y - WHEEL_Y)).isLessThan(WHEEL_WINDOW_R - 2f)
+        // The minutes never reach into the window
+        assertWithMessage("main colour in the window").that(countNear(render(hours24 = true), window, COLOUR_1, 60)).isEqualTo(0)
+    }
+
+    /** The bounding box of the gilt pixels of the seconds wheel inside [area], or null when there are none. */
+    private fun giltBox(picture: Bitmap, area: RectF): RectF? {
+        var box: RectF? = null
+        for (y in area.top.toInt() until area.bottom.toInt()) for (x in area.left.toInt() until area.right.toInt())
+            if (near(picture.getPixel(x, y), "#C9A04E", 60)) box = (box ?: RectF(x.toFloat(), y.toFloat(), x.toFloat(), y.toFloat())).apply { union(x.toFloat(), y.toFloat()) }
+        return box
     }
 
     @Test
@@ -1456,7 +1606,8 @@ class CwfD2DesignTest : CwfDesignBase() {
 
     @Test
     fun amPmOnlyShowsWith12Hours() {
-        val frame = RectF(PERIOD_BOX.left, PERIOD_BOX.top, PERIOD_BOX.right, PERIOD_BOX.bottom)
+        // The lower part of the box: with 24 hours the steel middle of the big wheel lies over its top
+        val frame = AM_PM_TEXT
         val with24 = render(hours24 = true)
         val with12 = render(hours24 = false)
         assertThat(countNear(with24, frame, WHITE, 60)).isEqualTo(0)
@@ -1508,11 +1659,15 @@ class CwfD2DesignTest : CwfDesignBase() {
         val design = design(defaultDesign())
         val chart = rectOf(design.getJSONObject("chart"))
         insideRound("chart", chart)
-        assertThat(GRAPH_WINDOW.contains(chart)).isTrue()
-        // The dots are there, in the muted colour, and nothing in the window is bright
+        // The view is the glass and a little more above and below, for the empty margin of the chart
+        assertThat(chart.left).isAtLeast(GRAPH_WINDOW.left)
+        assertThat(chart.right).isAtMost(GRAPH_WINDOW.right)
+        assertThat(chart.contains(GRAPH_BOX)).isTrue()
+        assertThat(chart.height() - GRAPH_BOX.height()).isAtMost(14f)
+        // The dots are there, in the glass, in the muted colour, and nothing in the window is bright
         val picture = render()
-        assertThat(countNear(picture, chart, GRAPH_MID, 40)).isGreaterThan(20)
-        assertThat(brightestAround(picture, chart.centerX() to chart.centerY(), (chart.height() / 2 - 1).toInt())).isLessThan(0.35)
+        assertThat(countNear(picture, GRAPH_BOX, GRAPH_MID, 40)).isGreaterThan(20)
+        assertThat(brightestAround(picture, GRAPH_BOX.centerX() to GRAPH_BOX.centerY(), (GRAPH_BOX.height() / 2 - 1).toInt())).isLessThan(0.35)
         // The glucose value keeps its own bright colour
         assertThat(countNear(picture, SGV_BOX, MID, 40)).isGreaterThan(100)
     }
@@ -1599,7 +1754,6 @@ class CwfD2DesignTest : CwfDesignBase() {
         assertThat(countNear(at32, box, "#C9A04E", 60)).isGreaterThan(40)
         insideRound("wheel window", RectF(WHEEL_X - WHEEL_WINDOW_R, WHEEL_Y - WHEEL_WINDOW_R, WHEEL_X + WHEEL_WINDOW_R, WHEEL_Y + WHEEL_WINDOW_R))
         assertThat(TIME_PANEL.contains(RectF(WHEEL_X - WHEEL_WINDOW_R, WHEEL_Y - WHEEL_WINDOW_R, WHEEL_X + WHEEL_WINDOW_R, WHEEL_Y + WHEEL_WINDOW_R))).isTrue()
-        assertThat(WHEEL_Y + WHEEL_WINDOW_R).isLessThan(PERIOD_BOX.top)
         // The runner follows the main colour chosen on the watch
         assertThat(countNear(render(colours = Pair("#FF3B3B", ColourLooks.AS_DESIGNED)), around(32), "#FF3B3B", 70)).isGreaterThan(4)
     }
@@ -1766,22 +1920,27 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val LINE_SIZE = 17
 
         /** The time panel: the day name and the day with the moon, the time, the seconds and AM / PM. */
-        const val DATE_LINE_X = 110f
-        val DAY_NAME_BOX = RectF(28f, 164f, 106f, 194f)
+        const val DATE_LINE_X = 100f
+        val DAY_NAME_BOX = RectF(28f, 164f, 96f, 194f)
         const val DAY_NAME_SIZE = 26
-        val DAY_BOX = RectF(52f, 198f, 108f, 240f)
+        val DAY_BOX = RectF(52f, 198f, 98f, 240f)
         const val DAY_SIZE = 38
         val MOON_BOX = RectF(26f, 207f, 50f, 231f)
-        val HOUR_BOX = RectF(108f, 162f, 207f, 240f)
-        val COLON_BOX = RectF(207f, 162f, 223f, 240f)
-        val MINUTE_BOX = RectF(223f, 162f, 322f, 240f)
+        val HOUR_BOX = RectF(98f, 162f, 197f, 240f)
+        val COLON_BOX = RectF(197f, 162f, 213f, 240f)
+        val MINUTE_BOX = RectF(213f, 162f, 312f, 240f)
         const val TIME_SIZE = 96
 
-        /** The seconds wheel right of the minutes, in its sunk window, and the step it turns each second. */
-        const val WHEEL_X = 346f
-        const val WHEEL_Y = 182f
-        const val WHEEL_R = 17f
-        const val WHEEL_WINDOW_R = 20f
+        /**
+         * The seconds wheel right of the minutes, in its sunk window, as big as the time panel allows, and the step it
+         * turns each second. With 12 hours the wheel is [WHEEL_12H_R] at the top of the window, with AM / PM under it.
+         */
+        const val WHEEL_X = 344f
+        const val WHEEL_Y = 201f
+        const val WHEEL_R = 31f
+        const val WHEEL_WINDOW_R = 34f
+        const val WHEEL_12H_Y = 185f
+        const val WHEEL_12H_R = 14f
         const val WHEEL_TEETH = 15
         const val WHEEL_STEP = 6
 
@@ -1789,8 +1948,10 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val RUNNER_INNER = 188f
         const val RUNNER_OUTER = 198.5f
         const val RUNNER_HALF_WIDTH = 2.8f
-        val PERIOD_BOX = RectF(326f, 206f, 366f, 230f)
-        const val PERIOD_SIZE = 17
+        val PERIOD_BOX = RectF(328f, 202f, 360f, 222f)
+        /** The lower part of [PERIOD_BOX], below the steel middle of the big wheel. */
+        val AM_PM_TEXT = RectF(PERIOD_BOX.left, 209f, PERIOD_BOX.right, PERIOD_BOX.bottom)
+        const val PERIOD_SIZE = 15
 
         /** The months: the label, the first number and the room between two, the mark over the numbers. */
         const val MONTH_LABEL_X = 62f
@@ -1803,6 +1964,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         /** The bottom right panel: the graph window at the top, then the sunrise or sunset and the steps, a line between them. */
         val GRAPH_WINDOW = RectF(163f, 283f, 340f, 330f)
         val GRAPH_BOX = RectF(166f, 286f, 337f, 327f)
+        val CHART_VIEW = RectF(GRAPH_BOX.left, GRAPH_BOX.top - 7f, GRAPH_BOX.right, GRAPH_BOX.bottom + 7f)
         const val ROW_D_LINE = 356f
 
         /** The icons of the bottom rows, in a column at [ROW_ICON_X]; the values start right of them. */
@@ -1846,8 +2008,16 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val BG_TO = -20.0
         const val MGDL_PER_MMOL = 18.0
 
-        /** The time-left scale: 0 hours at -164 degrees (bottom) to 72 at -120 (top). The size of its legend. */
-        const val HOURS_MAX = 72.0
+        /**
+         * The time-left scale: 0 hours at -164 degrees (bottom) to 96 at -120 (top), log with [HOURS_DETAIL] (see
+         * hoursAngle), the hand in steps of [HOURS_PER_STEP]. The size of its legend.
+         */
+        const val HOURS_MAX = 96.0
+        const val HOURS_DETAIL = 12.0
+        const val HOURS_PER_STEP = 0.5
+        const val WATCH_SIZE = 466
+        val HOURS_NUMBERS = listOf(0, 12, 24, 48, 96)
+        const val BAND_LINES = 48
         const val HOURS_EMPTY_ANGLE = -164.0
         const val HOURS_FULL_ANGLE = -120.0
         const val LEGEND_SIZE = 6f
