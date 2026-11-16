@@ -42,6 +42,7 @@ OnePlus Watch 2R and other round Wear OS watches.
 | 🚗 | **Glucose in the car** | AAPS says your glucose value over the car speakers. |
 | 🚦 | **Status lights count down** | The sensor and pod lights show the time that is really left. |
 | 📄 | **Logs to Downloads** | Save the logs without email. |
+| ⌚ | **Update the watch from the phone** | One button in AAPS sends a new watch app to the watch. No debugging on the watch. |
 
 > [!WARNING]
 > **Not an official AAPS release.** Not reviewed by the AAPS team. AAPS doses insulin: use this
@@ -51,10 +52,12 @@ OnePlus Watch 2R and other round Wear OS watches.
 
 ## Install
 
-1. Build `local/personal`: `:app:assembleFullRelease` for the phone, `:wear:assembleFullRelease` for
-   the watch.
-2. Sign both with the same key as the AAPS you have now, and install with `adb install -r`, so your
-   data and settings stay.
+1. Build `local/personal`: first `:wear:assembleFullRelease` and sign it, then
+   `:app:assembleFullRelease -PembedWearApk=<signed watch APK>` for the phone, which then carries the watch app.
+2. Sign the phone app with the same key as the AAPS you have now, and install with `adb install -r`, so
+   your data and settings stay. Install the watch app once with adb and allow it to install updates:
+   `adb shell appops set info.nightscout.androidaps REQUEST_INSTALL_PACKAGES allow`. Later updates:
+   AAPS → Wear → **Update watch app**.
 3. In AAPS, load a design from `wear/cwf-designs` as the day face, and another one as the night face
    if you like.
 
