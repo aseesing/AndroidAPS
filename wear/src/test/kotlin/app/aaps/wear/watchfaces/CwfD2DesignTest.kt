@@ -85,16 +85,16 @@ import kotlin.math.sqrt
  *   daily goal: one scale along the edge from 72 hours at the top to 0 at the bottom, red for the last 12
  *   hours, and two hands that come in from the edge, cyan for the sensor and orange for the pump. The ends
  *   are those of the phone's status lights; more than 72 hours shows as 72. No hand when it is not known;
- * - the **trend dial**: a half circle at the left of the glucose value, with a steel arrow that turns with
+ * - the **trend dial**: a big half circle right of the time, against the rim, with a steel arrow that turns with
  *   the delta of the glucose, not in the seven steps of the arrows: straight right when it stays the same,
  *   45 degrees up at +7.5 mg/dL in 5 minutes, straight up at +15 or more, and the same way down. No arrow
- *   when the delta is not known;
- * - the glucose value big at the top right, in green, amber or red, and the weather
- *   right of it: an icon (sun or moon, with a cloud, a cloud, rain) and the temperature, as the phone
+ *   when the delta is not known. The delta itself stands under the pivot, or over it while the glucose falls;
+ * - the glucose value very big at the top right, in green, amber or red, and right of it the heart rate over
+ *   the weather: an icon (sun or moon, with a cloud, a cloud, rain) and the temperature, as the phone
  *   reads them from Open-Meteo. Nothing when the phone sent no weather for three hours;
- * - a line with the delta, the age of the value (red from 10 minutes), the IOB, the carbs and the basal rate;
- * - the batteries of the watch and the phone (red at 20 % or less), and the loop age in a small box
- *   (green, red from 15 minutes);
+ * - a line with the age of the value (red from 10 minutes), the IOB, the carbs and the basal rate;
+ * - the batteries of the watch and the phone (red at 20 % or less);
+ * - all texts under a fine dark mesh, so they look like LED displays;
  * - the big time with seconds and AM/PM, the day, the date and the moon phase, the months of the year
  *   with a mark on this month;
  * - a **graph** of the glucose of the last hours (as set on the watch, 3 by default) in a small sunk window at
@@ -107,7 +107,7 @@ import kotlin.math.sqrt
  * - 12 or 24 hours: the face follows the setting of the watch; AM/PM only shows with 12 hours;
  * - the main colour (the time) and the second colour (the date), see [ColourLooks];
  * - what slots 1 and 2 show, in the watch face editor, and whether each one shows at all;
- * - each value on its own (seconds, delta, IOB, basal, batteries, loop, ...) in the face settings.
+ * - each value on its own (seconds, delta, IOB, basal, batteries, ...) in the face settings.
  *
  * The texts and the numbers on the dial are in D2 Text (a cut-down Saira Condensed Medium), which the zip brings; the words
  * printed on the dial in Michroma (in the pictures only). Both are in `cwf-designs/fonts`, with their licences.
@@ -173,7 +173,7 @@ class CwfD2DesignTest : CwfDesignBase() {
             .put(CwfMetadataKey.CWF_FILENAME.key, fileName)
             .put(CwfMetadataKey.CWF_AUTHOR.key, "AAPS (local)")
             .put(CwfMetadataKey.CWF_CREATED_AT.key, "14/11/26")
-            .put(CwfMetadataKey.CWF_COMMENT.key, "Digital sports face: glucose scale, trend dial, graph, time left of sensor and pump, big time, weather, sunrise and sunset, batteries, loop, heart rate and steps. Colours in the face settings")
+            .put(CwfMetadataKey.CWF_COMMENT.key, "Digital sports face: glucose scale, trend dial, graph, time left of sensor and pump, big time, weather, sunrise and sunset, batteries, heart rate and steps. Colours in the face settings")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION1.key, "true")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2.key, "true")
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3.key, "false")
@@ -202,7 +202,7 @@ class CwfD2DesignTest : CwfDesignBase() {
 
         // Every view this design does not use is off
         val used = setOf(
-            "background", "chart", "cover_chart", "sgv", "delta", "timestamp", "loop", "iob2", "basalRate", "hour", "minute",
+            "background", "chart", "cover_chart", "sgv", "delta", "timestamp", "time", "iob2", "basalRate", "hour", "minute",
             "timePeriod", "day_name", "day", "cob2", "second_hand", HR_VIEW, STEPS_VIEW, SUN_TIME_VIEW, BG_NEEDLE_VIEW, SENSOR_NEEDLE_VIEW, PUMP_NEEDLE_VIEW, TREND_HAND_VIEW, MOON_VIEW, MONTH_VIEW,
             TEMPERATURE_VIEW, "cover_plate", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW
         )
@@ -212,22 +212,25 @@ class CwfD2DesignTest : CwfDesignBase() {
         }
         put("background", JSONObject().put("width", 400).put("height", 400).put("topmargin", 0).put("leftmargin", 0).put("visibility", "visible"))
 
-        // The glucose value, big at the top right; its trend is the big arrow right of the time
+        // The glucose value, very big over two rows at the top right; its trend is the big arrow right of the time
         text("sgv", SGV_BOX, SGV_SIZE, "left", MID).put("dynData", SGV_DYN)
-        // The weather right of it: the icon (the weather looks below choose it) and the temperature
-        place("cover_plate", WEATHER_ICON_BOX.left.toInt(), WEATHER_ICON_BOX.top.toInt(), WEATHER_ICON_BOX.width().toInt()).put("dynData", WEATHER_ICON_DYN)
+        // In a column right of it: the heart rate, and under it the weather: the icon (the weather looks below choose it)
+        // and the temperature. The icon is in the view of the time text, which this design does not use otherwise.
+        place("time", WEATHER_ICON_BOX.left.toInt(), WEATHER_ICON_BOX.top.toInt(), WEATHER_ICON_BOX.width().toInt(), WEATHER_ICON_BOX.height().toInt())
+            .put("fontColor", CLEAR).put("textsize", 1).put("dynData", WEATHER_ICON_DYN)
+        // Over all the texts: a fine dark mesh, so the digits look like a display of LEDs (see ledMesh)
+        place("cover_plate", 0, 0, 400, 400)
         text(TEMPERATURE_VIEW, TEMPERATURE_BOX, TEMPERATURE_SIZE, "left", VALUE).put("textvalue", "%.0f°").put("dynValue", false).put("dynData", TEMPERATURE_DYN)
 
         // The batteries: the numbers, red at 20 % or less (the icons are in the background)
         text(WATCH_NUMBER_VIEW, WATCH_NUMBER_BOX, SMALL_SIZE, "left", WHITE).put("textvalue", "%.0f%%").put("dynValue", false).put("dynData", WATCH_NUMBER_DYN)
         text(PHONE_NUMBER_VIEW, PHONE_NUMBER_BOX, SMALL_SIZE, "left", WHITE).put("textvalue", "%.0f%%").put("dynValue", false).put("dynData", PHONE_NUMBER_DYN)
 
-        // Heart rate, and the loop age in its box: green, red from 15 minutes. The blank pictures stop the watch drawing its own circle.
-        slot(HR_VIEW, HR_BOX, SLOT_SIZE)
-        text("loop", LOOP_BOX, SMALL_SIZE, "center", MID).put("textvalue", "%.0f'").put("dynValue", false).put("dynData", LOOP_DYN)
+        slot(HR_VIEW, HR_BOX, HR_SIZE)
 
-        // The line under the glucose: delta, age, IOB, carbs, basal rate
-        text("delta", DELTA_BOX, LINE_SIZE, "left", VALUE)
+        // The delta, in the trend dial: under the pivot, or over it when the arrow points down, so the arrow never hides it
+        text("delta", DELTA_BOX, DELTA_SIZE, "center", VALUE).put("dynData", DELTA_PLACE_DYN)
+        // The line under the glucose: age, IOB, carbs, basal rate
         text("timestamp", AGE_BOX, LINE_SIZE, "center", VALUE).put("textvalue", "%.0f'").put("dynValue", false).put("dynData", AGE_DYN)
         text("iob2", IOB_BOX, LINE_SIZE, "left", VALUE)
         text("cob2", COB_BOX, LINE_SIZE, "left", VALUE)
@@ -273,7 +276,8 @@ class CwfD2DesignTest : CwfDesignBase() {
                 .put("invalidFontColor", MUTED).put("fontColor1", LOW).put("fontColor2", MID).put("fontColor3", HIGH))
             .put(WATCH_NUMBER_DYN, batteryNumberDynData(WatchBatteryLevel.KEY))
             .put(PHONE_NUMBER_DYN, batteryNumberDynData(PHONE_VALUE_KEY))
-            .put(LOOP_DYN, ageColourDynData("loop", LOOP_LIMIT, MID).put("invalidImage", BLANK).put("image1", BLANK).put("image2", BLANK))
+            .put(DELTA_PLACE_DYN, JSONObject().put("valueKey", "delta").put("minData", -1).put("maxData", 1)
+                .put("topOffset1", -DELTA_UP).put("topOffset2", 0).put("invalidTopOffset", 0))
             .put(AGE_DYN, ageColourDynData("timestamp", AGE_LIMIT, VALUE))
             .put(MOON_DYN, moonDynData())
             .put(MONTH_DYN, monthDynData())
@@ -425,6 +429,43 @@ class CwfD2DesignTest : CwfDesignBase() {
 
     private fun monthX(month: Int): Float = MONTH_FIRST_X + (month - 1) * MONTH_STEP
 
+    /** Where the texts of the face are: the boxes the [ledMesh] lies over. */
+    private fun textBoxes(): List<RectF> = listOf(
+        HOUR_BOX, COLON_BOX, MINUTE_BOX, SGV_BOX, HR_BOX, TEMPERATURE_BOX,
+        DAY_NAME_BOX, DAY_BOX, AGE_BOX, IOB_BOX, COB_BOX, BASAL_BOX, WATCH_NUMBER_BOX, PHONE_NUMBER_BOX, SUN_TIME_BOX, STEPS_BOX,
+        // The numbers of the months, not the mark over them, which moves
+        RectF(MONTH_PANEL.left + 4f, MONTH_TEXT_Y - 8f, MONTH_PANEL.right - 4f, MONTH_PANEL.bottom - 1f)
+    )
+
+    /**
+     * The LED look: a picture of the whole face, see-through but for a fine mesh in the colour of the panels over the
+     * [textBoxes], every [LED_PITCH] across and down. Over the panels it does not show; over a lit digit it splits the
+     * strokes into small dots, like the lights of an LED display. It lies over all texts (the view over them all), so it needs no
+     * view of its own per text.
+     */
+    private fun ledMesh(): ByteArray {
+        val s = SCALE
+        val image = createBitmap(800, 800).apply { eraseColor(Color.TRANSPARENT) }
+        val canvas = Canvas(image)
+        val gap = Paint().apply { color = color(PANEL); strokeWidth = LED_GAP * s }
+        for (box in textBoxes()) {
+            canvas.save()
+            canvas.clipRect(scaled(box))
+            var x = (box.left / LED_PITCH).toInt() * LED_PITCH
+            while (x <= box.right) {
+                canvas.drawLine(x * s, box.top * s, x * s, box.bottom * s, gap)
+                x += LED_PITCH
+            }
+            var y = (box.top / LED_PITCH).toInt() * LED_PITCH
+            while (y <= box.bottom) {
+                canvas.drawLine(box.left * s, y * s, box.right * s, y * s, gap)
+                y += LED_PITCH
+            }
+            canvas.restore()
+        }
+        return pngBytes(image)
+    }
+
     // ------------------------------------------------------------------------------------------
     // The pictures
     // ------------------------------------------------------------------------------------------
@@ -432,7 +473,7 @@ class CwfD2DesignTest : CwfDesignBase() {
     override fun images(): Map<String, ByteArray> = mapOf(
         ResFileMap.BACKGROUND.fileName to background(),
         ResFileMap.COVER_CHART.fileName to colonPicture(),
-        ResFileMap.COVER_PLATE.fileName to blankPng(),
+        ResFileMap.COVER_PLATE.fileName to ledMesh(),
         NEEDLE to needle(NEEDLE_RED, "#B3121A"),
         SENSOR_HAND to needle(SENSOR_COLOUR, "#1A7FA8"),
         PUMP_HAND to needle(PUMP_COLOUR, "#B8650A"),
@@ -475,18 +516,21 @@ class CwfD2DesignTest : CwfDesignBase() {
         })
     }
 
-    /** The pocket of the glucose scale: the dial left of the top right panel and above the line under the glucose. */
+    /**
+     * The pocket of the glucose scale: the dial left of the top right panel, as low as that panel, so the steel strip
+     * under them runs on to the rim; a strip of [POCKET_STRIP] steel between it and the panel.
+     */
     private fun topPocket(): Path = pocket(
-        listOf(0f to 0f, edgeX(0f, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT) - POCKET_GAP to 0f,
-               edgeX(LINE_PANEL.top - POCKET_GAP, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT) - POCKET_GAP to LINE_PANEL.top - POCKET_GAP,
-               0f to LINE_PANEL.top - POCKET_GAP)
+        listOf(0f to 0f, edgeX(0f, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT) - POCKET_STRIP to 0f,
+               edgeX(TOP_PANEL_BOTTOM, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT) - POCKET_STRIP to TOP_PANEL_BOTTOM,
+               0f to TOP_PANEL_BOTTOM)
     )
 
-    /** The pocket of the time-left scale: the dial left of the bottom right panel and below the months. */
+    /** The pocket of the time-left scale: the dial left of the bottom right panel, from as high as that panel, the same way. */
     private fun bottomPocket(): Path = pocket(
-        listOf(0f to MONTH_PANEL.bottom + POCKET_GAP,
-               edgeX(MONTH_PANEL.bottom + POCKET_GAP, LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT) - POCKET_GAP to MONTH_PANEL.bottom + POCKET_GAP,
-               edgeX(400f, LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT) - POCKET_GAP to 400f, 0f to 400f)
+        listOf(0f to LOW_PANEL_TOP,
+               LOW_PANEL_TOP_LEFT - POCKET_STRIP to LOW_PANEL_TOP,
+               edgeX(400f, LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT) - POCKET_STRIP to 400f, 0f to 400f)
     )
 
     /** The part of the dial inside the metal rim that lies within the polygon [corners]. */
@@ -601,7 +645,7 @@ class CwfD2DesignTest : CwfDesignBase() {
 
     /** The holes of the metal frame: the pockets and the panels, which lie lower than the frame. */
     private fun frameHoles(): List<Path> = listOf(
-        topPocket(), bottomPocket(),
+        topPocket(), bottomPocket(), trendDialShape(),
         sidePanel(TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT),
         sidePanel(LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT),
         roundRect(LINE_PANEL, 12f), roundRect(TIME_PANEL, 16f), roundRect(MONTH_PANEL, 10f)
@@ -722,7 +766,9 @@ class CwfD2DesignTest : CwfDesignBase() {
         canvas.panel(sidePanel(TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT))
         canvas.panel(sidePanel(LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT))
         canvas.rowLine(ROW_A_LINE, edgeX(ROW_A_LINE, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT))
-        canvas.rowLine(ROW_B_LINE, edgeX(ROW_B_LINE, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT))
+        // The column right of the glucose, and the line between heart rate and weather in it
+        canvas.drawLine(COLUMN_X * s, (ROW_A_LINE + 6f) * s, COLUMN_X * s, (TOP_PANEL_BOTTOM - 6f) * s, paint(ROW_LINE, width = 1f))
+        canvas.rowLine(COLUMN_LINE, COLUMN_X - 2f)
         canvas.rowLine(ROW_D_LINE, edgeX(ROW_D_LINE, LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT))
         graphWindow(canvas)
         canvas.panel(roundRect(LINE_PANEL, 12f))
@@ -736,13 +782,10 @@ class CwfD2DesignTest : CwfDesignBase() {
         canvas.drawLine((TIME_PANEL.left + 16f) * s, (TIME_PANEL.top + 2.5f) * s, (TIME_PANEL.right - 16f) * s, (TIME_PANEL.top + 2.5f) * s, paint("#3A3E44", width = 1f))
         canvas.drawLine(DATE_LINE_X * s, (TIME_PANEL.top + 10f) * s, DATE_LINE_X * s, (TIME_PANEL.bottom - 10f) * s, paint(ROW_LINE, width = 1.5f))
 
-        // The box of the loop age
-        canvas.drawRoundRect(scaled(LOOP_FRAME), 3f * s, 3f * s, paint(MUTED, Paint.Style.STROKE, 1.4f))
         // The battery icons: a flash for the watch, a phone
         flash(canvas, WATCH_ICON_X, ROW_A_Y)
         phone(canvas, PHONE_ICON_X, ROW_A_Y)
         // The labels of the line under the glucose
-        canvas.label("Δ", DELTA_BOX.left - 6f, LINE_PANEL.centerY(), 13f, MUTED)
         canvas.label("IOB", IOB_BOX.left - 14f, LINE_PANEL.centerY(), 7.5f, MUTED)
         canvas.label("COB", COB_BOX.left - 14f, LINE_PANEL.centerY(), 7.5f, MUTED)
         // The icons of the bottom rows, a little smaller than drawn, to fit the rows under the graph
@@ -934,14 +977,16 @@ class CwfD2DesignTest : CwfDesignBase() {
             val angle = hoursAngle(h)
             canvas.line(polar(200f, 200f, BAND_OUTER, angle), polar(200f, 200f, BAND_INNER, angle), paint(hex, width = 1.4f))
         }
-        legend(canvas, "SENSOR", SENSOR_COLOUR, hoursAngle(hoursAtPart(0.25)))
-        legend(canvas, "PUMP", PUMP_COLOUR, hoursAngle(hoursAtPart(0.72)))
+        // The legend in the middle of the scale, one word over the other: side by side they do not fit in the pocket
+        val middle = ((HOURS_EMPTY_ANGLE + HOURS_FULL_ANGLE) / 2).toFloat()
+        legend(canvas, "SENSOR", SENSOR_COLOUR, middle, SCALE_NAME_R - 1f)
+        legend(canvas, "PUMP", PUMP_COLOUR, middle, SCALE_NAME_R - 11f)
     }
 
-    /** A dot in [hex] and the word [text], along the time-left scale at [angle], inside its band. */
-    private fun legend(canvas: Canvas, text: String, hex: String, angle: Float) {
+    /** A dot in [hex] and the word [text], along the time-left scale at [angle] and [radius], inside its band. */
+    private fun legend(canvas: Canvas, text: String, hex: String, angle: Float, radius: Float) {
         val s = SCALE
-        val (x, y) = polar(200f, 200f, SCALE_NAME_R - 4f, angle)
+        val (x, y) = polar(200f, 200f, radius, angle)
         val width = Paint().apply { textSize = LEGEND_SIZE * s; typeface = printFont() }.measureText(text) / s
         canvas.save()
         canvas.rotate(angle + 180f, x * s, y * s)
@@ -959,19 +1004,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         val s = SCALE
         val (x, y) = TREND_DIAL_X to TREND_DIAL_Y
         val r = TREND_DIAL_R
-        val bounds = RectF((x - r) * s, (y - r) * s, (x + r) * s, (y + r) * s)
-        // The straight side lies a little left of the pivot, so the arrow stays on the dial when it points straight up or down
-        val half = Path().apply {
-            moveTo((x - TREND_DIAL_INSET) * s, (y - r) * s)
-            lineTo(x * s, (y - r) * s)
-            arcTo(bounds, -90f, 180f, false)
-            lineTo((x - TREND_DIAL_INSET) * s, (y + r) * s)
-            close()
-        }
-        canvas.save()
-        canvas.translate(0.6f * s, 0.9f * s)
-        canvas.drawPath(half, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(190, 0, 0, 0); maskFilter = BlurMaskFilter(1.2f * s, BlurMaskFilter.Blur.NORMAL) })
-        canvas.restore()
+        val half = trendDialShape()
         canvas.drawPath(half, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(x * s, (y - r * 0.3f) * s, r * 1.2f * s, color("#25282C"), color("#0B0C0E"), Shader.TileMode.CLAMP)
         })
@@ -988,13 +1021,27 @@ class CwfD2DesignTest : CwfDesignBase() {
                 else              -> LOW
             }
             val angle = trendAngle(delta).toFloat()
-            canvas.line(polar(x, y, r - 5f, angle), polar(x, y, r - 8.5f, angle), paint(hex, width = 1.3f))
+            canvas.line(polar(x, y, r - 9f, angle), polar(x, y, r - 15f, angle), paint(hex, width = 1.8f))
             delta += 0.75
         }
         for (k in 0..12) {
             val angle = k * 15f
             val major = k % 3 == 0
-            canvas.line(polar(x, y, r - 1.5f, angle), polar(x, y, r - if (major) 6f else 4f, angle), paint(if (major) WHITE else "#8A9099", width = if (major) 1.5f else 1f))
+            canvas.line(polar(x, y, r - 2f, angle), polar(x, y, r - if (major) 9f else 6f, angle), paint(if (major) WHITE else "#8A9099", width = if (major) 2.2f else 1.3f))
+        }
+    }
+
+    /** The half circle of the trend dial: open to the right, its straight side [TREND_DIAL_INSET] left of the pivot. */
+    private fun trendDialShape(): Path {
+        val s = SCALE
+        val (x, y) = TREND_DIAL_X to TREND_DIAL_Y
+        val r = TREND_DIAL_R
+        return Path().apply {
+            moveTo((x - TREND_DIAL_INSET) * s, (y - r) * s)
+            lineTo(x * s, (y - r) * s)
+            arcTo(RectF((x - r) * s, (y - r) * s, (x + r) * s, (y + r) * s), -90f, 180f, false)
+            lineTo((x - TREND_DIAL_INSET) * s, (y + r) * s)
+            close()
         }
     }
 
@@ -1038,15 +1085,15 @@ class CwfD2DesignTest : CwfDesignBase() {
         val canvas = Canvas(image)
         val c = TREND_DIAL_R
         val tip = c - TREND_HAND_LENGTH
-        val headBase = tip + 12f
-        val tail = c + 7f
+        val headBase = tip + 20f
+        val tail = c + 12f
         fun path(vararg points: Pair<Float, Float>) = Path().apply {
             points.forEachIndexed { i, (x, y) -> if (i == 0) moveTo(x * s, y * s) else lineTo(x * s, y * s) }
             close()
         }
         // Each half: the head, then the shaft down to the tail
-        val left = path(c to tip, (c - 8f) to headBase, (c - 3f) to (headBase - 1.5f), (c - 3f) to tail, c to tail)
-        val right = path(c to tip, (c + 8f) to headBase, (c + 3f) to (headBase - 1.5f), (c + 3f) to tail, c to tail)
+        val left = path(c to tip, (c - 12f) to headBase, (c - 4.5f) to (headBase - 2f), (c - 4.5f) to tail, c to tail)
+        val right = path(c to tip, (c + 12f) to headBase, (c + 4.5f) to (headBase - 2f), (c + 4.5f) to tail, c to tail)
         canvas.save()
         canvas.translate(0.8f * s, 1.2f * s)
         val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(170, 0, 0, 0); maskFilter = BlurMaskFilter(1f * s, BlurMaskFilter.Blur.NORMAL) }
@@ -1058,11 +1105,11 @@ class CwfD2DesignTest : CwfDesignBase() {
         val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 0.35f * s; color = Color.argb(150, 30, 30, 30) }
         canvas.drawPath(left, edge)
         canvas.drawPath(right, edge)
-        canvas.drawCircle(c * s, c * s, 5f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient((c - 1.6f) * s, (c - 1.6f) * s, 7f * s, color("#F4F6F8"), color("#5A5E64"), Shader.TileMode.CLAMP)
+        canvas.drawCircle(c * s, c * s, 8f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient((c - 2.5f) * s, (c - 2.5f) * s, 11f * s, color("#F4F6F8"), color("#5A5E64"), Shader.TileMode.CLAMP)
         })
-        canvas.drawCircle(c * s, c * s, 5f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 0.5f * s; color = color("#2A2C30") })
-        canvas.drawLine((c - 3f) * s, (c + 1.4f) * s, (c + 3f) * s, (c - 1.4f) * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 0.8f * s; color = color("#34373B") })
+        canvas.drawCircle(c * s, c * s, 8f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 0.6f * s; color = color("#2A2C30") })
+        canvas.drawLine((c - 4.8f) * s, (c + 2.2f) * s, (c + 4.8f) * s, (c - 2.2f) * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 1.2f * s; color = color("#34373B") })
         return pngBytes(image)
     }
 
@@ -1339,8 +1386,8 @@ class CwfD2DesignTest : CwfDesignBase() {
     @Test
     fun everythingStaysOnTheDial() {
         val design = design(defaultDesign())
-        for (key in listOf("sgv", "delta", "timestamp", "loop", "iob2", "basalRate", "day_name", "day", "hour", "minute",
-                           "timePeriod", "cob2", HR_VIEW, STEPS_VIEW, SUN_TIME_VIEW, MOON_VIEW, TEMPERATURE_VIEW, "cover_plate", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW, "cover_chart"))
+        for (key in listOf("sgv", "delta", "timestamp", "time", "iob2", "basalRate", "day_name", "day", "hour", "minute",
+                           "timePeriod", "cob2", HR_VIEW, STEPS_VIEW, SUN_TIME_VIEW, MOON_VIEW, TEMPERATURE_VIEW, WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW, "cover_chart"))
             insideRound(key, rectOf(design.getJSONObject(key)))
         // The month mark stays on the dial over December too
         insideRound("month mark", monthMarkBox(12))
@@ -1361,7 +1408,16 @@ class CwfD2DesignTest : CwfDesignBase() {
         // The glucose and the heart rate start right of the slanted edge of the top right panel
         for (box in listOf(HR_BOX, SGV_BOX)) assertThat(box.left).isAtLeast(edgeX(box.top, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT) + 2f)
         assertThat(HR_BOX.top).isGreaterThan(ROW_A_LINE)
-        assertThat(SGV_BOX.top).isAtLeast(ROW_B_LINE)
+        assertThat(SGV_BOX.top).isAtLeast(ROW_A_LINE)
+        assertThat(SGV_BOX.right).isAtMost(COLUMN_X)
+        for (box in listOf(HR_BOX, WEATHER_ICON_BOX, TEMPERATURE_BOX)) assertThat(box.left).isAtLeast(COLUMN_X)
+        // The delta stays in the trend dial, over and under the pivot
+        val dialR = TREND_DIAL_R - 16f
+        for (box in listOf(DELTA_BOX, RectF(DELTA_BOX).apply { offset(0f, -DELTA_UP.toFloat()) }))
+            for ((x, y) in listOf(box.left to box.top, box.right to box.top, box.left to box.bottom, box.right to box.bottom)) {
+                assertWithMessage("delta $x, $y").that(hypot(x - TREND_DIAL_X, y - TREND_DIAL_Y)).isAtMost(dialR)
+                assertWithMessage("delta $x, $y").that(x).isAtLeast(TREND_DIAL_X)
+            }
         assertThat(SGV_BOX.bottom).isAtMost(TOP_PANEL_BOTTOM)
     }
 
@@ -1370,7 +1426,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         val tooWide = listOf(
             Triple("23", HOUR_BOX, TIME_SIZE), Triple("59", MINUTE_BOX, TIME_SIZE),
             Triple("WED", DAY_NAME_BOX, DAY_NAME_SIZE), Triple("28", DAY_BOX, DAY_SIZE), Triple("18,5", SGV_BOX, SGV_SIZE),
-            Triple("100%", WATCH_NUMBER_BOX, SMALL_SIZE), Triple("100%", PHONE_NUMBER_BOX, SMALL_SIZE), Triple("+10,5", DELTA_BOX, LINE_SIZE),
+            Triple("100%", WATCH_NUMBER_BOX, SMALL_SIZE), Triple("100%", PHONE_NUMBER_BOX, SMALL_SIZE), Triple("+10,5", DELTA_BOX, DELTA_SIZE), Triple("120", RectF(HR_BOX.left + HR_BOX.height(), HR_BOX.top, HR_BOX.right, HR_BOX.bottom), HR_SIZE),
             Triple("12.25U", IOB_BOX, LINE_SIZE), Triple("120g", COB_BOX, LINE_SIZE), Triple("10.85U/h", BASAL_BOX, LINE_SIZE),
             Triple("PM", PERIOD_BOX, PERIOD_SIZE), Triple("10:48 PM", SUN_TIME_BOX, SUN_TIME_SIZE),
             Triple("12345", RectF(STEPS_BOX.left + STEPS_BOX.height() + 2f, 0f, STEPS_BOX.right, 0f), STEPS_SIZE),
@@ -1505,20 +1561,61 @@ class CwfD2DesignTest : CwfDesignBase() {
     @Test
     fun theTrendDialIsRightOfTheTimeWithAmPmBesideIt() {
         val dial = RectF(TREND_DIAL_X - TREND_DIAL_INSET, TREND_DIAL_Y - TREND_DIAL_R, TREND_DIAL_X + TREND_DIAL_R, TREND_DIAL_Y + TREND_DIAL_R)
-        // In the time panel, as tall as it allows, right of the widest minutes
-        insideRound("trend dial", dial)
-        assertThat(TIME_PANEL.contains(dial)).isTrue()
-        assertWithMessage("dial height").that(dial.height()).isAtLeast(TIME_PANEL.height() - 8f)
-        assertWithMessage("minutes and dial").that(dial.left).isAtLeast(MINUTE_BOX.left + (0..59).maxOf { textWidth("%02d".format(it), TIME_SIZE) } + 2f)
+        // Against the rim on the right, over the ends of the line and month panels, which end before it
+        assertWithMessage("against the rim").that(dial.right).isAtLeast(200f + RIM_INNER - 6f)
+        assertWithMessage("inside the rim").that(dial.right).isAtMost(200f + RIM_INNER - 1f)
+        for (panel in listOf(LINE_PANEL, MONTH_PANEL)) assertThat(panel.right).isLessThan(dial.left - 4f)
+        assertThat(dial.top).isLessThan(LINE_PANEL.bottom)
+        assertThat(dial.bottom).isGreaterThan(MONTH_PANEL.top)
+        // The time panel runs on under the dial, and its round end stays out of sight there
+        assertThat(TIME_PANEL.right).isGreaterThan(dial.left + 12f)
+        assertThat(dial.top).isLessThan(TIME_PANEL.top)
+        assertThat(dial.bottom).isGreaterThan(TIME_PANEL.bottom)
+        assertWithMessage("time panel corner under the dial").that(hypot(TIME_PANEL.right - TREND_DIAL_X, TIME_PANEL.top - TREND_DIAL_Y)).isLessThan(TREND_DIAL_R)
+        // Right of the widest minutes and AM / PM between them
+        assertWithMessage("minutes and AM / PM").that(PERIOD_BOX.left).isAtLeast(MINUTE_BOX.left + (0..59).maxOf { textWidth("%02d".format(it), TIME_SIZE) } + 1f)
+        assertWithMessage("AM / PM and dial").that(PERIOD_BOX.right).isAtMost(dial.left)
         assertWithMessage("hours and the date line").that(HOUR_BOX.right - (0..23).maxOf { textWidth("%02d".format(it), TIME_SIZE) }).isAtLeast(DATE_LINE_X + 2f)
+        assertThat(TIME_PANEL.contains(PERIOD_BOX)).isTrue()
         // The minutes never reach into the dial
         assertWithMessage("main colour in the dial").that(countNear(render(hours24 = true), dial, COLOUR_1, 60)).isEqualTo(0)
-        // AM / PM: in the panel, beside the dial, clear of the round corner
-        assertThat(PERIOD_BOX.left).isAtLeast(dial.right)
-        assertThat(TIME_PANEL.contains(PERIOD_BOX)).isTrue()
-        insideRound("AM / PM", PERIOD_BOX)
         val twelve = render(hours24 = false)
         File(out, "${fileName}_12h.png").writeBytes(pngBytes(twelve))
+    }
+
+    /** The delta stands under the pivot of the trend arrow, and over it while the glucose falls, so the arrow never covers it. */
+    @Test
+    fun theDeltaMovesOverThePivotWhenTheGlucoseFalls() {
+        val up = RectF(DELTA_BOX).apply { offset(0f, -DELTA_UP.toFloat()) }
+        val rising = render(Sample(deltaMgdl = 4.0))
+        val falling = render(Sample(deltaMgdl = -4.0))
+        // Counted in the cream of the text, which the grey steel of the arrow passing a box does not have
+        fun cream(picture: Bitmap, box: RectF): Int {
+            var n = 0
+            for (y in box.top.toInt() until box.bottom.toInt()) for (x in box.left.toInt() until box.right.toInt())
+                picture.getPixel(x, y).let { if (near(it, VALUE, 60) && Color.red(it) - Color.blue(it) > 35) n++ }
+            return n
+        }
+        assertThat(cream(rising, DELTA_BOX)).isGreaterThan(15)
+        assertThat(cream(falling, up)).isGreaterThan(15)
+        assertThat(cream(rising, up)).isEqualTo(0)
+        assertThat(cream(falling, DELTA_BOX)).isEqualTo(0)
+    }
+
+    /** The texts lie under a fine dark mesh, so a big digit shows as small lit dots with dark lines between them. */
+    @Test
+    fun theDigitsLookLikeLeds() {
+        // At the size of the watch, as the wearer sees it
+        val picture = render(size = WATCH_SIZE)
+        fun lit(x: Int, y: Int) = near(picture.getPixel(x, y), COLOUR_1, 60)
+        val box = onWatch(MINUTE_BOX)
+        var dark = 0
+        // A pixel clearly darker than the lit ones two to the left and two to the right: a line of the mesh through a stroke
+        for (y in box.top.toInt() until box.bottom.toInt()) for (x in box.left.toInt() + 2 until box.right.toInt() - 2)
+            if (lit(x - 2, y) && lit(x + 2, y) &&
+                brightness(picture.getPixel(x, y)) < (brightness(picture.getPixel(x - 2, y)) + brightness(picture.getPixel(x + 2, y))) / 2 - 20) dark++
+        assertWithMessage("lit dots").that(countNear(picture, box, COLOUR_1, 60)).isGreaterThan(300)
+        assertWithMessage("dark lines between them").that(dark).isGreaterThan(100)
     }
 
     /** The strips between the panels are raised brushed steel, not the dark dial, with small domed pins in them. */
@@ -1526,7 +1623,7 @@ class CwfD2DesignTest : CwfDesignBase() {
     fun theStripsBetweenThePanelsAreRaisedMetalWithPins() {
         val picture = render()
         // Steel half way between two pins, in each strip: grey and of middle brightness (the dark dial was about 45)
-        for ((x, y) in listOf(70f to 155f, 150f to 155f, 250f to 155f, 70f to 247f, 330f to 247f, 210f to 124f, 270f to 278f)) {
+        for ((x, y) in listOf(70f to 155f, 150f to 155f, 250f to 155f, 70f to 247f, 296f to 247f, 210f to 124f, 270f to 278f, 90f to 124f, 90f to 278f, 157f to 60f, 150f to 330f)) {
             val c = picture.getPixel(x.toInt(), y.toInt())
             assertWithMessage("steel at $x, $y").that(brightness(c)).isIn(Range.closed(80, 200))
             assertWithMessage("grey at $x, $y").that(maxOf(abs(Color.red(c) - Color.green(c)), abs(Color.green(c) - Color.blue(c)))).isAtMost(20)
@@ -1604,16 +1701,16 @@ class CwfD2DesignTest : CwfDesignBase() {
         val with24 = render(hours24 = true)
         val with12 = render(hours24 = false)
         assertThat(countNear(with24, frame, WHITE, 60)).isEqualTo(0)
-        assertThat(countNear(with12, frame, WHITE, 60)).isGreaterThan(10)
+        assertThat(countNear(with12, frame, WHITE, 70)).isGreaterThan(4)
     }
 
     @Test
     fun oldValuesAndLowBatteriesTurnRed() {
         val fresh = render()
         val old = render(bgAgeMin = 14, loopAgeMin = 20, watch = 12, phone = "9")
-        for ((name, box) in listOf("age" to AGE_BOX, "loop" to LOOP_FRAME, "watch" to WATCH_NUMBER_BOX, "phone" to PHONE_NUMBER_BOX)) {
+        for ((name, box) in listOf("age" to AGE_BOX, "watch" to WATCH_NUMBER_BOX, "phone" to PHONE_NUMBER_BOX)) {
             assertWithMessage("$name fresh").that(countNear(fresh, box, LOW, 40)).isEqualTo(0)
-            assertWithMessage("$name old").that(countNear(old, box, LOW, 40)).isGreaterThan(10)
+            assertWithMessage("$name old").that(countNear(old, box, LOW, 40)).isGreaterThan(5)
         }
     }
 
@@ -1628,7 +1725,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         assertThat(countNear(render(weather = EventData.Weather.CLOUDY), icon, CLOUD, 20)).isGreaterThan(80)
         assertThat(countNear(render(weather = EventData.Weather.RAIN), icon, RAIN, 50)).isGreaterThan(5)
         // The temperature in white
-        assertThat(countNear(render(temperature = 25.0), TEMPERATURE_BOX, VALUE, 40)).isGreaterThan(30)
+        assertThat(countNear(render(temperature = 25.0), TEMPERATURE_BOX, VALUE, 40)).isGreaterThan(15)
         // No weather: no icon and no temperature
         val none = render(weather = null, temperature = null)
         for (hex in listOf(SUN, CLOUD, MOON_LIGHT)) assertWithMessage(hex).that(countNear(none, icon, hex, 30)).isEqualTo(0)
@@ -1859,10 +1956,11 @@ class CwfD2DesignTest : CwfDesignBase() {
         val RIM_SCREW_ANGLES = listOf(45f, 135f, 225f, 315f)
 
         /** Screws at the inner corners of the pockets, clear of the scales. */
-        val POCKET_SCREWS = listOf(137f to 118f, 48f to 119f, 136f to 283f, 48f to 281f)
+        val POCKET_SCREWS = listOf(134f to 112f, 52f to 112f, 129f to 290f, 52f to 290f)
 
         /** The room between a pocket and the panels beside it. */
-        const val POCKET_GAP = 2f
+        /** The steel strip between a pocket and the panel right of it. */
+        const val POCKET_STRIP = 7f
 
         /** The raised steel frame between the panels: its colour at the top and the bottom of the face, and its pins. */
         const val FRAME_TOP = "#9CA2A9"
@@ -1874,12 +1972,12 @@ class CwfD2DesignTest : CwfDesignBase() {
         val FRAME_SCREWS = listOf(32f to 141f, 368f to 141f, 29f to 262f, 371f to 262f)
         val FRAME_PINS = listOf(
             // Under the top right panel, above the line under the glucose
-            180f to 124f, 240f to 124f, 300f to 124f, 355f to 124f,
+            60f to 124f, 120f to 124f, 180f to 124f, 240f to 124f, 300f to 124f, 355f to 124f,
             // Between the line panel and the time panel, and between the time panel and the months
             110f to 155f, 200f to 155f, 290f to 155f,
             110f to 247f, 200f to 247f, 290f to 247f,
             // Under the months, above the bottom right panel
-            180f to 278f, 240f to 278f, 300f to 278f, 355f to 278f
+            60f to 278f, 120f to 278f, 180f to 278f, 240f to 278f, 300f to 278f, 355f to 278f
         )
         const val ROW_LINE = "#2A2D32"
         const val NEEDLE_RED = "#FF2A2A"
@@ -1897,36 +1995,43 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val LOW_PANEL_BOTTOM = 400f
         const val LOW_PANEL_TOP_LEFT = 142f
         const val LOW_PANEL_BOTTOM_LEFT = 170f
-        val LINE_PANEL = RectF(44f, 128f, 356f, 152f)
-        val TIME_PANEL = RectF(18f, 158f, 382f, 244f)
-        val MONTH_PANEL = RectF(36f, 250f, 364f, 274f)
+        /** The line panel and the months end before the trend dial; the time panel runs on under it, out of sight. */
+        val LINE_PANEL = RectF(44f, 128f, 306f, 152f)
+        val TIME_PANEL = RectF(18f, 158f, 330f, 244f)
+        val MONTH_PANEL = RectF(36f, 250f, 306f, 274f)
 
         /** The top right panel: the batteries (row A), heart rate and loop (row B), the glucose (row C). */
         const val ROW_A_Y = 36f
         const val ROW_A_LINE = 49f
-        const val ROW_B_LINE = 77f
         const val WATCH_ICON_X = 176f
         const val PHONE_ICON_X = 232f
         val WATCH_NUMBER_BOX = RectF(184f, 26f, 224f, 46f)
         val PHONE_NUMBER_BOX = RectF(240f, 26f, 284f, 46f)
         const val SMALL_SIZE = 18
-        const val HR_ICON_X = 193f
-        const val HR_ROW_Y = 63f
-        val HR_BOX = RectF(180f, 50f, 256f, 76f)
-        val LOOP_FRAME = RectF(280f, 52f, 316f, 74f)
-        val LOOP_BOX = RectF(281f, 53f, 315f, 73f)
-        val SGV_BOX = RectF(160f, 78f, 279f, 120f)
-        const val SGV_SIZE = 56
-        val WEATHER_ICON_BOX = RectF(282f, 87f, 308f, 113f)
-        val TEMPERATURE_BOX = RectF(309f, 87f, 356f, 113f)
+        /** The glucose fills rows B and C; right of it a column ([COLUMN_X]) with the heart rate over the weather ([COLUMN_LINE]). */
+        val SGV_BOX = RectF(165f, 52f, 266f, 120f)
+        const val SGV_SIZE = 70
+        const val COLUMN_X = 269f
+        const val COLUMN_LINE = 81f
+        /** The slot keeps a square at its left for its icon: the heart of the background lies in it. */
+        val HR_BOX = RectF(270f, 54f, 318f, 76f)
+        const val HR_ICON_X = 281f
+        const val HR_ROW_Y = 65f
+        const val HR_SIZE = 21
+        val WEATHER_ICON_BOX = RectF(274f, 86f, 300f, 112f)
+        val TEMPERATURE_BOX = RectF(301f, 86f, 344f, 112f)
         const val TEMPERATURE_SIZE = 24
 
         /** The line under the glucose. */
-        val DELTA_BOX = RectF(62f, 129f, 104f, 151f)
-        val AGE_BOX = RectF(104f, 129f, 128f, 151f)
-        val IOB_BOX = RectF(152f, 129f, 206f, 151f)
-        val COB_BOX = RectF(230f, 129f, 268f, 151f)
-        val BASAL_BOX = RectF(271f, 129f, 353f, 151f)
+        val AGE_BOX = RectF(54f, 129f, 80f, 151f)
+        val IOB_BOX = RectF(108f, 129f, 160f, 151f)
+        val COB_BOX = RectF(190f, 129f, 228f, 151f)
+        val BASAL_BOX = RectF(236f, 129f, 304f, 151f)
+
+        /** The delta, in the trend dial under its pivot; [DELTA_UP] higher, over the pivot, while the glucose falls. */
+        val DELTA_BOX = RectF(321f, 216f, 351f, 232f)
+        const val DELTA_SIZE = 15
+        const val DELTA_UP = 42
         const val LINE_SIZE = 17
 
         /** The time panel: the day name and the day with the moon, the time, the seconds and AM / PM. */
@@ -1936,23 +2041,23 @@ class CwfD2DesignTest : CwfDesignBase() {
         val DAY_BOX = RectF(52f, 198f, 98f, 240f)
         const val DAY_SIZE = 38
         val MOON_BOX = RectF(26f, 207f, 50f, 231f)
-        val HOUR_BOX = RectF(98f, 162f, 197f, 240f)
-        val COLON_BOX = RectF(197f, 162f, 213f, 240f)
-        val MINUTE_BOX = RectF(213f, 162f, 312f, 240f)
-        const val TIME_SIZE = 96
+        val HOUR_BOX = RectF(89f, 162f, 188f, 240f)
+        val COLON_BOX = RectF(188f, 162f, 206f, 240f)
+        val MINUTE_BOX = RectF(206f, 162f, 305f, 240f)
+        const val TIME_SIZE = 88
 
         /** The runner on the rim: from the inner edge of the rim to near the outside, this wide at the outside. */
         const val RUNNER_INNER = 188f
         const val RUNNER_OUTER = 198.5f
         const val RUNNER_HALF_WIDTH = 2.8f
-        /** AM / PM, with 12 hours only: right of the trend dial, low in the time panel. */
-        val PERIOD_BOX = RectF(355f, 214f, 380f, 230f)
-        const val PERIOD_SIZE = 13
+        /** AM / PM, with 12 hours only: between the minutes and the trend dial, under the pivot. */
+        val PERIOD_BOX = RectF(293f, 214f, 312f, 229f)
+        const val PERIOD_SIZE = 11
 
         /** The months: the label, the first number and the room between two, the mark over the numbers. */
-        const val MONTH_LABEL_X = 62f
-        const val MONTH_FIRST_X = 96f
-        const val MONTH_STEP = 22
+        const val MONTH_LABEL_X = 56f
+        const val MONTH_FIRST_X = 80f
+        const val MONTH_STEP = 19
         const val MONTH_TEXT_Y = 265f
         const val MONTH_MARK_TOP = 252f
 
@@ -1976,7 +2081,6 @@ class CwfD2DesignTest : CwfDesignBase() {
 
         /** The small markers at the right end of the bottom rows, as in the original: where each one stands. */
         val ROW_MARKERS = listOf(Triple(312f, SUN_ROW_Y, true), Triple(268f, STEPS_ROW_Y, false))
-        const val SLOT_SIZE = 28
 
         /** The graph: muted, low contrast, on dark tinted glass. */
         const val GLASS_TOP = "#0E1311"
@@ -1999,15 +2103,15 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val BAND_INNER = 146f
         const val SCALE_NAME_R = 132f
 
-        /** The glucose scale: 2 to 18 mmol/L, from -58 to -20 degrees. */
+        /** The glucose scale: 2 to 18 mmol/L, from -55 to -22 degrees, inside its pocket with the steel strips round it. */
         const val BG_MIN = 36.0
         const val BG_MAX = 324.0
-        const val BG_FROM = -58.0
-        const val BG_TO = -20.0
+        const val BG_FROM = -55.0
+        const val BG_TO = -22.0
         const val MGDL_PER_MMOL = 18.0
 
         /**
-         * The time-left scale: 0 hours at -164 degrees (bottom) to 96 at -120 (top), log with [HOURS_DETAIL] (see
+         * The time-left scale: 0 hours at -158 degrees (bottom) to 96 at -127 (top), log with [HOURS_DETAIL] (see
          * hoursAngle), the hand in steps of [HOURS_PER_STEP]. The size of its legend.
          */
         const val HOURS_MAX = 96.0
@@ -2016,19 +2120,19 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val WATCH_SIZE = 466
         val HOURS_NUMBERS = listOf(0, 12, 24, 48, 96)
         const val BAND_LINES = 48
-        const val HOURS_EMPTY_ANGLE = -164.0
-        const val HOURS_FULL_ANGLE = -120.0
+        const val HOURS_EMPTY_ANGLE = -158.0
+        const val HOURS_FULL_ANGLE = -127.0
         const val LEGEND_SIZE = 6f
 
         /**
-         * The trend dial: a half circle right of the minutes, as tall as the time panel allows, its straight side on the
+         * The trend dial: a half circle right of the minutes, against the rim, over the ends of the line and month panels, its straight side on the
          * left, the arrow turning round the middle of that side. The arrow turns [TREND_DEGREES_PER_MGDL] degrees for each
          * mg/dL in 5 minutes.
          */
-        const val TREND_DIAL_X = 314f
+        const val TREND_DIAL_X = 318f
         const val TREND_DIAL_Y = 201f
-        const val TREND_DIAL_R = 39f
-        const val TREND_HAND_LENGTH = 34f
+        const val TREND_DIAL_R = 66f
+        const val TREND_HAND_LENGTH = 58f
         const val TREND_DIAL_INSET = 4f
         const val TREND_DEGREES_PER_MGDL = 6.0
         const val TREND_MAX_DELTA = 15.0
@@ -2054,7 +2158,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val PHONE_NUMBER_VIEW = "uploader_battery"
         const val WATCH_NUMBER_DYN = "watchBatteryNumber"
         const val PHONE_NUMBER_DYN = "phoneBatteryNumber"
-        const val LOOP_DYN = "loopAge"
+        const val DELTA_PLACE_DYN = "deltaPlace"
         const val AGE_DYN = "bgAge"
         const val MOON_DYN = "moonPhase"
         const val MONTH_DYN = "monthMark"
@@ -2069,7 +2173,9 @@ class CwfD2DesignTest : CwfDesignBase() {
 
         /** Less than any night progress after sunset: the night progress is exactly 0 all day. */
         const val NIGHT_STEP = 0.001
-        const val LOOP_LIMIT = 15.0
+        /** The LED mesh: the room between two lines, and their width. */
+        const val LED_PITCH = 2.4f
+        const val LED_GAP = 0.6f
         const val AGE_LIMIT = 10.0
 
         /** The pictures. */
