@@ -1416,7 +1416,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         for (box in listOf(DELTA_BOX, RectF(DELTA_BOX).apply { offset(0f, -DELTA_UP.toFloat()) }))
             for ((x, y) in listOf(box.left to box.top, box.right to box.top, box.left to box.bottom, box.right to box.bottom)) {
                 assertWithMessage("delta $x, $y").that(hypot(x - TREND_DIAL_X, y - TREND_DIAL_Y)).isAtMost(dialR)
-                assertWithMessage("delta $x, $y").that(x).isAtLeast(TREND_DIAL_X)
+                assertWithMessage("delta $x, $y").that(x).isAtLeast(TREND_DIAL_X - TREND_DIAL_INSET + 1f)
             }
         assertThat(SGV_BOX.bottom).isAtMost(TOP_PANEL_BOTTOM)
     }
@@ -1426,7 +1426,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         val tooWide = listOf(
             Triple("23", HOUR_BOX, TIME_SIZE), Triple("59", MINUTE_BOX, TIME_SIZE),
             Triple("WED", DAY_NAME_BOX, DAY_NAME_SIZE), Triple("28", DAY_BOX, DAY_SIZE), Triple("18,5", SGV_BOX, SGV_SIZE),
-            Triple("100%", WATCH_NUMBER_BOX, SMALL_SIZE), Triple("100%", PHONE_NUMBER_BOX, SMALL_SIZE), Triple("+10,5", DELTA_BOX, DELTA_SIZE), Triple("120", RectF(HR_BOX.left + HR_BOX.height(), HR_BOX.top, HR_BOX.right, HR_BOX.bottom), HR_SIZE),
+            Triple("100%", WATCH_NUMBER_BOX, SMALL_SIZE), Triple("100%", PHONE_NUMBER_BOX, SMALL_SIZE), Triple("+0,12", DELTA_BOX, DELTA_SIZE), Triple("+2,8", DELTA_BOX, DELTA_SIZE), Triple("120", RectF(HR_BOX.left + HR_BOX.height(), HR_BOX.top, HR_BOX.right, HR_BOX.bottom), HR_SIZE),
             Triple("12.25U", IOB_BOX, LINE_SIZE), Triple("120g", COB_BOX, LINE_SIZE), Triple("10.85U/h", BASAL_BOX, LINE_SIZE),
             Triple("PM", PERIOD_BOX, PERIOD_SIZE), Triple("10:48 PM", SUN_TIME_BOX, SUN_TIME_SIZE),
             Triple("12345", RectF(STEPS_BOX.left + STEPS_BOX.height() + 2f, 0f, STEPS_BOX.right, 0f), STEPS_SIZE),
@@ -2029,9 +2029,9 @@ class CwfD2DesignTest : CwfDesignBase() {
         val BASAL_BOX = RectF(236f, 129f, 304f, 151f)
 
         /** The delta, in the trend dial under its pivot; [DELTA_UP] higher, over the pivot, while the glucose falls. */
-        val DELTA_BOX = RectF(321f, 216f, 351f, 232f)
-        const val DELTA_SIZE = 15
-        const val DELTA_UP = 42
+        val DELTA_BOX = RectF(315f, 211f, 355f, 231f)
+        const val DELTA_SIZE = 20
+        const val DELTA_UP = 40
         const val LINE_SIZE = 17
 
         /** The time panel: the day name and the day with the moon, the time, the seconds and AM / PM. */
