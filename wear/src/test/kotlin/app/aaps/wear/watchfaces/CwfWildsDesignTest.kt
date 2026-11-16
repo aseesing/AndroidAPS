@@ -15,6 +15,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withClip
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.JsonKeyValues
@@ -110,7 +111,8 @@ class CwfWildsDesignTest : CyberpunkDesignBase() {
             ) + arrowImages() + batteryImages()
 
     /**
-     * The panel layer: only the table (the graph has its own parchment, see [chartParchment]). The
+     * The panel layer: the table, and the part of the graph's parchment below the graph view (the rest is
+     * the graph's own background, see [chartParchment]). The
      * table has a hole where heart rate and steps are: those slots draw the same parchment
      * themselves, below this layer.
      */
@@ -124,6 +126,12 @@ class CwfWildsDesignTest : CyberpunkDesignBase() {
         val withHole = Path(table).apply { op(slots, Path.Op.DIFFERENCE) }
         canvas.drawPath(withHole, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(PANEL_ARGB) })
         canvas.drawPath(table, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(WILDS.accent); style = Paint.Style.STROKE; strokeWidth = 2f * SCALE })
+        // The graph's parchment goes on to the edge of the screen, below the graph view that carries the rest of it
+        canvas.withClip(0f, (CHART_TOP + CHART_HEIGHT) * SCALE, 800f, 800f) {
+            val panel = chartPanel()
+            drawPath(panel, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(PANEL_ARGB) })
+            drawPath(panel, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(WILDS.accent); style = Paint.Style.STROKE; strokeWidth = 2f * SCALE })
+        }
         return pngBytes(image)
     }
 

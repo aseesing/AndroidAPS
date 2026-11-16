@@ -6,6 +6,9 @@ package app.aaps.wear.watchfaces.utils
 
 import android.content.res.Resources
 import android.graphics.Color
+import android.graphics.RectF
+import android.view.View
+import android.view.ViewGroup
 import androidx.core.graphics.ColorUtils
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.R
@@ -14,6 +17,10 @@ import lecho.lib.hellocharts.model.AxisValue
 import lecho.lib.hellocharts.model.Line
 import lecho.lib.hellocharts.model.LineChartData
 import lecho.lib.hellocharts.model.PointValue
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * The glucose graph of the watch faces with a log time scale ([LogTimeScale]): a whole day, the last
@@ -24,23 +31,26 @@ import lecho.lib.hellocharts.model.PointValue
  * `BgGraphBuilder` places every point with the scale; this class adds the time axis, with lines and
  * labels for how long ago ([LogTimeScale.LABEL_AGES_MS]). The labels are drawn inside the graph, so a
  * small graph keeps its height: outside, they and their margins take the whole graph of a small design.
+ * They go on the bottom edge, or on the top edge when the round screen cuts the bottom edge ([labelsOnTop]).
  */
 class LogTimeGraph(private val resources: Resources) {
 
     /**
      * Puts the time into [data], in [colour]: a line at now and at each label age, and the labels of how
-     * long ago. Takes away the value axis and the lines without values. Returns [data].
+     * long ago, on the top edge when [onTop], else on the bottom edge. Takes away the value axis and the
+     * lines without values. Returns [data].
      *
      * The chart keeps a margin round the plot of the biggest point of all lines, plus 4 dp, also for a
      * line with no values (the bolus and carbs markers are twice the size of a glucose point). On a
      * watch that is a third of a small graph; without the empty lines it is less. The time lines are
      * lines of the plot, not of the axis: the chart draws axis lines over the whole view, margin and all.
      */
-    fun label(data: LineChartData, colour: Int): LineChartData {
+    fun label(data: LineChartData, colour: Int, onTop: Boolean = false): LineChartData {
         val lines = data.lines.filter { it.values.isNotEmpty() }
         val ys = lines.flatMap { line -> line.values.map { it.y } }
         data.lines = if (ys.isEmpty()) lines else timeLines(ys.min(), ys.max(), colour) + lines
-        data.axisXBottom = timeAxis(colour)
+        data.axisXBottom = if (onTop) null else timeAxis(colour)
+        data.axisXTop = if (onTop) timeAxis(colour) else null
         data.axisYLeft = null
         return data
     }
@@ -119,6 +129,56 @@ class LogTimeGraph(private val resources: Resources) {
         private const val MAX_LABEL_CHARS = 2
         private const val MINUTE_MS = 60_000L
         private const val HOUR_MS = 60 * MINUTE_MS
+
+        /**
+         * True when the labels go on the top edge of [chart] (in pixels of a screen of [screenWidth] x
+         * [screenHeight]): the round screen cuts off part of the bottom edge, and less of the top edge. A
+         * graph low on the screen loses the corners of its bottom edge, and with them the labels there.
+         * Every screen counts as round here: the watch faces are made for round watches.
+         */
+        fun labelsOnTop(chart: RectF, screenWidth: Int, screenHeight: Int): Boolean {
+            if (screenWidth <= 0 || screenHeight <= 0 || chart.width() <= 0f) return false
+            val bottom = visibleWidth(chart, chart.bottom, screenWidth, screenHeight)
+            val top = visibleWidth(chart, chart.top, screenWidth, screenHeight)
+            return bottom < chart.width() - EDGE_TOLERANCE_PX && top > bottom
+        }
+
+        /** [labelsOnTop] for the view [chart]. False while its place on the screen is not known. */
+        fun labelsOnTop(chart: View, screenWidth: Int, screenHeight: Int): Boolean =
+            boundsOf(chart)?.let { labelsOnTop(it, screenWidth, screenHeight) } ?: false
+
+        /**
+         * Where [chart] is on the screen: from its layout once it is laid out, before that from its margins
+         * (a Custom watch face places each view with margins and a fixed size). Null when not known.
+         */
+        private fun boundsOf(chart: View): RectF? {
+            if (chart.isLaidOut) {
+                var x = 0f
+                var y = 0f
+                var view: View? = chart
+                while (view != null) {
+                    x += view.left
+                    y += view.top
+                    view = view.parent as? View
+                }
+                return RectF(x, y, x + chart.width, y + chart.height)
+            }
+            val params = chart.layoutParams as? ViewGroup.MarginLayoutParams ?: return null
+            if (params.width <= 0 || params.height <= 0) return null
+            return RectF(params.leftMargin.toFloat(), params.topMargin.toFloat(), (params.leftMargin + params.width).toFloat(), (params.topMargin + params.height).toFloat())
+        }
+
+        /** How much of the line at height [y] from [chart]'s left to its right is on the round screen. */
+        private fun visibleWidth(chart: RectF, y: Float, screenWidth: Int, screenHeight: Int): Float {
+            val radius = min(screenWidth, screenHeight) / 2f
+            val dy = abs(y - screenHeight / 2f)
+            if (dy >= radius) return 0f
+            val half = sqrt(radius * radius - dy * dy)
+            return (min(chart.right, screenWidth / 2f + half) - max(chart.left, screenWidth / 2f - half)).coerceAtLeast(0f)
+        }
+
+        /** An edge cut by less than this is not cut: the labels are a little inside it. */
+        private const val EDGE_TOLERANCE_PX = 2f
 
         /** True when the watch graphs use the log time scale. */
         fun isOn(sp: SP): Boolean = sp.getBoolean(R.string.key_graph_log_time, DEFAULT)
