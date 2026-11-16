@@ -5,6 +5,8 @@
 package app.aaps.wear.watchfaces.utils
 
 import android.content.res.Resources
+import android.graphics.Color
+import androidx.core.graphics.ColorUtils
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.R
 import lecho.lib.hellocharts.model.Axis
@@ -53,7 +55,11 @@ class LogTimeGraph(private val resources: Resources) {
             }
         }
 
-    /** The labels of how long ago, drawn inside the graph, at the label ages. */
+    /**
+     * The labels of how long ago, drawn inside the graph, at the label ages. In [colour] made lighter
+     * ([labelColour]): the grid colour of a design is often nearly the colour of the graph's background,
+     * fine for a line, but text in it cannot be read on a watch.
+     */
     internal fun timeAxis(colour: Int): Axis {
         val values = LogTimeScale.LABEL_AGES_MS.map { age -> AxisValue(LogTimeScale.xOfOffset(-age)).setLabel(ageLabel(age)) }
         return Axis(values).apply {
@@ -64,7 +70,7 @@ class LogTimeGraph(private val resources: Resources) {
             // Lines and labels closer than this many characters are left out by the chart
             maxLabelChars = MAX_LABEL_CHARS
             lineColor = colour
-            textColor = colour
+            textColor = labelColour(colour)
         }
     }
 
@@ -82,6 +88,12 @@ class LogTimeGraph(private val resources: Resources) {
         const val SETTING_NAME = "graph_log_time"
 
         private const val TEXT_SIZE_SP = 7
+
+        /** How far the labels are taken from the grid colour toward white. */
+        const val LABEL_LIGHTER = 0.4f
+
+        /** The colour of the labels for the grid colour [colour]: lighter, with its own alpha. */
+        fun labelColour(colour: Int): Int = ColorUtils.blendARGB(colour, Color.WHITE, LABEL_LIGHTER).let { ColorUtils.setAlphaComponent(it, Color.alpha(colour)) }
         private const val MAX_LABEL_CHARS = 2
         private const val MINUTE_MS = 60_000L
         private const val HOUR_MS = 60 * MINUTE_MS
