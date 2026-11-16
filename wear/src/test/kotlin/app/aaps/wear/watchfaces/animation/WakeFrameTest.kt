@@ -72,21 +72,28 @@ class WakeFrameTest {
             override fun prepare() = layout()
             override fun background(canvas: Canvas) = drawOnly(canvas, 0)
             override fun data(canvas: Canvas, leaveOut: Set<String>) = drawOnly(canvas, *(listOf(1) - leaveOut.mapNotNull { it.toIntOrNull() }.toSet()).toIntArray())
-            override fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>) {
+            override fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>, shifts: Map<String, Float>) {
                 val turned = turns.mapNotNull { (key, degrees) -> key.toIntOrNull()?.let { views[it] }?.let { view -> Triple(view, view.rotation, degrees) } }
+                val shifted = shifts.mapNotNull { (key, dx) -> key.toIntOrNull()?.let { views[it] }?.let { view -> Triple(view, view.translationX, dx) } }
                 turned.forEach { (view, rotation, degrees) -> view.rotation = rotation + degrees }
+                shifted.forEach { (view, translation, dx) -> view.translationX = translation + dx * size / 120f }
                 drawOnly(canvas, *keys.mapNotNull { it.toIntOrNull() }.toIntArray())
                 turned.forEach { (view, rotation, _) -> view.rotation = rotation }
+                shifted.forEach { (view, translation, _) -> view.translationX = translation }
             }
 
             override fun rotation(key: String): Float? = key.toIntOrNull()?.let { views.getOrNull(it) }?.rotation
+            override fun offsetX(key: String): Float? = key.toIntOrNull()?.let { views.getOrNull(it) }?.let { it.left * 120f / size - LEFTS.getValue(key.toInt()) }
             override fun clockText(canvas: Canvas) = drawOnly(canvas, 2)
-            override fun top(canvas: Canvas) = drawOnly(canvas, 3, 4)
+            override fun top(canvas: Canvas, leaveOut: Set<String>) = drawOnly(canvas, *(listOf(3, 4) - leaveOut.mapNotNull { it.toIntOrNull() }.toSet()).toIntArray())
             override fun secondHand(canvas: Canvas) = drawOnly(canvas, 5)
         }
     }
 
     private companion object {
+
+        /** The left of each view of [smallFace] in the design, 120 wide. */
+        val LEFTS = mapOf(0 to 0f, 1 to 10f, 2 to 20f, 3 to 30f, 4 to 40f, 5 to 58f)
 
         /** The small face of the layer tests, scaled to [size]. */
         fun smallFace(context: Application, size: Int): List<View> {
@@ -388,6 +395,30 @@ class WakeFrameTest {
         assertThat(cornerAt(600)).isEqualTo(Color.BLUE)
         // The view itself is never left turned
         assertThat(face.views[1].rotation).isEqualTo(0f)
+    }
+
+    @Test
+    fun aSlidViewAboveTheClockGoesRightAndComesBackToItsPlace() {
+        var clock = 0L
+        val face = Face(context, 120)
+        val bitmap = createBitmap(120, 120)
+        val canvas = Canvas(bitmap)
+        // The yellow box (above the clock text, 40..90 px) slides 20 px right and back
+        val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { clock }).apply {
+            setDesign(WakeAnimationSpec(durationMs = 1000, slide = listOf(SlideSpec(listOf("4"), fullDx = 20f, upMs = 200, settleMs = 300))))
+        }
+
+        fun pixelAt(ms: Long): Int? {
+            clock = ms
+            return if (animator.drawFrame(canvas, 120, 120, t0 + ms, 1, emptyList(), face.parts, true, true)) bitmap.getPixel(100, 30) else null
+        }
+        val before = pixelAt(0)!!
+        // At the end of the scale the box covers x 100; back at its value it does not
+        assertThat(pixelAt(200)).isNotEqualTo(before)
+        assertThat(Color.red(pixelAt(200)!!)).isGreaterThan(Color.red(before) + 40)
+        assertThat(pixelAt(600)).isEqualTo(before)
+        // The view itself is never left moved
+        assertThat(face.views[4].translationX).isEqualTo(0f)
     }
 
     @Test

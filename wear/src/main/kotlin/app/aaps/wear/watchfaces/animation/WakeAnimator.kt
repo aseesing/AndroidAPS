@@ -152,7 +152,8 @@ class WakeAnimator(
 
     /**
      * The views that are drawn live: the view that draws itself in, cut at how far it is, with its bright
-     * line; then the views that blink, unless in their off half, and the hands, turned where they are now.
+     * line; then the views that blink, unless in their off half, and the hands and marks, turned and moved
+     * where they are now.
      */
     private fun drawLive(canvas: Canvas, s: WakeAnimationSpec, elapsedMs: Long, scale: Float, height: Int, parts: WakeFrameParts) {
         s.trace?.let { trace ->
@@ -163,7 +164,17 @@ class WakeAnimator(
         }
         val hidden = hiddenAt(elapsedMs)
         val views = s.blinkViews - hidden + s.movingViews - listOfNotNull(s.trace?.view).toSet()
-        if (views.isNotEmpty()) parts.views(canvas, views, turnsAt(elapsedMs, s, parts))
+        if (views.isNotEmpty()) parts.views(canvas, views, turnsAt(elapsedMs, s, parts), shiftsAt(elapsedMs, s, parts))
+    }
+
+    /** How many design pixels each sliding view is moved right of its value [elapsedMs] after the start of this wake. */
+    internal fun shiftsAt(elapsedMs: Long, s: WakeAnimationSpec, parts: WakeFrameParts): Map<String, Float> {
+        val shifts = HashMap<String, Float>()
+        for (slide in s.slide) for (key in slide.views) {
+            val value = parts.offsetX(key) ?: continue
+            shifts[key] = (shifts[key] ?: 0f) + slide.dxAt(elapsedMs, value) - value
+        }
+        return shifts
     }
 
     /** How many degrees each moving hand is turned off its value [elapsedMs] after the start of this wake. */

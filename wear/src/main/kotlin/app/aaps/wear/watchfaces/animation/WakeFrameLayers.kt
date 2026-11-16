@@ -27,18 +27,28 @@ interface WakeFrameParts {
 
     /**
      * Only the views with the design keys [keys], where they sit. Drawn live every frame. A view in
-     * [turns] is drawn turned that many degrees more than it is, round its own pivot.
+     * [turns] is drawn turned that many degrees more than it is, round its own pivot; a view in
+     * [shifts] is drawn that many design pixels further right.
      */
-    fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float> = emptyMap()) {}
+    fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float> = emptyMap(), shifts: Map<String, Float> = emptyMap()) {}
 
     /** How far the view with the design key [key] is turned now, in degrees; null when there is no such view. Read after [prepare]. */
     fun rotation(key: String): Float? = null
 
+    /**
+     * How far right of its place in the design the view with the design key [key] is now (moved by its
+     * value), in design pixels; null when there is no such view. Read after [prepare].
+     */
+    fun offsetX(key: String): Float? = null
+
     /** The clock text. Drawn live every frame. */
     fun clockText(canvas: Canvas)
 
-    /** Everything between the clock text and the second hand: the rest of the data, the hour and minute hands. */
-    fun top(canvas: Canvas)
+    /**
+     * Everything between the clock text and the second hand: the rest of the data, the hour and minute
+     * hands, without the views in [leaveOut].
+     */
+    fun top(canvas: Canvas, leaveOut: Set<String>)
 
     /** The second hand. Drawn live every frame. */
     fun secondHand(canvas: Canvas)
@@ -92,10 +102,11 @@ class KeptLayer(private val clearColor: Int, private val newBitmap: (Int, Int) -
  * 1. the background (kept, opaque),
  * 2. the rain or the glitch bands (live) - above the background, below every data view, so the text stays readable,
  * 3. the data below the clock text (kept, transparent where nothing paints), without the live views,
- * 4. the live views: those that may blink (left out in the off half of a blink), the hands that move and
- *    the view that draws itself in. They are drawn above all other data below the clock text,
+ * 4. the live views: those that may blink (left out in the off half of a blink), the hands and marks that
+ *    move and the view that draws itself in. They are drawn above all other data below the clock text,
+ *    also those that belong above it,
  * 5. the clock text (live),
- * 6. the rest of the data and the hour and minute hands (kept, transparent),
+ * 6. the rest of the data and the hour and minute hands (kept, transparent), without the live views,
  * 7. the heart and the light (live),
  * 8. the second hand (live).
  *
@@ -135,7 +146,7 @@ class WakeFrameLayers(newBitmap: (Int, Int) -> Bitmap = { width, height -> creat
         if (leaveOut.isNotEmpty()) live(canvas)
         parts.clockText(canvas)
         val topState = State(width, height, nowMs / LayeredFrameCache.TOP_PERIOD_MS, content, complications)
-        canvas.drawBitmap(top.get(width, height, topState, parts::top), 0f, 0f, null)
+        canvas.drawBitmap(top.get(width, height, topState to leaveOut) { parts.top(it, leaveOut) }, 0f, 0f, null)
         heart(canvas)
         parts.secondHand(canvas)
     }

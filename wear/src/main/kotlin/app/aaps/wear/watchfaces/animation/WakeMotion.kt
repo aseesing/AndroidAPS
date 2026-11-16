@@ -74,6 +74,33 @@ data class SweepSpec(
 }
 
 /**
+ * Views that slide sideways when the wrist is raised, like the hands of [SweepSpec]: from where the design
+ * puts them to [fullDx] design pixels to the right, then back to where their value puts them, with a
+ * small bounce. For a mark that moves along a scale, for example the mark over this month.
+ *
+ * @param views the keys of the views that slide together, for example `month`
+ * @param fullDx how far right of the design place the end of the scale is, in design pixels
+ * @param delayMs the views wait at the design place for this long after the wake starts
+ * @param upMs the time from the design place to [fullDx]
+ * @param settleMs the time from [fullDx] back to the value, bounce included
+ */
+data class SlideSpec(
+    val views: List<String>,
+    val fullDx: Float,
+    val delayMs: Long = 0,
+    val upMs: Long = 600,
+    val settleMs: Long = 900
+) {
+
+    private val motion get() = SweepSpec(views, 0f, fullDx, delayMs, upMs, settleMs)
+
+    fun normalized(): SlideSpec = motion.normalized().let { copy(views = it.views, delayMs = it.delayMs, upMs = it.upMs, settleMs = it.settleMs) }
+
+    /** How far right of the design place a view is [elapsedMs] after the start of a wake, when its value puts it at [valueDx]. */
+    fun dxAt(elapsedMs: Long, valueDx: Float): Float = motion.angleAt(elapsedMs, valueDx)
+}
+
+/**
  * Hands that shake when the wrist is raised, like the needle of a meter that is knocked, and settle on
  * the value they show: a swing of [amplitude] degrees at [hz], smaller by a factor e every [decayMs].
  *
