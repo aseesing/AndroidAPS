@@ -99,6 +99,7 @@ import app.aaps.wear.watchfaces.utils.ComplicationStyleValues
 import app.aaps.wear.watchfaces.utils.ComplicationTypePriority
 import app.aaps.wear.watchfaces.utils.DesignTimeText
 import app.aaps.wear.watchfaces.utils.LayeredFrameCache
+import app.aaps.wear.watchfaces.utils.LogTimeGraph
 import app.aaps.wear.watchfaces.utils.ParsedJsonCache
 import app.aaps.wear.watchfaces.utils.PartTimeLeft
 import app.aaps.wear.watchfaces.utils.SecondSpin
@@ -337,6 +338,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     add(DayNightChoice.alwaysOnRow())
                 }
                 addAll(ColourLooks.rows(json)) // PERSONAL PATCH: colours, only those the design offers
+                if (json == null || ViewMap.CHART.isShownBy(json)) add(LogTimeGraph.row()) // PERSONAL PATCH: log time graph
             }
         }
 

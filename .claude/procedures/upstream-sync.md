@@ -36,6 +36,7 @@ as before.
 | `local/wear-preview-slots` | Phone: the live preview draws the complication slots (heart rate, steps) where the watch's system draws them |
 | `local/wear-loop-time` | Phone: the loop time sent to the watch is kept across loop runs, so the face does not show "LOOP --" while a run waits for the pump |
 | `local/wear-design-import` | Phone: a button in the list of watch face designs imports zips from Google Drive (file picker) into AAPS/export, replacing the old ones |
+| `local/wear-log-graph` | The glucose graph of every watch face on a log time scale: a whole day, the last minutes in detail, lines and labels for 1, 3, 6 and 12 hours ago; a watch setting, also in AAPS; the phone then sends a day of history, thinned further back |
 | `local/wear-d2` | The digital design *D2* (glucose and trend scales, three complications, weather, sunrise and sunset, sensor and pump time left, a BG graph); a main and a second colour, chosen on the watch or in AAPS; the phone offers every setting of the watch face menu by itself; the wake-up animation can swing hands, shake hands, draw a view in and slide a light over the face; a picture in the seconds that turns each second |
 
 `master` of this fork is a plain copy of upstream `master`.
