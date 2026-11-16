@@ -15,12 +15,16 @@ import app.aaps.core.interfaces.nsclient.ProcessedDeviceStatusData
 import app.aaps.core.interfaces.pump.PumpStatusProvider
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.receivers.ReceiverStatusStore
+import app.aaps.core.interfaces.rx.weardata.CwfSettingValue
 import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.interfaces.utils.TrendCalculator
 import app.aaps.core.objects.runningMode.RunningModeGuard
 import app.aaps.core.objects.wizard.QuickWizard
+import app.aaps.plugins.sync.wear.cwfsettings.CwfWatchSettingsStore
 import app.aaps.shared.tests.TestBaseWithProfile
+import app.aaps.wear.watchfaces.utils.LogTimeGraph
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -54,6 +58,13 @@ class DataHandlerMobileGraphDataTest : TestBaseWithProfile() {
     private lateinit var sut: DataHandlerMobile
     private val ads = mock<AutosensDataStore>()
 
+    // PERSONAL PATCH: the phone's copy of the watch settings, for the log time graph (see WearGraphHistory)
+    private val watchSettings = MutableStateFlow<Map<String, CwfSettingValue>>(emptyMap())
+
+    private fun logGraph(on: Boolean) {
+        watchSettings.value = mapOf(LogTimeGraph.SETTING_NAME to CwfSettingValue(on.toString(), 0L))
+    }
+
     @BeforeEach fun prepare() {
         sut = DataHandlerMobile(
             context, rxBus, aapsLogger, rh, preferences, config,
@@ -64,6 +75,7 @@ class DataHandlerMobileGraphDataTest : TestBaseWithProfile() {
             ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor
         )
         sut.automation = automation
+        sut.cwfWatchSettings = mock<CwfWatchSettingsStore>().also { whenever(it.values).thenReturn(watchSettings) } // PERSONAL PATCH
         whenever(iobCobCalculator.ads).thenReturn(ads)
         whenever(profileFunction.getUnits()).thenReturn(GlucoseUnit.MGDL)
     }
@@ -80,6 +92,7 @@ class DataHandlerMobileGraphDataTest : TestBaseWithProfile() {
     // The table is built BEFORE the stubbing line: bucketedTable() reads the dateUtil spy, and a spy
     // call inside whenever(...).thenReturn(...) is an "unfinished stubbing" to Mockito.
     @Test fun `graph data holds only the last 6 h of a 34 h table`() = runTest {
+        logGraph(on = false) // PERSONAL PATCH
         val table = bucketedTable(hours = 34)
         whenever(ads.getBucketedDataTableCopy()).thenReturn(table)
 
@@ -94,6 +107,7 @@ class DataHandlerMobileGraphDataTest : TestBaseWithProfile() {
     }
 
     @Test fun `a table shorter than 6 h goes out whole`() = runTest {
+        logGraph(on = false) // PERSONAL PATCH
         val table = bucketedTable(hours = 2)
         whenever(ads.getBucketedDataTableCopy()).thenReturn(table)
 
@@ -106,5 +120,33 @@ class DataHandlerMobileGraphDataTest : TestBaseWithProfile() {
         whenever(ads.getBucketedDataTableCopy()).thenReturn(null)
 
         assertThat(sut.buildGraphData()).isNull()
+    }
+
+    // PERSONAL PATCH: the log time graph of the watch shows a day; older glucose goes with fewer points
+    @Test fun `with the log graph a day goes out, thinned after 6 h`() = runTest {
+        logGraph(on = true)
+        val table = bucketedTable(hours = 34)
+        whenever(ads.getBucketedDataTableCopy()).thenReturn(table)
+
+        val graph = sut.buildGraphData()!!
+
+        val now = dateUtil.now()
+        assertThat(graph.entries.all { it.timeStamp >= now - T.hours(24).msecs() }).isTrue()
+        assertThat(graph.entries.minOf { it.timeStamp }).isLessThan(now - T.hours(20).msecs())
+        // All of the last 6 h, then about 17 more for the other 18 h
+        assertThat(graph.entries.count { it.timeStamp >= now - T.hours(6).msecs() }).isAtLeast(6 * 12 - 1)
+        assertThat(graph.entries.size).isAtMost(95)
+        // In the order of the table, newest first
+        assertThat(graph.entries.map { it.timeStamp }).isInOrder(Comparator.reverseOrder<Long>())
+    }
+
+    @Test fun `with nothing known from the watch the log graph is on`() = runTest {
+        watchSettings.value = emptyMap()
+        val table = bucketedTable(hours = 34)
+        whenever(ads.getBucketedDataTableCopy()).thenReturn(table)
+
+        val graph = sut.buildGraphData()!!
+
+        assertThat(graph.entries.minOf { it.timeStamp }).isLessThan(dateUtil.now() - T.hours(20).msecs())
     }
 }
