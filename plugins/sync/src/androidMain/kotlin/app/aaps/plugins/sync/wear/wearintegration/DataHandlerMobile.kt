@@ -118,6 +118,7 @@ import app.aaps.core.ui.extensions.generateCOBString
 import app.aaps.core.ui.extensions.toStringShort
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.LastLoopEnact // PERSONAL PATCH
+import app.aaps.plugins.sync.wear.cwfsettings.CwfWatchSettingsStore // PERSONAL PATCH
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -196,6 +197,7 @@ class DataHandlerMobile(
     @Inject lateinit var sensitivityOverview: SensitivityOverview
     @Inject lateinit var eatReminder: EatReminder
     @Inject lateinit var clientControlDispatcher: ClientControlActionDispatcher
+    @Inject lateinit var cwfWatchSettings: CwfWatchSettingsStore // PERSONAL PATCH: the log time graph of the watch
 
     // App lifetime: this is a @Singleton that subscribes in init and
     // never tears down. Dispatchers.IO because that is what the io scheduler gave these handlers, and
@@ -1390,8 +1392,7 @@ class DataHandlerMobile(
             val lowLine = profileUtil.convertToMgdl(preferences.get(UnitDoubleKey.OverviewLowMark), units)
             val highLine = profileUtil.convertToMgdl(preferences.get(UnitDoubleKey.OverviewHighMark), units)
             val slopeArrow = (trendCalculator.getTrendArrow(iobCobCalculator.ads) ?: TrendArrow.NONE).symbol
-            val graphStart = dateUtil.now() - T.hours(WEAR_GRAPH_HOURS).msecs()
-            val recent = bucketedData.filter { it.timestamp >= graphStart }
+            val recent = graphHistory.pick(bucketedData, dateUtil.now()) { it.timestamp } // PERSONAL PATCH: a day for the log graph, see WearGraphHistory
             EventData.GraphData(ArrayList(recent.map { buildSingleBg(it, glucoseStatus, units, lowLine, highLine, slopeArrow) }))
         }
 
@@ -1474,7 +1475,7 @@ class DataHandlerMobile(
 
     private suspend fun sendTreatments() {
         val now = System.currentTimeMillis()
-        val startTimeWindow = now - (60000 * 60 * 5.5).toLong()
+        val startTimeWindow = graphHistory.treatmentsFrom(now) // PERSONAL PATCH: a day for the log graph
         val basals = arrayListOf<EventData.TreatmentData.Basal>()
         val temps = arrayListOf<EventData.TreatmentData.TempBasal>()
         val boluses = arrayListOf<EventData.TreatmentData.Treatment>()
@@ -2074,6 +2075,7 @@ class DataHandlerMobile(
     internal fun lastSentToWear(): List<EventData> = unchangedToWear.lastSeen() + listOfNotNull(lastWeather) // PERSONAL PATCH: live watch face preview
 
     private val lastLoopEnact = LastLoopEnact() // PERSONAL PATCH: the loop time for the watch, kept across loop runs
+    private val graphHistory = WearGraphHistory(T.hours(WEAR_GRAPH_HOURS).msecs()) { WearGraphHistory.logGraphOn(cwfWatchSettings.values.value) } // PERSONAL PATCH: log time graph
 }
 
 /**

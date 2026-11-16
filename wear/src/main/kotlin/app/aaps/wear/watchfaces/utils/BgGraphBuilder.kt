@@ -290,7 +290,7 @@ class BgGraphBuilder(
     private fun addPredictionLines(lines: MutableList<Line>) {
         val values: MutableMap<Int, MutableList<PointValue>> = HashMap()
         for ((_, timeStamp, _, _, _, _, _, _, _, _, sgv, _, _, color) in predictionsList) {
-            if (timeStamp <= predictionEndTime) {
+            if (timeStamp <= predictionEndTime && logScale?.shows(timeStamp) != false) { // PERSONAL PATCH: log scale ends sooner
                 val value = min(sgv, UPPER_CUTOFF_SGV)
                 if (!values.containsKey(color)) {
                     values[color] = ArrayList()
@@ -437,7 +437,18 @@ class BgGraphBuilder(
     }
 
     private fun fuzz(value: Long): Float {
+        logScale?.let { return it.x(value) } // PERSONAL PATCH: log time scale, see LogTimeGraph
         return (value / fuzzyTimeDiv).roundToLong().toFloat()
+    }
+
+    // PERSONAL PATCH: the log time scale (see LogTimeGraph): a whole day back, at most an hour of predictions
+    private val logScale: LogTimeScale? = LogTimeGraph.scaleOrNull(sp, System.currentTimeMillis())
+
+    init {
+        logScale?.let { scale ->
+            startingTime = scale.start
+            endingTime = scale.end(if (sp.getBoolean(R.string.key_prediction_lines, true)) predictionsList.maxOfOrNull { it.timeStamp } else null)
+        }
     }
 
     companion object {
