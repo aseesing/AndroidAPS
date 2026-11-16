@@ -42,7 +42,6 @@ import app.aaps.wear.watchfaces.utils.DesignTimeText
 import app.aaps.wear.watchfaces.utils.LogTimeGraph
 import app.aaps.wear.watchfaces.utils.LogTimeScale
 import app.aaps.wear.watchfaces.utils.PartTimeLeft
-import app.aaps.wear.watchfaces.utils.SecondSpin
 import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
 import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
@@ -203,7 +202,7 @@ class CwfD2DesignTest : CwfDesignBase() {
 
         // Every view this design does not use is off
         val used = setOf(
-            "background", "chart", "cover_chart", "sgv", "delta", "timestamp", "loop", "iob2", "basalRate", "hour", "minute", "second",
+            "background", "chart", "cover_chart", "sgv", "delta", "timestamp", "loop", "iob2", "basalRate", "hour", "minute",
             "timePeriod", "day_name", "day", "cob2", "second_hand", HR_VIEW, STEPS_VIEW, SUN_TIME_VIEW, BG_NEEDLE_VIEW, SENSOR_NEEDLE_VIEW, PUMP_NEEDLE_VIEW, TREND_HAND_VIEW, MOON_VIEW, MONTH_VIEW,
             TEMPERATURE_VIEW, "cover_plate", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW
         )
@@ -213,7 +212,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         }
         put("background", JSONObject().put("width", 400).put("height", 400).put("topmargin", 0).put("leftmargin", 0).put("visibility", "visible"))
 
-        // The glucose value, big at the top right; its trend is the dial at its left
+        // The glucose value, big at the top right; its trend is the big arrow right of the time
         text("sgv", SGV_BOX, SGV_SIZE, "left", MID).put("dynData", SGV_DYN)
         // The weather right of it: the icon (the weather looks below choose it) and the temperature
         place("cover_plate", WEATHER_ICON_BOX.left.toInt(), WEATHER_ICON_BOX.top.toInt(), WEATHER_ICON_BOX.width().toInt()).put("dynData", WEATHER_ICON_DYN)
@@ -241,11 +240,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         // The colon between them is a picture (see colonPicture), in the same colour
         text("hour", HOUR_BOX, TIME_SIZE, "right", COLOUR_1)
         text("minute", MINUTE_BOX, TIME_SIZE, "left", COLOUR_1)
-        // The seconds: a gilt wheel in a sunk window that turns a step each second (see SecondSpin). Its own text is see-through.
-        // With 12 hours the watch draws it smaller at the top of the window, over AM / PM.
-        picture("second", wheelBox(), WHEEL).put("fontColor", CLEAR).put(SecondSpin.JSON_KEY, WHEEL_STEP)
-            .put(SecondSpin.BOX_12H_KEY, JSONObject().put("left", WHEEL_X - WHEEL_12H_R).put("top", WHEEL_12H_Y - WHEEL_12H_R).put("width", 2 * WHEEL_12H_R))
-        // And a lit marker that runs round the rim, a tick each second: the second hand, a picture of the whole face, in the main colour
+        // The seconds: a lit marker that runs round the rim, a tick each second: the second hand, a picture of the whole face, in the main colour
         place("second_hand", 0, 0, 400, 400).put("color", COLOUR_1)
         text("timePeriod", PERIOD_BOX, PERIOD_SIZE, "center", WHITE).put("background", PERIOD_FRAME)
 
@@ -259,7 +254,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         picture(SENSOR_NEEDLE_VIEW, NEEDLE_BOX, SENSOR_HAND).put("dynData", SENSOR_NEEDLE_DYN)
         picture(PUMP_NEEDLE_VIEW, NEEDLE_BOX, PUMP_HAND).put("dynData", PUMP_NEEDLE_DYN)
             .put("fontColor", CLEAR).put("dynValue", false)
-        // The trend arrow, turned round the middle of the straight side of its half dial by the delta of the glucose
+        // The trend arrow, big, right of the time: turned round the middle of the straight side of its half dial by the delta of the glucose
         picture(TREND_HAND_VIEW, trendDialBox(), TREND_HAND).put("rotationOffset", true).put("fontColor", CLEAR).put("dynValue", false)
             .put("dynData", TREND_HAND_DYN)
         // The colon of the time, white, so the watch paints it in the main colour
@@ -444,7 +439,6 @@ class CwfD2DesignTest : CwfDesignBase() {
         TREND_HAND to trendHand(),
         MONTH_MARK to monthMark(),
         PERIOD_FRAME to periodFrame(),
-        WHEEL to wheelPicture(),
         ResFileMap.SECOND_HAND.fileName to runnerPicture(),
         BLANK to blankPng()
     ) + (1..MOON_STEPS).associate { moonName(it) to moonPicture((it - 1).toDouble() / MOON_STEPS, MOON_BOX.width().toInt()) } + weatherIcons()
@@ -728,8 +722,7 @@ class CwfD2DesignTest : CwfDesignBase() {
         canvas.panel(sidePanel(TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT))
         canvas.panel(sidePanel(LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT))
         canvas.rowLine(ROW_A_LINE, edgeX(ROW_A_LINE, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT))
-        // The line between heart rate and glucose starts right of the trend dial
-        canvas.rowLine(ROW_B_LINE, TREND_DIAL_X + TREND_DIAL_R - 2f)
+        canvas.rowLine(ROW_B_LINE, edgeX(ROW_B_LINE, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT))
         canvas.rowLine(ROW_D_LINE, edgeX(ROW_D_LINE, LOW_PANEL_TOP, LOW_PANEL_BOTTOM, LOW_PANEL_TOP_LEFT, LOW_PANEL_BOTTOM_LEFT))
         graphWindow(canvas)
         canvas.panel(roundRect(LINE_PANEL, 12f))
@@ -742,7 +735,6 @@ class CwfD2DesignTest : CwfDesignBase() {
         // A thin light along the top of the time panel, and the line between date and time
         canvas.drawLine((TIME_PANEL.left + 16f) * s, (TIME_PANEL.top + 2.5f) * s, (TIME_PANEL.right - 16f) * s, (TIME_PANEL.top + 2.5f) * s, paint("#3A3E44", width = 1f))
         canvas.drawLine(DATE_LINE_X * s, (TIME_PANEL.top + 10f) * s, DATE_LINE_X * s, (TIME_PANEL.bottom - 10f) * s, paint(ROW_LINE, width = 1.5f))
-        wheelWindow(canvas)
 
         // The box of the loop age
         canvas.drawRoundRect(scaled(LOOP_FRAME), 3f * s, 3f * s, paint(MUTED, Paint.Style.STROKE, 1.4f))
@@ -1046,15 +1038,15 @@ class CwfD2DesignTest : CwfDesignBase() {
         val canvas = Canvas(image)
         val c = TREND_DIAL_R
         val tip = c - TREND_HAND_LENGTH
-        val headBase = tip + 8f
-        val tail = c + 5f
+        val headBase = tip + 12f
+        val tail = c + 7f
         fun path(vararg points: Pair<Float, Float>) = Path().apply {
             points.forEachIndexed { i, (x, y) -> if (i == 0) moveTo(x * s, y * s) else lineTo(x * s, y * s) }
             close()
         }
         // Each half: the head, then the shaft down to the tail
-        val left = path(c to tip, (c - 5f) to headBase, (c - 1.8f) to (headBase - 1f), (c - 1.8f) to tail, c to tail)
-        val right = path(c to tip, (c + 5f) to headBase, (c + 1.8f) to (headBase - 1f), (c + 1.8f) to tail, c to tail)
+        val left = path(c to tip, (c - 8f) to headBase, (c - 3f) to (headBase - 1.5f), (c - 3f) to tail, c to tail)
+        val right = path(c to tip, (c + 8f) to headBase, (c + 3f) to (headBase - 1.5f), (c + 3f) to tail, c to tail)
         canvas.save()
         canvas.translate(0.8f * s, 1.2f * s)
         val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(170, 0, 0, 0); maskFilter = BlurMaskFilter(1f * s, BlurMaskFilter.Blur.NORMAL) }
@@ -1066,11 +1058,11 @@ class CwfD2DesignTest : CwfDesignBase() {
         val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 0.35f * s; color = Color.argb(150, 30, 30, 30) }
         canvas.drawPath(left, edge)
         canvas.drawPath(right, edge)
-        canvas.drawCircle(c * s, c * s, 3.6f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient((c - 1.2f) * s, (c - 1.2f) * s, 5f * s, color("#F4F6F8"), color("#5A5E64"), Shader.TileMode.CLAMP)
+        canvas.drawCircle(c * s, c * s, 5f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient((c - 1.6f) * s, (c - 1.6f) * s, 7f * s, color("#F4F6F8"), color("#5A5E64"), Shader.TileMode.CLAMP)
         })
-        canvas.drawCircle(c * s, c * s, 3.6f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 0.4f * s; color = color("#2A2C30") })
-        canvas.drawLine((c - 2.2f) * s, (c + 1f) * s, (c + 2.2f) * s, (c - 1f) * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 0.6f * s; color = color("#34373B") })
+        canvas.drawCircle(c * s, c * s, 5f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 0.5f * s; color = color("#2A2C30") })
+        canvas.drawLine((c - 3f) * s, (c + 1.4f) * s, (c + 3f) * s, (c - 1.4f) * s, Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 0.8f * s; color = color("#34373B") })
         return pngBytes(image)
     }
 
@@ -1158,98 +1150,6 @@ class CwfD2DesignTest : CwfDesignBase() {
                 }
             }
         }
-        return pngBytes(image)
-    }
-
-    /** The box of the seconds wheel: a square round its middle. */
-    private fun wheelBox() = RectF(WHEEL_X - WHEEL_R, WHEEL_Y - WHEEL_R, WHEEL_X + WHEEL_R, WHEEL_Y + WHEEL_R)
-
-    /**
-     * The sunk round window of the seconds wheel, in the time panel: dark, with fine circles like the finish of a
-     * watch movement, and an edge that is dark at the top left and lit at the bottom right.
-     */
-    private fun wheelWindow(canvas: Canvas) {
-        val s = SCALE
-        val x = WHEEL_X * s
-        val y = WHEEL_Y * s
-        val r = WHEEL_WINDOW_R * s
-        canvas.drawCircle(x, y, r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(x, y - r * 0.3f, r, color("#2A2D32"), color("#08090A"), Shader.TileMode.CLAMP)
-        })
-        val rings = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 0.5f * s; color = Color.argb(22, 255, 255, 255) }
-        var ring = 3f
-        while (ring < WHEEL_WINDOW_R) {
-            canvas.drawCircle(x, y, ring * s, rings)
-            ring += 2.2f
-        }
-        canvas.drawCircle(x, y, r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 1.8f * s
-            shader = LinearGradient(x - r, y - r, x + r, y + r, color("#000000"), color("#8A8F96"), Shader.TileMode.CLAMP)
-        })
-    }
-
-    /**
-     * The seconds wheel: a gilt escape wheel with [WHEEL_TEETH] hooked teeth and four spokes, on a steel pinion with a
-     * red jewel. The watch turns it round its middle. Four spokes and teeth every 24 degrees: a step of 6 degrees shows.
-     */
-    private fun wheelPicture(): ByteArray {
-        val s = SCALE
-        val size = (2 * WHEEL_R * s).toInt()
-        val image = createBitmap(size, size)
-        val canvas = Canvas(image)
-        val c = WHEEL_R * s
-        val tip = WHEEL_R * 0.97f * s
-        val root = WHEEL_R * 0.76f * s
-        val rimInner = WHEEL_R * 0.6f * s
-        val pitch = 360f / WHEEL_TEETH
-        fun at(radius: Float, angle: Float): Pair<Float, Float> {
-            val a = Math.toRadians(angle.toDouble())
-            return Pair(c + radius * sin(a).toFloat(), c - radius * cos(a).toFloat())
-        }
-        val wheel = Path().apply {
-            for (i in 0 until WHEEL_TEETH) {
-                val a = i * pitch
-                val (x0, y0) = at(root, a)
-                val (x1, y1) = at(tip, a + pitch * 0.42f)
-                val (x2, y2) = at(tip * 0.93f, a + pitch * 0.55f)
-                val (x3, y3) = at(root, a + pitch * 0.5f)
-                if (i == 0) moveTo(x0, y0) else lineTo(x0, y0)
-                lineTo(x1, y1)
-                lineTo(x2, y2)
-                lineTo(x3, y3)
-            }
-            close()
-            // The open room between the rim and the hub, with four spokes left standing
-            val open = Path().apply { addCircle(c, c, rimInner, Path.Direction.CW) }
-            val spokes = Path()
-            for (i in 0 until 4) {
-                val (x, y) = at(rimInner * 1.05f, i * 90f)
-                spokes.addPath(Path().apply {
-                    val half = WHEEL_R * 0.075f * s
-                    val (nx, ny) = at(half, i * 90f + 90f)
-                    moveTo(c + (nx - c), c + (ny - c))
-                    lineTo(x + (nx - c), y + (ny - c))
-                    lineTo(x - (nx - c), y - (ny - c))
-                    lineTo(c - (nx - c), c - (ny - c))
-                    close()
-                })
-            }
-            spokes.addCircle(c, c, WHEEL_R * 0.24f * s, Path.Direction.CW)
-            open.op(spokes, Path.Op.DIFFERENCE)
-            op(open, Path.Op.DIFFERENCE)
-        }
-        canvas.drawPath(wheel, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), intArrayOf(color("#FBE7A6"), color("#C9A04E"), color("#8A6526")), null, Shader.TileMode.CLAMP)
-        })
-        canvas.drawPath(wheel, paint("#5A4115", Paint.Style.STROKE, 0.35f))
-        // The steel pinion and the jewel in the middle
-        canvas.drawCircle(c, c, WHEEL_R * 0.2f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(c - 1.5f * s, c - 1.5f * s, WHEEL_R * 0.3f * s, color("#F3F5F7"), color("#5E6369"), Shader.TileMode.CLAMP)
-        })
-        canvas.drawCircle(c, c, WHEEL_R * 0.1f * s, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(c - 0.6f * s, c - 0.6f * s, WHEEL_R * 0.12f * s, color("#FF6A86"), color("#9C0F2C"), Shader.TileMode.CLAMP)
-        })
         return pngBytes(image)
     }
 
@@ -1439,7 +1339,7 @@ class CwfD2DesignTest : CwfDesignBase() {
     @Test
     fun everythingStaysOnTheDial() {
         val design = design(defaultDesign())
-        for (key in listOf("sgv", "delta", "timestamp", "loop", "iob2", "basalRate", "day_name", "day", "hour", "minute", "second",
+        for (key in listOf("sgv", "delta", "timestamp", "loop", "iob2", "basalRate", "day_name", "day", "hour", "minute",
                            "timePeriod", "cob2", HR_VIEW, STEPS_VIEW, SUN_TIME_VIEW, MOON_VIEW, TEMPERATURE_VIEW, "cover_plate", WATCH_NUMBER_VIEW, PHONE_NUMBER_VIEW, "cover_chart"))
             insideRound(key, rectOf(design.getJSONObject(key)))
         // The month mark stays on the dial over December too
@@ -1454,14 +1354,15 @@ class CwfD2DesignTest : CwfDesignBase() {
             assertWithMessage(key).that(box.centerX()).isEqualTo(200f)
             assertWithMessage(key).that(box.centerY()).isEqualTo(200f)
         }
-        // The trend dial lies in the top right panel, right of its slanted edge, between the batteries and the line panel
-        val dial = rectOf(design.getJSONObject(TREND_HAND_VIEW))
-        insideRound(TREND_HAND_VIEW, dial)
-        assertThat(dial.centerX() - TREND_DIAL_INSET).isAtLeast(edgeX(dial.top, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT))
-        assertThat(dial.top).isGreaterThan(ROW_A_LINE)
-        assertThat(dial.bottom).isLessThan(LINE_PANEL.top)
-        // And left of the values next to it
-        for (box in listOf(HR_BOX, SGV_BOX)) assertThat(box.left).isAtLeast(dial.centerX() + TREND_DIAL_R)
+        // The trend arrow turns round the middle of the straight side of its dial
+        val hand = rectOf(design.getJSONObject(TREND_HAND_VIEW))
+        assertThat(hand.centerX()).isEqualTo(TREND_DIAL_X)
+        assertThat(hand.centerY()).isEqualTo(TREND_DIAL_Y)
+        // The glucose and the heart rate start right of the slanted edge of the top right panel
+        for (box in listOf(HR_BOX, SGV_BOX)) assertThat(box.left).isAtLeast(edgeX(box.top, TOP_PANEL_TOP, TOP_PANEL_BOTTOM, TOP_PANEL_TOP_LEFT, TOP_PANEL_BOTTOM_LEFT) + 2f)
+        assertThat(HR_BOX.top).isGreaterThan(ROW_A_LINE)
+        assertThat(SGV_BOX.top).isAtLeast(ROW_B_LINE)
+        assertThat(SGV_BOX.bottom).isAtMost(TOP_PANEL_BOTTOM)
     }
 
     @Test
@@ -1598,43 +1499,26 @@ class CwfD2DesignTest : CwfDesignBase() {
     }
 
     // ------------------------------------------------------------------------------------------
-    // The seconds wheel: big with 24 hours, small over AM / PM with 12
+    // The trend arrow: big, right of the time, AM / PM under it with 12 hours
     // ------------------------------------------------------------------------------------------
 
     @Test
-    fun theWheelIsBigWith24HoursAndSmallOverAmPmWith12() {
-        val window = RectF(WHEEL_X - WHEEL_WINDOW_R, WHEEL_Y - WHEEL_WINDOW_R, WHEEL_X + WHEEL_WINDOW_R, WHEEL_Y + WHEEL_WINDOW_R)
-        // 24 hours: the wheel fills its window
-        val big = giltBox(render(hours24 = true), window)!!
-        assertWithMessage("24 h wheel width").that(big.width()).isAtLeast(2 * WHEEL_R * 0.85f)
-        assertWithMessage("24 h wheel height").that(big.height()).isAtLeast(2 * WHEEL_R * 0.85f)
-        // 12 hours: small, at the top of the window, and AM / PM in white under it
+    fun theTrendDialIsRightOfTheTimeWithAmPmBesideIt() {
+        val dial = RectF(TREND_DIAL_X - TREND_DIAL_INSET, TREND_DIAL_Y - TREND_DIAL_R, TREND_DIAL_X + TREND_DIAL_R, TREND_DIAL_Y + TREND_DIAL_R)
+        // In the time panel, as tall as it allows, right of the widest minutes
+        insideRound("trend dial", dial)
+        assertThat(TIME_PANEL.contains(dial)).isTrue()
+        assertWithMessage("dial height").that(dial.height()).isAtLeast(TIME_PANEL.height() - 8f)
+        assertWithMessage("minutes and dial").that(dial.left).isAtLeast(MINUTE_BOX.left + (0..59).maxOf { textWidth("%02d".format(it), TIME_SIZE) } + 2f)
+        assertWithMessage("hours and the date line").that(HOUR_BOX.right - (0..23).maxOf { textWidth("%02d".format(it), TIME_SIZE) }).isAtLeast(DATE_LINE_X + 2f)
+        // The minutes never reach into the dial
+        assertWithMessage("main colour in the dial").that(countNear(render(hours24 = true), dial, COLOUR_1, 60)).isEqualTo(0)
+        // AM / PM: in the panel, beside the dial, clear of the round corner
+        assertThat(PERIOD_BOX.left).isAtLeast(dial.right)
+        assertThat(TIME_PANEL.contains(PERIOD_BOX)).isTrue()
+        insideRound("AM / PM", PERIOD_BOX)
         val twelve = render(hours24 = false)
         File(out, "${fileName}_12h.png").writeBytes(pngBytes(twelve))
-        val small = giltBox(twelve, window)!!
-        assertWithMessage("12 h wheel width").that(small.width()).isAtMost(2 * WHEEL_12H_R + 2f)
-        assertWithMessage("12 h wheel top").that(small.top).isAtLeast(WHEEL_12H_Y - WHEEL_12H_R - 2f)
-        assertWithMessage("12 h wheel bottom").that(small.bottom).isAtMost(WHEEL_12H_Y + WHEEL_12H_R + 2f)
-        assertWithMessage("12 h wheel above AM / PM").that(small.bottom).isAtMost(PERIOD_BOX.top + 1f)
-        assertWithMessage("AM / PM text").that(countNear(twelve, AM_PM_TEXT, WHITE, 60)).isGreaterThan(10)
-        assertWithMessage("no AM / PM with 24 h").that(countNear(render(hours24 = true), AM_PM_TEXT, WHITE, 60)).isEqualTo(0)
-        // The window lies in the time panel, right of the widest minutes, and holds the small wheel and AM / PM
-        insideRound("wheel window", window)
-        assertThat(TIME_PANEL.contains(window)).isTrue()
-        assertWithMessage("minutes and window").that(window.left).isAtLeast(MINUTE_BOX.left + (0..59).maxOf { textWidth("%02d".format(it), TIME_SIZE) } + 2f)
-        assertWithMessage("hours and the date line").that(HOUR_BOX.right - (0..23).maxOf { textWidth("%02d".format(it), TIME_SIZE) }).isAtLeast(DATE_LINE_X + 2f)
-        for ((x, y) in listOf(PERIOD_BOX.left to PERIOD_BOX.top, PERIOD_BOX.right to PERIOD_BOX.top, PERIOD_BOX.left to PERIOD_BOX.bottom, PERIOD_BOX.right to PERIOD_BOX.bottom))
-            assertWithMessage("AM / PM corner $x, $y in the window").that(hypot(x - WHEEL_X, y - WHEEL_Y)).isLessThan(WHEEL_WINDOW_R - 2f)
-        // The minutes never reach into the window
-        assertWithMessage("main colour in the window").that(countNear(render(hours24 = true), window, COLOUR_1, 60)).isEqualTo(0)
-    }
-
-    /** The bounding box of the gilt pixels of the seconds wheel inside [area], or null when there are none. */
-    private fun giltBox(picture: Bitmap, area: RectF): RectF? {
-        var box: RectF? = null
-        for (y in area.top.toInt() until area.bottom.toInt()) for (x in area.left.toInt() until area.right.toInt())
-            if (near(picture.getPixel(x, y), "#C9A04E", 60)) box = (box ?: RectF(x.toFloat(), y.toFloat(), x.toFloat(), y.toFloat())).apply { union(x.toFloat(), y.toFloat()) }
-        return box
     }
 
     /** The strips between the panels are raised brushed steel, not the dark dial, with small domed pins in them. */
@@ -1716,8 +1600,7 @@ class CwfD2DesignTest : CwfDesignBase() {
 
     @Test
     fun amPmOnlyShowsWith12Hours() {
-        // The lower part of the box: with 24 hours the steel middle of the big wheel lies over its top
-        val frame = AM_PM_TEXT
+        val frame = PERIOD_BOX
         val with24 = render(hours24 = true)
         val with12 = render(hours24 = false)
         assertThat(countNear(with24, frame, WHITE, 60)).isEqualTo(0)
@@ -1855,7 +1738,7 @@ class CwfD2DesignTest : CwfDesignBase() {
     }
 
     @Test
-    fun theWheelAndTheRunnerFollowTheSeconds() {
+    fun theRunnerFollowsTheSeconds() {
         // PREVIEW_MS is at 32 seconds
         val at32 = render()
         val at45 = render(instant = PREVIEW_MS + 13_000)
@@ -1863,15 +1746,6 @@ class CwfD2DesignTest : CwfDesignBase() {
         assertThat(countNear(at32, around(32), COLOUR_1, 70)).isGreaterThan(4)
         assertThat(countNear(at32, around(45), COLOUR_1, 70)).isEqualTo(0)
         assertThat(countNear(at45, around(45), COLOUR_1, 70)).isGreaterThan(4)
-        // The wheel turned: its pixels are not the same
-        val box = wheelBox()
-        var different = 0
-        for (y in box.top.toInt() until box.bottom.toInt()) for (x in box.left.toInt() until box.right.toInt()) if (at32.getPixel(x, y) != at45.getPixel(x, y)) different++
-        assertThat(different).isGreaterThan(50)
-        // It is gilt, and inside its window
-        assertThat(countNear(at32, box, "#C9A04E", 60)).isGreaterThan(40)
-        insideRound("wheel window", RectF(WHEEL_X - WHEEL_WINDOW_R, WHEEL_Y - WHEEL_WINDOW_R, WHEEL_X + WHEEL_WINDOW_R, WHEEL_Y + WHEEL_WINDOW_R))
-        assertThat(TIME_PANEL.contains(RectF(WHEEL_X - WHEEL_WINDOW_R, WHEEL_Y - WHEEL_WINDOW_R, WHEEL_X + WHEEL_WINDOW_R, WHEEL_Y + WHEEL_WINDOW_R))).isTrue()
         // The runner follows the main colour chosen on the watch
         assertThat(countNear(render(colours = Pair("#FF3B3B", ColourLooks.AS_DESIGNED)), around(32), "#FF3B3B", 70)).isGreaterThan(4)
     }
@@ -2030,19 +1904,19 @@ class CwfD2DesignTest : CwfDesignBase() {
         /** The top right panel: the batteries (row A), heart rate and loop (row B), the glucose (row C). */
         const val ROW_A_Y = 36f
         const val ROW_A_LINE = 49f
-        const val ROW_B_LINE = 82f
+        const val ROW_B_LINE = 77f
         const val WATCH_ICON_X = 176f
         const val PHONE_ICON_X = 232f
         val WATCH_NUMBER_BOX = RectF(184f, 26f, 224f, 46f)
         val PHONE_NUMBER_BOX = RectF(240f, 26f, 284f, 46f)
         const val SMALL_SIZE = 18
-        const val HR_ICON_X = 213f
-        const val HR_ROW_Y = 66f
-        val HR_BOX = RectF(200f, 53f, 276f, 79f)
-        val LOOP_FRAME = RectF(280f, 55f, 316f, 77f)
-        val LOOP_BOX = RectF(281f, 56f, 315f, 76f)
-        val SGV_BOX = RectF(203f, 84f, 279f, 118f)
-        const val SGV_SIZE = 40
+        const val HR_ICON_X = 193f
+        const val HR_ROW_Y = 63f
+        val HR_BOX = RectF(180f, 50f, 256f, 76f)
+        val LOOP_FRAME = RectF(280f, 52f, 316f, 74f)
+        val LOOP_BOX = RectF(281f, 53f, 315f, 73f)
+        val SGV_BOX = RectF(160f, 78f, 279f, 120f)
+        const val SGV_SIZE = 56
         val WEATHER_ICON_BOX = RectF(282f, 87f, 308f, 113f)
         val TEMPERATURE_BOX = RectF(309f, 87f, 356f, 113f)
         const val TEMPERATURE_SIZE = 24
@@ -2067,27 +1941,13 @@ class CwfD2DesignTest : CwfDesignBase() {
         val MINUTE_BOX = RectF(213f, 162f, 312f, 240f)
         const val TIME_SIZE = 96
 
-        /**
-         * The seconds wheel right of the minutes, in its sunk window, as big as the time panel allows, and the step it
-         * turns each second. With 12 hours the wheel is [WHEEL_12H_R] at the top of the window, with AM / PM under it.
-         */
-        const val WHEEL_X = 344f
-        const val WHEEL_Y = 201f
-        const val WHEEL_R = 31f
-        const val WHEEL_WINDOW_R = 34f
-        const val WHEEL_12H_Y = 185f
-        const val WHEEL_12H_R = 14f
-        const val WHEEL_TEETH = 15
-        const val WHEEL_STEP = 6
-
         /** The runner on the rim: from the inner edge of the rim to near the outside, this wide at the outside. */
         const val RUNNER_INNER = 188f
         const val RUNNER_OUTER = 198.5f
         const val RUNNER_HALF_WIDTH = 2.8f
-        val PERIOD_BOX = RectF(328f, 202f, 360f, 222f)
-        /** The lower part of [PERIOD_BOX], below the steel middle of the big wheel. */
-        val AM_PM_TEXT = RectF(PERIOD_BOX.left, 209f, PERIOD_BOX.right, PERIOD_BOX.bottom)
-        const val PERIOD_SIZE = 15
+        /** AM / PM, with 12 hours only: right of the trend dial, low in the time panel. */
+        val PERIOD_BOX = RectF(355f, 214f, 380f, 230f)
+        const val PERIOD_SIZE = 13
 
         /** The months: the label, the first number and the room between two, the mark over the numbers. */
         const val MONTH_LABEL_X = 62f
@@ -2161,13 +2021,14 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val LEGEND_SIZE = 6f
 
         /**
-         * The trend dial: a half circle at the left of the top right panel, its straight side on the left, the arrow turning
-         * round the middle of that side. The arrow turns [TREND_DEGREES_PER_MGDL] degrees for each mg/dL in 5 minutes.
+         * The trend dial: a half circle right of the minutes, as tall as the time panel allows, its straight side on the
+         * left, the arrow turning round the middle of that side. The arrow turns [TREND_DEGREES_PER_MGDL] degrees for each
+         * mg/dL in 5 minutes.
          */
-        const val TREND_DIAL_X = 167f
-        const val TREND_DIAL_Y = 86f
-        const val TREND_DIAL_R = 33f
-        const val TREND_HAND_LENGTH = 28f
+        const val TREND_DIAL_X = 314f
+        const val TREND_DIAL_Y = 201f
+        const val TREND_DIAL_R = 39f
+        const val TREND_HAND_LENGTH = 34f
         const val TREND_DIAL_INSET = 4f
         const val TREND_DEGREES_PER_MGDL = 6.0
         const val TREND_MAX_DELTA = 15.0
@@ -2216,7 +2077,6 @@ class CwfD2DesignTest : CwfDesignBase() {
         const val SENSOR_HAND = "SensorHand"
         const val PUMP_HAND = "PumpHand"
         const val TREND_HAND = "TrendHand"
-        const val WHEEL = "Wheel"
         const val SENSOR_COLOUR = "#2FC6FF"
         const val PUMP_COLOUR = "#FF9F1C"
         const val MONTH_MARK = "MonthMark"

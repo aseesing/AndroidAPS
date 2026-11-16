@@ -103,7 +103,6 @@ import app.aaps.wear.watchfaces.utils.LayeredFrameCache
 import app.aaps.wear.watchfaces.utils.LogTimeGraph
 import app.aaps.wear.watchfaces.utils.ParsedJsonCache
 import app.aaps.wear.watchfaces.utils.PartTimeLeft
-import app.aaps.wear.watchfaces.utils.SecondSpin
 import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
 import app.aaps.wear.watchfaces.utils.WatchFaceComplicationSlots
 import app.aaps.wear.watchfaces.utils.WatchFaceComplications
@@ -1172,7 +1171,6 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         binding.secondHand.rotation = now.second * 6f
         binding.minuteHand.rotation = now.minute * 6f + now.second * 0.1f
         binding.hourHand.rotation = now.hour * 30f + now.minute * 0.5f + now.second * (0.5f / 60f)
-        SecondSpin.rotation(ViewMap.SECOND.viewJson, now.second)?.let { binding.second.rotation = it } // PERSONAL PATCH: a picture in the seconds that turns
     }
 
     override fun setDataFields() {
@@ -1647,7 +1645,6 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         updateSecondVisibility()
         setSecond() // Update second visibility for time view
         binding.timePeriod.visibility = (binding.timePeriod.isVisible && DateFormat.is24HourFormat(this).not()).toVisibility()
-        SecondSpin.place(binding.second, SecondSpin.placement(ViewMap.SECOND.viewJson, DateFormat.is24HourFormat(this)), zoomFactor) // PERSONAL PATCH
     }
 
     // background is drawn on the Canvas by onDraw() from a View kept outside mainLayout, so it paints
