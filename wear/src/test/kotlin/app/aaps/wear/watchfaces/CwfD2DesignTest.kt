@@ -39,6 +39,7 @@ import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.DayOverlay
 import app.aaps.wear.watchfaces.daynight.StoredWeather
 import app.aaps.wear.watchfaces.utils.DesignTimeText
+import app.aaps.wear.watchfaces.utils.LogTimeGraph
 import app.aaps.wear.watchfaces.utils.LogTimeScale
 import app.aaps.wear.watchfaces.utils.PartTimeLeft
 import app.aaps.wear.watchfaces.utils.SecondSpin
@@ -194,10 +195,10 @@ class CwfD2DesignTest : CwfDesignBase() {
             .put(CwfMetadataKey.CWF_PREF_WATCH_SHOW_WEEK_NUMBER.key, "false")
 
         put("enableSecond", true)
-        // The colours of the graph, muted and low in contrast. The glucose value has its own colours (see SGV_DYN).
+        // The colours of the graph: muted, but bright enough to read on the watch. The glucose value has its own colours (see SGV_DYN).
         put("highColor", GRAPH_HIGH).put("midColor", GRAPH_MID).put("lowColor", GRAPH_LOW)
         put("gridColor", GRAPH_GRID).put("carbColor", GRAPH_CARBS).put("basalBackgroundColor", GRAPH_BASAL).put("basalCenterColor", GRAPH_BASAL_LINE)
-        put("pointSize", 2)
+        put("pointSize", GRAPH_POINT_SIZE)
 
         // Every view this design does not use is off
         val used = setOf(
@@ -1458,6 +1459,10 @@ class CwfD2DesignTest : CwfDesignBase() {
         // Three hours of glucose start halfway on the log scale, and end at the right
         assertWithMessage("oldest dot").that((dots.left - glass.left) / glass.width()).isIn(Range.closed(0.35f, 0.62f))
         assertWithMessage("newest dot").that((dots.right - glass.left) / glass.width()).isAtLeast(0.85f)
+        // Small dots: where the line of dots is flattest, it is at most 6 pixels thick (radius 1 dp; with 2 dp it was 9)
+        fun isDot(c: Int) = near(c, GRAPH_MID, 30) && Color.green(c) - Color.red(c) > 15
+        val thickness = (dots.left.toInt()..dots.right.toInt()).map { x -> (glass.top.toInt() until glass.bottom.toInt()).count { y -> isDot(picture.getPixel(x, y)) } }.filter { it > 0 }
+        assertWithMessage("thinnest part of the line of dots").that(thickness.min()).isAtMost(6)
     }
 
     /** A day of glucose spans the log graph; the plain graph shows its hours over the whole width. */
@@ -1487,9 +1492,13 @@ class CwfD2DesignTest : CwfDesignBase() {
         val to = LogTimeScale.xOfOffset(LogTimeScale.MIN_FUTURE_MS)
         // The line itself is in the grid colour; the glass beside it is darker
         fun lineAt(px: Int) = (glass.top.toInt() until glass.bottom.toInt()).count { y -> (px - 1..px + 1).any { x -> brightness(picture.getPixel(x, y)) > brightness(picture.getPixel(x + 5, y)) + 6 } }
+        // The labels, in a lighter colour than the lines so they can be read, in the lower half round each line
+        val labelHex = String.format("#%06X", 0xFFFFFF and LogTimeGraph.labelColour(Color.parseColor(GRAPH_GRID)))
         for (age in LogTimeScale.LABEL_AGES_MS) {
             val px = (left + (LogTimeScale.xOfOffset(-age) - from) / (to - from) * (right - left)).roundToInt()
             assertWithMessage("line at ${age / HOUR_MS} h, x $px").that(lineAt(px)).isGreaterThan((glass.height() * 0.3f).toInt())
+            val around = RectF(px - 14f, glass.centerY(), px + 14f, glass.bottom)
+            assertWithMessage("label at ${age / HOUR_MS} h").that(countNear(picture, around, labelHex, 30)).isGreaterThan(8)
         }
     }
 
@@ -1667,7 +1676,8 @@ class CwfD2DesignTest : CwfDesignBase() {
         // The dots are there, in the glass, in the muted colour, and nothing in the window is bright
         val picture = render()
         assertThat(countNear(picture, GRAPH_BOX, GRAPH_MID, 40)).isGreaterThan(20)
-        assertThat(brightestAround(picture, GRAPH_BOX.centerX() to GRAPH_BOX.centerY(), (GRAPH_BOX.height() / 2 - 1).toInt())).isLessThan(0.35)
+        // Readable on the watch, but quieter than the bright glucose value above it
+        assertThat(brightestAround(picture, GRAPH_BOX.centerX() to GRAPH_BOX.centerY(), (GRAPH_BOX.height() / 2 - 1).toInt())).isLessThan(0.6)
         // The glucose value keeps its own bright colour
         assertThat(countNear(picture, SGV_BOX, MID, 40)).isGreaterThan(100)
     }
@@ -1985,10 +1995,12 @@ class CwfD2DesignTest : CwfDesignBase() {
         /** The graph: muted, low contrast, on dark tinted glass. */
         const val GLASS_TOP = "#0E1311"
         const val GLASS_BOTTOM = "#141A17"
-        const val GRAPH_MID = "#7F9C83"
-        const val GRAPH_HIGH = "#A8955E"
-        const val GRAPH_LOW = "#A0615A"
-        const val GRAPH_GRID = "#26302B"
+        /** The radius of a glucose dot, in dp: the chart takes whole numbers only. */
+        const val GRAPH_POINT_SIZE = 1
+        const val GRAPH_MID = "#A3C4A8"
+        const val GRAPH_HIGH = "#CDB676"
+        const val GRAPH_LOW = "#C97C74"
+        const val GRAPH_GRID = "#3C4A44"
         const val GRAPH_CARBS = "#6E6A4C"
         const val GRAPH_BASAL = "#18221F"
         const val GRAPH_BASAL_LINE = "#3B4A44"
