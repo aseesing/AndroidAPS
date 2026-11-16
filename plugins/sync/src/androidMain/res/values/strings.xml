@@ -234,6 +234,18 @@
     <string name="wear_action_loop_state_invalid">Invalid loop state requested</string>
 
     <string name="wear_action_running_mode_title">Running mode</string>
+    <string name="wear_app_update_title">Watch app</string>
+    <string name="wear_app_update_embedded" comment="%1$s=version and file name of the watch app inside this phone app. Example: Included in this phone app: 4.0.1 (aaps-wear-4.0.1.apk)">Included in this phone app: %1$s</string>
+    <string name="wear_app_update_button">Update watch app</string>
+    <string name="wear_app_update_connecting">Connecting to the watch…</string>
+    <string name="wear_app_update_sending" comment="%1$s=name of the watch, %2$d=percent sent. Example: Sending to Pixel Watch: 42%">Sending to %1$s: %2$d%%</string>
+    <string name="wear_app_update_installing" comment="%1$s=name of the watch">%1$s is preparing the install…</string>
+    <string name="wear_app_update_sent" comment="%1$s=name of the watch">Sent to %1$s. If the watch asks, confirm the update there. The watch app restarts by itself.</string>
+    <string name="wear_app_update_not_embedded">This phone app has no watch app inside.</string>
+    <string name="wear_app_update_no_watch">No watch is connected.</string>
+    <string name="wear_app_update_no_answer">The watch does not answer. The watch app on it may be too old for updates from the phone: install this version once with adb.</string>
+    <string name="wear_app_update_timeout">The watch stopped answering. Try again with the watch close to the phone.</string>
+    <string name="wear_app_update_failed" comment="%1$s=reason, in English. Example: Update failed: INSTALL_FAILED_UPDATE_INCOMPATIBLE">Update failed: %1$s</string>
 
     <string name="garmin_request_key">Request Key</string>
 
