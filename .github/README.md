@@ -17,6 +17,11 @@
 <td align="center" width="33%"><img src="images/grand_complication_night.gif" width="220" alt="Grand Complication Night: midnight blue and gold, a low battery hand blinks"><br><b>Grand Complication Night</b><br><sub>midnight blue and gold, a low battery blinks</sub></td>
 </tr>
 <tr>
+<td></td>
+<td align="center" width="33%"><img src="images/d2.gif" width="220" alt="D2: steel and glass, a turning seconds wheel, a graph of the whole day"><br><b>D2</b><br><sub>steel and glass, a turning seconds wheel</sub></td>
+<td></td>
+</tr>
+<tr>
 <td align="center" colspan="3"><sub>Each picture is drawn by the watch's own code, wake-up animation and all, by <code>ReadmeAnimationsTest</code>. The same code draws the live preview on the phone.</sub></td>
 </tr>
 </table>
@@ -32,7 +37,8 @@ OnePlus Watch 2R and other round Wear OS watches.
 | 📱 | **Live preview in AAPS** | The phone shows your watch face as it looks on the watch now, animation and all. |
 | ⚙️ | **Watch face settings in AAPS** | Set up the watch face on the phone and see it at once. Changes on the watch come back. |
 | 🌗 | **Day face and night face** | One face for the day, one for the night, with the weather, the sun and the moon. |
-| 🎨 | **Six designs** | Cyberpunk Tech, Weather and Yellow, Wilds Weather, and the analog Grand Complication for day and night. |
+| 🎨 | **Seven designs** | Cyberpunk Tech, Weather and Yellow, Wilds Weather, the analog Grand Complication for day and night, and D2. |
+| 📈 | **Log time graph** | The last hour in detail and the whole day behind it, with the time ago under the graph. On every face with a graph. |
 | 🌙 | **The real sun and moon** | They rise and set over a horizon as in the sky, the moon in its real phase, worked out on the watch. |
 | 🔋 | **Battery on the face** | Phone and watch battery side by side. A low one blinks. |
 | ❤️ | **Heart rate and steps** | On the watch face, from what the watch measures anyway. |

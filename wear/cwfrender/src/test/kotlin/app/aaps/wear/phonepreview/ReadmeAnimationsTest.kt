@@ -34,6 +34,7 @@ import javax.imageio.ImageIO
 import javax.imageio.ImageTypeSpecifier
 import javax.imageio.metadata.IIOMetadataNode
 import kotlin.math.PI
+import kotlin.math.exp
 import kotlin.math.sin
 
 /**
@@ -64,7 +65,8 @@ class ReadmeAnimationsTest {
         Face("Cyberpunk_Yellow", "cyberpunk_yellow", phoneBattery = 15),
         Face("Wilds_Weather", "wilds_weather"),
         Face("Grand_Complication_Day", "grand_complication_day", animated = false),
-        Face("Grand_Complication_Night", "grand_complication_night", weather = EventData.Weather.PARTLY, phoneBattery = 15)
+        Face("Grand_Complication_Night", "grand_complication_night", weather = EventData.Weather.PARTLY, phoneBattery = 15),
+        Face("D2", "d2", weather = EventData.Weather.PARTLY)
     )
 
     @Test
@@ -118,11 +120,19 @@ class ReadmeAnimationsTest {
             battery = face.phoneBattery.toString(), rigBattery = "--", openApsStatus = now - 180_000L, bgi = "-0.4", batteryLevel = 1,
             tempTarget = "100", tempTargetLevel = 0, reservoirString = "120U", reservoir = 120.0, reservoirLevel = 0
         ),
-        EventData.GraphData(ArrayList((0 until 36).map { i ->
-            EventData.SingleBg(dataset = 0, timeStamp = now - (35 - i) * 300_000L, sgv = 125.0 + 35.0 * sin(i * PI / 14.0), high = 180.0, low = 70.0)
+        // A whole day for the log time graph: every 5 minutes for the last 6 hours, then thinner, as the phone sends it
+        EventData.GraphData(ArrayList(graphAges().map { age ->
+            val hours = age / 3_600_000.0
+            EventData.SingleBg(
+                dataset = 0, timeStamp = now - age, sgv = 125.0 + 40.0 * sin(hours * PI / 4.0) + 15.0 * exp(-hours / 2.0) * sin(hours * PI / 0.8), high = 180.0, low = 70.0
+            )
         })),
         EventData.Weather(now, face.weather)
     )
+
+    /** The ages of the graph points, oldest first. */
+    private fun graphAges(): List<Long> =
+        ((0L until 6 * 12L).map { it * 300_000L } + (12L..48L).map { it * 1_800_000L }).sortedDescending()
 
     /** [face] as a round watch: a dark bezel around it, and see-through outside it. */
     private fun watch(face: Bitmap): Bitmap {
