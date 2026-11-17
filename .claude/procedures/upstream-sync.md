@@ -42,6 +42,7 @@ as before.
 | `local/wear-graph-top-labels` | The time labels of the log graph go on its top edge when the round screen cuts its bottom edge; the graph of the Cyberpunk and Wilds designs sits higher |
 | `local/wear-glucose-line` | A design can draw the glucose of the graph as a line, with its own width and colour (`GlucoseLine`); the Cyberpunk and Wilds designs do |
 | `local/wear-anim-layers` | One generic wake-up animation engine: a design's `animation.layers` are pictures, shapes or views whose properties are safe math formulas (copies, strips, points, masks, still layers after the wake); the old effects (rain, glitch, pulse, blink, sweep, slide, wobble, trace, glint) are short forms of it. All designs and their generators moved out to [aaps-watchfaces](https://github.com/aseesing/aaps-watchfaces) |
+| `local/wear-design-manage` | Phone: a delete button for each design in the list of watch face designs; a loading indicator while a new face goes to the watch; the watch face settings button on the night face card too |
 
 `master` of this fork is a plain copy of upstream `master`.
 
