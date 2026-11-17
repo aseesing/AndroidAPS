@@ -47,7 +47,8 @@ step is green on its own and the DI stays working:
 
 Then wire it up: `include` in `settings.gradle`; add it to `:appshell` as `api(...)` if it has
 screens the navigation graph reaches; add it to `migratedModules` in `ios/shell/build.gradle.kts`
-once it builds for iOS; register its string owner in `MainApp` and `BaseTestApp`.
+once it builds for iOS; if it has strings, list it in `StringOwnerModules.ALL` (see the strings
+section below).
 
 ## The hard precondition: no annotation-processor DI in the module
 
@@ -403,9 +404,3 @@ do not belong in the API Swift sees. There is a `filterNot` in `ios/shell/build.
 Once a module builds for iOS, the ios-branch guard fails until it is listed. It names the module and
 what to do: add it to `migratedModules` in `ios/shell/build.gradle.kts` and bump
 `ShellInfo.LINKED_MODULES`. Expect this on every flip.
-
-## Do not run a javax-stripping sweep over `:app`'s DI files
-
-`AppRootGraph`, `MetroGraphs`, `AapsLeaves` and `CoreObjectsModule` legitimately import
-`javax.inject.Singleton` and `javax.inject.Inject`. A helper that strips javax while adding an import
-breaks them with `Unresolved reference 'Singleton'`. Edit those by hand.

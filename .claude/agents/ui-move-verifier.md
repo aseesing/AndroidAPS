@@ -13,9 +13,13 @@ that agrees with the mover and finds nothing is only useful if you can show what
 
 You do **not** fix anything. Read, grep and run builds only. Never edit, never commit.
 
-## CRITICAL: Bash rules on this Windows project
+## CRITICAL: Bash rules
 
-- **NEVER `cd && command` or `cd; command`.** Use absolute paths or `git -C E:/GitHub/AndroidAPS ...`.
+The rules below are for Windows. On macOS and Linux, `which`, `sort`, `uniq` and `chmod` are normal
+commands, there is no `powershell.exe`, and Gradle is `./gradlew` instead of `./gradlew.bat`.
+
+- **NEVER `cd && command` or `cd; command`.** Run `git` from the project root, which is your working
+  directory.
 - **Never start a command with** `awk`, `cut`, `tr`, `sort`, `uniq`, `diff`, `which`, `chmod`, `tar`,
   `pip`, `npm`. Use `sed`, `grep`, `find`, or `powershell.exe -Command "..."`.
 - Gradle is `./gradlew.bat --no-daemon`. **Redirect, never pipe**, when the exit code matters.
@@ -25,9 +29,9 @@ You do **not** fix anything. Read, grep and run builds only. Never edit, never c
 The mover's summary is a hypothesis. The evidence is:
 
 ```
-git -C E:/GitHub/AndroidAPS status --short
-git -C E:/GitHub/AndroidAPS diff --stat
-git -C E:/GitHub/AndroidAPS diff -M --summary        # which moves git actually recognises as renames
+git status --short
+git diff --stat
+git diff -M --summary        # which moves git actually recognises as renames
 ```
 
 A move should show up mostly as renames. **Large insert/delete counts on a "pure move" are the first
@@ -36,7 +40,7 @@ thing to explain** - either the file was rewritten while moving, or a bulk subst
 For each file git does *not* see as a pure rename:
 
 ```
-git -C E:/GitHub/AndroidAPS diff -M -- <old> <new>
+git diff -M -- <old> <new>
 ```
 
 Read it. Anything that is not an import change or a documented mechanical substitution is a
@@ -49,16 +53,20 @@ Read it. Anything that is not an import change or a documented mechanical substi
 A gradle task that runs zero tests exits `BUILD SUCCESSFUL`. This is the single easiest way for a
 move to look verified and not be.
 
-```
-powershell.exe -NoProfile -Command "$x = Select-String -Path '<module>/build/test-results/testAndroidHostTest/TEST-*.xml' -Pattern 'tests=\"(\d+)\".*failures=\"(\d+)\".*skipped=\"(\d+)\"' -AllMatches; $t=0;$f=0;$s=0; foreach($m in $x.Matches){$t+=[int]$m.Groups[1].Value;$f+=[int]$m.Groups[2].Value;$s+=[int]$m.Groups[3].Value}; Write-Output \"tests=$t failures=$f skipped=$s\""
-```
-
-Then get the baseline the same way, so the comparison is real rather than remembered:
+The same commands work on Windows (Git Bash), macOS and Linux:
 
 ```
-git -C E:/GitHub/AndroidAPS stash
-./gradlew.bat :<module>:testAndroidHostTest --no-daemon > /tmp/verify-base.log 2>&1
-git -C E:/GitHub/AndroidAPS stash pop
+cat <module>/build/test-results/testAndroidHostTest/TEST-*.xml | grep -c "<testcase "
+cat <module>/build/test-results/testAndroidHostTest/TEST-*.xml | grep -c "<failure"
+cat <module>/build/test-results/testAndroidHostTest/TEST-*.xml | grep -c "<skipped"
+```
+
+Then count the tests in the last commit and in the tree now. Do not `git stash`: you must not change
+the tree, and it holds the mover's uncommitted work:
+
+```
+git grep -h "@Test" HEAD -- <module>/src | wc -l
+grep -rh "@Test" <module>/src | wc -l
 ```
 
 A drop in `tests=` is a finding even if everything is green. So is a rise in `skipped=`.
@@ -88,29 +96,29 @@ grep -rn "app\.aaps\.core\.ui\.[A-Za-z]*Strings\." <module>/src
 grep -rn -B2 "suspend fun" <module>/src --include=*.kt | grep -E "override fun|@Composable"
 
 # a screen that lost its Preview when it moved
-git -C E:/GitHub/AndroidAPS diff -M | grep -c "^-.*@Preview"
+git diff -M | grep -c "^-.*@Preview"
 
 # leftover Android imports in commonMain (should be impossible, but the grep is free)
 grep -rn "^import android\." <module>/src/commonMain --include=*.kt
 ```
 
-### 4. Strings: the failure that only shows on a device
+### 4. Strings
 
-If the move introduced or extended a generated strings object, the owner must be registered in
-**both** places or the screen renders blank while every gate stays green:
+If the move introduced a generated strings object, its owner must be listed in
+`StringOwnerModules.ALL` (`buildSrc/src/main/kotlin/StringOwnerModules.kt`). Every shell registers
+its owners from that list, so there is no hand-written registration in `MainApp` or `BaseTestApp`:
 
 ```
-grep -rn "registerStringOwners" -A40 app/src/main/kotlin/app/aaps/MainApp.kt | grep -i "<owner>"
-grep -rn "<owner>" app/src/androidTest/kotlin/app/aaps/BaseTestApp.kt
+grep -n "<owner>" buildSrc/src/main/kotlin/StringOwnerModules.kt
 ```
 
-Missing from either one is a **CONFIRMED** finding, not a maybe.
+Missing from the list is a **CONFIRMED** finding, not a maybe.
 
 Also check no string text changed. The generator is name-preserving, so a changed *value* means
 someone edited `strings.xml`:
 
 ```
-git -C E:/GitHub/AndroidAPS diff -- "<module>/src/androidMain/res/values/strings.xml"
+git diff -- "<module>/src/androidMain/res/values/strings.xml"
 ```
 
 ### 5. Is the moved code still reachable?

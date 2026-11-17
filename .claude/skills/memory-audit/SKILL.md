@@ -55,8 +55,8 @@ written?** Have the agent read the blamed code as it stands and check `git log -
 `git log -- <path>`. Expect a large share of "open" bugs to be closed already.
 
 When spawning agents, repeat this repo's Bash rules in the prompt - agents do not follow CLAUDE.md
-reliably. In particular: never `cd && command`, and do not start a command with `awk`, `sort`,
-`uniq`, `which` or a bare file path.
+reliably. In particular: never `cd && command`, and on Windows do not start a command with `awk`,
+`sort`, `uniq`, `which` or a bare file path.
 
 **5. Fix and retire.** Split the work:
 - **Mechanical** - moved paths, renamed symbols, corrected counts, a status that is factually wrong.

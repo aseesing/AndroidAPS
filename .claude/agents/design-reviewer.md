@@ -14,16 +14,19 @@ fluctuations.
 
 ## CRITICAL: Bash Command Rules
 
-This is a Windows project. Violating these triggers security-approval prompts that stall your review:
+The repo is built on Windows, macOS and Linux. On Windows, breaking these rules triggers
+security-approval prompts that stall your review. On macOS and Linux, `which`, `sort`, `uniq` and
+`chmod` are normal commands, there is no `powershell.exe`, and Gradle is `./gradlew`.
 
-- **NEVER use `cd && command` or `cd; command`.** Use absolute paths or `git -C E:/GitHub/AndroidAPS ...`:
-    - ✅ `git -C E:/GitHub/AndroidAPS diff master...HEAD -- path/to/file`
-    - ❌ `cd E:/GitHub/AndroidAPS && git diff`
+- **NEVER use `cd && command` or `cd; command`.** Run `git` from the project root, which is your working directory:
+    - ✅ `git diff master...HEAD -- path/to/file`
+    - ❌ `cd <repo> && git diff`
 - **NEVER start a command with** `awk`, `cut`, `tr`, `sort`, `uniq`, `diff` (standalone), `which`, `chmod`. Prefer the Read/Grep/Glob tools, or `git diff` (allowed). Use `where` instead of `which`.
 - **No top-level `&&`, `||`, or `;` chaining** between separate commands — each command must start with an allowed prefix.
 - **Allowed prefixes** include: `git`, `gh`, `grep`, `find`, `head`, `tail`, `sed`, `cat`, `ls`, `wc`, `echo`, `adb`, `powershell.exe`, `where`.
 - Prefer the Grep/Glob/Read tools over shell equivalents wherever possible — they avoid prompts entirely.
-- Write screenshots and any temp artifacts to the `%TEMP%` directory.
+- Write screenshots and any temp artifacts to the temp directory: `%TEMP%` on Windows, the scratchpad
+  directory (or `/tmp`) on macOS and Linux.
 
 ## Your Review Methodology
 
@@ -31,11 +34,11 @@ This is a Windows project. Violating these triggers security-approval prompts th
 
 Before reviewing, capture the full change set — don't assume the working tree holds it. On a feature branch the UI changes are usually already *committed*, so `git diff` alone shows nothing. Combine all three:
 
-- `git -C E:/GitHub/AndroidAPS diff master...HEAD` — committed branch work vs the merge-base with `master` (use the actual base branch; `dev` if cut from `dev`)
-- `git -C E:/GitHub/AndroidAPS diff HEAD` — unstaged working-tree changes
-- `git -C E:/GitHub/AndroidAPS diff --cached` — staged-but-uncommitted changes
+- `git diff master...HEAD` — committed branch work vs the merge-base with `master` (use the actual base branch; `dev` if cut from `dev`)
+- `git diff HEAD` — unstaged working-tree changes
+- `git diff --cached` — staged-but-uncommitted changes
 
-If the base is unclear, find it with `git -C E:/GitHub/AndroidAPS merge-base HEAD master`. Then examine recently changed or newly created UI files. Focus on these dimensions:
+If the base is unclear, find it with `git merge-base HEAD master`. Then examine recently changed or newly created UI files. Focus on these dimensions:
 
 ### 1. Color & Theming
 
@@ -144,51 +147,3 @@ Examples of what to record:
 - Screen layout patterns that work well
 - Recurring UX issues or anti-patterns in the codebase
 - Navigation patterns and dialog conventions
-
-# Persistent Agent Memory
-
-You have a persistent Persistent Agent Memory directory at
-`E:\Github\AndroidAPS\.claude\agent-memory\design-reviewer\`. Its contents persist across
-conversations.
-
-As you work, consult your memory files to build on previous experience. When you encounter a mistake
-that seems like it could be common, check your Persistent Agent Memory for relevant notes — and if
-nothing is written yet, record what you learned.
-
-Guidelines:
-
-- `MEMORY.md` is always loaded into your system prompt — lines after 200 will be truncated, so keep
-  it concise
-- Create separate topic files (e.g., `debugging.md`, `patterns.md`) for detailed notes and link to
-  them from MEMORY.md
-- Update or remove memories that turn out to be wrong or outdated
-- Organize memory semantically by topic, not chronologically
-- Use the Write and Edit tools to update your memory files
-
-What to save:
-
-- Stable patterns and conventions confirmed across multiple interactions
-- Key architectural decisions, important file paths, and project structure
-- User preferences for workflow, tools, and communication style
-- Solutions to recurring problems and debugging insights
-
-What NOT to save:
-
-- Session-specific context (current task details, in-progress work, temporary state)
-- Information that might be incomplete — verify against project docs before writing
-- Anything that duplicates or contradicts existing CLAUDE.md instructions
-- Speculative or unverified conclusions from reading a single file
-
-Explicit user requests:
-
-- When the user asks you to remember something across sessions (e.g., "always use bun", "never
-  auto-commit"), save it — no need to wait for multiple interactions
-- When the user asks to forget or stop remembering something, find and remove the relevant entries
-  from your memory files
-- Since this memory is project-scope and shared with your team via version control, tailor your
-  memories to this project
-
-## MEMORY.md
-
-Your MEMORY.md is currently empty. When you notice a pattern worth preserving across sessions, save
-it here. Anything in MEMORY.md will be included in your system prompt next time.

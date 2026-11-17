@@ -33,7 +33,8 @@
 
 Everything above assumes the Windows machine. The same repo is also checked out on a Mac, which
 is the only place the iOS side can be linked and tested. Check `uname` if you are not sure which
-machine you are on. On macOS these rules replace the Windows ones:
+machine you are on. On macOS these rules replace the Windows ones (on Linux too, except the Xcode
+and iOS parts):
 
 - **Use `./gradlew`, never `./gradlew.bat`.** Stop daemons with `./gradlew --stop`.
 - **`which` works, `where` does not.** This is the opposite of the Windows rule.
@@ -68,23 +69,9 @@ Useful commands on the Mac:
 
 **A real body of tests runs on the simulator** - `iosTest` and `commonTest` source sets both execute
 under `iosSimulatorArm64Test`, so a change to shared code is genuinely run on Apple, not merely
-cross-compiled to a klib. Measured on 2026-09-21 at `7e303d9bb5`: **714 tests, 0 failures, across all
-14 modules below** (4m 11s). There are 18 populated test source sets in those 14 modules:
-
-- `commonTest`: `core/data`, `core/interfaces`, `core/nssdk`, `core/objects`, `core/utils`,
-  `database/persistence`, `implementation`, `plugins/aps`, `plugins/sync`, `shared/clientbindings`,
-  `shared/impl`, `ui`
-- `iosTest`: `core/interfaces`, `implementation`, `ios/shell`, `plugins/aps`, `plugins/automation`,
-  `plugins/sync`
-
-`.github/workflows/ios-ci.yml` already runs five of them explicitly. Re-derive the list rather than
-trusting this one when it matters:
-`find . -maxdepth 4 -type d \( -name commonTest -o -name iosTest \) -not -path "*/build/*"` - and
-check each for `.kt` files, because an empty source-set directory still exists for `core/ui`.
-
-(This paragraph used to say only `:core:data` had a `commonTest` source set and that everything else
-reported `NO-SOURCE`. That was wrong by the time anyone read it, and it caused work to be shipped as
-"compiles for iOS" when it could have been run.)
+cross-compiled to a klib. To see which modules have such tests, list the source sets and check each
+for `.kt` files, because a source-set directory can exist with no tests in it:
+`find . -maxdepth 4 -type d \( -name commonTest -o -name iosTest \) -not -path "*/build/*"`
 
 ## Token Usage Reduction (Delay Conversation Compaction)
 
@@ -256,7 +243,8 @@ reported `NO-SOURCE`. That was wrong by the time anyone read it, and it caused w
 - **NEVER run Android instrumented tests (connectedAndroidTest) without explicit user permission** —
   they uninstall the app from the device
 - Use %TEMP% directory for screenshots
-- Can edit files and run commands freely without asking for permission
+- Reading files and running commands needs no permission. Code changes follow the confirmation
+  rule above.
 - Can use internet/web search as needed
 - For compilation do not use gradle daemon
 - Do not decompile libraries, look for sources locally or ask first (especially Vico lib)

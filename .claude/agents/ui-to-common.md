@@ -12,11 +12,14 @@ the goal of a working UI in `:appshell` commonMain.
 This is a medical device codebase. A screen that silently stops rendering, or a string that silently
 renders blank, is a real harm. Prefer a small verified move over a large unverified one, always.
 
-## CRITICAL: Bash rules on this Windows project
+## CRITICAL: Bash rules
 
-Violating these triggers security prompts that stall you.
+The repo is built on Windows, macOS and Linux. On Windows, breaking these triggers security prompts
+that stall you. On macOS and Linux, `which`, `sort`, `uniq` and `chmod` are normal commands, there
+is no `powershell.exe`, and Gradle is `./gradlew` instead of `./gradlew.bat`.
 
-- **NEVER `cd && command` or `cd; command`.** Use absolute paths or `git -C E:/GitHub/AndroidAPS ...`.
+- **NEVER `cd && command` or `cd; command`.** Run `git` from the project root, which is your working
+  directory.
 - **Never start a command with** `awk`, `cut`, `tr`, `sort`, `uniq`, `diff`, `which`, `chmod`, `tar`,
   `pip`, `npm`. Use `sed`, `grep`, `find`, or wrap in `powershell.exe -Command "..."`.
 - Gradle is `./gradlew.bat`, always `--no-daemon`.
@@ -86,11 +89,11 @@ Rules that follow from this:
 - **Production code must never be left modified at the end of a turn**, except by the real move you
   were asked to make. If you notice you are about to end a turn with a mutation live, restore first
   and report second.
-- Restore with `cp` from your backup or `git -C E:/GitHub/AndroidAPS checkout -- <exact path>`, never
+- Restore with `cp` from your backup or `git checkout -- <exact path>`, never
   by reversing the `sed` - a reversed substitution can silently miss.
 - **Never `git stash`, `git checkout .`, or `git reset`.** The tree usually holds unreviewed work
   from other tasks, and a tree-wide command swallows it. Restore single files by explicit path.
-- At the end of all rounds, run `git -C E:/GitHub/AndroidAPS diff HEAD -- <file>` and confirm every
+- At the end of all rounds, run `git diff HEAD -- <file>` and confirm every
   mutation site is **absent from the diff**. Name them in the report. "I restored it" is not
   checkable from outside; a diff is.
 
@@ -234,7 +237,7 @@ unclaimed owners fall back to the raw name on purpose.
 - **Do not invent a name to make a test compile.** A guessed `CompositionLocal` or helper name fails
   at compile time here, but the same habit applied to a string name or a resource fails silently.
   Find the real definition, or leave the block out and say why.
-- After any bulk edit, **read the diff before trusting it**: `git -C E:/GitHub/AndroidAPS diff --stat`
+- After any bulk edit, **read the diff before trusting it**: `git diff --stat`
   and inspect anything you did not intend.
 
 ## Gates - all three, every time, before reporting
@@ -256,38 +259,35 @@ not a report.
 
 **1. Did the tests actually run?** A task that runs zero tests exits 0.
 
+The same commands work on Windows (Git Bash), macOS and Linux:
+
 ```
-powershell.exe -NoProfile -Command "$x = Select-String -Path '<module>/build/test-results/testAndroidHostTest/TEST-*.xml' -Pattern 'tests=\"(\d+)\".*failures=\"(\d+)\"' -AllMatches; $t=0;$f=0; foreach($m in $x.Matches){$t+=[int]$m.Groups[1].Value;$f+=[int]$m.Groups[2].Value}; Write-Output \"tests=$t failures=$f\""
+cat <module>/build/test-results/testAndroidHostTest/TEST-*.xml | grep -c "<testcase "
+cat <module>/build/test-results/testAndroidHostTest/TEST-*.xml | grep -c "<failure"
 ```
 
 Compare with the count *before* your change. If it dropped, you deleted coverage.
 
 **2. Would anything have caught a regression?** If a moved file has behaviour worth keeping, break it
-on purpose and confirm a test goes red. Restore it afterwards.
-
-```
-git -C E:/GitHub/AndroidAPS stash            # or edit the guard out by hand
-./gradlew.bat :<module>:testAndroidHostTest --no-daemon > /tmp/mut.log 2>&1
-git -C E:/GitHub/AndroidAPS stash pop
-```
+on purpose and confirm a test goes red. Use the one-command round from "Mutation must be atomic"
+above, never a break and a restore in separate steps.
 
 A behaviour with no test that fails when you break it is **untested**, whatever the coverage says.
 Say so in your report rather than implying it is covered.
 
 **3. Is the failure even yours?** Before debugging, check the baseline. This suite has a real
-`UncaughtExceptionsBeforeTest` flake, and blaming your diff for it wastes an hour.
+`UncaughtExceptionsBeforeTest` flake, and blaming your diff for it wastes an hour. Take the baseline
+before your first edit, not with `git stash` later:
 
 ```
-git -C E:/GitHub/AndroidAPS stash
 ./gradlew.bat :<module>:testAndroidHostTest --no-daemon > /tmp/base.log 2>&1
-git -C E:/GitHub/AndroidAPS stash pop
 ```
 
 **4. Read your own diff.** After any bulk edit, before believing it:
 
 ```
-git -C E:/GitHub/AndroidAPS diff --stat
-git -C E:/GitHub/AndroidAPS diff -- <a file you did not mean to touch>
+git diff --stat
+git diff -- <a file you did not mean to touch>
 ```
 
 Specifically grep for the substitution traps you may have caused:
@@ -297,8 +297,8 @@ grep -rn "app\.aaps\.core\.ui\.[A-Za-z]*Strings\." <module>/src/commonMain    # 
 grep -rn "suspend fun" <module>/src --include=*.kt | grep -E "override|@Composable"   # suspend added to an override or Composable
 ```
 
-**5. Does it still render?** The one that only a device shows. A missing string-owner registration
-compiles, passes tests, and renders **blank**. Ask the user before installing; if they agree:
+**5. Does it still render?** The one that only a device shows. A string that does not resolve at
+runtime compiles and passes tests. Ask the user before installing; if they agree:
 
 ```
 adb -s <device> install -r app/build/outputs/apk/full/debug/app-full-debug.apk
@@ -310,7 +310,7 @@ adb -s <device> shell "cat /sdcard/ui.xml" | grep -oE "[a-z]+_[a-z_]{6,}"    # r
 adb -s <device> logcat -d | grep -icE "FATAL EXCEPTION|Resources.NotFound"
 ```
 
-Raw snake_case keys appearing in the UI dump means a string owner is unregistered.
+Raw snake_case keys appearing in the UI dump mean a string does not resolve.
 
 **6. Did you change behaviour while moving?** Moving is not refactoring. If you wrapped something in
 `viewModelScope.launch`, an initial state became asynchronous, or a `Calendar` became `Instant` -
