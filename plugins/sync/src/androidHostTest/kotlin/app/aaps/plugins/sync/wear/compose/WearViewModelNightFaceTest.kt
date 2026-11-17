@@ -57,6 +57,7 @@ internal class WearViewModelNightFaceTest {
     @Mock private lateinit var aapsLogger: AAPSLogger
 
     private val savedNightWatchfaceFlow = MutableStateFlow<CwfData?>(null)
+    private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
 
     private lateinit var sut: WearViewModel
 
@@ -74,7 +75,7 @@ internal class WearViewModelNightFaceTest {
         MockitoAnnotations.openMocks(this)
         Dispatchers.setMain(UnconfinedTestDispatcher())
         whenever(wearPlugin.connectedDevice).thenReturn(MutableStateFlow("Galaxy Watch 5"))
-        whenever(wearPlugin.savedCustomWatchface).thenReturn(MutableStateFlow(null))
+        whenever(wearPlugin.savedCustomWatchface).thenReturn(savedCustomWatchfaceFlow)
         whenever(wearPlugin.savedNightWatchface).thenReturn(savedNightWatchfaceFlow)
         whenever(wearPlugin.watchFacePushStatus).thenReturn(MutableStateFlow(null))
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(MutableSharedFlow())
@@ -164,5 +165,34 @@ internal class WearViewModelNightFaceTest {
         sut.clearNightWatchface()
 
         verify(wearPlugin).clearNightWatchface(12345L)
+    }
+
+    @Test
+    fun `a chosen main face shows as loading until the watch reports it`() {
+        sut.loadWatchfaceFiles()
+        awaitImportList()
+        sut.selectWatchface(zip)
+        assertThat(sut.uiState.value.loading.day).isEqualTo("Night")
+        assertThat(sut.uiState.value.loading.night).isNull()
+
+        savedCustomWatchfaceFlow.value = zip.cwfData.copy()
+
+        assertThat(sut.uiState.value.loading.day).isNull()
+    }
+
+    @Test
+    fun `a chosen night face shows as loading until the watch reports it`() {
+        sut.loadNightWatchfaceFiles()
+        awaitImportList()
+        sut.selectWatchface(zip)
+        assertThat(sut.uiState.value.loading.night).isEqualTo("Night")
+        assertThat(sut.uiState.value.loading.day).isNull()
+
+        // A report of the main face does not end the night load
+        savedCustomWatchfaceFlow.value = zip.cwfData.copy()
+        assertThat(sut.uiState.value.loading.night).isEqualTo("Night")
+
+        savedNightWatchfaceFlow.value = zip.cwfData.copy()
+        assertThat(sut.uiState.value.loading.night).isNull()
     }
 }

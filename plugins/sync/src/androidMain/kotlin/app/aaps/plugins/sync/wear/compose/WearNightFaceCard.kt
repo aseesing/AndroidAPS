@@ -61,6 +61,9 @@ internal fun importListTitle(uiState: WearUiState, mainTitle: String): String =
  * The night face card: its name and preview, a button to load one from the same list as the main
  * face, and a button to remove it.
  *
+ * @param loading the name of a night face on its way to the watch: shown with a loading indicator
+ *   in place of the preview, see [WearFaceLoading]
+ *
  * @see NightWatchfaceCardPreview
  */
 @Composable
@@ -68,7 +71,8 @@ internal fun NightWatchfaceCard(
     state: WearNightFaceState,
     onLoadNightWatchface: () -> Unit,
     onRemoveNightWatchface: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    loading: String? = null
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -94,7 +98,8 @@ internal fun NightWatchfaceCard(
                 else null
             )
 
-            state.nightWatchfaceImage?.let { image ->
+            loading?.let { FaceLoadingIndicator(it) }
+            state.nightWatchfaceImage?.takeIf { loading == null }?.let { image ->
                 Spacer(modifier = Modifier.height(AapsSpacing.small))
                 // Live, as the main face: drawn by the watch's code, the static picture until then
                 CwfLivePreview(
