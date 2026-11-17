@@ -79,6 +79,7 @@ class DataHandlerMobileSceneTest : TestBaseWithProfile() {
 
     private val sleep = Scene(id = "sleep", name = "Sleep")
     private val wakeUp = Scene(id = "wake", name = "Wake up")
+    private val unchangedToWear = UnchangedToWearFilter()
 
     @BeforeEach
     fun prepare() {
@@ -90,7 +91,7 @@ class DataHandlerMobileSceneTest : TestBaseWithProfile() {
             loop, processedDeviceStatusData, receiverStatusStore, quickWizard, trendCalculator, dateUtil,
             constraintsChecker, activePlugin, commandQueue, fabricPrivacy, uiInteraction,
             persistenceLayer, importExportPrefs, decimalFormatter, pumpStatusProvider,
-            ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor
+            ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor, unchangedToWear
         )
         sut.automation = automation
         sut.scenes = scenes
@@ -201,5 +202,32 @@ class DataHandlerMobileSceneTest : TestBaseWithProfile() {
         val sent = captured { sut.sendActiveSceneState(active = false) }
         assertThat(sent).isEqualTo(EventData.ActiveSceneState(active = false))
         verify(activeSceneSync, never()).getActiveState()
+    }
+
+    /**
+     * The handler publishes every message, also the same state twice. Only the wear service leaves out
+     * what the watch already has (see [UnchangedToWearFilter]), so the AAPSClient broadcast, which
+     * listens to the same events, gets every message.
+     */
+    @Test
+    fun `every message is published, also an unchanged state`() = runTest {
+        val sent = mutableListOf<EventData>()
+        val job = collectMobileToWear { sent += it }
+        sut.sendActiveSceneState(active = false)
+        sut.sendActiveSceneState(active = false)
+        job.cancel()
+        assertThat(sent).hasSize(2)
+    }
+
+    /** A resend the watch asks for sends everything again, also what the watch should already have. */
+    @Test
+    fun `a resend request makes the filter send everything again`() = runTest {
+        val state = EventData.ActiveSceneState(active = false)
+        assertThat(unchangedToWear.messageToSend(state, 1_000L)).isNotNull()
+        assertThat(unchangedToWear.messageToSend(state, 2_000L)).isNull()
+
+        sut.handleResendRequest("test")
+
+        assertThat(unchangedToWear.messageToSend(state, 3_000L)).isNotNull()
     }
 }

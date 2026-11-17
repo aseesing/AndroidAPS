@@ -47,6 +47,7 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
     @Inject lateinit var wearPlugin: WearPlugin
     @Inject lateinit var activePlugin: ActivePlugin
     @Inject lateinit var rxBus: RxBus
+    @Inject lateinit var unchangedToWear: UnchangedToWearFilter
 
     inner class LocalBinder : Binder() {
 
@@ -70,12 +71,15 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
         super.onCreate()
         aapsLogger.debug(LTag.WEAR, "onCreate")
         handler.post { updateTranscriptionCapability() }
+        // Used only by the one collector below, so the filter sees the sends one after the other, in their
+        // real order. A state the watch already has is left out.
+        val rxSender = FilteredWearSender(unchangedToWear, { message, onFailure -> sendRxMessage(message, onFailure) }, System::currentTimeMillis)
         // scope is Main.immediate and onDestroy cancels it, so it is the right lifetime - but these two
         // observed on aapsSchedulers.io, and sendMessage talks to the Wear Data Layer. So the collector
         // lives on the service's scope and the send goes back to IO.
         rxBus.toFlow(EventMobileToWear::class)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
-                withContext(Dispatchers.IO) { sendMessage(rxPath, it.payload.serialize()) }
+                withContext(Dispatchers.IO) { rxSender.send(it.payload) }
             }
         rxBus.toFlow(EventMobileToWearWatchface::class)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
@@ -165,19 +169,24 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
         }
     }
 
-    private fun sendMessage(path: String, data: String?) {
+    /**
+     * The [WearMessageTransport] of the rx path: false when no watch is selected, [onFailure] when the
+     * send fails later.
+     */
+    private fun sendRxMessage(data: String, onFailure: () -> Unit): Boolean {
         // Size only, like the ByteArray overload: the full GraphData payload copied into a log string
         // on every resend was a cost of its own.
-        aapsLogger.debug(LTag.WEAR, "sendMessage: $path ${data?.length ?: 0}")
-        transcriptionNodeId?.also { nodeId ->
-            messageClient
-                .sendMessage(nodeId, path, data?.toByteArray() ?: byteArrayOf()).apply {
-                    addOnSuccessListener { }
-                    addOnFailureListener {
-                        aapsLogger.debug(LTag.WEAR, "sendMessage:  $path failure")
-                    }
+        aapsLogger.debug(LTag.WEAR, "sendMessage: $rxPath ${data.length}")
+        val nodeId = transcriptionNodeId ?: return false
+        messageClient
+            .sendMessage(nodeId, rxPath, data.toByteArray()).apply {
+                addOnSuccessListener { }
+                addOnFailureListener {
+                    aapsLogger.debug(LTag.WEAR, "sendMessage:  $rxPath failure")
+                    onFailure()
                 }
-        }
+            }
+        return true
     }
 
     private fun sendMessage(path: String, data: ByteArray) {
