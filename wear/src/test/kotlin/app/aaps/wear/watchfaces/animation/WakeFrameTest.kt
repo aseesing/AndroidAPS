@@ -131,11 +131,19 @@ class WakeFrameTest {
     private val t0 = 1_700_000_040_000L
     private val size = 200
 
-    private fun composed(face: Face, rain: RainField?, elapsed: Long): Bitmap {
+    /** The rain of [spec], drawn by the layer system as the wake draws it. */
+    private fun rainOf(spec: RainSpec) = LayerAnimator(WakeAnimationSpec(rain = spec).normalized().allLayers())
+
+    private fun LayerAnimator.drawRain(canvas: Canvas, elapsed: Long, size: Int) {
+        setTime(elapsed, 6000, 1f, t0)
+        drawSlot(canvas, LayerSlot.BACK, size / DESIGN_SIZE)
+    }
+
+    private fun composed(face: Face, rain: LayerAnimator?, elapsed: Long): Bitmap {
         val frame = createBitmap(face.size, face.size)
         WakeFrameLayers().draw(
             Canvas(frame), face.size, face.size, t0, 1, emptyList(), face.parts,
-            rain = { rain?.draw(it, elapsed, face.size / DESIGN_SIZE, 1f) }, heart = {}
+            rain = { rain?.drawRain(it, elapsed, face.size) }, heart = {}
         )
         return frame
     }
@@ -151,11 +159,11 @@ class WakeFrameTest {
     @Test
     fun theFrameIsBackgroundThenRainThenTheRest() {
         val face = Face(context, size)
-        val rain = RainField(RainSpec(count = 120, alpha = 255, thickness = 3f))
+        val rain = rainOf(RainSpec(count = 120, alpha = 255, thickness = 3f))
         val expected = createBitmap(size, size).apply { eraseColor(Color.BLACK) }
         val canvas = Canvas(expected)
         face.drawOnly(canvas, 0)
-        rain.draw(canvas, 1500, size / DESIGN_SIZE, 1f)
+        rain.drawRain(canvas, 1500, size)
         face.drawOnly(canvas, 1, 2, 3, 4, 5)
 
         val frame = composed(face, rain, 1500)
@@ -168,7 +176,7 @@ class WakeFrameTest {
     fun theDataViewsLookTheSameWithAndWithoutRain() {
         val face = Face(context, size)
         val plain = composed(face, null, 0)
-        val rainy = composed(face, RainField(RainSpec(count = 300, alpha = 255, thickness = 4f)), 2000)
+        val rainy = composed(face, rainOf(RainSpec(count = 300, alpha = 255, thickness = 4f)), 2000)
         // inside the opaque blue data box, away from the views above it, every pixel is unchanged
         val s = size / 120f
         var changedOutside = 0
@@ -358,7 +366,7 @@ class WakeFrameTest {
             assertThat(boxAt(1700)).isEqualTo(Color.DKGRAY)
             // After the wake the face is drawn the normal way, with the box
             assertThat(boxAt(3100)).isNull()
-            assertThat(hiddenAt(600)).isEmpty()
+            assertThat(isRunning).isFalse()
         }
         // At the limit it still blinks
         level = 20.0
@@ -446,8 +454,12 @@ class WakeFrameTest {
     @Test
     fun theGlintLightsOnlyItsShapes() {
         val bitmap = createBitmap(200, 200).apply { eraseColor(Color.BLACK) }
-        val glint = GlintSpec(rings = listOf(DesignRing(200f, 200f, 150f, 190f)), angle = 0f, width = 400f, alpha = 255)
-        GlintBand(glint).draw(Canvas(bitmap), 0.5f, 0.5f)
+        val glint = GlintSpec(rings = listOf(DesignRing(200f, 200f, 150f, 190f)), angle = 0f, width = 400f, alpha = 255, durationMs = 900)
+        // Halfway through: the middle of the band on the middle of the face
+        LayerAnimator(WakeAnimationSpec(glint = glint).normalized().allLayers()).apply {
+            setTime(450, 6000, 1f, t0)
+            drawSlot(Canvas(bitmap), LayerSlot.FRONT, 0.5f)
+        }
         // On the ring at the top, not in the middle, not outside it in the corner
         assertThat(Color.red(bitmap.getPixel(100, 15))).isGreaterThan(150)
         assertThat(bitmap.getPixel(100, 100)).isEqualTo(Color.BLACK)
@@ -460,13 +472,10 @@ class WakeFrameTest {
         assertThat(blink.views).containsExactly("a", "b").inOrder()
         assertThat(blink.periodMs).isEqualTo(BlinkSpec.MIN_PERIOD_MS)
         assertThat(BlinkSpec(listOf("a"), "v", 20.0, periodMs = 60_000).normalized().periodMs).isEqualTo(BlinkSpec.MAX_PERIOD_MS)
-        assertThat(blink.isLow(null)).isFalse()
-        assertThat(blink.isLow(20.0)).isTrue()
-        assertThat(blink.isLow(20.5)).isFalse()
         // A blink with no view or no value is dropped, and a blink alone is an animation
         val spec = WakeAnimationSpec(blink = listOf(BlinkSpec(emptyList(), "v", 20.0), BlinkSpec(listOf("a"), "", 20.0), BlinkSpec(listOf("b"), "v", 20.0))).normalized()
         assertThat(spec.blink).hasSize(1)
         assertThat(spec.hasContent).isTrue()
-        assertThat(spec.blinkViews).containsExactly("b")
+        assertThat(LayerAnimator(spec.allLayers()).viewKeys).containsExactly("b")
     }
 }

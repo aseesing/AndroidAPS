@@ -118,7 +118,7 @@ internal fun NightWatchfaceCardPreview() {
     MaterialTheme {
         Column(verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)) {
             NightWatchfaceCard(
-                state = WearNightFaceState(hasNightWatchface = true, nightWatchfaceName = "Cyberpunk"),
+                state = WearNightFaceState(hasNightWatchface = true, nightWatchfaceName = "Night"),
                 onLoadNightWatchface = {},
                 onRemoveNightWatchface = {}
             )

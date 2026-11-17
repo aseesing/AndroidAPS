@@ -63,7 +63,7 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
     @Mock private lateinit var batchExecutor: BatchExecutor
     @Mock private lateinit var wizardExecutor: WizardExecutor
 
-    private val nightFace = CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "Cyberpunk"), mutableMapOf())
+    private val nightFace = CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "Night"), mutableMapOf())
     private val mainFace = CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "AAPS V2"), mutableMapOf())
 
     @BeforeEach
@@ -91,7 +91,7 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
         val event = answerTo(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(nightFace, night = true)), EventWearNightWatchface::class)
 
         assertThat(event.customWatchfaceData).isEqualTo(nightFace)
-        verify(preferences).put(WearNightFaceKey.NightWatchfaceName, "Cyberpunk")
+        verify(preferences).put(WearNightFaceKey.NightWatchfaceName, "Night")
         verify(preferences, never()).put(eq(StringNonKey.WearCwfWatchfaceName), any<String>())
     }
 

@@ -12,6 +12,9 @@ import kotlin.math.ceil
  * The wake-up animation of a Custom watch face design: falling rain or glitch bands, and a beating
  * heart, for a few seconds after the wrist is raised.
  *
+ * The simple effects below are only settings: [allLayers] turns them into layers of the one layer
+ * system ([AnimLayerSpec]), and [LayerAnimator] draws them, together with the design's own [layers].
+ *
  * Plain values only. `CustomWatchface` reads them from the optional `animation` key of the design
  * json (it is the only class that may read that json) and hands them over. All sizes and positions
  * are in the 400 x 400 design space, like every other view of a design.
@@ -25,6 +28,7 @@ import kotlin.math.ceil
  * @param slide views that slide to the end of their scale and back to their value
  * @param trace a view that draws itself in from left to right
  * @param glint a light that slides once over the shiny parts
+ * @param layers the design's own layers, drawn after the simple effects of the same slot
  */
 data class WakeAnimationSpec(
     val durationMs: Long = 6000,
@@ -38,7 +42,8 @@ data class WakeAnimationSpec(
     val wobble: List<WobbleSpec> = emptyList(),
     val slide: List<SlideSpec> = emptyList(),
     val trace: TraceSpec? = null,
-    val glint: GlintSpec? = null
+    val glint: GlintSpec? = null,
+    val layers: List<AnimLayerSpec> = emptyList()
 ) {
 
     /** Values cut to safe limits, so a mistake in a design cannot cost a lot of battery. */
@@ -54,11 +59,12 @@ data class WakeAnimationSpec(
         wobble = wobble.map { it.normalized() }.filter { it.views.isNotEmpty() },
         slide = slide.map { it.normalized() }.filter { it.views.isNotEmpty() },
         trace = trace?.normalized()?.takeIf { it.view.isNotEmpty() },
-        glint = glint?.normalized()?.takeIf { it.hasShape }
+        glint = glint?.normalized()?.takeIf { it.hasShape },
+        layers = layers.mapNotNull { it.normalized() }.take(AnimLayerSpec.MAX_LAYERS)
     )
 
-    /** The same values without the image object, which is made new each time the design is read. */
-    fun withoutImage(): WakeAnimationSpec = copy(pulse = pulse?.copy(drawable = null))
+    /** The same values without the image objects, which are made new each time the design is read. */
+    fun withoutImage(): WakeAnimationSpec = copy(pulse = pulse?.copy(drawable = null), layers = layers.map { it.withoutImage() })
 
     /**
      * How strong the animation is [elapsedMs] after the start of a wake that plays [lengthMs]: rises
@@ -73,16 +79,7 @@ data class WakeAnimationSpec(
 
     /** True when there is something to draw at all. */
     val hasContent: Boolean
-        get() = rain != null || pulse != null || glitch != null || blink.isNotEmpty() || sweep.isNotEmpty() || wobble.isNotEmpty() || slide.isNotEmpty() || trace != null || glint != null
-
-    /** The keys of all views that may blink. */
-    val blinkViews: Set<String> get() = blink.flatMapTo(LinkedHashSet()) { it.views }
-
-    /** The keys of all hands that swing or shake. */
-    val movingViews: Set<String> get() = (sweep.flatMap { it.views } + wobble.flatMap { it.views } + slide.flatMap { it.views }).toCollection(LinkedHashSet())
-
-    /** The keys of all views that are drawn live while the animation plays, instead of in the kept picture. */
-    val liveViews: Set<String> get() = blinkViews + movingViews + listOfNotNull(trace?.view)
+        get() = rain != null || pulse != null || glitch != null || blink.isNotEmpty() || sweep.isNotEmpty() || wobble.isNotEmpty() || slide.isNotEmpty() || trace != null || glint != null || layers.isNotEmpty()
 
     /** Time between two frames while the animation plays. */
     val frameDelayMs: Long get() = (1000L / fps).coerceAtLeast(1)
@@ -128,12 +125,6 @@ data class BlinkSpec(
 ) {
 
     fun normalized(): BlinkSpec = copy(views = views.filter { it.isNotEmpty() }.distinct(), periodMs = periodMs.coerceIn(MIN_PERIOD_MS, MAX_PERIOD_MS))
-
-    /** True when the views blink for [value]. */
-    fun isLow(value: Double?): Boolean = value != null && value <= atOrBelow
-
-    /** True when the views are hidden [elapsedMs] after the start of a wake. They start shown. */
-    fun isOff(elapsedMs: Long): Boolean = elapsedMs.coerceAtLeast(0) % periodMs >= periodMs / 2
 
     companion object {
 

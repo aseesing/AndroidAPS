@@ -100,14 +100,15 @@ class KeptLayer(private val clearColor: Int, private val newBitmap: (Int, Int) -
  * A wake-up animation frame, put together from kept pictures and live drawing:
  *
  * 1. the background (kept, opaque),
- * 2. the rain or the glitch bands (live) - above the background, below every data view, so the text stays readable,
+ * 2. the back layers, like the rain or the glitch bands (live) - above the background, below every data
+ *    view, so the text stays readable,
  * 3. the data below the clock text (kept, transparent where nothing paints), without the live views,
- * 4. the live views: those that may blink (left out in the off half of a blink), the hands and marks that
+ * 4. the live views and the shapes of the views slot: the views that blink, the hands and marks that
  *    move and the view that draws itself in. They are drawn above all other data below the clock text,
  *    also those that belong above it,
  * 5. the clock text (live),
  * 6. the rest of the data and the hour and minute hands (kept, transparent), without the live views,
- * 7. the heart and the light (live),
+ * 7. the front layers, like the heart and the light (live),
  * 8. the second hand (live).
  *
  * Without rain and heart this gives the same picture as the face drawn in one go, the same way
@@ -143,7 +144,7 @@ class WakeFrameLayers(newBitmap: (Int, Int) -> Bitmap = { width, height -> creat
         canvas.drawBitmap(background.get(width, height, minute, parts::background), 0f, 0f, null)
         rain(canvas)
         canvas.drawBitmap(data.get(width, height, minute to leaveOut) { parts.data(it, leaveOut) }, 0f, 0f, null)
-        if (leaveOut.isNotEmpty()) live(canvas)
+        live(canvas)
         parts.clockText(canvas)
         val topState = State(width, height, nowMs / LayeredFrameCache.TOP_PERIOD_MS, content, complications)
         canvas.drawBitmap(top.get(width, height, topState to leaveOut) { parts.top(it, leaveOut) }, 0f, 0f, null)

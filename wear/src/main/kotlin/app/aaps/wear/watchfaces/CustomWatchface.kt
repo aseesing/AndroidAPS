@@ -70,21 +70,11 @@ import app.aaps.wear.utils.toVisibility
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.PROVISIONAL_RING_WIDTH
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.TEMPLE_RESOLUTION
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.complicationSlots
-import app.aaps.wear.watchfaces.animation.BlinkSpec
-import app.aaps.wear.watchfaces.animation.DesignRect
-import app.aaps.wear.watchfaces.animation.DesignRing
-import app.aaps.wear.watchfaces.animation.GlintSpec
-import app.aaps.wear.watchfaces.animation.GlitchSpec
-import app.aaps.wear.watchfaces.animation.PulseSpec
-import app.aaps.wear.watchfaces.animation.RainSpec
-import app.aaps.wear.watchfaces.animation.SlideSpec
-import app.aaps.wear.watchfaces.animation.SweepSpec
-import app.aaps.wear.watchfaces.animation.TraceSpec
+import app.aaps.wear.watchfaces.animation.WakeAnimationJson
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeFrameParts
 import app.aaps.wear.watchfaces.animation.WakeLength
-import app.aaps.wear.watchfaces.animation.WobbleSpec
 import app.aaps.wear.watchfaces.colour.ColourLooks
 import app.aaps.wear.watchfaces.daynight.DayNightChoice
 import app.aaps.wear.watchfaces.daynight.DayNightClock
@@ -894,6 +884,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             canvas.withRotation(backgroundView.rotation, backgroundView.pivotX, backgroundView.pivotY) {
                 backgroundView.draw(this)
             }
+        if (!renderSkipBackground) drawRestLayers(canvas, canvasWidth, renderNow()) // PERSONAL PATCH: wake layers that stay on the face
         if (!renderSkipBackground) slotPainter?.invoke(canvas) // PERSONAL PATCH: the phone preview's slots, where the system draws them on the watch
         // super.onDraw() has just laid out mainLayout, so the placeholders hold this frame's geometry
         // and the slots' declared bounds can follow it. Not in complicationRender(): that runs per
@@ -947,6 +938,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             layer.withRotation(backgroundView.rotation, backgroundView.pivotX, backgroundView.pivotY) {
                 backgroundView.draw(this)
             }
+            drawRestLayers(layer, width, now) // PERSONAL PATCH: wake layers that stay on the face
             complications.syncGeometry(::visibleSlotBounds)
             drawComplicationSlots(layer, zonedDateTime)
             drawLayer(layer, RenderLayer.DATA_BASE)
@@ -1074,97 +1066,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         if (tapType == TapType.UP && wake.wakeOnTap()) invalidate()
     }
 
-    /**
-     * Reads the optional `animation` key of the design [json]. Null when it is absent; missing keys
-     * get the defaults of [WakeAnimationSpec], [RainSpec], [PulseSpec] and [GlitchSpec]. Never throws: a broken
-     * animation must not cost the design. [image] finds a picture of the zip by its key.
-     */
-    internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = runCatching {
-        val animation = json.optJSONObject(WakeAnimationSpec.JSON_KEY) ?: return@runCatching null
-        val spec = WakeAnimationSpec()
-        val rain = RainSpec()
-        val pulse = PulseSpec()
-        val glitch = GlitchSpec()
-        fun JSONObject.float(key: String, default: Float) = optDouble(key, default.toDouble()).toFloat()
-        fun JSONObject.objects(key: String) = optJSONArray(key)?.let { list -> (0 until list.length()).mapNotNull { list.optJSONObject(it) } } ?: emptyList()
-        fun JSONObject.strings(key: String) = optJSONArray(key)?.let { list -> (0 until list.length()).map { list.optString(it) } } ?: emptyList()
-        fun JSONObject.rect(default: DesignRect) =
-            DesignRect(float("left", default.left), float("top", default.top), float("width", default.width), float("height", default.height))
-        WakeAnimationSpec(
-            durationMs = animation.optLong("durationMs", spec.durationMs),
-            fps = animation.optInt("fps", spec.fps),
-            fadeMs = animation.optLong("fadeMs", spec.fadeMs),
-            rain = animation.optJSONObject("rain")?.let {
-                RainSpec(
-                    count = it.optInt("count", rain.count), seed = it.optLong("seed", rain.seed), speed = it.float("speed", rain.speed),
-                    angle = it.float("angle", rain.angle), length = it.float("length", rain.length),
-                    lengthVariation = it.float("lengthVariation", rain.lengthVariation), thickness = it.float("thickness", rain.thickness),
-                    color = getColor(it.optString("color"), rain.color), alpha = it.optInt("alpha", rain.alpha),
-                    region = it.optJSONObject("region")?.rect(rain.region) ?: rain.region
-                )
-            },
-            pulse = animation.optJSONObject("pulse")?.let {
-                val key = it.optString("image")
-                PulseSpec(
-                    image = key, drawable = key.takeIf { k -> k.isNotEmpty() }?.let(image), rect = it.rect(pulse.rect),
-                    amplitude = it.float("amplitude", pulse.amplitude), secondBeat = it.float("secondBeat", pulse.secondBeat),
-                    glowColor = getColor(it.optString("glowColor"), pulse.glowColor), glowAlpha = it.optInt("glowAlpha", pulse.glowAlpha),
-                    glowRadius = it.float("glowRadius", pulse.glowRadius), fallbackBpm = it.optInt("fallbackBpm", pulse.fallbackBpm)
-                )
-            },
-            glitch = animation.optJSONObject("glitch")?.let {
-                GlitchSpec(
-                    periodMs = it.optLong("periodMs", glitch.periodMs), chance = it.float("chance", glitch.chance),
-                    burstMs = it.optLong("burstMs", glitch.burstMs), bands = it.optInt("bands", glitch.bands), seed = it.optLong("seed", glitch.seed),
-                    minHeight = it.float("minHeight", glitch.minHeight), maxHeight = it.float("maxHeight", glitch.maxHeight),
-                    minWidth = it.float("minWidth", glitch.minWidth), maxWidth = it.float("maxWidth", glitch.maxWidth), jump = it.float("jump", glitch.jump),
-                    color1 = getColor(it.optString("color1"), glitch.color1), color2 = getColor(it.optString("color2"), glitch.color2),
-                    alpha = it.optInt("alpha", glitch.alpha), region = it.optJSONObject("region")?.rect(glitch.region) ?: glitch.region
-                )
-            },
-            blink = animation.objects("blink").map {
-                BlinkSpec(views = it.strings("views"), valueKey = it.optString("valueKey"), atOrBelow = it.optDouble("atOrBelow", 0.0), periodMs = it.optLong("periodMs", 1000))
-            },
-            sweep = animation.objects("sweep").map {
-                val sweep = SweepSpec(emptyList(), 0f, 0f)
-                SweepSpec(
-                    views = it.strings("views"), emptyAngle = it.float("emptyAngle", 0f), fullAngle = it.float("fullAngle", 0f),
-                    delayMs = it.optLong("delayMs", sweep.delayMs), upMs = it.optLong("upMs", sweep.upMs), settleMs = it.optLong("settleMs", sweep.settleMs)
-                )
-            },
-            slide = animation.objects("slide").map {
-                val slide = SlideSpec(emptyList(), 0f)
-                SlideSpec(
-                    views = it.strings("views"), fullDx = it.float("fullDx", 0f),
-                    delayMs = it.optLong("delayMs", slide.delayMs), upMs = it.optLong("upMs", slide.upMs), settleMs = it.optLong("settleMs", slide.settleMs)
-                )
-            },
-            wobble = animation.objects("wobble").map {
-                val wobble = WobbleSpec(emptyList())
-                WobbleSpec(
-                    views = it.strings("views"), delayMs = it.optLong("delayMs", wobble.delayMs), amplitude = it.float("amplitude", wobble.amplitude),
-                    hz = it.float("hz", wobble.hz), decayMs = it.optLong("decayMs", wobble.decayMs)
-                )
-            },
-            trace = animation.optJSONObject("trace")?.let {
-                val trace = TraceSpec(rect = DesignRect.FULL)
-                TraceSpec(
-                    view = it.optString("view", trace.view), rect = it.optJSONObject("rect")?.rect(trace.rect) ?: trace.rect,
-                    delayMs = it.optLong("delayMs", trace.delayMs), durationMs = it.optLong("durationMs", trace.durationMs),
-                    color = getColor(it.optString("color"), trace.color), alpha = it.optInt("alpha", trace.alpha), width = it.float("width", trace.width)
-                )
-            },
-            glint = animation.optJSONObject("glint")?.let {
-                val glint = GlintSpec()
-                GlintSpec(
-                    rings = it.objects("rings").map { r -> DesignRing(r.float("cx", 200f), r.float("cy", 200f), r.float("inner", 0f), r.float("outer", 0f)) },
-                    boxes = it.objects("boxes").map { b -> b.rect(DesignRect(0f, 0f, 0f, 0f)) }, cornerRadius = it.float("cornerRadius", glint.cornerRadius),
-                    delayMs = it.optLong("delayMs", glint.delayMs), durationMs = it.optLong("durationMs", glint.durationMs), angle = it.float("angle", glint.angle),
-                    width = it.float("width", glint.width), color = getColor(it.optString("color"), glint.color), alpha = it.optInt("alpha", glint.alpha)
-                )
-            }
-        )
-    }.getOrNull()
+    /** Reads the optional `animation` key of the design [json]; [image] finds a picture of the zip by its key. See [WakeAnimationJson]. */
+    internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = WakeAnimationJson(::getColor, image).read(json) // PERSONAL PATCH
 
     override fun onTimeChanged(oldTime: app.aaps.wear.watchfaces.utils.WatchFaceTime, newTime: app.aaps.wear.watchfaces.utils.WatchFaceTime) {
         super.onTimeChanged(oldTime, newTime)
@@ -2643,5 +2546,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         if (simpleUi.isEnabled(currentWatchMode)) return null
         val style = complications.stateFor(slotId)?.style ?: return null
         return Pair(ComplicationRender.At(Rect(view.left, view.top, view.right, view.bottom), view.rotation), style)
+    }
+
+    // PERSONAL PATCH: the layers of the wake-up animation that stay on the face while no wake plays
+    // (`rest` in the design), drawn right after the background of a normal frame. Not on the always-on
+    // screen and not in the simple face.
+    /** Draws the resting wake layers onto [canvas] of [width] pixels, for the frame time [nowMs]. */
+    private fun drawRestLayers(canvas: Canvas, width: Int, nowMs: Long) {
+        if (!isAmbient && !simpleUi.isEnabled(currentWatchMode)) wake.drawRest(canvas, width, nowMs)
     }
 }

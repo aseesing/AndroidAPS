@@ -41,14 +41,16 @@ as before.
 | `local/watch-app-update` | The phone updates the watch app over the Wear OS connection, no adb on the watch: build the phone with `-PembedWearApk=<signed watch APK>`. Made upstream-ready on `origin/master`, without our other changes, for a pull request |
 | `local/wear-graph-top-labels` | The time labels of the log graph go on its top edge when the round screen cuts its bottom edge; the graph of the Cyberpunk and Wilds designs sits higher |
 | `local/wear-glucose-line` | A design can draw the glucose of the graph as a line, with its own width and colour (`GlucoseLine`); the Cyberpunk and Wilds designs do |
+| `local/wear-anim-layers` | One generic wake-up animation engine: a design's `animation.layers` are pictures, shapes or views whose properties are safe math formulas (copies, strips, points, masks, still layers after the wake); the old effects (rain, glitch, pulse, blink, sweep, slide, wobble, trace, glint) are short forms of it. All designs and their generators moved out to [aaps-watchfaces](https://github.com/aseesing/aaps-watchfaces) |
 
 `master` of this fork is a plain copy of upstream `master`.
 
 ## Tests
 
-All changes have JVM / Robolectric tests in the `wear`, `plugins/sync` and `ui` modules. The designs are
-built by tests (`CwfTechDesignTest`, `CwfGrandDayDesignTest`, ...) that render the real watch face.
-These tests check, for example, that no text is cut off, that all values in the table line up, that
+All changes have JVM / Robolectric tests in the `wear`, `plugins/sync` and `ui` modules. The designs
+live in their own repository, `aaps-watchfaces`, beside AAPS. It includes AAPS as a composite build,
+and its tests (`CwfTechDesignTest`, `CwfGrandDayDesignTest`, ...) build the design zips with the
+real watch face code (`:wear:cwfrender`). These tests check, for example, that no text is cut off, that all values in the table line up, that
 the rain does not make the table hard to read, and that the glucose hand points at the value.
 
 ## Updating to a new upstream version
