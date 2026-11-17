@@ -68,6 +68,7 @@ class WearApp : Application(), MetroMemberInjector {
 
     override fun onCreate() {
         super.onCreate()
+        if (StartAfterUnlock(this).postpones(::onCreate)) return // PERSONAL PATCH: started before the unlock, the settings are not readable yet; runs again after it
         injectMetroMembers(this)
         exceptionHandlerWear.register()
         aapsLogger.debug(LTag.WEAR, "onCreate")
