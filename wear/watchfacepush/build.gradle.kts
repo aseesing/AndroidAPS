@@ -103,6 +103,15 @@ android {
             dimension = "face"
             applicationIdSuffix = ".watchfacepush.cwf"
         }
+        // Base face for user-imported designs (phase 1 of the WFF import feature). Unlike wfs/cwf
+        // this one is not embedded in the wear app as a selectable face: it is a template whose
+        // `res/raw/watchface.xml` and image slots the phone swaps for a shared design, then re-signs
+        // and pushes. Images are fixed slots (bg0..bg3): a new resource cannot be added to a built
+        // APK, only the content of an existing one can be replaced.
+        create("tpl") {
+            dimension = "face"
+            applicationIdSuffix = ".watchfacepush.tpl"
+        }
     }
     buildFeatures {
         resValues = true
