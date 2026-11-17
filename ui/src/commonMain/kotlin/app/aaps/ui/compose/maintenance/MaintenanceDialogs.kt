@@ -82,6 +82,9 @@ fun MaintenanceDialogs(
             onDismiss = onMaintenanceSheetDismiss,
             onLogSettingsClick = { showLogSettings = true },
             onSendLogsClick = { showConfirmSendLogs = true },
+            showSaveLogs = maintenanceViewModel.canSaveLogsToDownloads,
+            // No confirmation: it only adds a file, it sends nothing anywhere
+            onSaveLogsClick = { maintenanceViewModel.saveLogsToDownloads() },
             onDeleteLogsClick = { maintenanceViewModel.deleteLogs() },
             onDirectoryClick = {
                 maintenanceViewModel.logSelectDirectory()
