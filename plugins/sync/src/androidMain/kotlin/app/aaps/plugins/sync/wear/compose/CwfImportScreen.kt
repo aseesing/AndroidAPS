@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
@@ -28,11 +29,19 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
+import app.aaps.core.ui.CoreUiStrings
 import app.aaps.core.ui.compose.AapsSpacing
+import app.aaps.core.ui.compose.dialogs.OkCancelDialog
+import app.aaps.core.ui.compose.rowAction
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
 
@@ -60,6 +69,7 @@ internal fun CwfImportContent(
     items: List<CwfImportItemState>,
     importing: Boolean,
     onItemClick: (CwfImportItemState) -> Unit,
+    onItemDelete: (CwfImportItemState) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -72,7 +82,7 @@ internal fun CwfImportContent(
             item(key = "importing") { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
         }
         items(items, key = { it.fileName }) { item ->
-            CwfImportItemCard(item = item, onClick = { onItemClick(item) })
+            CwfImportItemCard(item = item, onClick = { onItemClick(item) }, onDelete = { onItemDelete(item) })
         }
     }
 }
@@ -81,8 +91,22 @@ internal fun CwfImportContent(
 private fun CwfImportItemCard(
     item: CwfImportItemState,
     onClick: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // The delete button asks first: the zip is gone from AAPS/export then
+    var askDelete by remember { mutableStateOf(false) }
+    if (askDelete) {
+        OkCancelDialog(
+            title = stringResource(CoreUiStrings.delete),
+            message = stringResource(SyncStrings.wear_design_delete_question, item.cwfFile.cwfData.metadata[CwfMetadataKey.CWF_NAME] ?: ""),
+            onConfirm = {
+                askDelete = false
+                onDelete()
+            },
+            onDismiss = { askDelete = false }
+        )
+    }
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -150,6 +174,9 @@ private fun CwfImportItemCard(
                         )
                     }
                 }
+            }
+            IconButton(onClick = { askDelete = true }) {
+                Icon(imageVector = Icons.Default.Delete, contentDescription = rowAction(CoreUiStrings.delete, item.name))
             }
         }
     }

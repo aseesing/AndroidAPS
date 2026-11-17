@@ -9,6 +9,8 @@ import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.rx.weardata.CwfFile
+import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import dev.zacsweers.metro.Inject
@@ -34,6 +36,9 @@ internal interface DesignFolder {
 
     /** Writes [bytes] as [fileName] and replaces a file with that name. Returns false when it could not write. */
     fun write(fileName: String, bytes: ByteArray): Boolean
+
+    /** Deletes the file [fileName]. Returns false when there is no such file or it could not be deleted. */
+    fun delete(fileName: String): Boolean
 }
 
 /** Why a picked file was not imported. */
@@ -59,6 +64,8 @@ internal data class DesignImportResult(val imported: List<String>, val refused: 
  * [MAX_ZIP_BYTES] are read, the zip may unpack to at most [MAX_UNZIPPED_BYTES], and it must load as
  * a Custom watch face. The file name is only used inside AAPS/export, see [SafFolderFiles], and a
  * failed write never breaks the old design, see [SafeReplaceFolder].
+ *
+ * It also deletes a design from AAPS/export again. Before, that needed a file manager.
  *
  * @param fileListProvider gives the AAPS/export folder
  */
@@ -128,6 +135,26 @@ class CwfDesignImport(
             !folder.write(fileName, bytes)             -> DesignRefusal.NOT_WRITTEN
             else                                       -> null
         }
+    }
+
+    /**
+     * Deletes the zip of [cwfFile] from AAPS/export. The watch keeps the face it shows now.
+     *
+     * @return the message for the wearer: deleted, or could not be deleted
+     */
+    suspend fun deleteFrom(cwfFile: CwfFile): String = withContext(Dispatchers.IO) {
+        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext rh.gs(SyncStrings.wear_design_import_no_folder)
+        delete(cwfFile, SafeReplaceFolder(SafFolderFiles(dir, context.contentResolver, aapsLogger)))
+    }
+
+    internal fun delete(cwfFile: CwfFile, folder: DesignFolder): String {
+        // The file name of the zip, without ".zip": AAPS sets it from the real file name when it
+        // loads the list, so the zip itself cannot name another file here
+        val fileName = cwfFile.cwfData.metadata[CwfMetadataKey.CWF_FILENAME]?.let { zipName(it) }
+        val deleted = fileName != null && folder.delete(fileName)
+        aapsLogger.debug(LTag.WEAR, "Design delete: $fileName deleted $deleted")
+        val shownName = fileName ?: cwfFile.cwfData.metadata[CwfMetadataKey.CWF_NAME] ?: ""
+        return rh.gs(if (deleted) SyncStrings.wear_design_delete_done else SyncStrings.wear_design_delete_failed, shownName)
     }
 
     /** The zips at [uris], named as the place they come from (Drive, Downloads, ...) names them. */
@@ -273,6 +300,8 @@ internal class SafeReplaceFolder(private val files: FolderFiles) : DesignFolder 
         if (hadOld) files.delete(backup)
         return true
     }
+
+    override fun delete(fileName: String): Boolean = files.delete(fileName)
 }
 
 /**
