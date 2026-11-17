@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.wear.phonepreview
 
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
@@ -29,6 +30,9 @@ object DesignAccess {
 
     /** The parts of [face] that a wake frame draws: the real views, with a clock of your own. */
     fun wakeParts(face: CustomWatchface): WakeFrameParts = face.wakeParts
+
+    /** The moon of a moon layer of [face] at [epochMs], in a square of [size] pixels, as the watch draws it. */
+    fun wakeMoon(face: CustomWatchface, epochMs: Long, size: Int): Bitmap? = face.wakeMoon(epochMs, size)
 
     /** How many colour choices the watch shows for [design]. */
     fun colourChoiceCount(design: JSONObject?): Int = ColourLooks.rows(design).size

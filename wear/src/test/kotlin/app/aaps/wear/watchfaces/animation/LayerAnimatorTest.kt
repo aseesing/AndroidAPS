@@ -472,6 +472,111 @@ class LayerAnimatorTest {
         assertThat(Color.alpha(waved.getPixel(135, 135))).isEqualTo(255)
     }
 
+    // ---- the moon ----
+
+    /** A moon layer in [rect]; the moon of the tests is a plain red square. */
+    private fun moonLayer(rect: DesignRect = DesignRect(100f, 120f, 60f, 40f), restSeconds: Float? = null, maxScale: Float = 1f) =
+        AnimLayerSpec(source = LayerSource.Moon(rect), clip = noRound, restSeconds = restSeconds, maxScale = maxScale)
+
+    /** Gives a red square of the asked size and keeps what was asked, as (clock time, size). */
+    private class TestMoon {
+
+        val asked = ArrayList<Pair<Long, Int>>()
+        val made = ArrayList<Bitmap>()
+
+        fun picture(epochMs: Long, size: Int): Bitmap {
+            asked += epochMs to size
+            return createBitmap(size, size).apply { eraseColor(Color.RED) }.also { made += it }
+        }
+    }
+
+    @Test
+    fun aMoonLayerDrawsTheMoonInTheMiddleOfItsRect() {
+        val moon = TestMoon()
+        val now = 1_700_000_000_000L
+        val bitmap = draw(LayerAnimator(listOf(moonLayer()), utc, moon::picture), nowMs = now)
+        // The square of the shorter side (40), in the middle of the 60 wide rect
+        assertThat(bounds(bitmap)).isEqualTo(Rect(110, 120, 150, 160))
+        assertThat(pixel(bitmap, 130, 140)).isEqualTo(Color.RED)
+        // The moon of the frame's clock time, as big as it is drawn
+        assertThat(moon.asked).containsExactly(now to 40)
+        // Moved by x and y, like a picture
+        val moved = draw(LayerAnimator(listOf(moonLayer().copy(props = mapOf(LayerProp.X to "30", LayerProp.Y to "-20"))), utc, moon::picture), nowMs = now)
+        assertThat(bounds(moved)).isEqualTo(Rect(140, 100, 180, 140))
+    }
+
+    @Test
+    fun aMoonLayerIsDrawnInItsPlaceAmongTheLayers() {
+        val moon = TestMoon()
+        val below = rect(x = "100", y = "130", width = "60", height = "20", colors = listOf(Color.BLUE))
+        val above = rect(x = "100", y = "150", width = "60", height = "20", colors = listOf(Color.GREEN))
+        val bitmap = draw(LayerAnimator(listOf(below, moonLayer(), above), utc, moon::picture))
+        assertThat(pixel(bitmap, 105, 140)).isEqualTo(Color.BLUE)  // only the layer below
+        assertThat(pixel(bitmap, 130, 140)).isEqualTo(Color.RED)   // the moon over the layer below
+        assertThat(pixel(bitmap, 130, 155)).isEqualTo(Color.GREEN) // the layer above over the moon
+        assertThat(pixel(bitmap, 130, 125)).isEqualTo(Color.RED)
+    }
+
+    @Test
+    fun withoutAMoonPictureNothingIsDrawnAndTheOtherLayersStay() {
+        val other = rect(x = "10", y = "10")
+        // No moon at all (the default), none to be had, and one that fails
+        for (animator in listOf(
+            LayerAnimator(listOf(moonLayer(), other), utc),
+            LayerAnimator(listOf(moonLayer(), other), utc) { _, _ -> null },
+            LayerAnimator(listOf(moonLayer(), other), utc) { _, _ -> error("no moon") }
+        )) {
+            val bitmap = draw(animator)
+            assertThat(pixel(bitmap, 15, 15)).isEqualTo(Color.RED)
+            assertThat(countDrawn(bitmap)).isEqualTo(100)
+            // And again, while it is not asked again
+            assertThat(countDrawn(draw(animator))).isEqualTo(100)
+        }
+        // A picture freed by its owner is not drawn either
+        val freed = LayerAnimator(listOf(moonLayer()), utc) { _, size -> createBitmap(size, size).apply { recycle() } }
+        assertThat(isClear(draw(freed))).isTrue()
+    }
+
+    @Test
+    fun theMoonIsAskedForOncePerMinuteAndSize() {
+        val moon = TestMoon()
+        val animator = LayerAnimator(listOf(moonLayer()), utc, moon::picture)
+        val minute = 1_700_000_040_000L // a whole minute
+        for (frame in 0 until 24) {
+            animator.setTime(frame * 40L, 5000, 1f, minute + frame * 40L)
+            animator.drawSlot(Canvas(createBitmap(size, size)), LayerSlot.BACK, 1f)
+        }
+        assertThat(moon.asked).hasSize(1)
+        // The next minute, and another size of the screen, ask again
+        draw(animator, nowMs = minute + 60_000)
+        assertThat(moon.asked).hasSize(2)
+        animator.setTime(0, 5000, 1f, minute + 60_000)
+        animator.drawSlot(Canvas(createBitmap(2 * size, 2 * size)), LayerSlot.BACK, 2f)
+        assertThat(moon.asked.last()).isEqualTo(minute + 60_000 to 80)
+        // Freeing the pictures never frees the moon: it belongs to the caller
+        animator.release()
+        assertThat(moon.made.none { it.isRecycled }).isTrue()
+    }
+
+    @Test
+    fun theMoonSizeHasALimit() {
+        val moon = TestMoon()
+        draw(LayerAnimator(listOf(moonLayer(DesignRect.FULL, maxScale = 4f)), utc, moon::picture))
+        assertThat(moon.asked.single().second).isEqualTo(512)
+    }
+
+    @Test
+    fun aRestMoonLayerStaysOnTheFace() {
+        val moon = TestMoon()
+        val animator = LayerAnimator(listOf(moonLayer(restSeconds = 0f)), utc, moon::picture)
+        assertThat(animator.hasRest).isTrue()
+        val bitmap = createBitmap(size, size)
+        val now = 1_700_000_000_000L
+        animator.drawRest(Canvas(bitmap), 1f, now) { null }
+        assertThat(bounds(bitmap)).isEqualTo(Rect(110, 120, 150, 160))
+        assertThat(moon.asked).containsExactly(now to 40)
+    }
+
     // ---- views ----
 
     @Test
@@ -566,7 +671,7 @@ class LayerAnimatorTest {
         assertThat(box.top).isEqualTo(100)     // 20 minutes
         assertThat(box.width()).isEqualTo(10)  // 10 hours
         // The same moment in Amsterdam (winter: one hour later)
-        val amsterdam = bounds(draw(LayerAnimator(listOf(spec)) { ZoneId.of("Europe/Amsterdam") }, nowMs = now))!!
+        val amsterdam = bounds(draw(LayerAnimator(listOf(spec), zone = { ZoneId.of("Europe/Amsterdam") }), nowMs = now))!!
         assertThat(amsterdam.left).isEqualTo(305)
         assertThat(amsterdam.width()).isEqualTo(11)
     }

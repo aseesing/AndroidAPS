@@ -132,10 +132,17 @@ class WakeAnimationJson(
         )
     }
 
-    /** Exactly one of `image`, `shape` and `view`; null when none or more than one is given, or the shape is unknown. */
+    /**
+     * Exactly one of `image`, `shape`, `view` and `moon` (`"moon": true`, the moon of now drawn in its
+     * `rect`); null when none or more than one is given, or the shape is unknown. `"moon": false` counts
+     * as not given.
+     */
     private fun source(json: JSONObject): LayerSource? {
-        if (SOURCES.count { json.has(it) } != 1) return null
+        val moon = json.optBoolean(MOON)
+        if (SOURCES.count { json.has(it) } + (if (moon) 1 else 0) != 1) return null
         return when {
+            moon              -> LayerSource.Moon(json.optJSONObject("rect")?.rect(DesignRect.FULL) ?: DesignRect.FULL)
+
             json.has("image") -> json.optString("image").let { key ->
                 LayerSource.Image(key, key.takeIf { it.isNotEmpty() }?.let(image), json.optJSONObject("rect")?.rect(DesignRect.FULL) ?: DesignRect.FULL)
             }
@@ -225,6 +232,9 @@ class WakeAnimationJson(
 
         /** The glow radius of a layer whose `glow` gives none, in design pixels. */
         const val DEFAULT_GLOW_RADIUS = 10f
+
+        /** The key of a layer that draws the moon of now (see [LayerSource.Moon]). */
+        const val MOON = "moon"
 
         private val SOURCES = listOf("image", "shape", "view")
         private val COPIES = listOf("count", "slices", "points")
