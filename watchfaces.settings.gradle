@@ -1,0 +1,20 @@
+// ============================================================================================
+// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+// Own file: keep upstream files to small hooks that call into here.
+// ============================================================================================
+
+// The modules of AAPS that the watch face designs repository (aaps-watchfaces) needs, when it
+// includes AAPS as a composite build: the watch face code built for the phone, and what that uses.
+// settings.gradle applies this file instead of its own list then, so Gradle configures 6 modules,
+// not all of them, and never :app (which stops a build when this folder has uncommitted changes).
+// A module the designs need and that is missing here fails the build with "project not found".
+include ':wear:cwfrender'
+include ':shared:impl'
+include ':core:interfaces'
+include ':core:keys'
+include ':core:data'
+include ':core:utils'
+
+// ':wear' is the watch app itself. It comes in as the parent of ':wear:cwfrender', but its build
+// file needs most of AAPS: here it is only a folder, without a build file.
+project(':wear').buildFileName = 'not-used-by-the-designs.gradle.kts'
