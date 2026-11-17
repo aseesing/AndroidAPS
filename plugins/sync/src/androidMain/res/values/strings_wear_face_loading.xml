@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
+<!--
+    Personal strings for the loading indicator of a watch face on its way to the watch, not in
+    upstream AAPS. English only.
+-->
+<resources>
+    <string name="wear_face_loading" comment="Shown with a loading indicator on the Wear screen while a new watch face is sent to the watch. %1$s=name of the watch face. Example: Loading AAPS Classic on the watch…">Loading %1$s on the watch…</string>
+</resources>

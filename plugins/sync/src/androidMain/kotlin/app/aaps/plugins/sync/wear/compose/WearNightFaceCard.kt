@@ -27,7 +27,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
-import app.aaps.plugins.sync.wear.preview.CwfLivePreview
+import app.aaps.plugins.sync.wear.cwfsettings.CwfPreviewAndSettings
 import app.aaps.plugins.sync.wear.preview.PreviewSlot
 
 /**
@@ -59,7 +59,10 @@ internal fun importListTitle(uiState: WearUiState, mainTitle: String): String =
 
 /**
  * The night face card: its name and preview, a button to load one from the same list as the main
- * face, and a button to remove it.
+ * face, a button to remove it, and under the preview the button for the watch face settings.
+ *
+ * @param loading the name of a night face on its way to the watch: shown with a loading indicator
+ *   in place of the preview, see [WearFaceLoading]
  *
  * @see NightWatchfaceCardPreview
  */
@@ -68,7 +71,8 @@ internal fun NightWatchfaceCard(
     state: WearNightFaceState,
     onLoadNightWatchface: () -> Unit,
     onRemoveNightWatchface: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    loading: String? = null
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -94,10 +98,12 @@ internal fun NightWatchfaceCard(
                 else null
             )
 
-            state.nightWatchfaceImage?.let { image ->
+            loading?.let { FaceLoadingIndicator(it) }
+            state.nightWatchfaceImage?.takeIf { loading == null }?.let { image ->
                 Spacer(modifier = Modifier.height(AapsSpacing.small))
-                // Live, as the main face: drawn by the watch's code, the static picture until then
-                CwfLivePreview(
+                // Live, as the main face: drawn by the watch's code, the static picture until then.
+                // With the settings button under it, as the main face has.
+                CwfPreviewAndSettings(
                     bitmap = image,
                     contentDescription = state.nightWatchfaceName,
                     modifier = Modifier

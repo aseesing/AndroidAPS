@@ -169,7 +169,8 @@ internal fun WearScreen(
                 CwfImportContent(
                     items = uiState.importItems,
                     onItemClick = { item -> viewModel.selectWatchface(item.cwfFile) },
-                    modifier = modifier
+                    modifier = modifier,
+                    onItemDelete = { item -> viewModel.deleteDesign(context.contentResolver, item.cwfFile) } // PERSONAL PATCH: delete designs
                 )
             }
 
@@ -389,7 +390,8 @@ internal fun WearMainContent(
                     )
 
                     // Watchface preview image
-                    uiState.watchfaceImage?.let { image ->
+                    uiState.loading.day?.let { FaceLoadingIndicator(it) } // PERSONAL PATCH: loading indicator
+                    uiState.watchfaceImage?.takeIf { uiState.loading.day == null }?.let { image -> // PERSONAL PATCH: loading indicator, was without takeIf
                         Spacer(modifier = Modifier.height(AapsSpacing.small))
                         CwfPreviewAndSettings( // PERSONAL PATCH: live watch face preview and its settings, was Image(
                             bitmap = image,
@@ -402,7 +404,7 @@ internal fun WearMainContent(
                     }
                 }
             }
-            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface) // PERSONAL PATCH: day and night face
+            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface, loading = uiState.loading.night) // PERSONAL PATCH: day and night face
         }
     }
 }

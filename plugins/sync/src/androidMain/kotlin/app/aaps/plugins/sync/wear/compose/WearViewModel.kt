@@ -33,6 +33,7 @@ import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.preview.PreviewSlot // PERSONAL PATCH: loading indicator
 import app.aaps.plugins.sync.wear.wearintegration.WearNightFacePreferences
 import app.aaps.shared.impl.weardata.JsonKeyValues
 import app.aaps.shared.impl.weardata.JsonKeys
@@ -76,7 +77,8 @@ data class WearUiState(
     val cwfInfosState: CwfInfosState? = null,
     val showImportList: Boolean = false,
     val importItems: List<CwfImportItemState> = emptyList(),
-    val nightFace: WearNightFaceState = WearNightFaceState() // PERSONAL PATCH: day and night face
+    val nightFace: WearNightFaceState = WearNightFaceState(), // PERSONAL PATCH: day and night face
+    val loading: WearFaceLoading = WearFaceLoading() // PERSONAL PATCH: loading indicator, see WearFaceLoading.kt
 )
 
 @Immutable
@@ -330,6 +332,7 @@ class WearViewModel(
         preferences.put(StringNonKey.WearCwfAuthorVersion, metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] ?: "")
         preferences.put(StringNonKey.WearCwfFileName, metadata[CwfMetadataKey.CWF_FILENAME] ?: "")
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray))
+        faceLoading.start(PreviewSlot.DAY, metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedCustomWatchface) // PERSONAL PATCH: loading indicator
         _uiState.update { state ->
             // Sent and stored either way; but with the complications face on the wrist nothing
             // draws it, and the wearer should hear that now rather than wonder later
@@ -382,6 +385,7 @@ class WearViewModel(
         val metadata = cwfFile.cwfData.metadata
         nightFacePreferences.remember(metadata)
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray, night = true))
+        faceLoading.start(PreviewSlot.NIGHT, metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedNightWatchface)
         _uiState.update { state ->
             // The same note as for the main face: with the complications face on the wrist nothing draws it
             val hidden = state.watchFacePushSupported && !state.customWatchfaceSelected
@@ -414,4 +418,16 @@ class WearViewModel(
             loadWatchfaceFiles()
         }
     }
+
+    /** Deletes the zip of [cwfFile] from AAPS/export, says how it went, and shows the list again without it. */
+    fun deleteDesign(contentResolver: ContentResolver, cwfFile: CwfFile) {
+        viewModelScope.launch {
+            _toastEvent.emit(designImport.deleteFrom(contentResolver, cwfFile))
+            loadWatchfaceFiles()
+        }
+    }
+
+    // ---- PERSONAL PATCH: loading indicator, see WearFaceLoading.kt ----
+
+    private val faceLoading = WearFaceLoadingTracker(viewModelScope) { loading -> _uiState.update { it.copy(loading = loading) } }
 }

@@ -35,7 +35,8 @@ import app.aaps.core.ui.compose.AapsSpacing
 internal fun CwfImportContent(
     items: List<CwfImportItemState>,
     onItemClick: (CwfImportItemState) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onItemDelete: ((CwfImportItemState) -> Unit)? = null // PERSONAL PATCH: delete designs, see CwfDesignImport.kt
 ) {
     LazyColumn(
         modifier = modifier
@@ -44,7 +45,7 @@ internal fun CwfImportContent(
         verticalArrangement = Arrangement.spacedBy(AapsSpacing.small)
     ) {
         items(items, key = { it.fileName }) { item ->
-            CwfImportItemCard(item = item, onClick = { onItemClick(item) })
+            CwfImportItemCard(item = item, onClick = { onItemClick(item) }, onDelete = onItemDelete) // PERSONAL PATCH: delete designs
         }
     }
 }
@@ -53,7 +54,8 @@ internal fun CwfImportContent(
 private fun CwfImportItemCard(
     item: CwfImportItemState,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDelete: ((CwfImportItemState) -> Unit)? = null // PERSONAL PATCH: delete designs
 ) {
     Card(
         modifier = modifier
@@ -123,6 +125,7 @@ private fun CwfImportItemCard(
                     }
                 }
             }
+            onDelete?.let { DesignDeleteButton(item, it) } // PERSONAL PATCH: delete designs
         }
     }
 }

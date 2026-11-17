@@ -12,6 +12,7 @@ import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.CwfSettingValue
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.preview.PreviewSlot
 import app.aaps.wear.watchfaces.settingsync.CwfSettingNames
 import app.aaps.wear.watchfaces.settingsync.CwfSyncedSetting
 import app.aaps.wear.watchfaces.settingsync.CwfSyncedSettings
@@ -48,15 +49,21 @@ data class CwfSettingRow(
  * @param shownValues which values the face shows
  * @param fromWatch false until the watch sent its settings (or the user set one here): then the
  *   rows show the defaults, which may not be what the watch has
+ * @param sharedWithOtherFace true when the watch has a day face and a night face: the watch has one
+ *   set of settings for both, so a change here changes the other face too
  */
 @Immutable
 data class CwfSettingsUiState(
     val look: List<CwfSettingRow> = emptyList(),
     val shownValues: List<CwfSettingRow> = emptyList(),
-    val fromWatch: Boolean = true
+    val fromWatch: Boolean = true,
+    val sharedWithOtherFace: Boolean = false
 )
 
-/** The watch face settings screen: the settings of the loaded design, with the values the phone has. */
+/**
+ * The watch face settings screen: the settings of the loaded design, with the values the phone has.
+ * The day face and the night face share the settings; only the look rows depend on the design.
+ */
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 @ViewModelKey
 @Stable
@@ -67,10 +74,18 @@ class CwfSettingsViewModel(
     wearPlugin: WearPlugin
 ) : ViewModel() {
 
-    val uiState: StateFlow<CwfSettingsUiState> =
-        combine(store.values, wearPlugin.savedCustomWatchface) { values, design -> uiStateOf(sync.names, values, design) }
+    private val states = PreviewSlot.entries.associateWith { slot ->
+        val (design, other) = when (slot) {
+            PreviewSlot.DAY   -> wearPlugin.savedCustomWatchface to wearPlugin.savedNightWatchface
+            PreviewSlot.NIGHT -> wearPlugin.savedNightWatchface to wearPlugin.savedCustomWatchface
+        }
+        combine(store.values, design, other) { values, face, otherFace -> uiStateOf(sync.names, values, face, sharedWithOtherFace = otherFace != null) }
             .flowOn(Dispatchers.Default) // reads the design json
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), CwfSettingsUiState())
+    }
+
+    /** The settings screen of the face of [slot]: the look rows of its design. */
+    fun uiState(slot: PreviewSlot): StateFlow<CwfSettingsUiState> = states.getValue(slot)
 
     /** The user chose [value] for the setting [name]. The preview and the watch follow. */
     fun set(name: String, value: String) = sync.setByUser(name, value)
@@ -79,7 +94,12 @@ class CwfSettingsViewModel(
 
         const val STOP_TIMEOUT_MS = 5_000L
 
-        fun uiStateOf(names: CwfSettingNames, values: Map<String, CwfSettingValue>, design: CwfData?): CwfSettingsUiState {
+        fun uiStateOf(
+            names: CwfSettingNames,
+            values: Map<String, CwfSettingValue>,
+            design: CwfData?,
+            sharedWithOtherFace: Boolean = false
+        ): CwfSettingsUiState {
             val authorized = design?.metadata?.get(CwfMetadataKey.CWF_AUTHORIZATION)?.toBooleanStrictOrNull() == true
             fun row(setting: CwfSyncedSetting): CwfSettingRow {
                 val name = names.nameOf(setting)
@@ -89,7 +109,8 @@ class CwfSettingsViewModel(
             return CwfSettingsUiState(
                 look = CwfSyncedSettings.faceLookFor(design?.json).map(::row),
                 shownValues = CwfSyncedSettings.shownValues.map(::row),
-                fromWatch = values.isNotEmpty()
+                fromWatch = values.isNotEmpty(),
+                sharedWithOtherFace = sharedWithOtherFace
             )
         }
     }

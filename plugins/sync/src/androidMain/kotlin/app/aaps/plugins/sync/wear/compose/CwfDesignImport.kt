@@ -15,9 +15,14 @@ import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
@@ -25,7 +30,12 @@ import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.rx.weardata.CwfFile
+import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.keys.interfaces.Preferences
+import app.aaps.core.ui.CoreUiStrings
+import app.aaps.core.ui.compose.dialogs.OkCancelDialog
+import app.aaps.core.ui.compose.rowAction
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.keys.WearDesignImportKey
@@ -43,6 +53,9 @@ import java.io.InputStream
  * Drive, and move them into AAPS/export by hand. Now the import list has a button that opens the
  * file picker. The picked zips are copied into AAPS/export, a zip with the same file name is
  * replaced, and the list is shown again with the new designs.
+ *
+ * Each design in the list also has a delete button. Before, a design could only be removed with a
+ * file manager. The watch keeps the face it shows now; only the zip in AAPS/export is deleted.
  */
 
 /** One zip the wearer picked: its file name and how to read it. [read] gives null when it cannot be read. */
@@ -53,6 +66,9 @@ internal interface DesignFolder {
 
     /** Writes [bytes] as [fileName] and replaces a file with that name. Returns false when it could not write. */
     fun write(fileName: String, bytes: ByteArray): Boolean
+
+    /** Deletes the file [fileName]. Returns false when there is no such file or it could not be deleted. */
+    fun delete(fileName: String): Boolean
 }
 
 /**
@@ -110,6 +126,25 @@ internal class CwfDesignImport(
         }
         aapsLogger.debug(LTag.WEAR, "Design import: imported $imported, not imported $notImported")
         return DesignImportResult(imported, notImported)
+    }
+
+    /**
+     * Deletes the zip of [cwfFile] from AAPS/export.
+     *
+     * @return the message for the wearer: deleted, or could not be deleted
+     */
+    suspend fun deleteFrom(contentResolver: ContentResolver, cwfFile: CwfFile): String = withContext(Dispatchers.IO) {
+        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext rh.gs(SyncStrings.wear_design_import_no_folder)
+        delete(cwfFile, ExportDesignFolder(dir, contentResolver, aapsLogger))
+    }
+
+    fun delete(cwfFile: CwfFile, folder: DesignFolder): String {
+        // The list shows the file name without ".zip", and so does the metadata
+        val fileName = cwfFile.cwfData.metadata[CwfMetadataKey.CWF_FILENAME]?.let { zipName(it) }
+        val deleted = fileName != null && folder.delete(fileName)
+        aapsLogger.debug(LTag.WEAR, "Design delete: $fileName deleted $deleted")
+        val shownName = fileName ?: cwfFile.cwfData.metadata[CwfMetadataKey.CWF_NAME] ?: ""
+        return rh.gs(if (deleted) SyncStrings.wear_design_delete_done else SyncStrings.wear_design_delete_failed, shownName)
     }
 
     companion object {
@@ -174,6 +209,14 @@ internal class ExportDesignFolder(
             aapsLogger.error(LTag.WEAR, "Cannot write design $fileName", e)
             false
         }
+
+    override fun delete(fileName: String): Boolean =
+        try {
+            dir.findFile(fileName)?.delete() == true
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Cannot delete design $fileName", e)
+            false
+        }
 }
 
 /** The zips at [uris], named as the place they come from (Drive, Downloads, ...) names them. */
@@ -216,5 +259,25 @@ internal fun DesignImportAction(viewModel: WearViewModel) {
     val picker = rememberLauncherForActivityResult(PickDesignZips()) { uris -> viewModel.importDesigns(contentResolver, uris) }
     IconButton(onClick = { picker.launch(viewModel.lastPickedDesign()) }) {
         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = stringResource(SyncStrings.wear_design_import))
+    }
+}
+
+/** The delete button of one design in the import list. It asks first, then calls [onDelete]. */
+@Composable
+internal fun DesignDeleteButton(item: CwfImportItemState, onDelete: (CwfImportItemState) -> Unit) {
+    var askDelete by remember { mutableStateOf(false) }
+    IconButton(onClick = { askDelete = true }) {
+        Icon(imageVector = Icons.Default.Delete, contentDescription = rowAction(CoreUiStrings.delete, item.name))
+    }
+    if (askDelete) {
+        OkCancelDialog(
+            title = stringResource(CoreUiStrings.delete),
+            message = stringResource(SyncStrings.wear_design_delete_question, item.cwfFile.cwfData.metadata[CwfMetadataKey.CWF_NAME] ?: ""),
+            onConfirm = {
+                askDelete = false
+                onDelete(item)
+            },
+            onDismiss = { askDelete = false }
+        )
     }
 }
