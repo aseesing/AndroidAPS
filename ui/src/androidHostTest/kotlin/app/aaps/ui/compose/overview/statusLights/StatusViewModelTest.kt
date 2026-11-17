@@ -1,8 +1,12 @@
 package app.aaps.ui.compose.overview.statusLights
 
+import app.aaps.core.data.model.GV
+import app.aaps.core.data.model.GlucoseUnit
+import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TDD
 import app.aaps.core.data.model.TE
 import app.aaps.core.data.pump.defs.PumpDescription
+import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.nsclient.ProcessedDeviceStatusData
@@ -11,6 +15,7 @@ import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.pump.PumpInsulin
 import app.aaps.core.interfaces.pump.PumpWithConcentration
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.resources.TextResolver
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.EventConfigBuilderChange
 import app.aaps.core.interfaces.rx.events.EventInitializationChanged
@@ -20,9 +25,14 @@ import app.aaps.core.interfaces.stats.TddCalculator
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.DecimalFormatter
 import app.aaps.core.interfaces.utils.TimeDiff
+import app.aaps.core.keys.BooleanKey
+import app.aaps.core.keys.IntKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.core.ui.CoreUiStrings
+import app.aaps.core.ui.compose.StatusLevel
+import app.aaps.shared.tests.generatedTextResolver
+import app.aaps.ui.UiStringsValues
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -48,9 +58,12 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyVararg
 import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -87,14 +100,18 @@ internal class StatusViewModelTest {
         whenever(rxBus.toFlow(EventNsClientStatusUpdated::class)).thenReturn(emptyFlow())
         whenever(persistenceLayer.observeChanges(TE::class)).thenReturn(teChanges)
         whenever(persistenceLayer.databaseClearedFlow).thenReturn(emptyFlow())
+        whenever(preferences.observe(BooleanKey.OverviewStatusLightsCountdown)).thenReturn(countdownSwitch)
     }
 
     @AfterEach
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun newViewModel() = StatusViewModel(
-        rh, activePlugin, profileFunction, config, persistenceLayer, dateUtil, rxBus, preferences,
-        tddCalculator, decimalFormatter, processedDeviceStatusData
+    /** The countdown switch, as the preference store publishes it. */
+    private val countdownSwitch = MutableStateFlow(false)
+
+    private fun newViewModel(textResolver: TextResolver = rh) = StatusViewModel(
+        textResolver, activePlugin, profileFunction, config, persistenceLayer, dateUtil, rxBus, preferences,
+        tddCalculator, decimalFormatter, processedDeviceStatusData, StatusTimeLeft(textResolver, dateUtil)
     )
 
     @Test
@@ -208,6 +225,156 @@ internal class StatusViewModelTest {
         screen.cancelAndJoin()
     }
 
+    /**
+     * The countdown is a switch, off by default. Off, every row shows the age exactly as before, from the
+     * user's thresholds, and the newest BG reading is not even read.
+     */
+    @Test
+    fun `with the countdown off, a pod and a G6 show their age as before`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = false)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("2d0h")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+        assertThat(state.sensorStatus?.agePercent).isWithin(0.001f).of(48f / 240f)
+        assertThat(state.cannulaStatus?.age).isEqualTo("2d12h")
+        assertThat(state.cannulaStatus?.ageStatus).isEqualTo(StatusLevel.WARNING)
+        assertThat(state.cannulaStatus?.agePercent).isWithin(0.001f).of(60f / 72f)
+        assertThat(state.insulinStatus?.age).isEqualTo("2d12h")
+        assertThat(state.insulinStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+        assertThat(state.insulinStatus?.agePercent).isWithin(0.001f).of(60f / 144f)
+        verify(persistenceLayer, never()).getLastGlucoseValue()
+    }
+
+    @Test
+    fun `with the countdown on, a pod and a G6 show the time left until their real end`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true)
+
+        val state = refreshed(newViewModel(texts()))
+
+        // A G6 stops 10 days after the start, 2 days are gone
+        assertThat(state.sensorStatus?.age).isEqualTo("8d0h left")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+        assertThat(state.sensorStatus?.agePercent).isWithin(0.001f).of(48f / 240f)
+        // A pod stops 80 hours after the start, 60 are gone: less than one day left is yellow
+        assertThat(state.cannulaStatus?.age).isEqualTo("20h left")
+        assertThat(state.cannulaStatus?.ageStatus).isEqualTo(StatusLevel.WARNING)
+        // The insulin is in the pod, so it ends with the pod
+        assertThat(state.insulinStatus?.age).isEqualTo("20h left")
+        assertThat(state.insulinStatus?.ageStatus).isEqualTo(StatusLevel.WARNING)
+    }
+
+    /** A 10 day and a 15 day G7 send the same label, so a G7 shows its age and never a wrong countdown. */
+    @Test
+    fun `with the countdown on, a G7 shows its age`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G7)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("2d0h")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+        assertThat(state.sensorStatus?.agePercent).isWithin(0.001f).of(48f / 240f)
+    }
+
+    /** No start event: the same "-" as the age, and the BG reading is not read for nothing. */
+    @Test
+    fun `with the countdown on and no sensor change, the sensor row shows a dash`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true)
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(null)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("-")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.UNSPECIFIED)
+        assertThat(state.sensorStatus?.agePercent).isEqualTo(0f)
+        verify(persistenceLayer, never()).getLastGlucoseValue()
+    }
+
+    /** The rows follow the switch at once, not only at the next minute tick. */
+    @Test
+    fun `flipping the switch refreshes the rows`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = false)
+        val viewModel = newViewModel(texts())
+        val screen = show(viewModel)
+        awaitValue(finished, 1)
+        assertThat(viewModel.uiState.value.sensorStatus?.age).isEqualTo("2d0h")
+
+        whenever(preferences.get(BooleanKey.OverviewStatusLightsCountdown)).thenReturn(true)
+        countdownSwitch.value = true
+        assertThat(awaitValue(finished, 2)).isEqualTo(2)
+        delay(QUIET_MS)
+
+        assertThat(viewModel.uiState.value.sensorStatus?.age).isEqualTo("8d0h left")
+        assertThat(viewModel.uiState.value.cannulaStatus?.age).isEqualTo("20h left")
+        screen.cancelAndJoin()
+    }
+
+    /** No wrong countdown: a part whose end is not known keeps showing its age, also with the switch on. */
+    @Test
+    fun `with the countdown on, a sensor and pump with no known end show their age`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.LIBRE_2, pumpType = PumpType.MEDTRUM_NANO)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("2d0h")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+        assertThat(state.cannulaStatus?.age).isEqualTo("2d12h")
+        assertThat(state.cannulaStatus?.ageStatus).isEqualTo(StatusLevel.WARNING)
+        assertThat(state.insulinStatus?.age).isEqualTo("2d12h")
+    }
+
+    /** The real texts of this module and of core/ui, so the tests see what the user sees. */
+    private fun texts(): TextResolver = generatedTextResolver("ui" to UiStringsValues::textOf)
+
+    /** Refreshes once, the way a screen does when it shows the status lights. */
+    private suspend fun CoroutineScope.refreshed(viewModel: StatusViewModel): StatusUiState {
+        val screen = show(viewModel)
+        awaitValue(finished, 1)
+        delay(QUIET_MS)
+        screen.cancelAndJoin()
+        return viewModel.uiState.value
+    }
+
+    /**
+     * A sensor changed 2 days ago and a cannula (or pod) and insulin changed 60 hours ago, with the
+     * default thresholds. The newest BG reading comes from [sensor], the active pump is [pumpType].
+     */
+    private suspend fun givenDevices(countdown: Boolean, sensor: SourceSensor = SourceSensor.DEXCOM_G6, pumpType: PumpType = PumpType.OMNIPOD_DASH) {
+        givenStatusData()
+        whenever(dateUtil.now()).thenReturn(NOW)
+        whenever(dateUtil.computeDiff(any(), any())).thenAnswer {
+            val diff = it.getArgument<Long>(1) - it.getArgument<Long>(0)
+            TimeDiff(diff / DAY, diff % DAY / HOUR, 0, 0, 0, 0, 0)
+        }
+        whenever(preferences.get(BooleanKey.OverviewStatusLightsCountdown)).thenReturn(countdown)
+        whenever(preferences.get(IntKey.OverviewSageWarning)).thenReturn(216)
+        whenever(preferences.get(IntKey.OverviewSageCritical)).thenReturn(240)
+        whenever(preferences.get(IntKey.OverviewCageWarning)).thenReturn(48)
+        whenever(preferences.get(IntKey.OverviewCageCritical)).thenReturn(72)
+        whenever(preferences.get(IntKey.OverviewIageWarning)).thenReturn(72)
+        whenever(preferences.get(IntKey.OverviewIageCritical)).thenReturn(144)
+        whenever(activePlugin.activePump.model()).thenReturn(pumpType)
+        val sensorChange = TE(timestamp = NOW - 2 * DAY, type = TE.Type.SENSOR_CHANGE, glucoseUnit = GlucoseUnit.MGDL)
+        val insulinChange = TE(timestamp = NOW - 60 * HOUR, type = TE.Type.INSULIN_CHANGE, glucoseUnit = GlucoseUnit.MGDL)
+        val cannulaChange = TE(timestamp = NOW - 60 * HOUR, type = TE.Type.CANNULA_CHANGE, glucoseUnit = GlucoseUnit.MGDL)
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(sensorChange)
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.INSULIN_CHANGE)).thenReturn(insulinChange)
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.CANNULA_CHANGE)).doSuspendableAnswer {
+            started.incrementAndGet()
+            cannulaChange
+        }
+        val reading = mock<GV>()
+        whenever(reading.sourceSensor).thenReturn(sensor)
+        whenever(persistenceLayer.getLastGlucoseValue()).thenReturn(reading)
+    }
+
     /** Collects the state the way a screen does. */
     private fun CoroutineScope.show(viewModel: StatusViewModel): Job =
         launch(Dispatchers.Unconfined) { viewModel.uiState.collect { } }
@@ -238,6 +405,8 @@ internal class StatusViewModelTest {
         whenever(activePlugin.activeBgSource).thenReturn(bgSource)
         whenever(bgSource.sensorBatteryLevel).thenReturn(-1)
         whenever(rh.gs(any<TextRef>())).thenReturn("text")
+        // The age is a text with arguments. An unstubbed mock gives null for it, which a real resolver never does.
+        whenever(rh.gs(any<TextRef>(), anyVararg<Any>())).thenReturn("text")
         whenever(dateUtil.computeDiff(any(), any())).thenReturn(TimeDiff(1, 2, 0, 0, 0, 0, 0))
         val cannulaChange = mock<TE>()
         whenever(cannulaChange.timestamp).thenReturn(1_000L)
@@ -262,5 +431,9 @@ internal class StatusViewModelTest {
 
         /** How long a test waits to be sure that something did NOT happen. */
         const val QUIET_MS = 300L
+
+        const val NOW = 1_800_000_000_000L
+        const val HOUR = 60 * 60 * 1000L
+        const val DAY = 24 * HOUR
     }
 }
