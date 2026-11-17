@@ -43,6 +43,7 @@ as before.
 | `local/wear-glucose-line` | A design can draw the glucose of the graph as a line, with its own width and colour (`GlucoseLine`); the Cyberpunk and Wilds designs do |
 | `local/wear-anim-layers` | One generic wake-up animation engine: a design's `animation.layers` are pictures, shapes or views whose properties are safe math formulas (copies, strips, points, masks, still layers after the wake); the old effects (rain, glitch, pulse, blink, sweep, slide, wobble, trace, glint) are short forms of it. All designs and their generators moved out to [aaps-watchfaces](https://github.com/aseesing/aaps-watchfaces) |
 | `local/wear-design-manage` | Phone: a delete button for each design in the list of watch face designs; a loading indicator while a new face goes to the watch; the watch face settings button on the night face card too |
+| `local/wear-start-after-unlock` | The watch app waits for the unlock of the watch before it starts: Android may start it earlier after a boot, and it then crashed again and again until the unlock |
 
 `master` of this fork is a plain copy of upstream `master`.
 
