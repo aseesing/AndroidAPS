@@ -414,4 +414,12 @@ class WearViewModel(
             loadWatchfaceFiles()
         }
     }
+
+    /** Deletes the zip of [cwfFile] from AAPS/export, says how it went, and shows the list again without it. */
+    fun deleteDesign(contentResolver: ContentResolver, cwfFile: CwfFile) {
+        viewModelScope.launch {
+            _toastEvent.emit(designImport.deleteFrom(contentResolver, cwfFile))
+            loadWatchfaceFiles()
+        }
+    }
 }

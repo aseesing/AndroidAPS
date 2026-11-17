@@ -10,5 +10,8 @@
     <string name="wear_design_import" comment="Button in the list of watch face designs: opens the file picker to copy new design zips into AAPS/export">Import designs from Google Drive or files</string>
     <string name="wear_design_import_done" comment="%1$d=number of design zips copied into AAPS/export. Example: Designs imported: 6">Designs imported: %1$d</string>
     <string name="wear_design_import_partly" comment="%1$d=number of design zips copied, %2$s=file names that were left out. Example: Designs imported: 5. Not imported: notes.txt">Designs imported: %1$d. Not imported: %2$s</string>
+    <string name="wear_design_delete_question" comment="%1$s=name of the watch face design. Example: Delete the design AAPS Classic from the AAPS export folder? The watch keeps the face it shows now.">Delete the design %1$s from the AAPS export folder? The watch keeps the face it shows now.</string>
+    <string name="wear_design_delete_done" comment="%1$s=file name of the deleted design zip. Example: Deleted: AAPS_Classic.zip">Deleted: %1$s</string>
+    <string name="wear_design_delete_failed" comment="%1$s=file name of the design zip. Example: Could not delete AAPS_Classic.zip">Could not delete %1$s</string>
     <string name="wear_design_import_no_folder">Choose the AAPS directory first. The designs are copied to its export folder.</string>
 </resources>
