@@ -85,21 +85,21 @@ class WearNightFaceTest {
 
     @Test
     fun `a chosen night face is remembered in its own keys`() {
-        sut.remember(face("Cyberpunk", "2", "Cyberpunk_night").metadata)
+        sut.remember(face("Night", "2", "Night_face").metadata)
 
-        verify(preferences).put(WearNightFaceKey.NightWatchfaceName, "Cyberpunk")
+        verify(preferences).put(WearNightFaceKey.NightWatchfaceName, "Night")
         verify(preferences).put(WearNightFaceKey.NightAuthorVersion, "2")
-        verify(preferences).put(WearNightFaceKey.NightFileName, "Cyberpunk_night")
+        verify(preferences).put(WearNightFaceKey.NightFileName, "Night_face")
     }
 
     @Test
     fun `a reported night face is remembered only when name or version is new`() {
-        remembered("Cyberpunk", "2", "Cyberpunk_night")
+        remembered("Night", "2", "Night_face")
 
-        sut.rememberIfNew(face("Cyberpunk", "2", "other").metadata)
+        sut.rememberIfNew(face("Night", "2", "other").metadata)
         verify(preferences, never()).put(eq(WearNightFaceKey.NightFileName), any<String>())
 
-        sut.rememberIfNew(face("Cyberpunk", "3", "other").metadata)
+        sut.rememberIfNew(face("Night", "3", "other").metadata)
         verify(preferences).put(WearNightFaceKey.NightFileName, "other")
     }
 
@@ -114,17 +114,17 @@ class WearNightFaceTest {
 
     @Test
     fun `a night face with the right metadata needs no update`() {
-        remembered("Cyberpunk", "2", "Cyberpunk_night")
+        remembered("Night", "2", "Night_face")
         whenever(preferences.get(BooleanKey.WearCustomWatchfaceAuthorization)).thenReturn(true)
 
-        assertThat(sut.metadataUpdate(face("Cyberpunk", "2", "Cyberpunk_night", authorization = true))).isNull()
+        assertThat(sut.metadataUpdate(face("Night", "2", "Night_face", authorization = true))).isNull()
     }
 
     @Test
     fun `the night face follows the authorization setting of the phone`() {
-        remembered("Cyberpunk", "2", "Cyberpunk_night")
+        remembered("Night", "2", "Night_face")
         whenever(preferences.get(BooleanKey.WearCustomWatchfaceAuthorization)).thenReturn(true)
-        val nightFace = face("Cyberpunk", "2", "Cyberpunk_night", authorization = false)
+        val nightFace = face("Night", "2", "Night_face", authorization = false)
 
         val update = sut.metadataUpdate(nightFace)
 
@@ -136,11 +136,11 @@ class WearNightFaceTest {
 
     @Test
     fun `the night face gets the remembered file name when name and version are the same`() {
-        remembered("Cyberpunk", "2", "Cyberpunk_night")
+        remembered("Night", "2", "Night_face")
         whenever(preferences.get(BooleanKey.WearCustomWatchfaceAuthorization)).thenReturn(false)
 
-        val update = sut.metadataUpdate(face("Cyberpunk", "2", "old_name", authorization = false))
-        assertThat(update?.metadata?.get(CwfMetadataKey.CWF_FILENAME)).isEqualTo("Cyberpunk_night")
+        val update = sut.metadataUpdate(face("Night", "2", "old_name", authorization = false))
+        assertThat(update?.metadata?.get(CwfMetadataKey.CWF_FILENAME)).isEqualTo("Night_face")
 
         // Another face: its own file name stays
         assertThat(sut.metadataUpdate(face("Other", "2", "old_name", authorization = false))).isNull()

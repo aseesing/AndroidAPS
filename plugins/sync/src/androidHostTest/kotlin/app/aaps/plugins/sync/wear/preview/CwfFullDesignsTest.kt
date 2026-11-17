@@ -28,11 +28,11 @@ class CwfFullDesignsTest {
     )
 
     /** What the watch sends: the json, the metadata and the preview picture only. */
-    private val shortCopy = design("Cyberpunk Tech", "1.2", "{json}", preview)
+    private val shortCopy = design("Sample Face", "1.2", "{json}", preview)
 
     @Test
     fun theZipWithTheSameJsonGivesItsPicturesAndFonts() {
-        val zip = design("Cyberpunk Tech", "9.9", "{json}", preview, "background", "font")
+        val zip = design("Sample Face", "9.9", "{json}", preview, "background", "font")
         val whole = CwfFullDesigns.completeFrom(shortCopy, listOf(design("Other", "1.2", "{json}", "x"), zip))!!
         assertThat(whole.resData.keys).containsExactly(preview, "background", "font")
         // The json and the metadata are the watch's
@@ -43,14 +43,14 @@ class CwfFullDesignsTest {
     @Test
     fun otherwiseTheZipWithTheSameNameAndVersion() {
         // The phone may change the json when it sends the zip, so the version is enough
-        val zip = design("Cyberpunk Tech", "1.2", "{json changed}", preview, "background")
+        val zip = design("Sample Face", "1.2", "{json changed}", preview, "background")
         assertThat(CwfFullDesigns.completeFrom(shortCopy, listOf(zip))!!.resData.keys).containsExactly(preview, "background")
     }
 
     @Test
     fun anotherVersionIsNotUsed() {
         // Its pictures could be other ones: better the static picture than a wrong face
-        val zip = design("Cyberpunk Tech", "1.1", "{old json}", preview, "background")
+        val zip = design("Sample Face", "1.1", "{old json}", preview, "background")
         assertThat(CwfFullDesigns.completeFrom(shortCopy, listOf(zip))).isNull()
     }
 

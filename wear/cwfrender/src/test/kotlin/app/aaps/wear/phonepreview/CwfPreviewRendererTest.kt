@@ -12,7 +12,6 @@ import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.ResFileMap
-import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import app.aaps.wear.R
 import app.aaps.wear.health.HealthValues
 import app.aaps.wear.watchfaces.COB_SLOT_ID
@@ -37,9 +36,10 @@ import kotlin.math.abs
 import kotlin.math.sin
 
 /**
- * The watch's renderer, built for the phone, draws a real design with values, moves the clock, and
+ * The watch's renderer, built for the phone, draws a design with values, moves the clock, and
  * plays the wake-up animation. Runs with a plain [Application]: not the wear app, as on the phone.
- * Writes the frames to `build/cwf-preview` for a look by eye.
+ * The designs are small ones made by [TestDesigns]. Writes the frames to `build/cwf-preview` for a
+ * look by eye.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -49,9 +49,6 @@ class CwfPreviewRendererTest {
     private val out = File("build/cwf-preview").apply { mkdirs() }
     private val lengthKey: String get() = RuntimeEnvironment.getApplication().getString(R.string.key_wake_animation_length)
 
-    private fun design(name: String) =
-        ZipWatchfaceFormat.loadCustomWatchface(File("../cwf-designs/$name.zip").readBytes(), "$name.zip", authorization = true)!!.cwfData
-
     @Test
     fun drawsADesignWithValuesTheClockAndTheAnimation() {
         val logger: AAPSLogger = mock()
@@ -59,7 +56,7 @@ class CwfPreviewRendererTest {
         val now = System.currentTimeMillis()
         values(now).forEach(renderer::apply)
 
-        renderer.setDesign(design("Cyberpunk_Tech"))
+        renderer.setDesign(TestDesigns.animated())
         // A new design plays its animation once, as on the watch when the face starts
         val first = renderer.frame(SIZE, now)
         assertThat(renderer.isAnimating).isTrue()
@@ -91,7 +88,7 @@ class CwfPreviewRendererTest {
             val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
             val now = System.currentTimeMillis()
             values(now).forEach(renderer::apply)
-            renderer.setDesign(design("Cyberpunk_Tech"))
+            renderer.setDesign(TestDesigns.animated())
             renderer.frame(SIZE, now)
         }
         PreviewThread().executor.execute(frame)
@@ -101,12 +98,12 @@ class CwfPreviewRendererTest {
     @Test
     fun twoPreviewsWithTheirOwnStorageDrawTheirOwnFaceAtTheSameTime() {
         // The day face and the night face: the face's storage allows one owner per file
-        val day = stillRenderer("Cyberpunk_Tech")
+        val day = stillRenderer(TestDesigns.animated())
         val night = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_night")
         night.watchSettings.edit().putString(lengthKey, "0").commit()
         val now = System.currentTimeMillis()
         values(now).forEach(night::apply)
-        night.setDesign(design("Wilds_Weather"))
+        night.setDesign(TestDesigns.still())
         val dayFrame = day.frame(SIZE, now)
         val nightFrame = night.frame(SIZE, now)
         save(nightFrame, "night")
@@ -116,14 +113,14 @@ class CwfPreviewRendererTest {
     }
 
     @Test
-    fun theShortCopyOfTheWatchMissesThePicturesAndFonts() {
+    fun theShortCopyOfTheWatchMissesThePictures() {
         // What the watch sends to the phone: the json, the metadata and the preview picture only.
-        // Drawn from it, the face lacks its background and fonts, as first seen on the phone.
-        val whole = design("Cyberpunk_Tech")
+        // Drawn from it, the face lacks its background, as first seen on the phone.
+        val whole = TestDesigns.animated()
         val preview = ResFileMap.CUSTOM_WATCHFACE.fileName
         val shortCopy = CwfData(whole.json, whole.metadata, mutableMapOf(preview to whole.resData.getValue(preview)))
         val now = System.currentTimeMillis()
-        val withWhole = stillRenderer("Cyberpunk_Tech").frame(SIZE, now)
+        val withWhole = stillRenderer(whole).frame(SIZE, now)
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_short")
         renderer.watchSettings.edit().putString(lengthKey, "0").commit()
         values(now).forEach(renderer::apply)
@@ -135,7 +132,7 @@ class CwfPreviewRendererTest {
 
     @Test
     fun aNewSizeIsDrawnWhole() {
-        val renderer = stillRenderer("Cyberpunk_Yellow")
+        val renderer = stillRenderer(TestDesigns.still())
         val now = System.currentTimeMillis()
         val before = renderer.frame(SIZE, now)
         renderer.frame(SIZE * 3 / 4, now)
@@ -149,7 +146,7 @@ class CwfPreviewRendererTest {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
         val now = System.currentTimeMillis()
         values(now).forEach(renderer::apply)
-        renderer.setDesign(design("Cyberpunk_Tech"))
+        renderer.setDesign(TestDesigns.animated())
         renderer.frame(SIZE, now)
         ShadowSystemClock.advanceBy(Duration.ofSeconds(16))
         val before = renderer.frame(SIZE, now)
@@ -166,13 +163,13 @@ class CwfPreviewRendererTest {
         assertThat(after.sameAs(before)).isTrue()
     }
 
-    /** A renderer with values and [designName], and the wake-up animation switched off. */
-    private fun stillRenderer(designName: String): CwfPreviewRenderer {
+    /** A renderer with values and [design], and the wake-up animation switched off. */
+    private fun stillRenderer(design: CwfData): CwfPreviewRenderer {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
         renderer.watchSettings.edit().putString(lengthKey, "0").commit()
         val now = System.currentTimeMillis()
         values(now).forEach(renderer::apply)
-        renderer.setDesign(design(designName))
+        renderer.setDesign(design)
         return renderer
     }
 
@@ -181,7 +178,7 @@ class CwfPreviewRendererTest {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
         val now = System.currentTimeMillis()
         values(now).forEach(renderer::apply)
-        renderer.setDesign(design("Cyberpunk_Yellow"))
+        renderer.setDesign(TestDesigns.still())
         renderer.watchSettings.edit().putString(lengthKey, "0").commit()
         renderer.settingsChanged()
         val before = renderer.frame(SIZE, now)
@@ -191,8 +188,8 @@ class CwfPreviewRendererTest {
         assertThat(after.sameAs(before)).isFalse()
     }
 
-    /** A still renderer named [name] with [designName], and the heart rate and steps kept in its health values when given. */
-    private fun slotRenderer(name: String, designName: String, heartRate: Int?, steps: Long?): CwfPreviewRenderer {
+    /** A still renderer named [name] with [design], and the heart rate and steps kept in its health values when given. */
+    private fun slotRenderer(name: String, design: CwfData, heartRate: Int?, steps: Long?): CwfPreviewRenderer {
         val now = System.currentTimeMillis()
         RuntimeEnvironment.getApplication().getSharedPreferences("${name}_aaps_health_values", Application.MODE_PRIVATE).edit().apply {
             heartRate?.let { putInt("heart_rate", it).putLong("heart_rate_at", now) }
@@ -201,7 +198,7 @@ class CwfPreviewRendererTest {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), name)
         renderer.watchSettings.edit().putString(lengthKey, "0").commit()
         values(now).forEach(renderer::apply)
-        renderer.setDesign(design(designName))
+        renderer.setDesign(design)
         return renderer
     }
 
@@ -218,12 +215,12 @@ class CwfPreviewRendererTest {
 
     @Test
     fun theStepsSlotShowsTheKeptValueOrNoValue() {
-        // Grand Complication: the steps window at 6 o'clock is slot 2, in the ink of the design
+        // The steps window at 6 o'clock is slot 2 of the design, in its ink
         val window = intArrayOf(144, 320, 256, 348)
-        val ink = "#1C2A5A"
+        val ink = TestDesigns.STEPS_INK
         val now = System.currentTimeMillis()
-        val withSteps = slotRenderer("cwf_preview_steps", "Grand_Complication_Day", heartRate = null, steps = 6482).frame(SIZE, now)
-        val without = slotRenderer("cwf_preview_no_steps", "Grand_Complication_Day", heartRate = null, steps = null).frame(SIZE, now)
+        val withSteps = slotRenderer("cwf_preview_steps", TestDesigns.steps(), heartRate = null, steps = 6482).frame(SIZE, now)
+        val without = slotRenderer("cwf_preview_no_steps", TestDesigns.steps(), heartRate = null, steps = null).frame(SIZE, now)
         save(withSteps, "slot_steps")
         save(without, "slot_no_steps")
         // The number and the icon of the source are drawn; without a value only the icon and the source's "no value" text
@@ -232,12 +229,12 @@ class CwfPreviewRendererTest {
     }
 
     @Test
-    fun theHeartRateRowOfACyberpunkDesignIsDrawn() {
-        // Cyberpunk Tech: heart rate is slot 1, a row of the table, in white
+    fun theHeartRateRowIsDrawn() {
+        // Heart rate is slot 1, a row of white text
         val row = intArrayOf(254, 204, 359, 230)
         val now = System.currentTimeMillis()
-        val withHeart = slotRenderer("cwf_preview_heart", "Cyberpunk_Tech", heartRate = 72, steps = null).frame(SIZE, now)
-        val without = slotRenderer("cwf_preview_no_heart", "Cyberpunk_Tech", heartRate = null, steps = null).frame(SIZE, now)
+        val withHeart = slotRenderer("cwf_preview_heart", TestDesigns.animated(), heartRate = 72, steps = null).frame(SIZE, now)
+        val without = slotRenderer("cwf_preview_no_heart", TestDesigns.animated(), heartRate = null, steps = null).frame(SIZE, now)
         save(withHeart, "slot_heart")
         assertThat(count(withHeart, row, "#FFFFFF")).isGreaterThan(count(without, row, "#FFFFFF") + 20)
     }

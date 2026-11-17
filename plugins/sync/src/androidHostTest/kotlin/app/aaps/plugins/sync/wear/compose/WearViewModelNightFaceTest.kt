@@ -63,7 +63,7 @@ internal class WearViewModelNightFaceTest {
     private val zip = CwfFile(
         cwfData = CwfData(
             json = "{}",
-            metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Cyberpunk", CwfMetadataKey.CWF_FILENAME to "Cyberpunk"),
+            metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Night", CwfMetadataKey.CWF_FILENAME to "Night"),
             resData = mutableMapOf()
         ),
         zipByteArray = ByteArray(3)
@@ -111,7 +111,7 @@ internal class WearViewModelNightFaceTest {
 
         savedNightWatchfaceFlow.value = zip.cwfData
         assertThat(sut.uiState.value.nightFace.hasNightWatchface).isTrue()
-        assertThat(sut.uiState.value.nightFace.nightWatchfaceName).isEqualTo("Cyberpunk")
+        assertThat(sut.uiState.value.nightFace.nightWatchfaceName).isEqualTo("Night")
         assertThat(sut.uiState.value.hasCustomWatchface).isFalse()
 
         savedNightWatchfaceFlow.value = null
@@ -128,7 +128,7 @@ internal class WearViewModelNightFaceTest {
         sut.selectWatchface(zip)
 
         assertThat(sentZips().single().night).isTrue()
-        verify(preferences).put(WearNightFaceKey.NightWatchfaceName, "Cyberpunk")
+        verify(preferences).put(WearNightFaceKey.NightWatchfaceName, "Night")
         verify(preferences, never()).put(eq(StringNonKey.WearCwfWatchfaceName), any<String>())
         assertThat(sut.uiState.value.nightFace.importForNight).isFalse()
         assertThat(sut.uiState.value.showImportList).isFalse()
@@ -141,7 +141,7 @@ internal class WearViewModelNightFaceTest {
         sut.selectWatchface(zip)
 
         assertThat(sentZips().single().night).isFalse()
-        verify(preferences).put(StringNonKey.WearCwfWatchfaceName, "Cyberpunk")
+        verify(preferences).put(StringNonKey.WearCwfWatchfaceName, "Night")
         verify(preferences, never()).put(eq(WearNightFaceKey.NightWatchfaceName), any<String>())
     }
 

@@ -8,22 +8,22 @@
 
 <table align="center">
 <tr>
-<td align="center" width="33%"><img src="images/cyberpunk_tech.gif" width="220" alt="Cyberpunk Tech: falling rain, a beating heart"><br><b>Cyberpunk Tech</b><br><sub>falling rain, a beating heart</sub></td>
-<td align="center" width="33%"><img src="images/cyberpunk_weather.gif" width="220" alt="Cyberpunk Weather: glitch bands, the weather of your place"><br><b>Cyberpunk Weather</b><br><sub>glitch bands, the weather of your place</sub></td>
-<td align="center" width="33%"><img src="images/cyberpunk_yellow.gif" width="220" alt="Cyberpunk Yellow: glitch bands, a low battery blinks"><br><b>Cyberpunk Yellow</b><br><sub>glitch bands, a low battery blinks</sub></td>
+<td align="center" width="33%"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/cyberpunk_tech.gif" width="220" alt="Cyberpunk Tech: falling rain, a beating heart"><br><b>Cyberpunk Tech</b><br><sub>falling rain, a beating heart</sub></td>
+<td align="center" width="33%"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/cyberpunk_weather.gif" width="220" alt="Cyberpunk Weather: glitch bands, the weather of your place"><br><b>Cyberpunk Weather</b><br><sub>glitch bands, the weather of your place</sub></td>
+<td align="center" width="33%"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/cyberpunk_yellow.gif" width="220" alt="Cyberpunk Yellow: glitch bands, a low battery blinks"><br><b>Cyberpunk Yellow</b><br><sub>glitch bands, a low battery blinks</sub></td>
 </tr>
 <tr>
-<td align="center" width="33%"><img src="images/wilds_weather.gif" width="220" alt="Wilds Weather: a beating heart, sun and weather"><br><b>Wilds Weather</b><br><sub>a beating heart, sun and weather</sub></td>
-<td align="center" width="33%"><img src="images/grand_complication_day.gif" width="220" alt="Grand Complication Day: a dress watch, the real sun and moon over a horizon"><br><b>Grand Complication Day</b><br><sub>a dress watch, the real sun and moon</sub></td>
-<td align="center" width="33%"><img src="images/grand_complication_night.gif" width="220" alt="Grand Complication Night: midnight blue and gold, a low battery hand blinks"><br><b>Grand Complication Night</b><br><sub>midnight blue and gold, a low battery blinks</sub></td>
+<td align="center" width="33%"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/wilds_weather.gif" width="220" alt="Wilds Weather: a beating heart, sun and weather"><br><b>Wilds Weather</b><br><sub>a beating heart, sun and weather</sub></td>
+<td align="center" width="33%"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/grand_complication_day.gif" width="220" alt="Grand Complication Day: a dress watch, the real sun and moon over a horizon"><br><b>Grand Complication Day</b><br><sub>a dress watch, the real sun and moon</sub></td>
+<td align="center" width="33%"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/grand_complication_night.gif" width="220" alt="Grand Complication Night: midnight blue and gold, a low battery hand blinks"><br><b>Grand Complication Night</b><br><sub>midnight blue and gold, a low battery blinks</sub></td>
 </tr>
 <tr>
 <td></td>
-<td align="center" width="33%"><img src="images/d2.gif" width="220" alt="D2: steel and glass, a big trend arrow, a graph of the whole day"><br><b>D2</b><br><sub>steel and glass, a big trend arrow</sub></td>
+<td align="center" width="33%"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/d2.gif" width="220" alt="D2: steel and glass, a big trend arrow, a graph of the whole day"><br><b>D2</b><br><sub>steel and glass, a big trend arrow</sub></td>
 <td></td>
 </tr>
 <tr>
-<td align="center" colspan="3"><sub>Each picture is drawn by the watch's own code, wake-up animation and all, by <code>ReadmeAnimationsTest</code>. The same code draws the live preview on the phone.</sub></td>
+<td align="center" colspan="3"><sub>Each picture is drawn by the watch's own code, wake-up animation and all, by <code>ReadmeAnimationsTest</code> in <a href="https://github.com/aseesing/aaps-watchfaces">aaps-watchfaces</a>. The same code draws the live preview on the phone.</sub></td>
 </tr>
 </table>
 
@@ -67,8 +67,8 @@ OnePlus Watch 2R and other round Wear OS watches.
    `adb shell appops set info.nightscout.androidaps REQUEST_INSTALL_PACKAGES allow`. Later updates:
    AAPS → Wear → **Update watch app** → **Send to watch** (several minutes, keep the watch close), then
    confirm on the watch.
-3. In AAPS, load a design from `wear/cwf-designs` as the day face, and another one as the night face
-   if you like.
+3. In AAPS, load a design zip as the day face, and another one as the night face if you like. The
+   designs are in [aaps-watchfaces](https://github.com/aseesing/aaps-watchfaces) (folder `cwf-designs`).
 
 ## Version
 

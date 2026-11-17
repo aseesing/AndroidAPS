@@ -10,7 +10,7 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
-include ':app'
+if (gradle.parent == null) include ':app' // PERSONAL PATCH: not when another build includes AAPS (the watch face designs repo), so its dirty-tree check does not stop that build
 include ':wear'
 include ':wear:watchfacepush'
 include ':wear:cwfrender' // PERSONAL PATCH: live watch face preview on the phone

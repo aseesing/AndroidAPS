@@ -5,10 +5,6 @@
 package app.aaps.wear.watchfaces.animation
 
 import android.graphics.Color
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.exp
-import kotlin.math.sin
 
 /**
  * Hands that swing when the wrist is raised, like the needles of a car when the engine starts: from
@@ -39,37 +35,11 @@ data class SweepSpec(
         settleMs = settleMs.coerceIn(MIN_PART_MS, MAX_PART_MS)
     )
 
-    /** The angle of a hand that shows [valueAngle], [elapsedMs] after the start of a wake. */
-    fun angleAt(elapsedMs: Long, valueAngle: Float): Float {
-        val t = elapsedMs - delayMs
-        return when {
-            t <= 0               -> emptyAngle
-            t < upMs             -> emptyAngle + (fullAngle - emptyAngle) * easeInOut(t.toFloat() / upMs)
-            t < upMs + settleMs  -> fullAngle + (valueAngle - fullAngle) * settle((t - upMs).toFloat() / settleMs)
-            else                 -> valueAngle
-        }
-    }
-
     companion object {
 
         const val MAX_DELAY_MS = 5000L
         const val MIN_PART_MS = 50L
         const val MAX_PART_MS = 5000L
-
-        /** Slow at the start and at the end, like a needle with some weight. */
-        fun easeInOut(u: Float): Float = (0.5 - 0.5 * cos(PI * u.coerceIn(0f, 1f))).toFloat()
-
-        /**
-         * From 0 to 1 like a damped spring: past 1 by about a fifth, a smaller swing back, and exactly 1 at
-         * the end, so the hand stops on its value without a jump.
-         */
-        fun settle(u: Float): Float {
-            val x = u.coerceIn(0f, 1f).toDouble()
-            val spring = 1 - exp(-5 * x) * cos(3 * PI * x)
-            // The spring is not quite 1 at the end; pull the rest in over the last part
-            val rest = (1 - exp(-5.0) * cos(3 * PI)) - 1
-            return (spring - rest * x).toFloat()
-        }
     }
 }
 
@@ -92,12 +62,9 @@ data class SlideSpec(
     val settleMs: Long = 900
 ) {
 
-    private val motion get() = SweepSpec(views, 0f, fullDx, delayMs, upMs, settleMs)
-
-    fun normalized(): SlideSpec = motion.normalized().let { copy(views = it.views, delayMs = it.delayMs, upMs = it.upMs, settleMs = it.settleMs) }
-
-    /** How far right of the design place a view is [elapsedMs] after the start of a wake, when its value puts it at [valueDx]. */
-    fun dxAt(elapsedMs: Long, valueDx: Float): Float = motion.angleAt(elapsedMs, valueDx)
+    /** The same limits as a sweep. */
+    fun normalized(): SlideSpec =
+        SweepSpec(views, 0f, fullDx, delayMs, upMs, settleMs).normalized().let { copy(views = it.views, delayMs = it.delayMs, upMs = it.upMs, settleMs = it.settleMs) }
 }
 
 /**
@@ -123,20 +90,12 @@ data class WobbleSpec(
         decayMs = decayMs.coerceIn(SweepSpec.MIN_PART_MS, SweepSpec.MAX_PART_MS)
     )
 
-    /** How many degrees the hands are off their value [elapsedMs] after the start of a wake. 0 once it has died out. */
-    fun offsetAt(elapsedMs: Long): Float {
-        val t = elapsedMs - delayMs
-        if (t <= 0 || t > decayMs * DECAYS) return 0f
-        val seconds = t / 1000.0
-        return (amplitude * exp(-t.toDouble() / decayMs) * sin(2 * PI * hz * seconds)).toFloat()
-    }
-
     companion object {
 
         const val MAX_AMPLITUDE = 90f
         const val MAX_HZ = 10f
 
-        /** After this many [decayMs] the swing is less than 1 % and stops. */
+        /** After this many `decayMs` the swing is less than 1 % and stops. */
         const val DECAYS = 5
     }
 }
@@ -168,9 +127,6 @@ data class TraceSpec(
         alpha = alpha.coerceIn(0, 255),
         width = width.coerceIn(0f, 40f)
     )
-
-    /** How much of the view is drawn in [elapsedMs] after the start of a wake, 0 to 1. */
-    fun progressAt(elapsedMs: Long): Float = ((elapsedMs - delayMs).toFloat() / durationMs).coerceIn(0f, 1f)
 }
 
 /** A ring in the 400 x 400 design space: the room between two circles round ([cx], [cy]). */
@@ -210,14 +166,4 @@ data class GlintSpec(
 
     /** True when there is something to light. */
     val hasShape: Boolean get() = rings.isNotEmpty() || boxes.isNotEmpty()
-
-    /**
-     * Where the middle of the band is [elapsedMs] after the start of a wake, from 0 (before the face) to
-     * 1 (past it). Null before it starts and after it has crossed.
-     */
-    fun progressAt(elapsedMs: Long): Float? {
-        val t = elapsedMs - delayMs
-        if (t < 0 || t > durationMs) return null
-        return SweepSpec.easeInOut(t.toFloat() / durationMs)
-    }
 }

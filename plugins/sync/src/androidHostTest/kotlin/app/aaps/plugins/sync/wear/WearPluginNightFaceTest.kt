@@ -56,7 +56,7 @@ class WearPluginNightFaceTest : TestBaseWithProfile() {
 
     private fun nightFace(authorization: Boolean) = CwfData(
         "{}",
-        mutableMapOf(CwfMetadataKey.CWF_NAME to "Cyberpunk", CwfMetadataKey.CWF_AUTHORIZATION to authorization.toString()),
+        mutableMapOf(CwfMetadataKey.CWF_NAME to "Night", CwfMetadataKey.CWF_AUTHORIZATION to authorization.toString()),
         mutableMapOf()
     )
 

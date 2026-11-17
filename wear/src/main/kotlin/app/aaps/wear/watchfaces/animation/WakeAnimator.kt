@@ -5,6 +5,7 @@
 package app.aaps.wear.watchfaces.animation
 
 import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.os.SystemClock
 import androidx.core.graphics.withClip
 import androidx.wear.watchface.WatchState
@@ -17,7 +18,8 @@ import kotlinx.coroutines.launch
 /**
  * The wake-up animation of the Custom watch face: rain or glitch bands, a beating heart, hands that
  * swing or shake, a view that draws itself in and a light over the shiny parts, for a few seconds
- * after the wrist is raised. Private patch, see [WakeAnimationSpec] for what a design can set.
+ * after the wrist is raised. Private patch, see [WakeAnimationSpec] for what a design can set. All of
+ * it is drawn by one [LayerAnimator], from the layers of [allLayers].
  *
  * The watch face hands over the design's values ([setDesign]), the watch state ([watch]), asks for
  * each plain interactive frame whether this one draws it ([drawFrame]), and asks for the time to the
@@ -30,7 +32,8 @@ import kotlinx.coroutines.launch
  * @param heartRate the latest measured heart rate, or null; read once per wake
  * @param chosenLengthMs the length chosen in the watch setting (see [WakeLength]); read once per wake
  * @param value the value of a `dynData` value key, or null when there is none; decides which views
- *   blink ([BlinkSpec]). Read once per wake: the battery values change slowly.
+ *   blink ([BlinkSpec]) and is the `v_<key>` of a formula. Read once per wake: the battery values
+ *   change slowly.
  */
 class WakeAnimator(
     private val heartRate: () -> Int?,
@@ -42,17 +45,13 @@ class WakeAnimator(
 ) {
 
     private var spec: WakeAnimationSpec? = null
-    private var rain: RainField? = null
-    private var glitch: GlitchField? = null
-    private var pulse: HeartPulse? = null
-    private var beam: TraceBeam? = null
-    private var light: GlintBand? = null
+    private var animator: LayerAnimator? = null
+
+    /** False until [animator] has the values of this wake. */
+    private var hasWakeValues = false
     private var bpm = PulseCurve.FALLBACK_BPM
     private var isHeadless = false
     private var scope: CoroutineScope? = null
-
-    /** The blinks whose value is low in this wake. */
-    private var lowBlinks: List<BlinkSpec> = emptyList()
 
     /** True while a wake plays, for tests and logging. */
     val isRunning: Boolean get() = timer.isRunning
@@ -70,13 +69,10 @@ class WakeAnimator(
     fun setDesign(design: WakeAnimationSpec?) {
         val s = design?.normalized()?.takeIf { it.hasContent }
         timer.spec = s
-        if (s?.withoutImage() != spec?.withoutImage() || s?.pulse?.drawable !== spec?.pulse?.drawable) {
-            rain = s?.rain?.let { RainField(it) }
-            glitch = s?.glitch?.let { GlitchField(it) }
-            pulse?.release()
-            pulse = s?.pulse?.let { HeartPulse(it) }
-            beam = s?.trace?.let { TraceBeam(it) }
-            light = s?.glint?.let { GlintBand(it) }
+        if (s?.withoutImage() != spec?.withoutImage() || !sameDrawables(s, spec)) {
+            animator?.release()
+            animator = s?.let { LayerAnimator(it.allLayers()) }
+            hasWakeValues = false
             layers.invalidate()
         }
         spec = s
@@ -125,75 +121,69 @@ class WakeAnimator(
         if (!ready) return false
         val elapsed = timer.frame() ?: return false
         val s = spec ?: return false
+        val anim = animator ?: return false
         if (timer.framesThisWake == 1) {
-            // A new wake: the heart rate of now, and pictures drawn fresh, since the face may have
-            // changed in ways the kept states do not show while it was drawn the normal way.
+            // A new wake: the heart rate and the values of now, and pictures drawn fresh, since the face
+            // may have changed in ways the kept states do not show while it was drawn the normal way.
             bpm = PulseCurve.bpmOrFallback(heartRate(), s.pulse?.fallbackBpm ?: PulseCurve.FALLBACK_BPM)
-            lowBlinks = s.blink.filter { it.isLow(value(it.valueKey)) }
+            hasWakeValues = false
             layers.invalidate()
         }
+        if (!hasWakeValues) {
+            // Also when the design changed during a wake
+            anim.setWakeValues(value, bpm)
+            hasWakeValues = true
+        }
         val scale = width / DESIGN_SIZE
-        val strength = s.envelope(elapsed, timer.lengthThisWakeMs)
+        anim.setTime(elapsed, timer.lengthThisWakeMs, s.envelope(elapsed, timer.lengthThisWakeMs), nowMs)
         layers.draw(
             canvas, width, height, nowMs, content, complications, parts,
-            rain = { c ->
-                rain?.draw(c, elapsed, scale, strength)
-                glitch?.draw(c, elapsed, scale, strength)
-            },
-            heart = { c ->
-                pulse?.let { it.draw(c, PulseCurve.value(elapsed, bpm, s.pulse?.secondBeat ?: 0f) * strength, scale) }
-                s.glint?.progressAt(elapsed)?.let { light?.draw(c, it, scale) }
-            },
-            leaveOut = s.liveViews,
-            live = { c -> drawLive(c, s, elapsed, scale, height, parts) }
+            rain = { c -> anim.drawSlot(c, LayerSlot.BACK, scale) },
+            heart = { c -> anim.drawSlot(c, LayerSlot.FRONT, scale) },
+            leaveOut = anim.viewKeys,
+            live = { c -> drawLive(c, anim, scale, height, parts) }
         )
         return true
     }
 
     /**
-     * The views that are drawn live: the view that draws itself in, cut at how far it is, with its bright
-     * line; then the views that blink, unless in their off half, and the hands and marks, turned and moved
-     * where they are now.
+     * The views that are drawn live, as the view layers have them now: first the views that are cut at
+     * the right (a view that draws itself in), then the shapes of the views slot (the bright line of
+     * that view), then the other views, turned and moved. A hidden view is left out.
      */
-    private fun drawLive(canvas: Canvas, s: WakeAnimationSpec, elapsedMs: Long, scale: Float, height: Int, parts: WakeFrameParts) {
-        s.trace?.let { trace ->
-            val progress = trace.progressAt(elapsedMs)
-            val edge = beam?.edge(progress, scale) ?: 0f
-            if (progress > 0f) canvas.withClip(0f, 0f, edge, height.toFloat()) { parts.views(this, setOf(trace.view)) }
-            beam?.draw(canvas, progress, scale)
+    private fun drawLive(canvas: Canvas, anim: LayerAnimator, scale: Float, height: Int, parts: WakeFrameParts) {
+        // Read here, after the face has laid its views out for this frame
+        val effects = anim.viewEffects(parts::rotation, parts::offsetX)
+        for ((key, right) in effects.clipRights) {
+            if (key in effects.hidden) continue
+            canvas.withClip(0f, 0f, right * scale, height.toFloat()) {
+                parts.views(this, setOf(key), effects.turns.filterKeys { it == key }, effects.shifts.filterKeys { it == key })
+            }
         }
-        val hidden = hiddenAt(elapsedMs)
-        val views = s.blinkViews - hidden + s.movingViews - listOfNotNull(s.trace?.view).toSet()
-        if (views.isNotEmpty()) parts.views(canvas, views, turnsAt(elapsedMs, s, parts), shiftsAt(elapsedMs, s, parts))
+        anim.drawSlot(canvas, LayerSlot.VIEWS, scale)
+        val views = anim.viewKeys - effects.clipRights.keys - effects.hidden
+        if (views.isNotEmpty()) parts.views(canvas, views, effects.turns, effects.shifts)
     }
 
-    /** How many design pixels each sliding view is moved right of its value [elapsedMs] after the start of this wake. */
-    internal fun shiftsAt(elapsedMs: Long, s: WakeAnimationSpec, parts: WakeFrameParts): Map<String, Float> {
-        val shifts = HashMap<String, Float>()
-        for (slide in s.slide) for (key in slide.views) {
-            val value = parts.offsetX(key) ?: continue
-            shifts[key] = (shifts[key] ?: 0f) + slide.dxAt(elapsedMs, value) - value
-        }
-        return shifts
+    /** True when [a] and [b] have the very same picture objects. */
+    private fun sameDrawables(a: WakeAnimationSpec?, b: WakeAnimationSpec?): Boolean {
+        val first = a?.drawables().orEmpty()
+        val second = b?.drawables().orEmpty()
+        return first.size == second.size && first.indices.all { first[it] === second[it] }
     }
 
-    /** How many degrees each moving hand is turned off its value [elapsedMs] after the start of this wake. */
-    internal fun turnsAt(elapsedMs: Long, s: WakeAnimationSpec, parts: WakeFrameParts): Map<String, Float> {
-        val turns = HashMap<String, Float>()
-        for (sweep in s.sweep) for (key in sweep.views) {
-            val value = parts.rotation(key) ?: continue
-            turns[key] = (turns[key] ?: 0f) + sweep.angleAt(elapsedMs, value) - value
-        }
-        for (wobble in s.wobble) for (key in wobble.views) turns[key] = (turns[key] ?: 0f) + wobble.offsetAt(elapsedMs)
-        return turns
-    }
+    private fun WakeAnimationSpec.drawables(): List<Drawable?> =
+        listOf(pulse?.drawable) + layers.flatMap { listOf((it.source as? LayerSource.Image)?.drawable, it.clip.mask?.drawable) }
 
     /**
-     * The views that are hidden [elapsedMs] after the start of this wake: those of a low value, in the
-     * off half of a blink. None when no wake plays.
+     * Draws the layers that stay on the face while no animation plays (see [AnimLayerSpec.restSeconds])
+     * onto [canvas] of [width] pixels, at the clock time [nowMs]. Called right after the background of a
+     * normal frame. Draws nothing while a wake plays: then they are part of the wake frame.
      */
-    internal fun hiddenAt(elapsedMs: Long): Set<String> =
-        if (!timer.isRunning) emptySet() else lowBlinks.filter { it.isOff(elapsedMs) }.flatMapTo(HashSet()) { it.views }
+    fun drawRest(canvas: Canvas, width: Int, nowMs: Long) {
+        if (timer.isRunning) return
+        animator?.drawRest(canvas, width / DESIGN_SIZE, nowMs, value)
+    }
 
     /** Stops watching and frees the pictures. */
     fun release() {
@@ -201,6 +191,8 @@ class WakeAnimator(
         scope = null
         timer.stop()
         layers.release()
-        pulse?.release()
+        animator?.release()
+        // Gone for good: a frame after this must not make new pictures that nobody frees
+        animator = null
     }
 }

@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.io.ByteArrayInputStream
-import java.io.File
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 internal class CwfDesignImportTest {
 
@@ -43,22 +45,22 @@ internal class CwfDesignImportTest {
 
     @Test
     fun `copies the picked designs and replaces the old ones with the same name`() {
-        val folder = FakeFolder(mutableMapOf("Cyberpunk_Tech.zip" to "old", "Mine.zip" to "mine"))
+        val folder = FakeFolder(mutableMapOf("Design_One.zip" to "old", "Mine.zip" to "mine"))
 
-        val result = sut.import(listOf(picked("Cyberpunk_Tech.zip", "new"), picked("Wilds_Weather.zip", "wilds")), folder)
+        val result = sut.import(listOf(picked("Design_One.zip", "new"), picked("Design_Two.zip", "two")), folder)
 
-        assertThat(result.imported).containsExactly("Cyberpunk_Tech.zip", "Wilds_Weather.zip")
+        assertThat(result.imported).containsExactly("Design_One.zip", "Design_Two.zip")
         assertThat(result.notImported).isEmpty()
-        assertThat(folder.files).containsExactly("Cyberpunk_Tech.zip", "new", "Wilds_Weather.zip", "wilds", "Mine.zip", "mine")
+        assertThat(folder.files).containsExactly("Design_One.zip", "new", "Design_Two.zip", "two", "Mine.zip", "mine")
     }
 
     @Test
     fun `a name without zip gets it, because only zips are listed`() {
         val folder = FakeFolder()
 
-        sut.import(listOf(picked("Cyberpunk_Tech", "new")), folder)
+        sut.import(listOf(picked("Design_One", "new")), folder)
 
-        assertThat(folder.files.keys).containsExactly("Cyberpunk_Tech.zip")
+        assertThat(folder.files.keys).containsExactly("Design_One.zip")
     }
 
     @Test
@@ -77,10 +79,12 @@ internal class CwfDesignImportTest {
     }
 
     @Test
-    fun `a real design zip is a watch face, other bytes are not`() {
-        val zip = File(repoRoot(), "wear/cwf-designs/Cyberpunk_Tech.zip").readBytes()
+    fun `a design zip is a watch face, other bytes are not`() {
+        val json = "CustomWatchface.json" to "{\"metadata\":{\"name\":\"Test\"}}"
 
-        assertThat(CwfDesignImport.isWatchfaceZip(zip, "Cyberpunk_Tech.zip")).isTrue()
+        assertThat(CwfDesignImport.isWatchfaceZip(zipOf(json, "CustomWatchface.png" to "picture"), "Test.zip")).isTrue()
+        // Without its preview picture it is not a design
+        assertThat(CwfDesignImport.isWatchfaceZip(zipOf(json), "Test.zip")).isFalse()
         assertThat(CwfDesignImport.isWatchfaceZip("not a zip".toByteArray(), "notes.zip")).isFalse()
     }
 
@@ -103,11 +107,18 @@ internal class CwfDesignImportTest {
 
     @Test
     fun `zip names are kept and other names get zip`() {
-        assertThat(CwfDesignImport.zipName("Wilds_Weather.zip")).isEqualTo("Wilds_Weather.zip")
-        assertThat(CwfDesignImport.zipName("Wilds_Weather")).isEqualTo("Wilds_Weather.zip")
+        assertThat(CwfDesignImport.zipName("Design_Two.zip")).isEqualTo("Design_Two.zip")
+        assertThat(CwfDesignImport.zipName("Design_Two")).isEqualTo("Design_Two.zip")
     }
 
-    /** The test runs in the module folder; the designs live at the top of the repo. */
-    private fun repoRoot(): File =
-        generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "wear/cwf-designs").isDirectory }
+    /** A zip of [entries]: file name and text. */
+    private fun zipOf(vararg entries: Pair<String, String>): ByteArray = ByteArrayOutputStream().also { bytes ->
+        ZipOutputStream(bytes).use { zip ->
+            entries.forEach { (name, text) ->
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(text.toByteArray())
+                zip.closeEntry()
+            }
+        }
+    }.toByteArray()
 }
