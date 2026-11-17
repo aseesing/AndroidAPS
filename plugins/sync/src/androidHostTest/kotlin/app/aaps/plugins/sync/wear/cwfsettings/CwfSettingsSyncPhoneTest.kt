@@ -13,20 +13,31 @@ import app.aaps.core.interfaces.rx.weardata.CwfSettingValue
 import app.aaps.core.interfaces.rx.weardata.CwfSettingsSync
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.DateUtil
+import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.preview.PreviewSlot
 import app.aaps.shared.impl.rx.bus.RxBusImpl
 import app.aaps.wear.watchfaces.settingsync.CwfSyncedSettings
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -179,5 +190,37 @@ class CwfSettingsSyncPhoneTest {
         // No design known: every look setting, as the watch menu does
         assertThat(CwfSettingsViewModel.uiStateOf(sut.names, emptyMap(), null).look.map { it.setting })
             .containsExactlyElementsIn(CwfSyncedSettings.faceLook).inOrder()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun theNightFaceHasItsOwnSettingsScreenWithTheSameSettings() {
+        Dispatchers.setMain(UnconfinedTestDispatcher()) // the view model scope
+        try {
+            val day = CwfData("{}", mutableMapOf(), mutableMapOf())
+            // Only the night design sets a value
+            val night = CwfData(
+                "{}",
+                mutableMapOf(CwfMetadataKey.CWF_AUTHORIZATION to "true", CwfMetadataKey.CWF_PREF_WATCH_SHOW_IOB to "false"),
+                mutableMapOf()
+            )
+            val nightFlow = MutableStateFlow<CwfData?>(night)
+            val wearPlugin: WearPlugin = mock {
+                on { savedCustomWatchface } doReturn MutableStateFlow(day)
+                on { savedNightWatchface } doReturn nightFlow
+            }
+            val viewModel = CwfSettingsViewModel(sut, store, wearPlugin)
+            fun stateOf(slot: PreviewSlot, shared: Boolean) =
+                runBlocking { withTimeout(5_000) { viewModel.uiState(slot).first { it.shownValues.isNotEmpty() && it.sharedWithOtherFace == shared } } }
+
+            assertThat(stateOf(PreviewSlot.DAY, shared = true).shownValues.none { it.setByDesign }).isTrue()
+            assertThat(stateOf(PreviewSlot.NIGHT, shared = true).shownValues.filter { it.setByDesign }.map { it.name }).containsExactly("show_iob")
+
+            // Without a night face the main face shares its settings with nothing
+            nightFlow.value = null
+            assertThat(stateOf(PreviewSlot.DAY, shared = false).shownValues).isNotEmpty()
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 }

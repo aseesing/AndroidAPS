@@ -54,13 +54,15 @@ import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.compose.ButtonDef
 import app.aaps.plugins.sync.wear.compose.ButtonRow
 import app.aaps.plugins.sync.wear.preview.CwfLivePreview
+import app.aaps.plugins.sync.wear.preview.PreviewSlot
 import app.aaps.wear.watchfaces.settingsync.CwfSyncedSetting
 import app.aaps.wear.watchfaces.settingsync.CwfSyncedSettings
 import androidx.compose.ui.res.stringResource as androidStringResource
 
 /**
  * The live preview of the Custom watch face on the wear screen, with a button under it that opens
- * the watch face settings. Takes the place of the static picture, with the same parameters as [Image].
+ * the watch face settings. Takes the place of the static picture, with the same parameters as [Image],
+ * and [slot] for the face it shows: the day face card and the night face card each have one.
  *
  * While the settings are open the preview is drawn there, and here the static picture stands in: one
  * live preview at a time is enough work.
@@ -70,27 +72,28 @@ fun CwfPreviewAndSettings(
     bitmap: ImageBitmap,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Fit
+    contentScale: ContentScale = ContentScale.Fit,
+    slot: PreviewSlot = PreviewSlot.DAY
 ) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     if (settingsOpen) Image(bitmap = bitmap, contentDescription = contentDescription, modifier = modifier, contentScale = contentScale)
-    else CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = modifier, contentScale = contentScale)
+    else CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = modifier, contentScale = contentScale, slot = slot)
     ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings)) { settingsOpen = true }, button2 = null)
-    if (settingsOpen && !LocalInspectionMode.current) CwfSettingsDialog(bitmap, contentDescription, onClose = { settingsOpen = false })
+    if (settingsOpen && !LocalInspectionMode.current) CwfSettingsDialog(bitmap, contentDescription, slot, onClose = { settingsOpen = false })
 }
 
-/** The watch face settings over the whole screen, with the live preview at the top. */
+/** The watch face settings over the whole screen, with the live preview of [slot] at the top. */
 @Composable
-private fun CwfSettingsDialog(bitmap: ImageBitmap, contentDescription: String?, onClose: () -> Unit) {
+private fun CwfSettingsDialog(bitmap: ImageBitmap, contentDescription: String?, slot: PreviewSlot, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             val viewModel: CwfSettingsViewModel = metroViewModel()
-            val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val state by viewModel.uiState(slot).collectAsStateWithLifecycle()
             CwfSettingsContent(
                 state = state,
                 onChange = viewModel::set,
                 onClose = onClose,
-                preview = { CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize()) }
+                preview = { CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize(), slot = slot) }
             )
         }
     }
@@ -128,6 +131,14 @@ internal fun CwfSettingsContent(
         HorizontalDivider()
         ProvidePreferenceTheme {
             LazyColumn(modifier = Modifier.weight(1f)) {
+                if (state.sharedWithOtherFace) item {
+                    Text(
+                        text = stringResource(SyncStrings.wear_cwf_settings_shared),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = AapsSpacing.extraLarge, vertical = AapsSpacing.medium)
+                    )
+                }
                 if (!state.fromWatch) item {
                     Text(
                         text = stringResource(SyncStrings.wear_cwf_settings_not_from_watch),
@@ -194,7 +205,8 @@ internal fun CwfSettingsContentPreview() {
                 state = CwfSettingsUiState(
                     look = CwfSyncedSettings.faceLook.take(3).map { CwfSettingRow(it.toString(), it, it.defaultValue, setByDesign = false) },
                     shownValues = CwfSyncedSettings.shownValues.take(4).mapIndexed { i, it -> CwfSettingRow(it.toString(), it, it.defaultValue, setByDesign = i == 0) },
-                    fromWatch = false
+                    fromWatch = false,
+                    sharedWithOtherFace = true
                 ),
                 onChange = { _, _ -> },
                 onClose = {},

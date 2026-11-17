@@ -10,6 +10,7 @@
     <string name="wear_cwf_settings" comment="Button on the Wear screen, and title of the screen it opens: the settings of the Custom watch face, set from the phone">Watch face settings</string>
     <string name="wear_cwf_settings_look" comment="Header of a group of settings: how the Custom watch face looks (seconds, date, dark, wake-up animation, ...)">Look</string>
     <string name="wear_cwf_settings_shown_values" comment="Header of a group of settings: which values the Custom watch face shows (BG, IOB, COB, ...)">Values shown</string>
+    <string name="wear_cwf_settings_shared">The day face and the night face share these settings. A change here changes both faces.</string>
     <string name="wear_cwf_settings_not_from_watch">The watch has not sent its settings yet. Until it does, the defaults are shown here.</string>
     <string name="wear_cwf_settings_set_by_design" comment="Shown under a setting that the user cannot change, because the loaded watch face sets it. Authorize custom watchfaces is the name of a setting in the wear settings.">Set by the watch face, because of the setting \"Authorize custom watchfaces\"</string>
 </resources>
