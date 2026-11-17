@@ -346,6 +346,24 @@ internal class WearViewModelTest {
     }
 
     @Test
+    fun `deleting a design says how it went and shows the list again`() = runTest(UnconfinedTestDispatcher()) {
+        val zip = CwfFile(
+            cwfData = CwfData(json = "{}", metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Analog G-Watch"), resData = mutableMapOf()),
+            zipByteArray = ByteArray(0)
+        )
+        whenever(designImport.deleteFrom(zip)).thenReturn("Deleted: Analog_G-Watch.zip")
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        val messages = mutableListOf<String>()
+        backgroundScope.launch { sut.toastEvent.toList(messages) }
+
+        sut.deleteDesign(zip)
+
+        assertThat(messages).containsExactly("Deleted: Analog_G-Watch.zip")
+        // The list is read again on the IO dispatcher
+        verify(fileListProvider, timeout(2_000)).listCustomWatchfaceFiles()
+    }
+
+    @Test
     fun `an empty pick imports nothing`() {
         sut.importDesigns(emptyList())
 
