@@ -19,6 +19,7 @@ import app.aaps.core.interfaces.rx.events.EventNsClientStatusUpdated
 import app.aaps.core.interfaces.stats.TddCalculator
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.DecimalFormatter
+import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.IntKey
 import app.aaps.core.keys.interfaces.IntPreferenceKey
 import app.aaps.core.keys.interfaces.Preferences
@@ -73,7 +74,8 @@ class StatusViewModel(
     private val preferences: Preferences,
     private val tddCalculator: TddCalculator,
     private val decimalFormatter: DecimalFormatter,
-    private val processedDeviceStatusData: ProcessedDeviceStatusData
+    private val processedDeviceStatusData: ProcessedDeviceStatusData,
+    private val statusTimeLeft: StatusTimeLeft
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StatusUiState())
@@ -100,7 +102,10 @@ class StatusViewModel(
         persistenceLayer.databaseClearedFlow.map { },
         // AAPSCLIENT: the reservoir comes from the NS device status
         rxBus.toFlow(EventNsClientStatusUpdated::class).map { },
-        pumpLevelChanges()
+        pumpLevelChanges(),
+        // Age or time left: the rows change at once when the user flips the switch.
+        // drop(1): a StateFlow sends its current value first, which is not a change
+        preferences.observe(BooleanKey.OverviewStatusLightsCountdown).drop(1).map { }
     )
 
     /**
@@ -133,14 +138,17 @@ class StatusViewModel(
             val pumpDescription = pump.pumpDescription
             val isInitialized = pump.isInitialized()
             val isPatchPump = pumpDescription.isPatchPump
+            val countdown = preferences.get(BooleanKey.OverviewStatusLightsCountdown)
+            // Only a pod has a known end. It holds the insulin too, so the insulin ends with the pod.
+            val podLifetime = if (countdown) DeviceLifetime.of(pump.model()) else null
 
             // Build status items (without expensive TDD calculation)
-            val sensorStatus = buildSensorStatus()
-            val insulinStatus = buildInsulinStatus(isPatchPump, pumpDescription.maxReservoirReading.toDouble())
+            val sensorStatus = buildSensorStatus(countdown)
+            val insulinStatus = buildInsulinStatus(isPatchPump, pumpDescription.maxReservoirReading.toDouble(), podLifetime)
             val cannulaChange = withContext(aapsIoDispatcher) {
                 persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.CANNULA_CHANGE)
             }
-            val cannulaStatus = buildCannulaStatus(cannulaChange, isPatchPump, includeTddCalculation = false)
+            val cannulaStatus = buildCannulaStatus(cannulaChange, isPatchPump, podLifetime, includeTddCalculation = false)
             val batteryStatus = if (!isPatchPump || pumpDescription.useHardwareLink) {
                 buildBatteryStatus()
             } else null
@@ -166,14 +174,14 @@ class StatusViewModel(
 
             // Calculate cannula usage (expensive operation). The items above are already shown, and the
             // usage is part of this job, so a newer refresh cancels it too.
-            val cannulaStatusWithUsage = buildCannulaStatus(cannulaChange, isPatchPump, includeTddCalculation = true)
+            val cannulaStatusWithUsage = buildCannulaStatus(cannulaChange, isPatchPump, podLifetime, includeTddCalculation = true)
             _uiState.update { state ->
                 state.copy(cannulaStatus = cannulaStatusWithUsage)
             }
         }
     }
 
-    private suspend fun buildSensorStatus(): StatusItem {
+    private suspend fun buildSensorStatus(countdown: Boolean): StatusItem {
         val event = withContext(aapsIoDispatcher) {
             persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)
         }
@@ -182,12 +190,17 @@ class StatusViewModel(
         val hasBattery = !config.AAPSCLIENT && bgSource.sensorBatteryLevel != -1
         val level = if (hasBattery) rh.gs(CoreUiStrings.units_format_percent, bgSource.sensorBatteryLevel) else null
         val levelPercent = if (hasBattery) bgSource.sensorBatteryLevel / 100f else -1f
+        // The newest reading names the sensor model, and with it the lifetime the maker gives it
+        val lifetime = if (countdown && event != null) {
+            DeviceLifetime.of(withContext(aapsIoDispatcher) { persistenceLayer.getLastGlucoseValue() }?.sourceSensor)
+        } else null
+        val age = ageDisplay(event, lifetime, IntKey.OverviewSageWarning, IntKey.OverviewSageCritical)
 
         return StatusItem(
             label = rh.gs(CoreUiStrings.sensor_label),
-            age = event?.let { formatAge(it.timestamp) } ?: "-",
-            ageStatus = event?.let { getAgeStatus(it.timestamp, IntKey.OverviewSageWarning, IntKey.OverviewSageCritical) } ?: StatusLevel.UNSPECIFIED,
-            agePercent = event?.let { getAgePercent(it.timestamp, IntKey.OverviewSageCritical) } ?: 0f,
+            age = age.text,
+            ageStatus = age.status,
+            agePercent = age.percent,
             level = level,
             levelStatus = if (levelPercent >= 0) getLevelStatus((levelPercent * 100).toDouble(), IntKey.OverviewSbatWarning, IntKey.OverviewSbatCritical) else StatusLevel.UNSPECIFIED,
             levelPercent = if (levelPercent >= 0) 1f - levelPercent else -1f,
@@ -196,7 +209,7 @@ class StatusViewModel(
         )
     }
 
-    private suspend fun buildInsulinStatus(isPatchPump: Boolean, maxReading: Double): StatusItem {
+    private suspend fun buildInsulinStatus(isPatchPump: Boolean, maxReading: Double, podLifetime: DeviceLifetime?): StatusItem {
         val event = withContext(aapsIoDispatcher) {
             persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.INSULIN_CHANGE)
         }
@@ -218,12 +231,13 @@ class StatusViewModel(
                 rh.gs(CoreUiStrings.value_with_unit, decimalFormatter.to0Decimal(reservoirLevel), rh.gs(CoreUiStrings.insulin_unit_shortname))
             }
         } else null
+        val age = ageDisplay(event, podLifetime, IntKey.OverviewIageWarning, IntKey.OverviewIageCritical)
 
         return StatusItem(
             label = rh.gs(CoreUiStrings.insulin_label),
-            age = event?.let { formatAge(it.timestamp) } ?: "-",
-            ageStatus = event?.let { getAgeStatus(it.timestamp, IntKey.OverviewIageWarning, IntKey.OverviewIageCritical) } ?: StatusLevel.UNSPECIFIED,
-            agePercent = event?.let { getAgePercent(it.timestamp, IntKey.OverviewIageCritical) } ?: 0f,
+            age = age.text,
+            ageStatus = age.status,
+            agePercent = age.percent,
             level = level,
             levelStatus = if (reservoirLevel > 0) getLevelStatus(reservoirLevel, IntKey.OverviewResWarning, IntKey.OverviewResCritical) else StatusLevel.UNSPECIFIED,
             levelPercent = -1f, // No progress bar - reservoir sizes vary by pump
@@ -232,7 +246,7 @@ class StatusViewModel(
         )
     }
 
-    private suspend fun buildCannulaStatus(event: TE?, isPatchPump: Boolean, includeTddCalculation: Boolean): StatusItem {
+    private suspend fun buildCannulaStatus(event: TE?, isPatchPump: Boolean, podLifetime: DeviceLifetime?, includeTddCalculation: Boolean): StatusItem {
         // Calculate usage since last cannula change (expensive - can be deferred)
         val usage = if (includeTddCalculation && event != null) {
             withContext(aapsIoDispatcher) {
@@ -242,12 +256,13 @@ class StatusViewModel(
 
         val label = if (isPatchPump) rh.gs(CoreUiStrings.patch_pump) else rh.gs(CoreUiStrings.cannula)
         val icon = if (isPatchPump) IcPatchPump else IcCannulaChange
+        val age = ageDisplay(event, podLifetime, IntKey.OverviewCageWarning, IntKey.OverviewCageCritical)
 
         return StatusItem(
             label = label,
-            age = event?.let { formatAge(it.timestamp) } ?: "-",
-            ageStatus = event?.let { getAgeStatus(it.timestamp, IntKey.OverviewCageWarning, IntKey.OverviewCageCritical) } ?: StatusLevel.UNSPECIFIED,
-            agePercent = event?.let { getAgePercent(it.timestamp, IntKey.OverviewCageCritical) } ?: 0f,
+            age = age.text,
+            ageStatus = age.status,
+            agePercent = age.percent,
             level = if (usage > 0) rh.gs(CoreUiStrings.value_with_unit, decimalFormatter.to0Decimal(usage), rh.gs(CoreUiStrings.insulin_unit_shortname)) else null,
             levelStatus = StatusLevel.UNSPECIFIED, // Usage doesn't have warning thresholds
             levelPercent = -1f,
@@ -293,6 +308,16 @@ class StatusViewModel(
             compactLevel = showLevel && useBatteryLevel, // hidden when no level value (e.g., AAPSCLIENT)
             expandedLevel = showLevel
         )
+    }
+
+    /**
+     * The age of a part, or, when the user turned the countdown on and the end of the part is known
+     * ([lifetime] not null), the time left until that end.
+     */
+    private fun ageDisplay(event: TE?, lifetime: DeviceLifetime?, warnKey: IntPreferenceKey, urgentKey: IntPreferenceKey): AgeDisplay = when {
+        event == null    -> AgeDisplay("-", StatusLevel.UNSPECIFIED, 0f)
+        lifetime != null -> statusTimeLeft.of(event.timestamp, lifetime)
+        else             -> AgeDisplay(formatAge(event.timestamp), getAgeStatus(event.timestamp, warnKey, urgentKey), getAgePercent(event.timestamp, urgentKey))
     }
 
     // Always the short form, on every screen size: a status row is read at a glance, and the long
