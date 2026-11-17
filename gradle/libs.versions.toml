@@ -147,6 +147,7 @@ androidx-wear-watchface-editor = { group = "androidx.wear.watchface", name = "wa
 androidx-wear-watchface-client = { group = "androidx.wear.watchface", name = "watchface-client", version = "1.2.1" }
 androidx-wear-compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "wearCompose" }
 androidx-wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
+androidx-health-services-client = { group = "androidx.health", name = "health-services-client", version = "1.1.0" }
 
 io-reactivex-rxjava3-rxkotlin = { group = "io.reactivex.rxjava3", name = "rxkotlin", version = "3.0.1" }
 io-reactivex-rxjava3-rxandroid = { group = "io.reactivex.rxjava3", name = "rxandroid", version = "3.0.2" }

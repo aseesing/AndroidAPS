@@ -35,6 +35,10 @@ import app.aaps.wear.complications.WallpaperGrayComplication
 import app.aaps.wear.complications.WallpaperLightComplication
 import app.aaps.wear.complications.cwf.CwfAmbientFaceComplication
 import app.aaps.wear.complications.cwf.CwfFaceComplication
+import app.aaps.wear.health.HealthPassiveService
+import app.aaps.wear.health.HealthPermissionActivity
+import app.aaps.wear.health.HeartRateComplication
+import app.aaps.wear.health.StepsComplication
 import app.aaps.wear.interaction.ConfigurationActivity
 import app.aaps.wear.interaction.WatchfaceConfigurationActivity
 import app.aaps.wear.interaction.actions.BackgroundActionActivity
@@ -317,6 +321,24 @@ object WearMemberInjectors {
     @Provides
     @FeatureMemberInjectors
     @IntoMap
+    @ClassKey(HealthPassiveService::class)
+    fun bindHealthPassiveService(injector: MembersInjector<HealthPassiveService>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(HealthPermissionActivity::class)
+    fun bindHealthPermissionActivity(injector: MembersInjector<HealthPermissionActivity>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(HeartRateComplication::class)
+    fun bindHeartRateComplication(injector: MembersInjector<HeartRateComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
     @ClassKey(IobDetailedComplication::class)
     fun bindIobDetailedComplication(injector: MembersInjector<IobDetailedComplication>): MembersInjector<*> = injector
 
@@ -433,6 +455,12 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(StatusMenuActivity::class)
     fun bindStatusMenuActivity(injector: MembersInjector<StatusMenuActivity>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(StepsComplication::class)
+    fun bindStepsComplication(injector: MembersInjector<StepsComplication>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors

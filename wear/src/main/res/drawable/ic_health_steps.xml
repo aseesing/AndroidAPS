@@ -1,0 +1,10 @@
+<!-- Two footprints, each a sole and a heel, for the AAPS steps complication -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4.83,7.39a2.80,3.70 -8.0 1,0 5.55,-0.78a2.80,3.70 -8.0 1,0 -5.55,0.78zM6.22,13.89a2.10,2.30 -8.0 1,0 4.16,-0.58a2.10,2.30 -8.0 1,0 -4.16,0.58zM13.63,10.21a2.80,3.70 8.0 1,0 5.55,0.78a2.80,3.70 8.0 1,0 -5.55,-0.78zM13.62,16.91a2.10,2.30 8.0 1,0 4.16,0.58a2.10,2.30 8.0 1,0 -4.16,-0.58z" />
+</vector>
