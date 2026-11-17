@@ -16,6 +16,7 @@ internal fun CwfImportContentPreview() {
                 previewImportItem("Digital Style", "digital_style", false, 0, false),
                 previewImportItem("Steampunk", "steampunk", true, 2, false)
             ),
+            importing = false,
             onItemClick = {}
         )
     }
