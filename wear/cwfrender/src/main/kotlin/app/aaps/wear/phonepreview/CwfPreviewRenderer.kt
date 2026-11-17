@@ -66,7 +66,8 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         val wakeAnimator = WakeAnimator(
             heartRate = { null }, // the phone does not measure it; the pulse uses the design's fallback
             chosenLengthMs = { WakeLength.parse(host.sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) },
-            value = { key -> face.wakeValue(key) } // a low battery blinks, as on the watch
+            value = { key -> face.wakeValue(key) }, // a low battery blinks, as on the watch
+            moon = { epochMs, size -> face.wakeMoon(epochMs, size) } // the moon layers, the same picture as the face's resting layers
         )
 
         /** The size of the last frame. The kept layer pictures only fit that size. */

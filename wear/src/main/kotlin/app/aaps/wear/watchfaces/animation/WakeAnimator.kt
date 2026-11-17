@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.wear.watchfaces.animation
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.os.SystemClock
@@ -34,11 +35,14 @@ import kotlinx.coroutines.launch
  * @param value the value of a `dynData` value key, or null when there is none; decides which views
  *   blink ([BlinkSpec]) and is the `v_<key>` of a formula. Read once per wake: the battery values
  *   change slowly.
+ * @param moon the moon at a clock time (epoch ms), in a square of so many pixels, for a moon layer
+ *   ([LayerSource.Moon]); null when there is none. The caller keeps the picture, see [LayerAnimator].
  */
 class WakeAnimator(
     private val heartRate: () -> Int?,
     chosenLengthMs: () -> Long? = { null },
     private val value: (String) -> Double? = { null },
+    private val moon: (Long, Int) -> Bitmap? = { _, _ -> null },
     private val timer: WakeTimer = WakeTimer(chosenLengthMs) { SystemClock.elapsedRealtime() },
     private val layers: WakeFrameLayers = WakeFrameLayers(),
     private val newScope: () -> CoroutineScope = { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
@@ -71,7 +75,7 @@ class WakeAnimator(
         timer.spec = s
         if (s?.withoutImage() != spec?.withoutImage() || !sameDrawables(s, spec)) {
             animator?.release()
-            animator = s?.let { LayerAnimator(it.allLayers()) }
+            animator = s?.let { LayerAnimator(it.allLayers(), moon = moon) }
             hasWakeValues = false
             layers.invalidate()
         }

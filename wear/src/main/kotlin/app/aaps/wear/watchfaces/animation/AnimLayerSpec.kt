@@ -8,7 +8,7 @@ import android.graphics.Color
 import android.graphics.drawable.Drawable
 
 /**
- * One animated layer of a design: a picture, a simple shape or a view of the face, drawn once or many
+ * One animated layer of a design: a picture, a simple shape, the moon or a view of the face, drawn once or many
  * times, where every property can be a [Formula] of the time and of the copy. All the effects of the
  * wake-up animation are made of these (see [allLayers]); a design can also give its own in the
  * `layers` list of its `animation`.
@@ -47,6 +47,7 @@ data class AnimLayerSpec(
         if (clip.mask != null && clip.mask.drawable == null) return null       // not in the zip: never drawn without its mask
         if (source is LayerSource.View && source.key.isEmpty()) return null
         if (source is LayerSource.Shape && source.colors.isEmpty()) return null
+        if (source is LayerSource.Moon && !(source.rect.width > 0f && source.rect.height > 0f)) return null
         if (props.values.any { it.length > Formula.MAX_LENGTH }) return null
         return copy(
             copies = copies.normalized(),
@@ -97,6 +98,23 @@ sealed interface LayerSource {
      * variables `rot0` and `dx0`.
      */
     data class View(val key: String) : LayerSource
+
+    /**
+     * The moon as it is in the sky now, the same picture as a view with `"moonLight": true` (see
+     * `MoonPicture`): today's phase, turned as it stands in the sky of the stored place. Drawn in the
+     * middle of [rect] as a square of its shorter side, and moved by `x` and `y` like a picture. So a
+     * design can draw the moon below other layers, for example below an aurora, which is light in our
+     * own air and so in front of the moon. Has no glow: a design that wants one gives its own layer.
+     */
+    data class Moon(val rect: DesignRect) : LayerSource {
+
+        /** The square the moon is drawn in. */
+        val square: DesignRect
+            get() {
+                val side = minOf(rect.width, rect.height)
+                return DesignRect(rect.left + (rect.width - side) / 2, rect.top + (rect.height - side) / 2, side, side)
+            }
+    }
 }
 
 /**

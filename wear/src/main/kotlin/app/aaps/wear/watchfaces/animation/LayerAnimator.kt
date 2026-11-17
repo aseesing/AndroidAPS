@@ -51,8 +51,15 @@ data class ViewEffects(
  * Not thread safe: one animator draws on one thread.
  *
  * @param zone the time zone of `sec`, `min` and `hour`
+ * @param moon the moon at a clock time (epoch ms), in a square of so many pixels, for a
+ *   [LayerSource.Moon] layer; null when there is none. The caller keeps the picture (see `MoonPicture`):
+ *   it is asked again only once a minute or when the size changes, and it is never freed here.
  */
-class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId = { ZoneId.systemDefault() }) {
+class LayerAnimator(
+    specs: List<AnimLayerSpec>,
+    private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+    private val moon: (Long, Int) -> Bitmap? = { _, _ -> null }
+) {
 
     private class Compiled(
         val spec: AnimLayerSpec,
@@ -72,6 +79,11 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
         var mask: Bitmap? = null
         var maskForScale = 0f
 
+        /** The picture of a moon layer, owned by the caller; with the minute and the size it was asked for. */
+        var moon: Bitmap? = null
+        var moonMinute = Long.MIN_VALUE
+        var moonSize = 0
+
         /** True when a copy may be turned or scaled; else the canvas needs no save per copy. */
         val hasTransform = props[LayerProp.ROTATION.ordinal] != null || props[LayerProp.SCALE_X.ordinal] != null || props[LayerProp.SCALE_Y.ordinal] != null
     }
@@ -80,6 +92,9 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
 
     /** True when a formula reads `sec`, `min` or `hour`: only then the clock time is worked out per frame. */
     private var usesClock = false
+
+    /** The clock time of the frame, from [setTime]: the moon of a moon layer is the moon of then. */
+    private var nowMs = 0L
     private val layers: List<Compiled>
     private val values: DoubleArray
 
@@ -161,6 +176,7 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
         values[LayerVariables.MS] = elapsedMs.toDouble()
         values[LayerVariables.LEN] = lengthMs.toDouble()
         values[LayerVariables.ENV] = env.toDouble()
+        this.nowMs = nowMs
         if (!usesClock) return
         // Not LocalTime.ofInstant: that needs API 31, the watch app runs from 30
         val time = Instant.ofEpochMilli(nowMs).atZone(zone()).toLocalTime()
@@ -182,6 +198,7 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
      */
     fun drawRest(canvas: Canvas, scale: Float, nowMs: Long, value: (String) -> Double?) {
         // A normal frame is a good moment to make the pictures, so the first frame of a wake does not stutter
+        this.nowMs = nowMs
         prepare(scale)
         if (!hasRest) return
         setWakeValues(value, values[LayerVariables.BPM].toInt())
@@ -236,6 +253,7 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
     fun prepare(scale: Float) {
         for (layer in layers) {
             (layer.spec.source as? LayerSource.Image)?.let { picture(layer, it, scale) }
+            (layer.spec.source as? LayerSource.Moon)?.let { moonPicture(layer, it, scale) }
             layer.spec.clip.mask?.let { mask(layer, it, scale) }
         }
     }
@@ -295,7 +313,11 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
      */
     private fun drawLayer(canvas: Canvas, layer: Compiled, scale: Float) {
         val spec = layer.spec
-        val picture = (spec.source as? LayerSource.Image)?.let { picture(layer, it, scale) ?: return }
+        val picture = when (val source = spec.source) {
+            is LayerSource.Image -> picture(layer, source, scale) ?: return
+            is LayerSource.Moon  -> moonPicture(layer, source, scale) ?: return
+            else                 -> null
+        }
         val maskSpec = spec.clip.mask
         val mask = maskSpec?.let { mask(layer, it, scale) ?: return }
         val blend = when (spec.blend) {
@@ -330,7 +352,8 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
             val alpha = layer.value(LayerProp.ALPHA, 1f)
             if (!(alpha > ALPHA_SHOWN)) continue
             when (val source = spec.source) {
-                is LayerSource.Image -> drawPicture(canvas, layer, source, picture!!, i, alpha, scale)
+                is LayerSource.Image -> drawPicture(canvas, layer, source.rect, picture!!, i, alpha, scale)
+                is LayerSource.Moon  -> drawPicture(canvas, layer, source.square, picture!!, i, alpha, scale)
                 is LayerSource.Shape -> drawShape(canvas, layer, source, alpha, scale)
                 is LayerSource.View  -> Unit
             }
@@ -365,8 +388,7 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
         if (save != NO_SAVE) canvas.restoreToCount(save)
     }
 
-    private fun drawPicture(canvas: Canvas, layer: Compiled, source: LayerSource.Image, picture: Bitmap, i: Int, alpha: Float, scale: Float) {
-        val rect = source.rect
+    private fun drawPicture(canvas: Canvas, layer: Compiled, rect: DesignRect, picture: Bitmap, i: Int, alpha: Float, scale: Float) {
         val x = layer.value(LayerProp.X, 0f)
         val y = layer.value(LayerProp.Y, 0f)
         // A formula that reads a missing value gives NaN: then this copy is not drawn
@@ -574,6 +596,22 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
         return bitmap
     }
 
+    /**
+     * The picture of a moon layer at the largest size it is drawn ([AnimLayerSpec.maxScale]), from
+     * [moon]. Asked again when the minute or the size changes, so a frame costs nothing: the caller
+     * makes a new picture only when the moon looks different (see `MoonPicture`). Null when there is none.
+     */
+    private fun moonPicture(layer: Compiled, source: LayerSource.Moon, scale: Float): Bitmap? {
+        val size = ceil(source.square.width * scale * layer.spec.maxScale).toInt().coerceIn(1, MAX_MOON_SIZE)
+        val minute = Math.floorDiv(nowMs, MOON_ASK_MS)
+        if (minute != layer.moonMinute || size != layer.moonSize) {
+            layer.moon = runCatching { moon(nowMs, size) }.getOrNull()
+            layer.moonMinute = minute
+            layer.moonSize = size
+        }
+        return layer.moon?.takeIf { !it.isRecycled }
+    }
+
     /** The bytes of all pictures, glows and masks kept now, each shared picture counted once. */
     private fun keptBytes(): Long = layers.sumOf { layer ->
         (if (layer.ownsPicture) layer.picture.bytes() else 0L) + layer.glow.bytes() + layer.mask.bytes()
@@ -622,6 +660,10 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
         layer.mask?.recycle()
         layer.mask = null
         layer.maskForScale = 0f
+        // The moon belongs to the caller: only let go
+        layer.moon = null
+        layer.moonMinute = Long.MIN_VALUE
+        layer.moonSize = 0
     }
 
     /** Frees the picture and glow of [layer]; a picture shared from another layer is only let go. */
@@ -660,5 +702,14 @@ class LayerAnimator(specs: List<AnimLayerSpec>, private val zone: () -> ZoneId =
 
         /** The size, in screen pixels, the band and dot shaders are made for. */
         const val SHADER_SIZE = 100f
+
+        /**
+         * The largest side of the moon picture. The moon is made pixel by pixel on the CPU (see
+         * `MoonPicture`), so a mistake in a design must not ask for a huge one.
+         */
+        const val MAX_MOON_SIZE = 512
+
+        /** How often a moon layer asks for its picture again. */
+        const val MOON_ASK_MS = 60_000L
     }
 }

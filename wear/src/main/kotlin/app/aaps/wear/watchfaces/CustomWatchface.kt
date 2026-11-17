@@ -176,6 +176,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private fun moonDrawable(view: JSONObject?, width: Int, height: Int): Drawable? =
         if (MoonPicture.isOn(view)) moonPicture.bitmap(renderNow(), storedLocation(), minOf(width, height))?.let { BitmapDrawable(resources, it) } else null
 
+    private val wakeMoonPicture = MoonPicture { BitmapFactory.decodeResource(resources, R.drawable.personal_moon_full) } // PERSONAL PATCH: own copy for the moon layers, so a moon view of another size does not redraw it each frame
+    internal fun wakeMoon(epochMs: Long, size: Int): Bitmap? = wakeMoonPicture.bitmap(epochMs, storedLocation(), size) // PERSONAL PATCH: the moon of a wake layer (`"moon": true`); internal for the phone preview
+
     /** The weather the phone sent last (see `EventData.Weather`), or null when there is none or it is too old. */
     private fun storedWeather(): String? {
         val kind = sp.getString(R.string.key_weather_kind, "").takeIf { it.isNotEmpty() } ?: return null
@@ -966,7 +969,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private val wake = WakeAnimator(
         heartRate = { HealthValues.of(this).heartRate() },
         chosenLengthMs = { WakeLength.parse(sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) },
-        value = ::wakeValue
+        value = ::wakeValue,
+        moon = ::wakeMoon // PERSONAL PATCH: the moon layers
     )
 
     /** The value of [key] (for example `uploader_battery`) for the animation's blink rule. Internal for the phone preview. */

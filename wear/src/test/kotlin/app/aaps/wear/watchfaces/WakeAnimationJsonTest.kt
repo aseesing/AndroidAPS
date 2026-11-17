@@ -176,6 +176,36 @@ class WakeAnimationJsonTest {
     }
 
     @Test
+    fun aMoonLayerIsReadWithItsRect() {
+        val spec = layer("""{"moon": true, "rect": {"left": 316, "top": 78, "width": 44, "height": 44}, "rest": 0, "blend": "screen", "x": 2}""")
+        assertThat(spec.source).isEqualTo(LayerSource.Moon(DesignRect(316f, 78f, 44f, 44f)))
+        assertThat(spec.blend).isEqualTo(LayerBlend.SCREEN)
+        assertThat(spec.props[LayerProp.X]).isEqualTo("2")
+        // a rest layer, also after normalizing: it stays on the face like a picture
+        assertThat(spec.normalized()!!.restSeconds).isEqualTo(0f)
+        // without a rect the moon fills the face; a rect that is not square draws in the middle of it
+        assertThat(layer("""{"moon": true}""").source).isEqualTo(LayerSource.Moon(DesignRect.FULL))
+        assertThat(LayerSource.Moon(DesignRect(10f, 20f, 60f, 40f)).square).isEqualTo(DesignRect(20f, 20f, 40f, 40f))
+    }
+
+    @Test
+    fun aMoonLayerNeedsTrueAndNoOtherSource() {
+        val spec = read(
+            """{"animation": {"layers": [
+                 {"moon": false},
+                 {"moon": true, "image": "heart"},
+                 {"moon": true, "shape": "dot"},
+                 {"moon": false, "shape": "dot", "x": 1},
+                 {"moon": "yes"},
+                 {"moon": true, "x": 2}
+               ]}}"""
+        )!!
+        assertThat(spec.layers.map { it.source }).containsExactly(LayerSource.Shape(ShapeKind.DOT), LayerSource.Moon(DesignRect.FULL)).inOrder()
+        // a moon of no size can never draw
+        assertThat(layer("""{"moon": true, "rect": {"width": 0}}""").normalized()).isNull()
+    }
+
+    @Test
     fun everyShapeAndItsColoursAreRead() {
         val kinds = layers("""{"shape": "line"}""", """{"shape": "rect"}""", """{"shape": "band"}""", """{"shape": "DOT"}""", """{"shape": "circle"}""")
             .map { (it.source as LayerSource.Shape).kind }
