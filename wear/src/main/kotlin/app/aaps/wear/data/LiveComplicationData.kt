@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.data
 
 import androidx.datastore.core.DataMigration
@@ -21,8 +17,8 @@ import java.io.OutputStream
  *
  * Kept in a file of its own, apart from the custom watch face designs. The designs hold all their
  * images, often close to a megabyte, and DataStore rewrites the whole file on every write. While both
- * lived in one file, every BG rewrote the designs too, a few hundred megabytes of flash a day. This
- * file is a few kilobytes.
+ * lived in one file, every BG rewrote the designs too. This file is a few kilobytes. See
+ * `ComplicationDataWritePerfTest` for the count of writes.
  *
  * Field names match [ComplicationData], so [ComplicationData.withLive] and [ComplicationData.toLive]
  * are plain copies.
@@ -65,13 +61,17 @@ fun ComplicationData.withLive(live: LiveComplicationData) = copy(
  * Fills a new live file with the live data that the old single file still holds, so the face shows
  * the last values at once after an update instead of "---" until the phone sends again.
  *
- * Runs only while the live file has never been written; the old file itself is left as it is.
+ * Runs only while the live file does not exist yet. The old file itself is left as it is, so its live
+ * fields stay frozen at the time of the update. That is why a live file that exists but cannot be read
+ * (damaged) must not be filled from there: it would bring back old BG and loop values, maybe months
+ * old. It reads as empty instead, and the phone sends new values soon.
  */
 internal class LiveDataFromDesignFile(
+    private val liveFileExists: () -> Boolean,
     private val readDesignFile: suspend () -> ComplicationData
 ) : DataMigration<LiveComplicationData> {
 
-    override suspend fun shouldMigrate(currentData: LiveComplicationData): Boolean = currentData == LiveComplicationData.EMPTY
+    override suspend fun shouldMigrate(currentData: LiveComplicationData): Boolean = !liveFileExists()
 
     override suspend fun migrate(currentData: LiveComplicationData): LiveComplicationData = readDesignFile().toLive()
 

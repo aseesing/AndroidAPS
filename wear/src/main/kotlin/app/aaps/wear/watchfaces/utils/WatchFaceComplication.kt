@@ -38,6 +38,7 @@ import androidx.wear.watchface.style.UserStyleSetting.ComplicationSlotsUserStyle
 import androidx.wear.watchface.style.UserStyleSetting.ComplicationSlotsUserStyleSetting.ComplicationSlotsOption
 import androidx.wear.watchface.style.WatchFaceLayer
 import java.time.ZonedDateTime
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 import kotlin.math.min
 import android.support.wearable.complications.ComplicationData as WireComplicationData
@@ -514,6 +515,25 @@ internal class WatchFaceComplications(
     // Keeps every pushed option's id distinct - see syncGeometry().
     private var geometryRevision = 0
 
+    private val redrawRequests = AtomicInteger(0)
+
+    /**
+     * How often a complication asked to be drawn again on its own, through the invalidate callback the
+     * library gave it (a drawable that changed, an image that finished loading). A watch face that
+     * keeps drawn complications in a picture compares it to know when that picture is out of date: the
+     * complication data itself did not change in that case.
+     */
+    val redrawRequestCount: Int get() = redrawRequests.get()
+
+    /** [callback], counting each call in [redrawRequestCount] first. */
+    internal fun countingRedrawRequests(callback: CanvasComplication.InvalidateCallback): CanvasComplication.InvalidateCallback =
+        object : CanvasComplication.InvalidateCallback {
+            override fun onInvalidate() {
+                redrawRequests.incrementAndGet()
+                callback.onInvalidate()
+            }
+        }
+
     /** The live state for [slotId], for a watch face to write its decoded style into. */
     fun stateFor(slotId: Int): ComplicationSlotState? = slotStates[slotId]
 
@@ -573,7 +593,7 @@ internal class WatchFaceComplications(
                 context = context,
                 drawable = drawable,
                 watchState = watchState,
-                invalidateCallback = invalidateCallback,
+                invalidateCallback = countingRedrawRequests(invalidateCallback),
                 imageFit = { state.imageFit },
                 iconColorRequested = { state.iconColorRequested }
             ).also { state.renderer = it }

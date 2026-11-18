@@ -53,6 +53,12 @@ class ComplicationDataRepository(
     private val sp: SP
 ) {
 
+    private companion object {
+
+        /** The file of [LiveComplicationData]. */
+        const val LIVE_FILE = "complication_live.pb"
+    }
+
     /**
      * Default watchface variant to display, honoring the `key_include_external` preference:
      * when enabled, the full template (with external/follower views) is used.
@@ -76,8 +82,13 @@ class ComplicationDataRepository(
      */
     private val liveStore: DataStore<LiveComplicationData> = DataStoreFactory.create(
         serializer = LiveComplicationDataSerializer(aapsLogger),
-        migrations = listOf(LiveDataFromDesignFile { dataStore.data.first() }),
-        produceFile = { context.dataStoreFile("complication_live.pb") }
+        migrations = listOf(
+            LiveDataFromDesignFile(
+                liveFileExists = { context.dataStoreFile(LIVE_FILE).exists() },
+                readDesignFile = { dataStore.data.first() }
+            )
+        ),
+        produceFile = { context.dataStoreFile(LIVE_FILE) }
     )
 
     /**

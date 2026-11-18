@@ -108,6 +108,8 @@ class WakeAnimator(
     /**
      * Draws this frame with the animation when it plays.
      *
+     * @param content any value that changes when the drawn face changes, compared with `equals`; a new
+     *   value draws the kept pictures again (see [WakeFrameLayers])
      * @param allowed false where the animation must never show (an image render, the simple face);
      *   stops it
      * @param ready false while the face cannot draw its views yet; a wake waits for the first frame
@@ -115,7 +117,7 @@ class WakeAnimator(
      * @return false when the frame must be drawn the normal way
      */
     fun drawFrame(
-        canvas: Canvas, width: Int, height: Int, nowMs: Long, content: Int, complications: List<Any?>,
+        canvas: Canvas, width: Int, height: Int, nowMs: Long, content: Any, complications: List<Any?>,
         parts: WakeFrameParts, allowed: Boolean, ready: Boolean
     ): Boolean {
         if (!allowed || isHeadless) {

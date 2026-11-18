@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchfaces.utils
 
 import android.graphics.Bitmap
@@ -33,7 +29,7 @@ fun drawWithHidden(parent: View, hide: List<View>, canvas: Canvas) {
  * frame with a running second hand only pastes them and draws the few views that do change.
  *
  * - The **base** is everything below the clock text: background, complications, chart and data. It
- *   is drawn again when the minute changes or anything else changed ([content], the complications).
+ *   is drawn again when the minute changes or anything else changed (`content`, the complications).
  * - The **top** is everything between the clock text and the second hand: the rest of the data and
  *   the hour and minute hands. It is drawn again with the base, and every [TOP_PERIOD_MS] in between,
  *   so the minute hand keeps creeping forward in steps of one degree.
@@ -43,7 +39,8 @@ fun drawWithHidden(parent: View, hide: List<View>, canvas: Canvas) {
  */
 class LayeredFrameCache(private val newBitmap: (Int, Int) -> Bitmap = { width, height -> createBitmap(width, height) }) {
 
-    private data class State(val width: Int, val height: Int, val period: Long, val content: Int, val complications: List<Any?>)
+    /** [content] is compared with `equals`: any value that changes when the drawn content changes. */
+    private data class State(val width: Int, val height: Int, val period: Long, val content: Any, val complications: List<Any?>)
 
     private var base: Bitmap? = null
     private var top: Bitmap? = null
@@ -60,7 +57,7 @@ class LayeredFrameCache(private val newBitmap: (Int, Int) -> Bitmap = { width, h
      * The base for a frame at [nowMs], drawn by [draw] first when the one kept is out of date. Starts
      * from black, like a cleared screen.
      */
-    fun base(width: Int, height: Int, nowMs: Long, content: Int, complications: List<Any?>, draw: (Canvas) -> Unit): Bitmap {
+    fun base(width: Int, height: Int, nowMs: Long, content: Any, complications: List<Any?>, draw: (Canvas) -> Unit): Bitmap {
         val state = State(width, height, nowMs / MINUTE_MS, content, complications)
         if (!fits(base, width, height)) {
             base?.recycle()
@@ -79,7 +76,7 @@ class LayeredFrameCache(private val newBitmap: (Int, Int) -> Bitmap = { width, h
     }
 
     /** The top for a frame at [nowMs], drawn by [draw] first when the one kept is out of date. Transparent where nothing paints. */
-    fun top(width: Int, height: Int, nowMs: Long, content: Int, draw: (Canvas) -> Unit): Bitmap {
+    fun top(width: Int, height: Int, nowMs: Long, content: Any, draw: (Canvas) -> Unit): Bitmap {
         val state = State(width, height, nowMs / TOP_PERIOD_MS, content, emptyList())
         if (!fits(top, width, height)) {
             top?.recycle()

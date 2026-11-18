@@ -927,7 +927,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
      * face, a render for an image - false sends the frame the normal way, once a minute.
      */
     override fun drawLayeredFrame(canvas: Canvas, bounds: Rect, zonedDateTime: ZonedDateTime): Boolean {
-        if (drawWakeFrame(canvas, bounds, zonedDateTime)) return true
+        if (drawWakeFrame(canvas, bounds, zonedDateTime)) return true // PERSONAL PATCH: a frame of the wake-up animation
         if (isRenderOnly || !isLayoutReady || !showSecond || simpleUi.isEnabled(currentWatchMode)) {
             layeredFrames.invalidate()
             return false
@@ -937,7 +937,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         val height = bounds.height()
         // The frame's own time, the one onTimeChanged saw when it filled the views for a new minute
         val now = zonedDateTime.toInstant().toEpochMilli()
-        val content = contentVersion * 31 + styleGeneration
+        val content = layeredFrameContent()
         val base = layeredFrames.base(width, height, now, content, complicationDataNow()) { layer ->
             layer.withRotation(backgroundView.rotation, backgroundView.pivotX, backgroundView.pivotY) {
                 backgroundView.draw(this)
@@ -958,9 +958,17 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         return true
     }
 
+    /**
+     * What the kept pictures of [drawLayeredFrame] depend on, besides the time and the complication
+     * data: every change announced through `invalidate()` and every frame drawn the normal way
+     * (`contentVersion`), the design (`styleGeneration`), and a complication that asked to be drawn
+     * again on its own (`WatchFaceComplications.redrawRequestCount`). A new value draws them again.
+     */
+    internal fun layeredFrameContent(): List<Int> = listOf(contentVersion, styleGeneration, complications.redrawRequestCount)
+
     override fun onDestroy() {
         layeredFrames.release()
-        wake.release()
+        wake.release() // PERSONAL PATCH: the wake-up animation
         super.onDestroy()
     }
 
@@ -1055,7 +1063,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private fun drawWakeFrame(canvas: Canvas, bounds: Rect, zonedDateTime: ZonedDateTime): Boolean {
         wakeFrameTime = zonedDateTime
         val drawn = wake.drawFrame(
-            canvas, bounds.width(), bounds.height(), zonedDateTime.toInstant().toEpochMilli(), contentVersion * 31 + styleGeneration,
+            canvas, bounds.width(), bounds.height(), zonedDateTime.toInstant().toEpochMilli(), layeredFrameContent(),
             complicationDataNow(), wakeParts, allowed = !isRenderOnly && !simpleUi.isEnabled(currentWatchMode), ready = isLayoutReady
         )
         if (drawn) layeredFrames.invalidate()

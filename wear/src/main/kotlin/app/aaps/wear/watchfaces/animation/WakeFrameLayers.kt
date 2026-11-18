@@ -118,7 +118,8 @@ class KeptLayer(private val clearColor: Int, private val newBitmap: (Int, Int) -
  */
 class WakeFrameLayers(newBitmap: (Int, Int) -> Bitmap = { width, height -> createBitmap(width, height) }) {
 
-    private data class State(val width: Int, val height: Int, val period: Long, val content: Int, val complications: List<Any?>)
+    /** [content] is compared with `equals`: any value that changes when the drawn content changes. */
+    private data class State(val width: Int, val height: Int, val period: Long, val content: Any, val complications: List<Any?>)
 
     private val background = KeptLayer(Color.BLACK, newBitmap)
     private val data = KeptLayer(Color.TRANSPARENT, newBitmap)
@@ -135,7 +136,7 @@ class WakeFrameLayers(newBitmap: (Int, Int) -> Bitmap = { width, height -> creat
      * what it wants of them on top of it.
      */
     fun draw(
-        canvas: Canvas, width: Int, height: Int, nowMs: Long, content: Int, complications: List<Any?>,
+        canvas: Canvas, width: Int, height: Int, nowMs: Long, content: Any, complications: List<Any?>,
         parts: WakeFrameParts, rain: (Canvas) -> Unit, heart: (Canvas) -> Unit,
         leaveOut: Set<String> = emptySet(), live: (Canvas) -> Unit = {}
     ) {
