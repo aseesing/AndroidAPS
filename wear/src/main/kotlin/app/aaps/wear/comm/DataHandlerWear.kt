@@ -9,7 +9,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
-import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -70,16 +69,18 @@ import app.aaps.wear.tile.TempTargetTileService
 import app.aaps.wear.tile.UserActionTileService
 import app.aaps.wear.watchfaces.PushedFace
 import app.aaps.wear.watchfaces.WatchFacePushHelper
-import app.aaps.wear.watchfaces.daynight.DayNightChoice
+import app.aaps.wear.watchfaces.daynight.OldDayNightPreferences
 import app.aaps.wear.watchfaces.daynight.StoredWeather
 import com.google.android.gms.wearable.WearableListenerService
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
@@ -101,9 +102,28 @@ class DataHandlerWear(
     // Coroutine scope for DataStore operations
     private val dataStoreScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * The face messages, one after the other. Each one reads and writes the face slots and answers
+     * the phone; run side by side, a late "no night face" from an earlier request could reach the
+     * phone after the report of a night face that was stored later.
+     */
+    private val faceWork = Channel<suspend () -> Unit>(Channel.UNLIMITED).also { work ->
+        dataStoreScope.launch {
+            for (next in work) {
+                try {
+                    next()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    aapsLogger.error(LTag.WEAR, "Watch face message failed", e)
+                }
+            }
+        }
+    }
 
     init {
         setupBus()
+        OldDayNightPreferences.remove(sp) // PERSONAL PATCH: the place and the look keys the personal build kept
     }
 
     /**
@@ -285,20 +305,6 @@ class DataHandlerWear(
             preferences.put(IntKey.OverviewCarbsButtonIncrement2, it.carbsButtonIncrement2)
             // Read by the watch's own alarms, see DoNotDisturbRule
             preferences.put(BooleanKey.AlertOverrideDoNotDisturb, it.alertOverrideDnd)
-            // The day look of the Custom watch face follows sunrise and sunset there. Kept when the
-            // phone sends none, so a short loss of the phone's place does not move the day to fixed hours.
-            val latitude = it.latitude
-            val longitude = it.longitude
-            // Written only when it changed, like the face's own preferences: a write can start a redraw.
-            if (latitude != null && longitude != null &&
-                (sp.getDouble(R.string.key_location_latitude, Double.NaN) != latitude || sp.getDouble(R.string.key_location_longitude, Double.NaN) != longitude)
-            ) {
-                sp.putDouble(R.string.key_location_latitude, latitude)
-                sp.putDouble(R.string.key_location_longitude, longitude)
-            }
-            // Private patch: the phone's choice for the day and night look, see CwfNight
-            takeFromPhone(R.string.key_day_night_look, R.string.key_day_night_look_phone, it.dayNightLook, DayNightChoice.ACTIVE_VALUES)
-            takeFromPhone(R.string.key_day_night_always_on, R.string.key_day_night_always_on_phone, it.alwaysOnLook, DayNightChoice.ALWAYS_ON_VALUES)
             // The Watch Face Push face the wearer chose on the phone. Stored whatever the watch
             // can do with it, so a watch updated to Wear OS 6 later installs the chosen face on
             // its next start; swapped now when the watch can. Either way the phone is told what
@@ -349,13 +355,14 @@ class DataHandlerWear(
                 TileService.getUpdater(context).requestUpdate(RunningModeTileService::class.java)
             }
         }
+        // The face messages run one after the other, in the order they came (see inFaceOrder)
         onEvent<EventData.ActionSetCustomWatchface>(detail = { " night=${it.night}" }) {
-            dataStoreScope.launch {
-                // Private patch: the night face has its own slot, see CwfNight
+            inFaceOrder {
+                // The night face has its own slot, see CwfNight
                 if (it.night) {
                     complicationDataRepository.storeNightWatchface(it.customWatchfaceData)
                     sendNightWatchface()
-                    return@launch
+                    return@inFaceOrder
                 }
                 complicationDataRepository.storeCustomWatchface(it.customWatchfaceData)
                 complicationDataRepository.getSimplifiedCustomWatchface()?.let { cwf ->
@@ -364,12 +371,11 @@ class DataHandlerWear(
             }
         }
         onEvent<EventData.ActionUpdateCustomWatchface>(detail = { " night=${it.night}" }) {
-            dataStoreScope.launch {
-                // Private patch: the night face has its own slot, see CwfNight
+            inFaceOrder {
                 if (it.night) {
                     complicationDataRepository.updateNightWatchfaceMetadata(it.customWatchfaceData.metadata)
                     sendNightWatchface()
-                    return@launch
+                    return@inFaceOrder
                 }
                 complicationDataRepository.updateCustomWatchfaceMetadata(it.customWatchfaceData.metadata)
                 complicationDataRepository.getSimplifiedCustomWatchface()?.let { cwf ->
@@ -377,54 +383,63 @@ class DataHandlerWear(
                 }
             }
         }
-        // Private patch: back to one face. The answer names the main face, and comes as an update
-        // (not as the usual ActionGetCustomWatchface), so the phone can tell it is the answer to this.
+        // Back to one face. The answer is the main face as ActionUpdateCustomWatchface(night = false),
+        // which the phone handles like any other report of the main face, and "no night face".
         onEvent<EventData.ActionClearNightWatchface> {
-            dataStoreScope.launch {
+            inFaceOrder {
                 complicationDataRepository.clearNightWatchface()
                 complicationDataRepository.getSimplifiedCustomWatchface()?.let { cwf ->
                     rxBus.send(EventWearDataToMobile(EventData.ActionUpdateCustomWatchface(cwf, night = false)))
                 }
+                sendNightWatchface()
+            }
+        }
+        // When it is day for the night face. Kept only with a night face: without one the phone is
+        // told so, since it sends a rule only while it thinks the watch has one.
+        onEvent<EventData.ActionSetDayNightRule>(detail = { " rule=${it.rule}" }) {
+            inFaceOrder {
+                if (!complicationDataRepository.storeDayNightRule(it.rule)) sendNightWatchface()
             }
         }
         onEvent<EventData.ActionrequestSetDefaultWatchface> {
-            dataStoreScope.launch {
+            inFaceOrder {
                 complicationDataRepository.setDefaultWatchface()
                 complicationDataRepository.getCustomWatchface()?.let { cwf ->
                     rxBus.send(EventWearDataToMobile(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(cwf), false)))
                 }
             }
         }
-        onEvent<EventData.ActionrequestCustomWatchface>(detail = { " export=${it.exportFile}" }) {
-            dataStoreScope.launch {
+        onEvent<EventData.ActionrequestCustomWatchface>(detail = { " export=${it.exportFile} night=${it.night}" }) {
+            inFaceOrder {
                 complicationDataRepository.getSimplifiedCustomWatchface(it.exportFile)?.let { cwf ->
                     rxBus.send(EventWearDataToMobile(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(cwf), it.exportFile)))
                 }
-                // Private patch: and the night face, when there is one. Not for an export, which
-                // is about the default design.
-                if (!it.exportFile) sendNightWatchface()
+                // And the night face, or that there is none. Not for an export, which is about the
+                // default design. "None" only when the phone asks: a phone that knows of no night
+                // face gets no extra message.
+                if (!it.exportFile && (it.night || complicationDataRepository.getNightWatchface() != null)) sendNightWatchface()
             }
         }
     }
 
-    /**
-     * Private patch: tells the phone which night face the watch has (see `CwfNight`). Sends nothing
-     * when there is none.
-     */
-    private suspend fun sendNightWatchface() {
-        complicationDataRepository.getSimplifiedNightWatchface()?.let { cwf ->
-            rxBus.send(EventWearDataToMobile(EventData.ActionUpdateCustomWatchface(cwf, night = true)))
-        }
+    /** Runs [work] after the face messages that came before it, see [faceWork]. */
+    private fun inFaceOrder(work: suspend () -> Unit) {
+        faceWork.trySend(work)
     }
 
     /**
-     * Private patch: stores a day / night setting the phone sent into the watch setting [key], when
-     * it differs from what the phone sent last time (kept in [lastKey]). See [DayNightChoice.fromPhone].
+     * Tells the phone which night face the watch has (see `CwfNight`), or with
+     * [EventData.ActionClearNightWatchface] that it has none, so the phone never shows a night face
+     * the watch no longer has.
      */
-    private fun takeFromPhone(@StringRes key: Int, @StringRes lastKey: Int, sent: String?, allowed: Set<String>) {
-        val value = DayNightChoice.fromPhone(sent, sp.getString(lastKey, ""), allowed) ?: return
-        sp.putString(lastKey, value)
-        sp.putString(key, value)
+    private suspend fun sendNightWatchface() {
+        val cwf = complicationDataRepository.getSimplifiedNightWatchface()
+        rxBus.send(
+            EventWearDataToMobile(
+                if (cwf != null) EventData.ActionUpdateCustomWatchface(cwf, night = true)
+                else EventData.ActionClearNightWatchface(System.currentTimeMillis())
+            )
+        )
     }
 
     private fun handleBolusProgress(bolusProgress: EventData.BolusProgress) {

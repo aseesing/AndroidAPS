@@ -34,8 +34,8 @@ internal interface CustomWatchfaceSettingsHost {
      */
     fun isSystemEditor(): Boolean = false
 
-    /** Private patch: true when a night face is stored besides the main one (see `CwfNight`). */
-    fun hasNightWatchface(): Boolean = false
+    /** True when a night face is stored besides the main one (see `CwfNight`). */
+    fun hasNightWatchface(): Boolean
 }
 
 /**
@@ -69,7 +69,9 @@ class CustomWatchfaceConfigurationFragment : PreferenceFragmentCompat() {
         } else {
             (activity as? CustomWatchfaceSettingsHost).let { host ->
                 CustomWatchface.settingRows(
-                    host?.storedWatchfaceConfiguration(), systemEditor = host?.isSystemEditor() == true, hasNightFace = host?.hasNightWatchface() == true
+                    host?.storedWatchfaceConfiguration(),
+                    systemEditor = host?.isSystemEditor() == true,
+                    hasNightFace = host?.hasNightWatchface() == true
                 )
             }
         }

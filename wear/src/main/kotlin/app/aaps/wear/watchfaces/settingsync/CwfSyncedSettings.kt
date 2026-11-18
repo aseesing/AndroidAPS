@@ -71,9 +71,8 @@ object CwfSyncedSettings {
 
     /**
      * Watch settings the phone does not offer, though the watch menu has them: the simplified view
-     * (it needs the watch), and the day / night look (the phone has its own settings for those, sent in
-     * `EventData.Preferences`). The complication pickers and the type priority have no value, so they
-     * are never offered.
+     * (it needs the watch), and the day / night look (settings of the watch only, see `DayNightChoice`).
+     * The complication pickers and the type priority have no value, so they are never offered.
      */
     private val NOT_SYNCED = setOf(R.string.key_simplify_ui, R.string.key_day_night_look, R.string.key_day_night_always_on)
 

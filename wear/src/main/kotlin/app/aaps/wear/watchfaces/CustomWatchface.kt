@@ -45,11 +45,13 @@ import androidx.wear.watchface.style.UserStyleSchema
 import app.aaps.core.interfaces.InterfacesStringIds
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.events.EventUpdateSelectedWatchface
+import app.aaps.core.interfaces.rx.events.EventWearToMobile
 import app.aaps.core.interfaces.rx.weardata.CUSTOM_VERSION
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataMap
 import app.aaps.core.interfaces.rx.weardata.CwfResDataMap
+import app.aaps.core.interfaces.rx.weardata.DayNightRule
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.rx.weardata.ResData
 import app.aaps.core.interfaces.rx.weardata.ResFormat
@@ -85,6 +87,7 @@ import app.aaps.wear.watchfaces.daynight.MoonPicture
 import app.aaps.wear.watchfaces.daynight.NightFace
 import app.aaps.wear.watchfaces.daynight.Orbit
 import app.aaps.wear.watchfaces.daynight.StoredWeather
+import app.aaps.wear.watchfaces.daynight.placeOf
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.ComplicationImageFit
 import app.aaps.wear.watchfaces.utils.ComplicationRender
@@ -162,23 +165,33 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private var lookJsonSource: JSONObject? = null
     private var lookJsonKey: Pair<Boolean, String?>? = null
 
-    /** Day or night, from the phone's last known place (see `DataHandlerWear`) or fixed hours without one. */
-    private val dayNight = DayNightClock(location = { storedLocation() })
+    /**
+     * Day or night, for the choice between the main face and the night face (see `CwfNight`).
+     * PERSONAL PATCH: also the sun and the moon of the personal designs, by the same rule ([skyRule]).
+     */
+    private val dayNight = DayNightClock(skyRule = { skyRule })
 
-    private fun storedLocation(): GeoPoint? {
-        val latitude = sp.getDouble(R.string.key_location_latitude, Double.NaN)
-        val longitude = sp.getDouble(R.string.key_location_longitude, Double.NaN)
-        return if (latitude.isNaN() || longitude.isNaN()) null else GeoPoint(latitude, longitude)
-    }
+    /** True while the views carry the night face. Always false without a night face. */
+    private var styleShowsNightFace = false
+
+    /**
+     * PERSONAL PATCH: the rule for when it is day that the watch keeps with its night face, as read in
+     * [setWatchfaceStyle]; null without a night face. The day look, the sun and the moon of the personal
+     * designs follow it, see `SkyTimes`. The place is on the watch only while it has a night face.
+     */
+    private var skyRule: DayNightRule? = null
+
+    /** PERSONAL PATCH: the place for the moon, from [skyRule]; null without a place. */
+    private fun skyPlace(): GeoPoint? = placeOf(skyRule)
 
     // PERSONAL PATCH: the moon drawn on the watch, for a view with `"moonLight": true` (see MoonPicture)
     private val moonPicture = MoonPicture { BitmapFactory.decodeResource(resources, R.drawable.personal_moon_full) }
 
     private fun moonDrawable(view: JSONObject?, width: Int, height: Int): Drawable? =
-        if (MoonPicture.isOn(view)) moonPicture.bitmap(renderNow(), storedLocation(), minOf(width, height))?.let { BitmapDrawable(resources, it) } else null
+        if (MoonPicture.isOn(view)) moonPicture.bitmap(renderNow(), skyPlace(), minOf(width, height))?.let { BitmapDrawable(resources, it) } else null
 
     private val wakeMoonPicture = MoonPicture { BitmapFactory.decodeResource(resources, R.drawable.personal_moon_full) } // PERSONAL PATCH: own copy for the moon layers, so a moon view of another size does not redraw it each frame
-    internal fun wakeMoon(epochMs: Long, size: Int): Bitmap? = wakeMoonPicture.bitmap(epochMs, storedLocation(), size) // PERSONAL PATCH: the moon of a wake layer (`"moon": true`); internal for the phone preview
+    internal fun wakeMoon(epochMs: Long, size: Int): Bitmap? = wakeMoonPicture.bitmap(epochMs, skyPlace(), size) // PERSONAL PATCH: the moon of a wake layer (`"moon": true`); internal for the phone preview
 
     /** The weather the phone sent last (see `EventData.Weather`), or null when there is none or it is too old. */
     private fun storedWeather(): String? {
@@ -281,14 +294,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
          * Which rows are relevant depends on the loaded CWF, and deciding that is this class's job -
          * only this class may read the CWF json.
          */
-        override fun settingRows(storedConfiguration: String?, systemEditor: Boolean): List<WatchFaceSettingRow> =
-            settingRows(storedConfiguration, systemEditor, hasNightFace = false)
-
-        /**
-         * Like the one above. [hasNightFace] (private patch) is true when a night face is stored:
-         * then the day / night rows choose between the two faces, whatever the main design has.
-         */
-        fun settingRows(storedConfiguration: String?, systemEditor: Boolean, hasNightFace: Boolean): List<WatchFaceSettingRow> {
+        override fun settingRows(storedConfiguration: String?, systemEditor: Boolean, hasNightFace: Boolean): List<WatchFaceSettingRow> {
             val json = storedConfiguration?.let {
                 try {
                     JSONObject(it)
@@ -336,8 +342,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 add(WatchFaceSettingRow.Toggle(R.string.key_include_external, R.string.pref_include_external, false))
                 // Wake-up animation (private patch): only for a design that has one
                 if (json == null || json.has(WakeAnimationSpec.JSON_KEY)) add(WakeLength.row())
-                // Day look (private patch): only for a design that has one, or with a night face
-                if (json == null || hasNightFace || DayOverlay.hasDayLook(json)) {
+                // Day face and night face: only when there is a night face to choose
+                // PERSONAL PATCH: also for a design with a day look, and with no design read
+                if (hasNightFace || json == null || DayOverlay.hasDayLook(json)) {
                     add(DayNightChoice.activeRow())
                     add(DayNightChoice.alwaysOnRow())
                 }
@@ -1222,24 +1229,29 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             runBlocking { complicationDataRepository.setDefaultWatchface() }
             customWatchfaceData = runBlocking { complicationDataRepository.getCustomWatchface(true) }
         }
-        // Private patch: the night face, when one is stored, shows instead of the main face at night
-        val nightFace = runBlocking { complicationDataRepository.getNightWatchface() }
+        // The night face, when one is stored, shows instead of the main face at night (see CwfNight)
+        val night = runBlocking { complicationDataRepository.getNightWatchfaceData() }
+        skyRule = night.dayNightRule // PERSONAL PATCH: the sun and the moon of the personal designs
         var showsNightFace = false
         customWatchfaceData?.let { main ->
             updatePref(main.metadata)
             try {
                 // Day or night as the wearer chose, separately for the active and the always-on
-                // screen. Decided once, for the choice of face and for the day look.
+                // screen. Only worked out when there is a night face.
+                // PERSONAL PATCH: decided once, for the choice of face and for the day look
                 val showDay by lazy(LazyThreadSafetyMode.NONE) {
                     DayNightChoice.showDay(
                         active = sp.getString(R.string.key_day_night_look, DayNightChoice.AUTO),
-                        alwaysOn = sp.getString(R.string.key_day_night_always_on, DayNightChoice.NIGHT),
+                        alwaysOn = sp.getString(R.string.key_day_night_always_on, DayNightChoice.AS_ACTIVE),
                         ambient = isAmbient,
-                        isDayNow = { dayNight.isDay(renderNow()) }
+                        isDayNow = { dayNight.isDay(renderNow(), night.dayNightRule) }
                     )
                 }
-                val face = NightFace.choose(main, nightFace) { showDay }
+                val face = NightFace.choose(main, night.customWatchfaceNight) { showDay }
                 showsNightFace = face !== main
+                // A swap between the day face and the night face is not a new zip
+                val daySwap = showsNightFace != styleShowsNightFace
+                styleShowsNightFace = showsNightFace
                 val colours = ColourLooks.choices { key, default -> sp.getString(key, default) } // PERSONAL PATCH
                 val design = colourLooks.apply((if (showsNightFace) parsedNightJson else parsedJson).parse(face.json), colours) // PERSONAL PATCH: colours
                 val day = DayOverlay.hasDayLook(design) && showDay
@@ -1283,7 +1295,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     // A different zip means the dial looks like something else, which the style
                     // schema the system caches its preview from does not say. Asked for inside this
                     // block, which only runs on a real change, since the system rate limits requests.
-                    requestPreviewImageUpdate()
+                    // Not for a swap between the day face and the night face: the preview shows the
+                    // main face, and a swap happens at sunrise, at sunset and with the always-on look.
+                    if (!daySwap) requestPreviewImageUpdate()
                     wake.setDesign(readWakeAnimation(json) { key -> resDataMap[key]?.toDrawable(resources) })
                 }
                 if (checkPref()) {
@@ -1337,9 +1351,11 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             } catch (_: Exception) {
                 aapsLogger.debug(LTag.WEAR, "Crash during Custom watch load")
                 runBlocking {
-                    // Private patch: a broken night face is dropped, the main face stays
-                    if (showsNightFace) complicationDataRepository.clearNightWatchface()
-                    else complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false)
+                    // A broken night face is dropped, the main face stays, and the phone is told
+                    if (showsNightFace) {
+                        complicationDataRepository.clearNightWatchface()
+                        rxBus.send(EventWearToMobile(EventData.ActionClearNightWatchface(System.currentTimeMillis())))
+                    } else complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false)
                 } // reload correct values to avoid crash of watchface
             }
         }

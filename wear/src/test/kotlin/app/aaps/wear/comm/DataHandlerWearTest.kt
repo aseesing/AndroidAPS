@@ -34,6 +34,7 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyBlocking
+import org.mockito.kotlin.whenever
 
 /**
  * Drives [DataHandlerWear]'s message handlers through a REAL [RxBusImpl]. Handlers run on the
@@ -89,21 +90,28 @@ internal class DataHandlerWearTest : WearTestBase() {
     }
 
     @Test
-    fun `preferences event stores the phone's place for the day look`() {
-        rxBus.send(EventData.Preferences(0L, false, true, 50, 80, 25.0, 0.5, 1.0, 5, 10, latitude = 52.4, longitude = 4.9))
-
-        verify(sp, timeout(HANDLER_TIMEOUT_MS)).putDouble(R.string.key_location_latitude, 52.4)
-        verify(sp, timeout(HANDLER_TIMEOUT_MS)).putDouble(R.string.key_location_longitude, 4.9)
-    }
-
-    @Test
-    fun `preferences event without a place keeps the stored one`() {
+    fun `preferences event stores no place`() {
         rxBus.send(EventData.Preferences(0L, false, true, 50, 80, 25.0, 0.5, 1.0, 5, 10))
 
-        // The face is chosen after the place is stored, so once it is, the place would have been written
+        // The face is chosen after the other preferences are stored, so once it is, a place would have been written
         verify(watchFacePushHelper, timeout(HANDLER_TIMEOUT_MS)).selectFace(PushedWatchfaceId.CWF)
         verify(sp, never()).putDouble(eq(R.string.key_location_latitude), any())
         verify(sp, never()).putDouble(eq(R.string.key_location_longitude), any())
+    }
+
+    @Test
+    fun `the place and the look keys of the personal build are removed at the start`() {
+        // PERSONAL PATCH: the place was kept in the shared preferences, which Auto Backup copies
+        whenever(sp.contains(R.string.key_location_latitude)).thenReturn(true)
+        whenever(sp.contains(R.string.key_location_longitude)).thenReturn(true)
+        whenever(sp.contains(R.string.key_day_night_look_phone)).thenReturn(true)
+
+        DataHandlerWear(context, rxBus, sp, preferences, logger, complicationDataRepository, watchFacePushHelper, eatReminderWatch, phoneAlarmWatch, cgmAlarmWatch)
+
+        verify(sp).remove(R.string.key_location_latitude)
+        verify(sp).remove(R.string.key_location_longitude)
+        verify(sp).remove(R.string.key_day_night_look_phone)
+        verify(sp, never()).remove(R.string.key_day_night_always_on_phone)
     }
 
     @Test

@@ -76,7 +76,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
 
     private val rxPath get() = getString(app.aaps.core.interfaces.R.string.path_rx_bridge)
     private val rxDataPath get() = getString(app.aaps.core.interfaces.R.string.path_rx_data_bridge)
-    // Private patch: a night face zip, see CwfNight
+    // A night face zip, see CwfNight
     private val rxNightDataPath get() = rxDataPath + CwfNight.PATH_SUFFIX
 
     @ExperimentalSerializationApi

@@ -1,14 +1,17 @@
 package app.aaps.wear.data
 
 import android.content.Context
+import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.Serializer
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStoreFile
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
+import app.aaps.core.interfaces.rx.weardata.DayNightRule
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.shared.impl.weardata.ResFileMap
@@ -17,6 +20,7 @@ import app.aaps.wear.watchdirect.WatchDirectReadings
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +35,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.protobuf.ProtoBuf
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -52,12 +57,6 @@ class ComplicationDataRepository(
     private val aapsLogger: AAPSLogger,
     private val sp: SP
 ) {
-
-    private companion object {
-
-        /** The file of [LiveComplicationData]. */
-        const val LIVE_FILE = "complication_live.pb"
-    }
 
     /**
      * Default watchface variant to display, honoring the `key_include_external` preference:
@@ -400,38 +399,64 @@ class ComplicationDataRepository(
             CwfData(cwf.json, cwf.metadata, mutableMapOf(ResFileMap.CUSTOM_WATCHFACE.fileName to mainRes))
         }
 
-    // ----------------------------------------------------------------------------------------
-    // Private patch: the optional night face, see CwfNight. The main face above is not touched.
-    // ----------------------------------------------------------------------------------------
+    // The optional night face, see CwfNight. The main face above is not touched by these. It has its
+    // own file, so the BG and status writes above do not write the night design again each time. The
+    // file is in the no-backup folder: the night face and its rule are never in an Auto Backup.
 
-    /** Stores [cwf] as the night face. */
+    private val nightStore: DataStore<NightWatchfaceData> = DataStoreFactory.create(
+        serializer = NightWatchfaceSerializer(aapsLogger),
+        // A file that cannot be read is replaced by "no night face", not kept unreadable for ever
+        corruptionHandler = ReplaceFileCorruptionHandler { NightWatchfaceData() },
+        migrations = listOf(NightFaceFromDesignFile(dataStore, nightFileExists = { File(context.noBackupFilesDir, NIGHT_WATCHFACE_FILE).exists() })), // PERSONAL PATCH
+        produceFile = { File(context.noBackupFilesDir, NIGHT_WATCHFACE_FILE) }
+    )
+
+    /** Stores [cwf] as the night face. A rule for when it is day stays. */
     suspend fun storeNightWatchface(cwf: CwfData) {
         try {
-            dataStore.updateData { it.copy(customWatchfaceNight = cwf) }
+            nightStore.updateData { it.copy(customWatchfaceNight = cwf) }
             aapsLogger.debug(LTag.WEAR, "Stored night watchface: ${cwf.metadata}")
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to store night watchface", e)
         }
     }
 
-    /** Forgets the night face, so the main face shows day and night again. */
+    /**
+     * Stores [rule] for when it is day, but only while there is a night face: without one the rule
+     * has no use, so it is not kept.
+     *
+     * @return true when stored, false when there is no night face
+     */
+    suspend fun storeDayNightRule(rule: DayNightRule): Boolean =
+        try {
+            nightStore.updateData { current -> if (current.customWatchfaceNight != null) current.copy(dayNightRule = rule) else current }
+                .dayNightRule == rule
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Failed to store day and night rule", e)
+            false
+        }
+
+    /** Forgets the night face and its rule, so the main face shows day and night again. */
     suspend fun clearNightWatchface() {
         try {
-            dataStore.updateData { it.copy(customWatchfaceNight = null) }
+            nightStore.updateData { NightWatchfaceData() }
             aapsLogger.debug(LTag.WEAR, "Cleared night watchface")
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to clear night watchface", e)
         }
     }
 
-    /** The night face, or null when there is none. */
-    suspend fun getNightWatchface(): CwfData? =
+    /** The night face and its rule, or empty data when there is none. */
+    suspend fun getNightWatchfaceData(): NightWatchfaceData =
         try {
-            complicationData.first().customWatchfaceNight
+            nightStore.data.first()
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to get night watchface", e)
-            null
+            NightWatchfaceData()
         }
+
+    /** The night face, or null when there is none. */
+    suspend fun getNightWatchface(): CwfData? = getNightWatchfaceData().customWatchfaceNight
 
     /**
      * The night face for the phone, with only its main picture, or null when there is none. A night
@@ -443,12 +468,21 @@ class ComplicationDataRepository(
     /** Like [updateCustomWatchfaceMetadata], for the night face. */
     suspend fun updateNightWatchfaceMetadata(newMetadata: Map<CwfMetadataKey, String>) {
         try {
-            dataStore.updateData { current ->
+            nightStore.updateData { current ->
                 current.customWatchfaceNight?.let { withMetadata(it, newMetadata) }?.let { current.copy(customWatchfaceNight = it) } ?: current
             }
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to update night watchface metadata", e)
         }
+    }
+
+    internal companion object {
+
+        /** The file of [LiveComplicationData]. */
+        private const val LIVE_FILE = "complication_live.pb"
+
+        /** The file of the night face, in the no-backup folder. */
+        const val NIGHT_WATCHFACE_FILE = "night_watchface.pb"
     }
 }
 
@@ -456,7 +490,7 @@ class ComplicationDataRepository(
  * Serializer for ComplicationData using Protocol Buffers
  * Handles corruption gracefully by returning default data
  */
-@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+@OptIn(ExperimentalSerializationApi::class)
 private class ComplicationDataSerializer(
     private val aapsLogger: AAPSLogger
 ) : Serializer<ComplicationData> {
@@ -482,5 +516,31 @@ private class ComplicationDataSerializer(
                 t
             )
         )
+    }
+}
+
+/**
+ * Serializer for [NightWatchfaceData]. Any read error is a [CorruptionException], so the store's
+ * corruption handler replaces the file with "no night face" (see `ComplicationDataRepository`).
+ */
+@OptIn(ExperimentalSerializationApi::class)
+internal class NightWatchfaceSerializer(
+    private val aapsLogger: AAPSLogger
+) : Serializer<NightWatchfaceData> {
+
+    override val defaultValue: NightWatchfaceData = NightWatchfaceData()
+
+    override suspend fun readFrom(input: InputStream): NightWatchfaceData =
+        try {
+            ProtoBuf.decodeFromByteArray(NightWatchfaceData.serializer(), input.readBytes())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Corrupted night watchface, using none", e)
+            throw CorruptionException("Cannot read the night watchface", e)
+        }
+
+    override suspend fun writeTo(t: NightWatchfaceData, output: OutputStream) {
+        output.write(ProtoBuf.encodeToByteArray(NightWatchfaceData.serializer(), t))
     }
 }

@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchfaces.daynight
 
 import java.time.Instant
@@ -25,8 +21,11 @@ object SunTimes {
         /** The sun rises at [rise] and sets at [set]. */
         data class RiseAndSet(val rise: Instant, val set: Instant) : Result()
 
-        /** The sun does not set on this day (summer near the poles). */
-        data object AlwaysUp : Result()
+        /**
+         * The sun does not set on this day (summer near the poles). This day is the 24 hours around
+         * its solar [noon].
+         */
+        data class AlwaysUp(val noon: Instant) : Result()
 
         /** The sun does not rise on this day (winter near the poles). */
         data object AlwaysDown : Result()
@@ -35,9 +34,15 @@ object SunTimes {
     /** The angle from straight up to the sun's centre at sunrise and sunset: refraction and the sun's own size, in degrees. */
     private const val SUNRISE_ZENITH = 90.833
 
+    private const val MINUTE_MS = 60_000L
+
     /**
-     * Sunrise and sunset on [date] at [latitude] and [longitude], in degrees, north and east
-     * positive. [date] is taken as a day in UTC, which is close enough for any place on land.
+     * Sunrise and sunset around the solar noon of the UTC day [date], at [latitude] and [longitude],
+     * in degrees, north and east positive.
+     *
+     * The solar noon is counted from midnight UTC of [date], so it falls inside that UTC day, and
+     * sunrise and sunset are at most 12 hours from it. A caller that asks about one instant must look
+     * at the UTC days around it too, see [DayNightClock.isDay].
      */
     fun of(date: LocalDate, latitude: Double, longitude: Double): Result {
         // The year as an angle, at noon of the day
@@ -49,15 +54,13 @@ object SunTimes {
             0.000907 * sin(2 * gamma) - 0.002697 * cos(3 * gamma) + 0.00148 * sin(3 * gamma)
         val lat = Math.toRadians(latitude)
         val cosHourAngle = cos(Math.toRadians(SUNRISE_ZENITH)) / (cos(lat) * cos(decl)) - tan(lat) * tan(decl)
-        if (cosHourAngle < -1) return Result.AlwaysUp
-        if (cosHourAngle > 1) return Result.AlwaysDown
-        val hourAngle = Math.toDegrees(acos(cosHourAngle))
         // Minutes after midnight UTC
         val solarNoon = 720 - 4 * longitude - eqTime
         val midnight = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         fun at(minutes: Double) = Instant.ofEpochMilli(midnight + (minutes * MINUTE_MS).toLong())
+        if (cosHourAngle < -1) return Result.AlwaysUp(noon = at(solarNoon))
+        if (cosHourAngle > 1) return Result.AlwaysDown
+        val hourAngle = Math.toDegrees(acos(cosHourAngle))
         return Result.RiseAndSet(rise = at(solarNoon - 4 * hourAngle), set = at(solarNoon + 4 * hourAngle))
     }
-
-    private const val MINUTE_MS = 60_000L
 }

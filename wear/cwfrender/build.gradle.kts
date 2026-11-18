@@ -45,6 +45,7 @@ val wearShared = listOf(
     "data/ComplicationDataRepository.kt",
     "data/ComplicationStore.kt",
     "data/LiveComplicationData.kt", // PERSONAL PATCH
+    "data/NightFaceFromDesignFile.kt", // PERSONAL PATCH
     "events/EventWearPreferenceChange.kt",
     "health/HealthComplicationData.kt", // PERSONAL PATCH
     "health/HealthValues.kt", // PERSONAL PATCH
@@ -66,18 +67,20 @@ val wearShared = listOf(
     "watchfaces/animation/WakeMotion.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeTimer.kt", // PERSONAL PATCH
     "watchfaces/colour/ColourLooks.kt", // PERSONAL PATCH
-    "watchfaces/daynight/DayNightChoice.kt", // PERSONAL PATCH
-    "watchfaces/daynight/DayNightClock.kt", // PERSONAL PATCH
+    "watchfaces/daynight/DayNightChoice.kt",
+    "watchfaces/daynight/DayNightClock.kt",
     "watchfaces/daynight/DayOverlay.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonLight.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPhase.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPicture.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPosition.kt", // PERSONAL PATCH
-    "watchfaces/daynight/NightFace.kt", // PERSONAL PATCH
+    "watchfaces/daynight/NightFace.kt",
+    "watchfaces/daynight/OldDayNightPreferences.kt", // PERSONAL PATCH: brings the old place keys, which the design tests still name
     "watchfaces/daynight/Orbit.kt", // PERSONAL PATCH
     "watchfaces/daynight/SkyCycle.kt", // PERSONAL PATCH
+    "watchfaces/daynight/SkyTimes.kt", // PERSONAL PATCH
     "watchfaces/daynight/StoredWeather.kt", // PERSONAL PATCH
-    "watchfaces/daynight/SunTimes.kt", // PERSONAL PATCH
+    "watchfaces/daynight/SunTimes.kt",
     "watchfaces/settingsync/CwfSettingNames.kt", // PERSONAL PATCH
     "watchfaces/settingsync/CwfSyncedSettings.kt", // PERSONAL PATCH
     "watchfaces/utils/BaseWatchFace.kt",

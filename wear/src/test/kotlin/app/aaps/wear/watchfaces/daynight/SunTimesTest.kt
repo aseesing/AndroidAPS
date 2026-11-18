@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchfaces.daynight
 
 import com.google.common.truth.Truth.assertThat
@@ -49,7 +45,10 @@ class SunTimesTest {
 
     @Test
     fun beyondThePolarCircleTheSunStaysUpOrDown() {
-        assertThat(SunTimes.of(LocalDate.parse("2025-06-21"), TROMSO_LAT, TROMSO_LON)).isEqualTo(SunTimes.Result.AlwaysUp)
+        val summer = SunTimes.of(LocalDate.parse("2025-06-21"), TROMSO_LAT, TROMSO_LON)
+        assertThat(summer).isInstanceOf(SunTimes.Result.AlwaysUp::class.java)
+        // The solar noon there is about 10:46 UTC
+        assertNear((summer as SunTimes.Result.AlwaysUp).noon, "2025-06-21T10:46:00Z")
         assertThat(SunTimes.of(LocalDate.parse("2025-12-21"), TROMSO_LAT, TROMSO_LON)).isEqualTo(SunTimes.Result.AlwaysDown)
     }
 

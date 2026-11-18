@@ -23,7 +23,6 @@ import app.aaps.wear.complications.cwf.CwfFramePipeline
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeLength
-import app.aaps.wear.watchfaces.daynight.DayNightChoice
 import app.aaps.wear.watchfaces.daynight.StoredWeather
 import app.aaps.wear.watchfaces.settingsync.CwfSettingNames
 import kotlinx.coroutines.runBlocking
@@ -163,17 +162,9 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
 
             is EventData.Weather       -> StoredWeather.save(sp, event)
 
-            is EventData.Preferences   -> {
-                sp.putBoolean(R.string.key_units_mgdl, event.unitsMgdl)
-                val latitude = event.latitude
-                val longitude = event.longitude
-                if (latitude != null && longitude != null) {
-                    sp.putDouble(R.string.key_location_latitude, latitude)
-                    sp.putDouble(R.string.key_location_longitude, longitude)
-                }
-                DayNightChoice.fromPhone(event.dayNightLook, "", DayNightChoice.ACTIVE_VALUES)?.let { sp.putString(R.string.key_day_night_look, it) }
-                DayNightChoice.fromPhone(event.alwaysOnLook, "", DayNightChoice.ALWAYS_ON_VALUES)?.let { sp.putString(R.string.key_day_night_always_on, it) }
-            }
+            // The place and the day / night looks are no longer sent with these (see `CwfNight`): the
+            // preview has no rule for when it is day, so it draws the day look from 07:00 to 19:00
+            is EventData.Preferences   -> sp.putBoolean(R.string.key_units_mgdl, event.unitsMgdl)
 
             else                       -> return
         }

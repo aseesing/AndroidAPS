@@ -1,12 +1,8 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchfaces.daynight
 
 /**
  * The choice between the main face and the optional night face of the Custom watch face (see
- * `CwfNight`). Private patch. Pure functions only.
+ * `CwfNight`). Pure functions only.
  */
 internal object NightFace {
 

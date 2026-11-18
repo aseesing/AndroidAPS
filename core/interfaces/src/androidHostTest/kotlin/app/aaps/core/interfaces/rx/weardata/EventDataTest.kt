@@ -167,7 +167,27 @@ class EventDataTest {
             assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
             assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
         }
-        EventData.Preferences(1, wearControl = true, true, 2, 3, 4.0, 5.0, 6.0, 7, 8, latitude = 52.4, longitude = 4.9).let {
+        EventData.ActionSetDayNightRule(DayNightRule.Place(52.4, 4.9)).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionSetDayNightRule(DayNightRule.FixedTimes(dayStartMinute = 420, nightStartMinute = 1140)).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionrequestCustomWatchface(exportFile = false, night = true).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionSetCustomWatchface(CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "night"), mutableMapOf()), night = true).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionUpdateCustomWatchface(CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "night"), mutableMapOf()), night = true).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionClearNightWatchface(1).let {
             assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
             assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
         }
@@ -401,5 +421,22 @@ class EventDataTest {
         val fromPhone = EventData.SingleBg(dataset = 0, timeStamp = 1L, sgv = 100.0, high = 180.0, low = 70.0)
         assertThat(fromPhone.serialize()).doesNotContain("fromSensor")
         assertThat((EventData.deserialize(fromPhone.serialize()) as EventData.SingleBg).fromSensor).isFalse()
+    }
+
+    @Test
+    fun aDayNightRuleNeverPrintsItsPlace() {
+        // RxBus logs every event it sends with toString, on the phone and on the watch
+        val message = EventData.ActionSetDayNightRule(DayNightRule.Place(52.37, 4.89)).toString()
+        assertThat(message).doesNotContain("52")
+        assertThat(message).doesNotContain("4.89")
+        assertThat(message).contains("Place")
+        assertThat(EventData.ActionSetDayNightRule(DayNightRule.FixedTimes(420, 1140)).toString()).contains("420")
+    }
+
+    @Test
+    fun aRequestFromAnOlderPhoneDoesNotAskForTheNightFace() {
+        val old = EventData.ActionrequestCustomWatchface(false).serialize()
+        assertThat(old).doesNotContain("night")
+        assertThat((EventData.deserialize(old) as EventData.ActionrequestCustomWatchface).night).isFalse()
     }
 }

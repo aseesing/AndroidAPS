@@ -65,6 +65,31 @@
         <item>ambient_charging</item>
     </string-array>
 
+    <!-- The values are those of DayNightChoice -->
+    <string-array name="day_night_look_names">
+        <item>@string/day_night_auto</item>
+        <item>@string/day_night_day</item>
+        <item>@string/day_night_night</item>
+    </string-array>
+
+    <string-array name="day_night_look_values" translatable="false">
+        <item>auto</item>
+        <item>day</item>
+        <item>night</item>
+    </string-array>
+
+    <string-array name="day_night_always_on_names">
+        <item>@string/day_night_as_active</item>
+        <item>@string/day_night_night</item>
+        <item>@string/day_night_day</item>
+    </string-array>
+
+    <string-array name="day_night_always_on_values" translatable="false">
+        <item>active</item>
+        <item>night</item>
+        <item>day</item>
+    </string-array>
+
     <string-array name="tile_action_names">
         <item>@string/menu_wizard</item>
         <item>@string/menu_treatment</item>
