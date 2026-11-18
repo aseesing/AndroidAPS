@@ -99,7 +99,6 @@ kotlin {
 
                 // PERSONAL PATCH: car speech, activity recognition ("in a vehicle")
                 implementation(libs.com.google.android.gms.playservices.location)
-                implementation(project(":wear:cwfrender")) // PERSONAL PATCH: live watch face preview
 
                 // OpenHumans
                 api(libs.com.squareup.okhttp3.okhttp)
@@ -115,6 +114,8 @@ kotlin {
 
                 // DataLayerListenerService
                 api(libs.com.google.android.gms.playservices.wearable)
+                // The Custom watch face code of the watch, for its settings on the phone
+                implementation(project(":wear:cwfrender"))
 
                 // SMS Communicator (OTP + QR code). ZXing itself comes from jvmSharedMain.
                 implementation(libs.com.eatthepath.java.otp)

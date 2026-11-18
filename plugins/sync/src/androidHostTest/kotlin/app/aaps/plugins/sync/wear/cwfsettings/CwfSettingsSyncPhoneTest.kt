@@ -10,7 +10,6 @@ import app.aaps.core.interfaces.rx.events.EventMobileToWear
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.CwfSettingValue
-import app.aaps.core.interfaces.rx.weardata.CwfSettingsSync
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.plugins.sync.wear.WearPlugin
@@ -60,7 +59,7 @@ class CwfSettingsSyncPhoneTest {
     private val scope = CoroutineScope(Dispatchers.Unconfined)
 
     /** What the phone sent to the watch. */
-    private val sent = CopyOnWriteArrayList<CwfSettingsSync>()
+    private val sent = CopyOnWriteArrayList<EventData.CwfSettingsSync>()
     private lateinit var collector: Job
     private lateinit var store: CwfWatchSettingsStore
     private lateinit var sut: CwfSettingsSyncPhone
@@ -68,7 +67,7 @@ class CwfSettingsSyncPhoneTest {
     @Before
     fun setUp() {
         collector = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            rxBus.toFlow(EventMobileToWear::class).collect { (it.payload as? CwfSettingsSync)?.let(sent::add) }
+            rxBus.toFlow(EventMobileToWear::class).collect { (it.payload as? EventData.CwfSettingsSync)?.let(sent::add) }
         }
         store = CwfWatchSettingsStore(app)
         sut = CwfSettingsSyncPhone(store, rxBus, dateUtil, logger, app)
@@ -98,7 +97,7 @@ class CwfSettingsSyncPhoneTest {
         sut.setByUser("show_iob", "false")
 
         assertThat(store.values.value).containsExactly("show_iob", CwfSettingValue("false", now))
-        assertThat(sent.single()).isEqualTo(CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("false", now))))
+        assertThat(sent.single()).isEqualTo(EventData.CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("false", now))))
     }
 
     @Test
@@ -115,7 +114,7 @@ class CwfSettingsSyncPhoneTest {
         sut.setByUser("show_iob", "false")
         sent.clear()
 
-        sut.fromWatch(CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("true", now + 5_000))))
+        sut.fromWatch(EventData.CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("true", now + 5_000))))
 
         assertThat(store.values.value["show_iob"]).isEqualTo(CwfSettingValue("true", now + 5_000))
         assertThat(sent).isEmpty()
@@ -125,11 +124,11 @@ class CwfSettingsSyncPhoneTest {
     fun aWatchThatIsBehindGetsOneAnswerAndAnAnswerIsNeverAnswered() {
         sut.setByUser("show_iob", "false")
         sent.clear()
-        val older = CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("true", 5L)))
+        val older = EventData.CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("true", 5L)))
 
         sut.fromWatch(older)
         assertThat(store.values.value["show_iob"]).isEqualTo(CwfSettingValue("false", now))
-        assertThat(sent.single()).isEqualTo(CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("false", now)), isAnswer = true))
+        assertThat(sent.single()).isEqualTo(EventData.CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("false", now)), isAnswer = true))
 
         sent.clear()
         sut.fromWatch(older.copy(isAnswer = true))
@@ -137,27 +136,52 @@ class CwfSettingsSyncPhoneTest {
     }
 
     @Test
+    fun withBothTimesUnknownThePhoneTakesTheValueOfTheWatch() {
+        // Learned from another watch, time not known
+        sut.fromWatch(EventData.CwfSettingsSync(mapOf("show_date" to CwfSettingValue("true", 0L), "wake_animation_length" to CwfSettingValue("3000", 0L))))
+        sent.clear()
+
+        // A new watch, or the watch app installed again: its own values, time not known either
+        sut.fromWatch(EventData.CwfSettingsSync(mapOf("show_date" to CwfSettingValue("false", 0L), "wake_animation_length" to CwfSettingValue("design", 0L))))
+
+        assertThat(store.values.value["show_date"]).isEqualTo(CwfSettingValue("false", 0L))
+        assertThat(store.values.value["wake_animation_length"]).isEqualTo(CwfSettingValue("design", 0L))
+        assertThat(sent).isEmpty()
+    }
+
+    @Test
+    fun aChangeOnThePhoneIsNotAnAnswerOfTheWatch() {
+        // An older watch app never sends its settings: the screen must keep saying so
+        sut.setByUser("show_iob", "false")
+        assertThat(store.heardFromWatch.value).isFalse()
+
+        sut.fromWatch(EventData.CwfSettingsSync(emptyMap()))
+        assertThat(store.heardFromWatch.value).isTrue()
+        assertThat(CwfWatchSettingsStore(app).heardFromWatch.value).isTrue()
+    }
+
+    @Test
     fun whenTheWatchAsksForEverythingThePhoneSendsItsSettings() {
-        sut.fromWatch(CwfSettingsSync(mapOf("dark" to CwfSettingValue("false", 0L))))
+        sut.fromWatch(EventData.CwfSettingsSync(mapOf("dark" to CwfSettingValue("false", 0L))))
         sut.start(scope)
         sent.clear()
 
         rxBus.send(EventData.ActionResendData("test"))
 
-        assertThat(sent.single()).isEqualTo(CwfSettingsSync(mapOf("dark" to CwfSettingValue("false", 0L))))
+        assertThat(sent.single()).isEqualTo(EventData.CwfSettingsSync(mapOf("dark" to CwfSettingValue("false", 0L))))
     }
 
     @Test
     fun messagesFromTheWatchArriveThroughTheBus() {
         sut.start(scope)
-        rxBus.send(CwfSettingsSync(mapOf("show_cob" to CwfSettingValue("false", 7L))))
+        rxBus.send(EventData.CwfSettingsSync(mapOf("show_cob" to CwfSettingValue("false", 7L))))
         assertThat(store.values.value["show_cob"]).isEqualTo(CwfSettingValue("false", 7L))
     }
 
     @Test
     fun theStoreKeepsItsSettingsOverARestart() {
         sut.setByUser("show_second", "false")
-        sut.fromWatch(CwfSettingsSync(mapOf("wake_animation_length" to CwfSettingValue("6000", 3L))))
+        sut.fromWatch(EventData.CwfSettingsSync(mapOf("wake_animation_length" to CwfSettingValue("6000", 3L))))
 
         assertThat(CwfWatchSettingsStore(app).values.value).containsExactly(
             "show_second", CwfSettingValue("false", now),
@@ -172,7 +196,7 @@ class CwfSettingsSyncPhoneTest {
             mutableMapOf(CwfMetadataKey.CWF_AUTHORIZATION to "true", CwfMetadataKey.CWF_PREF_WATCH_SHOW_IOB to "false"),
             mutableMapOf()
         )
-        val state = CwfSettingsViewModel.uiStateOf(sut.names, mapOf("show_cob" to CwfSettingValue("false", 9L)), design)
+        val state = CwfSettingsViewModel.uiStateOf(sut.names, mapOf("show_cob" to CwfSettingValue("false", 9L)), design, fromWatch = true)
 
         // A design without views uses none of the look settings, except the one about the template
         assertThat(state.look.map { it.name }).containsExactly("include_external")
@@ -184,11 +208,11 @@ class CwfSettingsSyncPhoneTest {
 
         // Without the authorization the design sets nothing; without values nothing came from the watch yet
         val notAuthorized = design.copy(metadata = mutableMapOf(CwfMetadataKey.CWF_PREF_WATCH_SHOW_IOB to "false"))
-        val stateWithout = CwfSettingsViewModel.uiStateOf(sut.names, emptyMap(), notAuthorized)
+        val stateWithout = CwfSettingsViewModel.uiStateOf(sut.names, emptyMap(), notAuthorized, fromWatch = false)
         assertThat(stateWithout.shownValues.none { it.setByDesign }).isTrue()
         assertThat(stateWithout.fromWatch).isFalse()
         // No design known: every look setting, as the watch menu does
-        assertThat(CwfSettingsViewModel.uiStateOf(sut.names, emptyMap(), null).look.map { it.setting })
+        assertThat(CwfSettingsViewModel.uiStateOf(sut.names, emptyMap(), null, fromWatch = false).look.map { it.setting })
             .containsExactlyElementsIn(CwfSyncedSettings.faceLook).inOrder()
     }
 

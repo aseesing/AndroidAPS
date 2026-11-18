@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -72,7 +73,8 @@ import app.aaps.core.ui.compose.metroViewModel
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.R
 import app.aaps.plugins.sync.SyncStrings
-import app.aaps.plugins.sync.wear.cwfsettings.CwfPreviewAndSettings // PERSONAL PATCH: live watch face preview and its settings
+import app.aaps.plugins.sync.wear.cwfsettings.CwfSettingsDialog
+import app.aaps.plugins.sync.wear.preview.CwfLivePreview
 import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateButton
 import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateContent
 import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateViewModel
@@ -175,6 +177,10 @@ internal fun WearScreen(
 
     val moreWatchfacesUrl = stringResource(SyncStrings.wear_link_to_more_cwf_doc)
 
+    // The settings of the Custom watch face, set from the phone
+    var cwfSettingsOpen by rememberSaveable { mutableStateOf(false) }
+    if (cwfSettingsOpen) CwfSettingsDialog(uiState.watchfaceImage, uiState.watchfaceName, onClose = { cwfSettingsOpen = false })
+
     AnimatedContent(
         targetState = subScreen,
         label = "wear_screen"
@@ -222,6 +228,9 @@ internal fun WearScreen(
                     },
                     onSelectPushedWatchface = { viewModel.selectPushedWatchface(it) },
                     onDismissCustomWatchfaceNotShown = { viewModel.dismissCustomWatchfaceNotShown() },
+                    onCwfSettings = { cwfSettingsOpen = true },
+                    // One live preview at a time: while the settings are open it is drawn there
+                    livePreview = !cwfSettingsOpen,
                     onLoadNightWatchface = { viewModel.loadNightWatchfaceFiles() }, // PERSONAL PATCH: day and night face
                     onRemoveNightWatchface = { viewModel.clearNightWatchface() }, // PERSONAL PATCH: day and night face
                     modifier = modifier
@@ -251,9 +260,11 @@ internal fun WearMainContent(
     onMoreWatchfaces: () -> Unit,
     onSelectPushedWatchface: (String) -> Unit,
     onDismissCustomWatchfaceNotShown: () -> Unit,
+    onCwfSettings: () -> Unit,
     onLoadNightWatchface: () -> Unit = {}, // PERSONAL PATCH: day and night face
     onRemoveNightWatchface: () -> Unit = {}, // PERSONAL PATCH: day and night face
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    livePreview: Boolean = true
 ) {
     // The face the wearer tapped, waiting for their confirmation; null while no dialog is open.
     // Confirmed first because the watch replaces its installed face at once.
@@ -410,18 +421,21 @@ internal fun WearMainContent(
                         button2 = ButtonDef(Icons.Default.Download, stringResource(SyncStrings.wear_export_watchface), onExportTemplate)
                     )
 
+                    // Row 3: the watch face settings, set from the phone
+                    ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings), onCwfSettings), button2 = null)
+
                     // Watchface preview image, or a loading indicator while a new face goes to the watch
                     uiState.loadingWatchface?.let { name -> FaceLoadingIndicator(name) }
                     uiState.watchfaceImage?.takeIf { uiState.loadingWatchface == null }?.let { image ->
                         Spacer(modifier = Modifier.height(AapsSpacing.small))
-                        CwfPreviewAndSettings( // PERSONAL PATCH: live watch face preview and its settings, was Image(
-                            bitmap = image,
-                            contentDescription = uiState.watchfaceName,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = AapsSpacing.extraLarge),
-                            contentScale = ContentScale.FillWidth
-                        )
+                        val imageModifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = AapsSpacing.extraLarge)
+                        // The face drawn live by the watch face code
+                        if (livePreview)
+                            CwfLivePreview(bitmap = image, contentDescription = uiState.watchfaceName, modifier = imageModifier, contentScale = ContentScale.FillWidth)
+                        else
+                            Image(bitmap = image, contentDescription = uiState.watchfaceName, modifier = imageModifier, contentScale = ContentScale.FillWidth)
                     }
                 }
             }

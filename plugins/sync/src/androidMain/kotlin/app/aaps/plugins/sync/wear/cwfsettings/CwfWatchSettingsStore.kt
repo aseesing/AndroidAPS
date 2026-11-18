@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.cwfsettings
 
 import android.content.Context
@@ -17,7 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The phone's copy of the Custom watch face settings that the phone can set too (see
- * `CwfSettingsSync`): per setting the value and the time of its last change, by the setting's
+ * `EventData.CwfSettingsSync`): per setting the value and the time of its last change, by the setting's
  * stored name on the watch.
  *
  * Kept in its own preferences file, not in the AAPS settings: these are settings of the watch, the
@@ -36,6 +32,14 @@ class CwfWatchSettingsStore(private val context: Context) {
     /** All settings the phone knows, by stored name. Empty until the watch or the user gave one. */
     val values: StateFlow<Map<String, CwfSettingValue>> by lazy { state.asStateFlow() }
 
+    private val heard: MutableStateFlow<Boolean> by lazy { MutableStateFlow(prefs.getBoolean(HEARD_FROM_WATCH, false)) }
+
+    /**
+     * True once the watch sent its settings. A watch app that does not know these messages never
+     * does, and then a change on the phone does not reach the watch.
+     */
+    val heardFromWatch: StateFlow<Boolean> by lazy { heard.asStateFlow() }
+
     /** The user set [name] to [value] on the phone at [now]. Returns all settings after the change. */
     @Synchronized
     fun setByUser(name: String, value: String, now: Long): Map<String, CwfSettingValue> {
@@ -48,8 +52,12 @@ class CwfWatchSettingsStore(private val context: Context) {
     /** Takes the newer settings of [remote], the full set of the watch. See [CwfSettingsMerge.merge]. */
     @Synchronized
     fun merge(remote: Map<String, CwfSettingValue>, allowed: (name: String, value: String) -> Boolean): CwfSettingsMerge.Result {
-        val result = CwfSettingsMerge.merge(state.value, remote, allowed)
+        val result = CwfSettingsMerge.merge(state.value, remote, localIsWatch = false, allowed = allowed)
         if (result.taken.isNotEmpty()) save(result.taken)
+        if (!heard.value) {
+            prefs.edit().putBoolean(HEARD_FROM_WATCH, true).apply()
+            heard.value = true
+        }
         return result
     }
 
@@ -74,5 +82,6 @@ class CwfWatchSettingsStore(private val context: Context) {
         const val FILE = "cwf_watch_settings"
         const val VALUE_PREFIX = "value_"
         const val TIME_PREFIX = "time_"
+        const val HEARD_FROM_WATCH = "heard_from_watch"
     }
 }

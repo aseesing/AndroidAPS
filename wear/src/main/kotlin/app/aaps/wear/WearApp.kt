@@ -19,7 +19,7 @@ import app.aaps.wear.events.EventWearPreferenceChange
 import app.aaps.wear.health.PassiveHealthRegistration
 import app.aaps.wear.watchdirect.WatchDirect
 import app.aaps.wear.watchfaces.WatchFacePushHelper
-import app.aaps.wear.watchfaces.settingsync.CwfSettingsSyncWear // PERSONAL PATCH: CWF settings from the phone
+import app.aaps.wear.watchfaces.settingsync.CwfSettingsSyncWear
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.MembersInjector
 import dev.zacsweers.metro.createGraphFactory
@@ -49,7 +49,7 @@ class WearApp : Application(), MetroMemberInjector {
     @Inject lateinit var cwfComplicationUpdater: CwfComplicationUpdater
     @Inject lateinit var passiveHealthRegistration: PassiveHealthRegistration
     @Inject lateinit var watchDirect: WatchDirect
-    @Inject lateinit var cwfSettingsSync: CwfSettingsSyncWear // PERSONAL PATCH: CWF settings from the phone
+    @Inject lateinit var cwfSettingsSync: CwfSettingsSyncWear
 
     /**
      * Held in a field on purpose: `SharedPreferences` keeps its change listeners in a
@@ -83,7 +83,8 @@ class WearApp : Application(), MetroMemberInjector {
         passiveHealthRegistration.updateInBackground()
         // Direct-to-watch: listens for the phone turning it on, and picks a set-up sensor up again after a restart
         watchDirect.start()
-        cwfSettingsSync.start() // PERSONAL PATCH: CWF settings from the phone
+        // The Custom watch face settings that the phone can set too: both ways, the newer change wins
+        cwfSettingsSync.start()
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(preferenceChangeListener)
         startForegroundService(Intent(this, DataLayerListenerServiceWear::class.java))
     }

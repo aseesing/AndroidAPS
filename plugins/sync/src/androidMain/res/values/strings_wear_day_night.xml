@@ -20,4 +20,5 @@
     <string name="wear_day_night_face_night" comment="Choice of the settings Day / night look and Always-on look: always show the night face">Night face</string>
     <string name="wear_day_night_always_on_look" comment="Setting: which face the always-on (ambient) screen of the watch shows">Always-on look</string>
     <string name="wear_day_night_always_on_look_active" comment="Choice of the setting Always-on look: the same face as the active screen shows at that moment">Same as active screen</string>
+    <string name="wear_cwf_settings_shared">The day face and the night face share these settings. A change here changes both faces.</string>
 </resources>

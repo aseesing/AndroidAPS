@@ -1,18 +1,21 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
+// The Custom watch face code of the wear app, built a second time as a library for the phone.
 //
-// The Custom watch face renderer of the watch app, built a second time for the phone, so the phone
-// can show a live preview that is drawn by exactly the same code as the watch.
+// The phone uses it to draw a live preview of the watch face with exactly the same code as the watch,
+// see `CwfPreviewRenderer` in `src/main`.
 //
-// Nothing is moved and nothing in `wear` is edited. A sync task copies the listed watch sources, and
-// only the resources they really use, into this module's build folder. Watch-only classes that the
-// sources name but never run on the phone get a small stand-in in `src/main`.
+// Nothing in `wear` is moved or edited for it. A sync task copies the listed watch sources, and
+// only the resources they really use, into this module's build folder. A watch-only class that the
+// sources name but never run on the phone gets a small stand-in in `src/main`.
 //
-// Only the resources the renderer uses are copied, never all of them: `wear` has many names that the
+// Only the resources the code uses are copied, never all of them: `wear` has many names that the
 // phone modules use too (`error`, `confirm`, `carbs`, ...). Merged into the phone app, one would
 // silently replace the other.
+//
+// PERSONAL PATCH: the lines marked below add the watch sources and libraries of the personal looks
+// (the wake-up animation, the complication slots, weather, sun and moon, the log time graph, the
+// glucose line, the batteries, the D2 colours). The watch face designs repository builds its zips
+// and tests with this module too. What the added libraries bring into the phone's manifest is
+// removed in AndroidManifest.xml.
 
 import org.w3c.dom.Element
 import javax.xml.parsers.DocumentBuilderFactory
@@ -34,58 +37,59 @@ val wearRoot: File = rootProject.file("wear/src/main")
 val wearSrc: File = File(wearRoot, "kotlin/app/aaps/wear")
 val wearResDir: File = File(wearRoot, "res")
 
-/** The watch sources the renderer needs. A file missing here fails to compile, it never fails silently. */
+/** The watch sources the phone needs. A file missing here fails to compile, it never fails silently. */
 val wearShared = listOf(
     "complications/cwf/CwfCachePolicy.kt",
     "complications/cwf/CwfFramePipeline.kt",
     "complications/cwf/CwfRenderTarget.kt",
     "data/ComplicationDataRepository.kt",
     "data/ComplicationStore.kt",
-    "data/LiveComplicationData.kt",
+    "data/LiveComplicationData.kt", // PERSONAL PATCH
     "events/EventWearPreferenceChange.kt",
-    "health/HealthComplicationData.kt",
-    "health/HealthValues.kt",
+    "health/HealthComplicationData.kt", // PERSONAL PATCH
+    "health/HealthValues.kt", // PERSONAL PATCH
     "utils/ViewExtensions.kt",
-    "watchdirect/WatchDirectReadings.kt",
-    "watchdirect/WatchSensorLink.kt",
-    "watchfaces/CustomSlotDefaults.kt",
+    "watchdirect/WatchDirectReadings.kt", // PERSONAL PATCH
+    "watchdirect/WatchSensorLink.kt", // PERSONAL PATCH
+    "watchfaces/CustomSlotDefaults.kt", // PERSONAL PATCH
     "watchfaces/CustomWatchface.kt",
-    "watchfaces/animation/AnimLayerSpec.kt",
-    "watchfaces/animation/AnimPresets.kt",
-    "watchfaces/animation/Formula.kt",
-    "watchfaces/animation/LayerAnimator.kt",
-    "watchfaces/animation/PulseCurve.kt",
-    "watchfaces/animation/WakeAnimationJson.kt",
-    "watchfaces/animation/WakeAnimationSpec.kt",
-    "watchfaces/animation/WakeAnimator.kt",
-    "watchfaces/animation/WakeFrameLayers.kt",
-    "watchfaces/animation/WakeLength.kt",
-    "watchfaces/animation/WakeMotion.kt",
-    "watchfaces/animation/WakeTimer.kt",
-    "watchfaces/colour/ColourLooks.kt",
-    "watchfaces/daynight/DayNightChoice.kt",
-    "watchfaces/daynight/DayNightClock.kt",
-    "watchfaces/daynight/DayOverlay.kt",
-    "watchfaces/daynight/MoonLight.kt",
-    "watchfaces/daynight/MoonPhase.kt",
-    "watchfaces/daynight/MoonPicture.kt",
-    "watchfaces/daynight/MoonPosition.kt",
-    "watchfaces/daynight/NightFace.kt",
-    "watchfaces/daynight/Orbit.kt",
-    "watchfaces/daynight/SkyCycle.kt",
-    "watchfaces/daynight/StoredWeather.kt",
-    "watchfaces/daynight/SunTimes.kt",
-    "watchfaces/settingsync/CwfSyncedSettings.kt",
+    "watchfaces/animation/AnimLayerSpec.kt", // PERSONAL PATCH
+    "watchfaces/animation/AnimPresets.kt", // PERSONAL PATCH
+    "watchfaces/animation/Formula.kt", // PERSONAL PATCH
+    "watchfaces/animation/LayerAnimator.kt", // PERSONAL PATCH
+    "watchfaces/animation/PulseCurve.kt", // PERSONAL PATCH
+    "watchfaces/animation/WakeAnimationJson.kt", // PERSONAL PATCH
+    "watchfaces/animation/WakeAnimationSpec.kt", // PERSONAL PATCH
+    "watchfaces/animation/WakeAnimator.kt", // PERSONAL PATCH
+    "watchfaces/animation/WakeFrameLayers.kt", // PERSONAL PATCH
+    "watchfaces/animation/WakeLength.kt", // PERSONAL PATCH
+    "watchfaces/animation/WakeMotion.kt", // PERSONAL PATCH
+    "watchfaces/animation/WakeTimer.kt", // PERSONAL PATCH
+    "watchfaces/colour/ColourLooks.kt", // PERSONAL PATCH
+    "watchfaces/daynight/DayNightChoice.kt", // PERSONAL PATCH
+    "watchfaces/daynight/DayNightClock.kt", // PERSONAL PATCH
+    "watchfaces/daynight/DayOverlay.kt", // PERSONAL PATCH
+    "watchfaces/daynight/MoonLight.kt", // PERSONAL PATCH
+    "watchfaces/daynight/MoonPhase.kt", // PERSONAL PATCH
+    "watchfaces/daynight/MoonPicture.kt", // PERSONAL PATCH
+    "watchfaces/daynight/MoonPosition.kt", // PERSONAL PATCH
+    "watchfaces/daynight/NightFace.kt", // PERSONAL PATCH
+    "watchfaces/daynight/Orbit.kt", // PERSONAL PATCH
+    "watchfaces/daynight/SkyCycle.kt", // PERSONAL PATCH
+    "watchfaces/daynight/StoredWeather.kt", // PERSONAL PATCH
+    "watchfaces/daynight/SunTimes.kt", // PERSONAL PATCH
+    "watchfaces/settingsync/CwfSettingNames.kt", // PERSONAL PATCH
+    "watchfaces/settingsync/CwfSyncedSettings.kt", // PERSONAL PATCH
     "watchfaces/utils/BaseWatchFace.kt",
     "watchfaces/utils/BgGraphBuilder.kt",
-    "watchfaces/utils/DesignTimeText.kt",
-    "watchfaces/utils/FirstFrameAfterWake.kt",
-    "watchfaces/utils/GlucoseLine.kt",
-    "watchfaces/utils/LayeredFrame.kt",
-    "watchfaces/utils/LogTimeGraph.kt",
-    "watchfaces/utils/LogTimeScale.kt",
-    "watchfaces/utils/ParsedJsonCache.kt",
-    "watchfaces/utils/PartTimeLeft.kt",
+    "watchfaces/utils/DesignTimeText.kt", // PERSONAL PATCH
+    "watchfaces/utils/FirstFrameAfterWake.kt", // PERSONAL PATCH
+    "watchfaces/utils/GlucoseLine.kt", // PERSONAL PATCH
+    "watchfaces/utils/LayeredFrame.kt", // PERSONAL PATCH
+    "watchfaces/utils/LogTimeGraph.kt", // PERSONAL PATCH
+    "watchfaces/utils/LogTimeScale.kt", // PERSONAL PATCH
+    "watchfaces/utils/ParsedJsonCache.kt", // PERSONAL PATCH
+    "watchfaces/utils/PartTimeLeft.kt", // PERSONAL PATCH
     "watchfaces/utils/SecondVisibility.kt",
     "watchfaces/utils/SimpleUi.kt",
     "watchfaces/utils/WatchFace.kt",
@@ -94,7 +98,7 @@ val wearShared = listOf(
     "watchfaces/utils/WatchFaceTime.kt",
     "watchfaces/utils/WatchMode.kt",
     "watchfaces/utils/WatchShape.kt",
-    "watchfaces/utils/WatchBatteryLevel.kt",
+    "watchfaces/utils/WatchBatteryLevel.kt", // PERSONAL PATCH
     "watchfaces/utils/WatchfaceViewAdapter.kt",
 )
 
@@ -246,24 +250,26 @@ dependencies {
     implementation(project(":core:keys"))
     implementation(project(":core:data"))
 
-    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.appcompat) // PERSONAL PATCH
     implementation(libs.androidx.core)
     implementation(libs.androidx.datastore)
-    implementation(libs.androidx.preference)
-    implementation(libs.androidx.wear)
+    implementation(libs.androidx.preference) // PERSONAL PATCH
+    implementation(libs.androidx.wear) // PERSONAL PATCH
+    // Needed at run time, not only to compile: CustomWatchface is a WatchFaceService and draws its
+    // slots with the rendering library. Their manifest entries are removed, see AndroidManifest.xml.
     implementation(libs.androidx.wear.watchface)
     implementation(libs.androidx.wear.watchface.complications.data)
-    implementation(libs.androidx.wear.watchface.complications.datasource)
-    implementation(libs.androidx.wear.watchface.complications.datasource.ktx)
+    implementation(libs.androidx.wear.watchface.complications.datasource) // PERSONAL PATCH
+    implementation(libs.androidx.wear.watchface.complications.datasource.ktx) // PERSONAL PATCH
     implementation(libs.androidx.wear.watchface.complications)
     implementation(libs.androidx.wear.watchface.complications.rendering)
-    implementation(libs.androidx.wear.watchface.editor)
-    implementation(libs.androidx.wear.watchface.client)
-    implementation(libs.androidx.health.services.client)
-    implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.wear.watchface.editor) // PERSONAL PATCH
+    implementation(libs.androidx.wear.watchface.client) // PERSONAL PATCH
+    implementation(libs.androidx.health.services.client) // PERSONAL PATCH
+    implementation(libs.androidx.constraintlayout) // PERSONAL PATCH
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.kotlinx.coroutines.guava)
+    implementation(libs.kotlinx.coroutines.guava) // PERSONAL PATCH
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlinx.serialization.protobuf)
     implementation(files(chartJar).builtBy(unpackChartJar))

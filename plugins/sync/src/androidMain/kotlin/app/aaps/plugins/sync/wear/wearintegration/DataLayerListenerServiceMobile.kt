@@ -17,7 +17,7 @@ import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.plugins.sync.wear.WearPlugin
-import app.aaps.plugins.sync.wear.cwfsettings.CwfSettingsSyncPhone // PERSONAL PATCH: CWF settings on the phone
+import app.aaps.plugins.sync.wear.cwfsettings.CwfSettingsSyncPhone
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.CapabilityInfo
@@ -49,7 +49,7 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
     @Inject lateinit var activePlugin: ActivePlugin
     @Inject lateinit var rxBus: RxBus
     @Inject lateinit var unchangedToWear: UnchangedToWearFilter
-    @Inject lateinit var cwfSettingsSync: CwfSettingsSyncPhone // PERSONAL PATCH: CWF settings on the phone
+    @Inject lateinit var cwfSettingsSync: CwfSettingsSyncPhone
 
     inner class LocalBinder : Binder() {
 
@@ -72,7 +72,8 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
         injectMetroMembers(this)
         super.onCreate()
         aapsLogger.debug(LTag.WEAR, "onCreate")
-        cwfSettingsSync.start(scope) // PERSONAL PATCH: CWF settings on the phone
+        // The Custom watch face settings that the phone can set too, for as long as the watch is served
+        cwfSettingsSync.start(scope)
         handler.post { updateTranscriptionCapability() }
         // Used only by the one collector below, so the filter sees the sends one after the other, in their
         // real order. A state the watch already has is left out.

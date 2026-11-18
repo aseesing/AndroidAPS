@@ -4,22 +4,24 @@
 // ============================================================================================
 package app.aaps.wear.watchfaces.settingsync
 
-import android.content.res.Resources
 import androidx.annotation.ArrayRes
 import androidx.annotation.StringRes
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
-import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.R
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.colour.ColourLooks
 import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
 
 /*
- * The settings of the Custom watch face that the phone can set too, see `CwfSettingsSync`.
+ * The settings of the Custom watch face that the phone can set too, see `EventData.CwfSettingsSync`.
  *
  * Shared code: the watch uses it to send and take these settings, and the phone app builds it a second
  * time inside `:wear:cwfrender` (listed there in `wearShared`), so both sides use the same keys,
- * defaults, labels and allowed values.
+ * defaults, labels and allowed values. [CwfSettingNames] gives them by their stored names.
+ *
+ * A personal extension of the upstream sync: the upstream table `CwfWatchSettings` has only the on/off
+ * settings; this list has every row of the watch face menu, also the choices (colours, the log time
+ * graph, the length of the wake-up animation, ...). The same message and the same merge rule carry them.
  */
 
 /** One watch setting that the phone can set too. */
@@ -111,47 +113,5 @@ object CwfSyncedSettings {
     fun faceLookFor(json: String?): List<CwfSyncedSetting> {
         val used = CustomWatchface.settingRows(json, systemEditor = true, hasNightFace = false).map { it.key }.toSet()
         return faceLook.filter { it.key in used }
-    }
-}
-
-/**
- * The settings of [CwfSyncedSettings] by their stored names, read from [resources]. Reads, writes and
- * checks values the same way on the watch and on the phone.
- */
-class CwfSettingNames(resources: Resources) {
-
-    /** Stored name -> setting, in the order of [CwfSyncedSettings.all]. */
-    val settings: Map<String, CwfSyncedSetting> = CwfSyncedSettings.all.associateBy { resources.getString(it.key) }
-
-    private val names: Map<CwfSyncedSetting, String> = settings.entries.associate { (name, setting) -> setting to name }
-
-    private val allowedChoices: Map<String, Set<String>> = settings.mapNotNull { (name, setting) ->
-        (setting as? CwfSyncedSetting.Choice)?.let { name to resources.getStringArray(it.entryValues).toSet() }
-    }.toMap()
-
-    /** The stored name of [setting]. */
-    fun nameOf(setting: CwfSyncedSetting): String = names.getValue(setting)
-
-    /** True when [name] is one of these settings and [value] is a value it can have. */
-    fun isAllowed(name: String, value: String): Boolean =
-        when (settings[name]) {
-            is CwfSyncedSetting.Toggle -> value == "true" || value == "false"
-            is CwfSyncedSetting.Choice -> value in allowedChoices[name].orEmpty()
-            null                       -> false
-        }
-
-    /** The value of [setting] in [sp], as text. */
-    fun read(sp: SP, setting: CwfSyncedSetting): String =
-        when (setting) {
-            is CwfSyncedSetting.Toggle -> sp.getBoolean(setting.key, setting.default).toString()
-            is CwfSyncedSetting.Choice -> sp.getString(setting.key, setting.defaultValue)
-        }
-
-    /** Stores [value] for [setting] in [sp], with the type the watch uses. [value] must be allowed. */
-    fun write(sp: SP, setting: CwfSyncedSetting, value: String) {
-        when (setting) {
-            is CwfSyncedSetting.Toggle -> sp.putBoolean(setting.key, value.toBooleanStrict())
-            is CwfSyncedSetting.Choice -> sp.putString(setting.key, value)
-        }
     }
 }

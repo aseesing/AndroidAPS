@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchfaces.settingsync
 
 import android.content.Context
@@ -12,7 +8,7 @@ import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.EventWearToMobile
 import app.aaps.core.interfaces.rx.weardata.CwfSettingValue
 import app.aaps.core.interfaces.rx.weardata.CwfSettingsMerge
-import app.aaps.core.interfaces.rx.weardata.CwfSettingsSync
+import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.events.EventWearPreferenceChange
 import dev.zacsweers.metro.AppScope
@@ -26,7 +22,8 @@ import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
 /**
- * The watch side of the Custom watch face settings that the phone can set too (see [CwfSettingsSync]).
+ * The watch side of the Custom watch face settings that the phone can set too (see
+ * [EventData.CwfSettingsSync]).
  *
  * - A setting the user changes on the watch goes to the phone, with the time of the change.
  * - A setting from the phone is stored when it is newer. It is not sent back.
@@ -56,7 +53,7 @@ class CwfSettingsSyncWear(
     fun start(scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)) {
         if (started) return
         started = true
-        scope.launch(start = CoroutineStart.UNDISPATCHED) { rxBus.toFlow(CwfSettingsSync::class).collect { fromPhone(it) } }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { rxBus.toFlow(EventData.CwfSettingsSync::class).collect { fromPhone(it) } }
         scope.launch(start = CoroutineStart.UNDISPATCHED) { rxBus.toFlow(EventWearPreferenceChange::class).collect { it.changedKey?.let(::settingChanged) } }
         scope.launch { catchUp() }
     }
@@ -96,13 +93,13 @@ class CwfSettingsSyncWear(
         // Not changed when fromPhone wrote it: then the book has the value already
         val toSend = synchronized(this) { if (catchUp()) current() else null } ?: return
         aapsLogger.debug(LTag.WEAR, "CWF setting $name changed on the watch, sent to the phone")
-        rxBus.send(EventWearToMobile(CwfSettingsSync(toSend)))
+        rxBus.send(EventWearToMobile(EventData.CwfSettingsSync(toSend)))
     }
 
     /** The settings of the phone came in. Takes the newer ones, and answers when the phone is behind. */
-    fun fromPhone(message: CwfSettingsSync) {
+    fun fromPhone(message: EventData.CwfSettingsSync) {
         val answer = synchronized(this) {
-            val result = CwfSettingsMerge.merge(current(), message.settings, names::isAllowed)
+            val result = CwfSettingsMerge.merge(current(), message.settings, localIsWatch = true, allowed = ::isAllowed)
             result.taken.forEach { (name, taken) ->
                 // The book first: the change of the watch setting below must look like ours, not like the user's
                 writeBook(name, taken)
@@ -111,8 +108,11 @@ class CwfSettingsSyncWear(
             if (result.taken.isNotEmpty()) aapsLogger.debug(LTag.WEAR, "CWF settings from the phone: ${result.taken.keys}")
             result.merged.takeIf { result.answer && !message.isAnswer }
         }
-        answer?.let { rxBus.send(EventWearToMobile(CwfSettingsSync(it, isAnswer = true))) }
+        answer?.let { rxBus.send(EventWearToMobile(EventData.CwfSettingsSync(it, isAnswer = true))) }
     }
+
+    /** True when the watch has the setting [name] and [value] is a value it can have. */
+    private fun isAllowed(name: String, value: String): Boolean = names.isAllowed(name, value) // PERSONAL PATCH: also the choices of the watch face menu, see CwfSyncedSettings
 
     private fun readBook(name: String): CwfSettingValue? {
         val value = book.getString(VALUE_PREFIX + name, null) ?: return null
