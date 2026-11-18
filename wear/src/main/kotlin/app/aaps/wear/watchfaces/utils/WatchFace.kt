@@ -258,8 +258,13 @@ abstract class WatchFace : WatchFaceService() {
     /** Hands the watch state (ambient, visible, headless) to a subclass that wants to follow it. */
     protected open fun onWatchStateReady(watchState: WatchState) {} // PERSONAL PATCH: for the wake-up animation
 
-    /** PERSONAL PATCH: keeps the first frame after a wake cheap, see [FirstFrameAfterWake]. */
-    protected val wakeFrame = FirstFrameAfterWake()
+    /**
+     * Keeps the first frame after a wake cheap, see [FirstFrameAfterWake]. Each renderer (engine) has
+     * its own, because the system may make a new engine on the same service object; this is the one
+     * of the renderer that drew last. Before the first frame it is one that never wakes.
+     */
+    protected var wakeFrame = FirstFrameAfterWake()
+        private set
 
     // Renderer instance
     private var renderer: WatchFaceRenderer? = null
@@ -284,7 +289,6 @@ abstract class WatchFace : WatchFaceService() {
     ): WatchFace {
         this.complicationSlotsManager = complicationSlotsManager
         onWatchStateReady(watchState) // PERSONAL PATCH
-        wakeFrame.watch(watchState) // PERSONAL PATCH
 
         // Create renderer that delegates to abstract methods
         renderer = WatchFaceRenderer(
@@ -338,6 +342,9 @@ abstract class WatchFace : WatchFaceService() {
             }
         }
 
+        /** The first frame after a wake of this renderer, see [WatchFace.wakeFrame]. */
+        private val wake = FirstFrameAfterWake().also { it.watch(wState) }
+
         init {
             // Register broadcast receiver for time changes
             val filter = IntentFilter().apply {
@@ -378,7 +385,8 @@ abstract class WatchFace : WatchFaceService() {
 
             // Update watch state
             val newAmbient = renderParameters.drawMode == DrawMode.AMBIENT
-            wakeFrame.beginFrame(leftAmbient = isAmbient && !newAmbient, interactive = !newAmbient && !wState.isHeadless) // PERSONAL PATCH
+            wakeFrame = wake
+            wake.beginFrame(leftAmbient = isAmbient && !newAmbient, interactive = !newAmbient && !wState.isHeadless)
             if (isAmbient != newAmbient) {
                 isAmbient = newAmbient
                 onWatchModeChanged(currentWatchMode)
@@ -395,9 +403,9 @@ abstract class WatchFace : WatchFaceService() {
                 renderParameters.highlightLayer == null &&
                 renderParameters.watchFaceLayers == WatchFaceLayer.ALL_WATCH_FACE_LAYERS &&
                 !complicationTapShown(zonedDateTime)
-            // PERSONAL PATCH: the wake frame is drawn the plain way, one pass over the views; the
-            // layered frame and the wake animation would first draw their kept pictures again
-            val layered = plainFrame && !wakeFrame.isActive && drawLayeredFrame(canvas, bounds, zonedDateTime)
+            // The wake frame is drawn the plain way, one pass over the views: the layered frame would
+            // first draw its kept pictures again
+            val layered = plainFrame && !wake.isActive && drawLayeredFrame(canvas, bounds, zonedDateTime)
             if (!layered) {
                 // Delegate to abstract onDraw method
                 onDraw(canvas)
@@ -405,7 +413,7 @@ abstract class WatchFace : WatchFaceService() {
                 onDrawOverlay(canvas)
             }
             frameDrawn(layered)
-            wakeFrame.endFrame() // PERSONAL PATCH
+            wake.endFrame()
 
             // Read again after every frame, not only once at construction: whether seconds are shown
             // is known only after the first draw has loaded the design, and changes with preferences.
@@ -535,7 +543,7 @@ abstract class WatchFace : WatchFaceService() {
 
         override fun onDestroy() {
             super.onDestroy()
-            wakeFrame.release() // PERSONAL PATCH
+            wake.release()
             try {
                 context.unregisterReceiver(dateTimeChangedReceiver)
             } catch (_: IllegalArgumentException) {
