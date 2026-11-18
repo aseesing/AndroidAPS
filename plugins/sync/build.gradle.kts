@@ -111,6 +111,8 @@ kotlin {
 
                 // DataLayerListenerService
                 api(libs.com.google.android.gms.playservices.wearable)
+                // The Custom watch face code of the watch, for its settings on the phone
+                implementation(project(":wear:cwfrender"))
 
                 // SMS Communicator (OTP + QR code). ZXing itself comes from jvmSharedMain.
                 implementation(libs.com.eatthepath.java.otp)

@@ -1,7 +1,6 @@
 package app.aaps.plugins.sync.wear.cwfsettings
 
 import android.content.res.Configuration
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -41,11 +40,13 @@ import app.aaps.core.ui.compose.preference.ProvidePreferenceTheme
 import app.aaps.core.ui.compose.preference.SwitchPreference
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.plugins.sync.wear.preview.CwfLivePreview
 
 /**
- * The watch face settings over the whole screen, with the picture of the watch face at the top.
+ * The watch face settings over the whole screen, with the live preview of the watch face at the top.
+ * A change shows in the preview at once.
  *
- * @param bitmap the picture of the watch face, or null when the phone has none yet
+ * @param bitmap the static picture of the watch face, or null when the phone has none yet
  */
 @Composable
 internal fun CwfSettingsDialog(bitmap: ImageBitmap?, contentDescription: String?, onClose: () -> Unit) {
@@ -59,7 +60,7 @@ internal fun CwfSettingsDialog(bitmap: ImageBitmap?, contentDescription: String?
                 onClose = onClose,
                 preview = {
                     if (bitmap != null)
-                        Image(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                        CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                 }
             )
         }
