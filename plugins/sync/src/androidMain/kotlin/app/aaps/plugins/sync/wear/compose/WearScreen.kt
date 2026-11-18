@@ -136,6 +136,11 @@ internal fun WearScreen(
                             )
                         }
                     }
+                    if (subScreen == SubScreen.IMPORT_LIST) {
+                        // The toolbar is set up once per sub-screen, so it reads the state itself
+                        val importState by viewModel.uiState.collectAsStateWithLifecycle()
+                        CwfImportAction(importing = importState.importingDesigns, onImport = { uris -> viewModel.importDesigns(uris) })
+                    }
                 }
             )
         )
@@ -151,7 +156,9 @@ internal fun WearScreen(
             SubScreen.IMPORT_LIST -> {
                 CwfImportContent(
                     items = uiState.importItems,
+                    importing = uiState.importingDesigns,
                     onItemClick = { item -> viewModel.selectWatchface(item.cwfFile) },
+                    onItemDelete = { item -> viewModel.deleteDesign(item.cwfFile) },
                     modifier = modifier
                 )
             }
@@ -195,6 +202,7 @@ private enum class SubScreen { MAIN, INFOS, IMPORT_LIST }
 /**
  * @see WearMainContentPreview
  * @see WearMainContentDisconnectedPreview
+ * @see WearMainContentLoadingPreview
  */
 @Composable
 internal fun WearMainContent(
@@ -362,8 +370,9 @@ internal fun WearMainContent(
                         button2 = ButtonDef(Icons.Default.Download, stringResource(SyncStrings.wear_export_watchface), onExportTemplate)
                     )
 
-                    // Watchface preview image
-                    uiState.watchfaceImage?.let { image ->
+                    // Watchface preview image, or a loading indicator while a new face goes to the watch
+                    uiState.loadingWatchface?.let { name -> FaceLoadingIndicator(name) }
+                    uiState.watchfaceImage?.takeIf { uiState.loadingWatchface == null }?.let { image ->
                         Spacer(modifier = Modifier.height(AapsSpacing.small))
                         Image(
                             bitmap = image,

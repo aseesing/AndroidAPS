@@ -1,6 +1,7 @@
 package app.aaps.plugins.sync.wear.compose
 
 import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
@@ -72,7 +73,11 @@ data class WearUiState(
     val showInfos: Boolean = false,
     val cwfInfosState: CwfInfosState? = null,
     val showImportList: Boolean = false,
-    val importItems: List<CwfImportItemState> = emptyList()
+    val importItems: List<CwfImportItemState> = emptyList(),
+    /** True while picked designs are copied into AAPS/export: the list shows progress and the import button is off */
+    val importingDesigns: Boolean = false,
+    /** Name of a custom watchface on its way to the watch: shown with a loading indicator instead of the old face, or null */
+    val loadingWatchface: String? = null
 )
 
 @Immutable
@@ -122,7 +127,8 @@ class WearViewModel(
     private val preferences: Preferences,
     private val versionCheckerUtils: VersionCheckerUtils,
     private val fileListProvider: FileListProvider,
-    private val aapsLogger: AAPSLogger
+    private val aapsLogger: AAPSLogger,
+    private val designImport: CwfDesignImport
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WearUiState())
@@ -130,6 +136,8 @@ class WearViewModel(
 
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
+
+    private val faceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(loadingWatchface = name) } }
 
     init {
         viewModelScope.launch {
@@ -140,6 +148,8 @@ class WearViewModel(
                         isDeviceConnected = device != null
                     )
                 }
+                // A watch that is gone will not report the new face: stop waiting for it
+                if (device == null) faceLoading.stop()
             }
         }
         viewModelScope.launch {
@@ -324,6 +334,8 @@ class WearViewModel(
         preferences.put(StringNonKey.WearCwfAuthorVersion, metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] ?: "")
         preferences.put(StringNonKey.WearCwfFileName, metadata[CwfMetadataKey.CWF_FILENAME] ?: "")
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray))
+        // Without a watch nothing will report the face back, so there is nothing to wait for
+        if (_uiState.value.isDeviceConnected) faceLoading.start(metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedCustomWatchface)
         _uiState.update { state ->
             // Sent and stored either way; but with the complications face on the wrist nothing
             // draws it, and the wearer should hear that now rather than wonder later
@@ -342,5 +354,32 @@ class WearViewModel(
 
     fun hideImportList() {
         _uiState.update { it.copy(showImportList = false, importItems = emptyList()) }
+    }
+
+    /**
+     * Copies the picked zips into AAPS/export, says how it went, and shows the list again with the
+     * new designs. Only one import runs at a time: two at once would race on the same file names.
+     * Reading from Drive can be slow, so [WearUiState.importingDesigns] shows that it runs.
+     */
+    fun importDesigns(uris: List<Uri>) {
+        if (uris.isEmpty() || _uiState.value.importingDesigns) return
+        _uiState.update { it.copy(importingDesigns = true) }
+        viewModelScope.launch {
+            val message = try {
+                designImport.importFrom(uris)
+            } finally {
+                _uiState.update { it.copy(importingDesigns = false) }
+            }
+            _toastEvent.emit(message)
+            loadWatchfaceFiles()
+        }
+    }
+
+    /** Deletes the zip of [cwfFile] from AAPS/export, says how it went, and shows the list again without it. */
+    fun deleteDesign(cwfFile: CwfFile) {
+        viewModelScope.launch {
+            _toastEvent.emit(designImport.deleteFrom(cwfFile))
+            loadWatchfaceFiles()
+        }
     }
 }
