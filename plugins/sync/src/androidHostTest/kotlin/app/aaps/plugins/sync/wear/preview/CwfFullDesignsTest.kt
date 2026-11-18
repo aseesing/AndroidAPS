@@ -1,16 +1,19 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.preview
 
+import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.rx.weardata.CwfData
+import app.aaps.core.interfaces.rx.weardata.CwfFile
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.ResData
 import app.aaps.core.interfaces.rx.weardata.ResFormat
 import app.aaps.shared.impl.weardata.ResFileMap
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
 
 /** The watch sends a short copy of its design; the preview needs the whole zip from the phone. */
 class CwfFullDesignsTest {
@@ -65,5 +68,21 @@ class CwfFullDesignsTest {
         assertThat(CwfFullDesigns.isWhole(shortCopy)).isFalse()
         assertThat(CwfFullDesigns.isWhole(design("A", "1", "{}"))).isFalse()
         assertThat(CwfFullDesigns.isWhole(design("A", "1", "{}", preview, "background"))).isTrue()
+    }
+
+    @Test
+    fun onlyTheLastDesignIsKeptAndANewCopyOfItIsFound() = runBlocking {
+        val zip = design("Sample Face", "1.2", "{json}", preview, "background")
+        val fileListProvider: FileListProvider = mock { on { listCustomWatchfaceFiles() } doReturn mutableListOf(CwfFile(zip, byteArrayOf())) }
+        val sut = CwfFullDesigns(fileListProvider)
+
+        assertThat(sut.complete(shortCopy)!!.resData.keys).containsExactly(preview, "background")
+        // A new copy from the watch has new picture arrays, but the same json and metadata: no new read of the zips
+        assertThat(sut.complete(design("Sample Face", "1.2", "{json}", preview))!!.resData.keys).containsExactly(preview, "background")
+        verify(fileListProvider, times(1)).listCustomWatchfaceFiles()
+        // Another design replaces it
+        assertThat(sut.complete(design("Other", "1.0", "{other}", preview))).isNull()
+        sut.complete(shortCopy)
+        verify(fileListProvider, times(3)).listCustomWatchfaceFiles()
     }
 }

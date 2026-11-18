@@ -1,6 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- ============================================================================================
-     PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-     Own file: keep upstream files to small hooks that call into here.
-     ============================================================================================ -->
-<manifest />
+<!--
+    The Custom watch face code of the wear app, built again for the phone. See build.gradle.kts.
+
+    The watch face libraries bring entries for a watch. The phone draws the face itself and needs none
+    of them, so they are removed here: an exported service other apps could bind on a phone, an
+    activity, visibility of all launcher apps and of complication sources, and two watch libraries.
+
+    PERSONAL PATCH: the personal version of this module uses more watch libraries (the watch face
+    client and editor, health services, ...). What they bring is removed too (marked entries): an
+    exported health services service, the visibility of the health services app, and the permission
+    to bind the watch face control service.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <queries>
+        <intent tools:node="remove">
+            <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+        </intent>
+        <intent tools:node="remove">
+            <action android:name="android.intent.action.MAIN" />
+
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- PERSONAL PATCH: from androidx.health:health-services-client -->
+        <package
+            android:name="com.google.android.wearable.healthservices"
+            tools:node="remove" />
+    </queries>
+
+    <!-- PERSONAL PATCH: from androidx.wear.watchface:watchface-client -->
+    <uses-permission
+        android:name="com.google.android.wearable.permission.BIND_WATCH_FACE_CONTROL"
+        tools:node="remove" />
+
+    <application>
+        <service
+            android:name="androidx.wear.watchface.control.WatchFaceControlService"
+            tools:node="remove" />
+        <activity
+            android:name="androidx.wear.watchface.ComplicationHelperActivity"
+            tools:node="remove" />
+        <uses-library
+            android:name="com.google.android.wearable"
+            tools:node="remove" />
+        <uses-library
+            android:name="wear-sdk"
+            tools:node="remove" />
+        <!-- PERSONAL PATCH: from androidx.health:health-services-client, exported -->
+        <service
+            android:name="androidx.health.services.client.VersionApiService"
+            tools:node="remove" />
+    </application>
+</manifest>

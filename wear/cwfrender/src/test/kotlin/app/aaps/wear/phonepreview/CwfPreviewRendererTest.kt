@@ -9,7 +9,9 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import app.aaps.core.interfaces.logging.AAPSLogger
+import app.aaps.core.interfaces.rx.weardata.CUSTOM_VERSION
 import app.aaps.core.interfaces.rx.weardata.CwfData
+import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.wear.R
@@ -33,6 +35,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
+import app.aaps.core.interfaces.R as InterfacesR
 
 /**
  * The watch's renderer, built for the phone, draws a design with values, moves the clock, and
@@ -130,14 +133,46 @@ class CwfPreviewRendererTest {
     }
 
     @Test
-    fun aNewSizeIsDrawnWhole() {
+    fun aNewSizeIsDrawnAsAFaceOfThatSize() {
         val renderer = stillRenderer(TestDesigns.still())
         val now = System.currentTimeMillis()
-        val before = renderer.frame(SIZE, now)
-        renderer.frame(SIZE * 3 / 4, now)
-        // The layers kept from the smaller frame must not be reused at the old size
-        val after = renderer.frame(SIZE, now)
-        assertThat(after.sameAs(before)).isTrue()
+        val big = renderer.frame(SIZE, now)
+        val small = renderer.frame(SMALL, now)
+        save(small, "small")
+        assertThat(small.width).isEqualTo(SMALL)
+        // The same as a face built for that size from the start: the scale is not the one of the first size
+        renderer.release()
+        assertThat(renderer.frame(SMALL, now).sameAs(small)).isTrue()
+        // And back
+        assertThat(renderer.frame(SIZE, now).sameAs(big)).isTrue()
+    }
+
+    @Test
+    fun drawsTheDefaultDesignWithoutAZip() {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_default")
+        val now = System.currentTimeMillis()
+        values(now).forEach(renderer::apply)
+        val frame = renderer.frame(SIZE, now)
+        save(frame, "default")
+        assertThat(frame.width).isEqualTo(SIZE)
+    }
+
+    @Test
+    fun knowsTheDefaultDesignOfTheWatch() {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_knows_default")
+        values(System.currentTimeMillis()).forEach(renderer::apply)
+        assertThat(renderer.isDefaultDesign(TestDesigns.still())).isFalse()
+        // What the watch sends for its default design: the same name, author and version
+        val default = CwfData(
+            "{}",
+            mutableMapOf(
+                CwfMetadataKey.CWF_NAME to RuntimeEnvironment.getApplication().getString(InterfacesR.string.wear_default_watchface),
+                CwfMetadataKey.CWF_AUTHOR to "Philoul",
+                CwfMetadataKey.CWF_AUTHOR_VERSION to CUSTOM_VERSION
+            ),
+            mutableMapOf()
+        )
+        assertThat(renderer.isDefaultDesign(default)).isTrue()
     }
 
     @Test
@@ -174,14 +209,16 @@ class CwfPreviewRendererTest {
 
     @Test
     fun aNewValueIsDrawn() {
-        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
+        val renderer = stillRenderer(TestDesigns.still())
         val now = System.currentTimeMillis()
-        values(now).forEach(renderer::apply)
-        renderer.setDesign(TestDesigns.still())
-        renderer.watchSettings.edit().putString(lengthKey, "0").commit()
+        // A setting change makes the next frame read the values
         renderer.settingsChanged()
         val before = renderer.frame(SIZE, now)
+        // A value right after that read: the face reads the values at most once in half a second, so it
+        // is kept for a later frame, not lost until the next minute
         renderer.apply(bg(now, "9,4", 170.0))
+        assertThat(renderer.frame(SIZE, now).sameAs(before)).isTrue()
+        Thread.sleep(1_500)
         val after = renderer.frame(SIZE, now)
         save(after, "new_value")
         assertThat(after.sameAs(before)).isFalse()
@@ -277,5 +314,6 @@ class CwfPreviewRendererTest {
     private companion object {
 
         const val SIZE = 400
+        const val SMALL = 300
     }
 }

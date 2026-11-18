@@ -2,6 +2,10 @@
 // PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
 // Own file: keep upstream files to small hooks that call into here.
 // ============================================================================================
+// The personal renderer, larger than the upstream one (issue 5610): it plays the wake-up animation,
+// draws the complication slots, takes the weather, and has a storage per face (day and night). The
+// reviewed fixes of upstream are ported into it: a new face per size, new values kept until a frame
+// that surely reads them, and the default design of the watch drawn without a zip.
 package app.aaps.wear.phonepreview
 
 import android.content.Context
@@ -11,6 +15,7 @@ import android.graphics.Canvas
 import androidx.core.graphics.createBitmap
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.rx.weardata.CwfData
+import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.toDrawable
 import app.aaps.wear.R
@@ -45,11 +50,15 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
     private val host = PreviewHost(context, logger, name)
 
     /**
-     * The part that draws: the face with its views, the kept layer pictures and the animation. Made
-     * when a frame is asked for, and dropped again by [release]. The values, the design and the
-     * settings are kept by [host], so a new one draws the same face.
+     * The part that draws, for frames of [size] x [size] pixels: the face with its views, the kept
+     * layer pictures and the animation. Made when a frame is asked for, and dropped again by [release].
+     * The values, the design and the settings are kept by [host], so a new one draws the same face.
+     *
+     * One size only: the face fixes the scale of its views to the size of its first frame, as a watch
+     * has one screen size. A frame of another size gets a new [Drawing], and its animation plays, as
+     * when the preview is shown again.
      */
-    private inner class Drawing {
+    private inner class Drawing(val size: Int) {
 
         /** The time of the frame being drawn, for the complication slots. */
         var frameTime = System.currentTimeMillis()
@@ -69,8 +78,8 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
             moon = { epochMs, size -> face.wakeMoon(epochMs, size) } // the moon layers, the same picture as the face's resting layers
         )
 
-        /** The size of the last frame. The kept layer pictures only fit that size. */
-        var size = 0
+        /** When the face last read the values, or may have, in wall clock ms. `prepareForRendering` reads them. */
+        var valuesReadAt = System.currentTimeMillis()
 
         /** The minute of the last frame. A new minute reloads the fields, as `onTimeChanged` does on the watch. */
         var minute = -1L
@@ -89,10 +98,21 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
 
     private var drawing: Drawing? = null
 
-    private fun drawing(): Drawing = drawing ?: Drawing().also { new ->
-        drawing = new
-        design?.let(new::useDesign)
+    /** The [Drawing] for frames of [size]. A new one when the size changed: the screen turned, or another screen shows the preview. */
+    private fun drawing(size: Int): Drawing {
+        drawing?.takeIf { it.size == size }?.let { return it }
+        release()
+        return Drawing(size).also { new ->
+            drawing = new
+            design?.let(new::useDesign)
+        }
     }
+
+    /** True when new values came in that the face has not read yet. */
+    private var newValues = false
+
+    /** True when the next frame reads the values for another reason: a new design, new settings or a new minute. */
+    private var readsValues = false
 
     /** Changes each time the values change, so the animation knows its kept pictures are old. */
     private var dataVersion = 0
@@ -115,6 +135,20 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         design = cwfData
         runBlocking { host.repository.storeCustomWatchface(cwfData) }
         drawing?.useDesign(cwfData)
+        readsValues = true
+    }
+
+    /**
+     * True when [cwfData] is the default design of the watch: the one the watch face code makes itself,
+     * with no zip behind it. Then the copy the watch sends is all there is, and it can be drawn as it is.
+     */
+    fun isDefaultDesign(cwfData: CwfData): Boolean {
+        // The face stores its default design when it builds its views the first time
+        val drawing = drawing ?: drawing(DEFAULT_SIZE)
+        drawing.face.prepareLayout(drawing.size, drawing.size)
+        val default = runBlocking { host.repository.getCustomWatchface(isDefault = true) } ?: return false
+        return listOf(CwfMetadataKey.CWF_NAME, CwfMetadataKey.CWF_AUTHOR, CwfMetadataKey.CWF_AUTHOR_VERSION)
+            .all { key -> cwfData.metadata[key] != null && cwfData.metadata[key] == default.metadata[key] }
     }
 
     /** Takes a message the phone sends to the watch, as the watch does. Others are left out. */
@@ -143,14 +177,15 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
 
             else                       -> return
         }
-        dataVersion++
-        drawing?.pipeline?.invalidateData()
+        // Read by the next frame that surely reads the values, see [frame]
+        newValues = true
     }
 
     /** Draws again with the [watchSettings] as they are now. */
     fun settingsChanged() {
         dataVersion++
         drawing?.pipeline?.invalidateAll()
+        readsValues = true
     }
 
     /** Plays the wake-up animation again, as a tap on the watch does. False when there is none to play. */
@@ -158,21 +193,33 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
 
     /** The face at [nowMs], [size] pixels wide and high: a frame of the animation while it plays. */
     fun frame(size: Int, nowMs: Long = System.currentTimeMillis()): Bitmap {
-        val drawing = drawing()
+        val drawing = drawing(size)
         drawing.frameTime = nowMs
-        // The kept layer pictures have the old size: the screen turned, or another screen shows the preview
-        if (size != drawing.size) {
-            drawing.size = size
-            drawing.pipeline.invalidateAll()
-        }
         // The hour, minute and date fields are filled with the data, from the real clock
-        val minute = nowMs / 60_000L
+        val minute = nowMs / MS_PER_MINUTE
         if (minute != drawing.minute) {
             drawing.minute = minute
             drawing.pipeline.invalidateData()
+            readsValues = true
+        }
+        // The face reads the values again only when its last read is older than half a second (so the
+        // halves of one picture of the watch agree, see `BaseWatchFace.refreshRenderData`). New values
+        // are kept until a frame that surely reads them, or they would be skipped until the next minute.
+        val wallClock = System.currentTimeMillis()
+        if (newValues && wallClock - drawing.valuesReadAt >= VALUES_READ_GAP_MS) {
+            newValues = false
+            dataVersion++ // the kept pictures of the animation show the old values
+            drawing.pipeline.invalidateData()
+            readsValues = true
         }
         // Also when the animation plays: this sets the clock and the values in the views it draws over
         val still = drawing.pipeline.compose(nowMs, ambient = false, width = size, height = size)
+        if (readsValues) {
+            readsValues = false
+            // The time after the frame, not before it: the face read somewhere inside it, and a slow
+            // frame (the first one of a new face) must not make the next read look allowed too early
+            drawing.valuesReadAt = System.currentTimeMillis()
+        }
         val wantsAnimation = frameDelayMs(Long.MAX_VALUE) != Long.MAX_VALUE
         if (!wantsAnimation) return still
         val animated = createBitmap(size, size)
@@ -193,6 +240,10 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
      * Frees the face, its views and its pictures while no preview is shown. The values, the design
      * and the settings stay. The next [frame] builds the face again, and the animation plays again,
      * as on the watch when the face becomes visible.
+     *
+     * The last face is not fully freed: the watch code keeps it in static fields (the style owner of
+     * `CustomWatchface` and the fields of its `ViewMap` entries), and with it its views and the
+     * pictures of the design. That is one face at most, until the next face takes its place.
      */
     fun release() {
         drawing?.release()
@@ -203,7 +254,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
     private val settingNames: CwfSettingNames by lazy { CwfSettingNames(host.resources) }
 
     /**
-     * Writes the watch settings [values] (stored name -> value, as in `CwfSettingsSync`) into
+     * Writes the watch settings [values] (stored name -> value, as in `EventData.CwfSettingsSync`) into
      * [watchSettings], and draws with them from the next frame on. Unknown names and values are left out.
      *
      * @return true when the length of the wake-up animation changed, so the caller can play it again
@@ -220,5 +271,16 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         }
         if (changed) settingsChanged()
         return wakeChanged
+    }
+
+    private companion object {
+
+        const val MS_PER_MINUTE = 60_000L
+
+        /** More than the half second in which the face does not read the values again. */
+        const val VALUES_READ_GAP_MS = 1_000L
+
+        /** The size of the views built only to learn the default design. Any size gives the same design. */
+        const val DEFAULT_SIZE = 400
     }
 }

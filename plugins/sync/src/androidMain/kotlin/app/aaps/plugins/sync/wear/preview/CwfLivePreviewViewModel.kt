@@ -1,6 +1,6 @@
 // ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
+// PERSONAL PATCH - the upstream view model (issue 5610) with personal extras: a preview per face
+// (day and night), the weather, and the wake-up animation (frames at its speed, a tap plays it).
 // ============================================================================================
 package app.aaps.plugins.sync.wear.preview
 
@@ -16,6 +16,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.plugins.sync.wear.WearPlugin
 import app.aaps.plugins.sync.wear.cwfsettings.CwfWatchSettingsStore
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
+import app.aaps.plugins.sync.wear.wearintegration.LastWatchFaceValues
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
@@ -29,6 +30,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -47,7 +50,10 @@ import java.util.concurrent.atomic.AtomicReference
  *   whole design from the phone, see [CwfFullDesigns].
  *
  * Nothing is drawn or stored while no preview is on screen: new values and settings are only kept
- * here, the newest of each kind, and handed to the renderer just before it draws a frame.
+ * here, the newest of each kind, and handed to the renderer just before it draws a frame. When the
+ * screen stops showing a preview (left, or the app goes to the background), the kept layer pictures
+ * of its face are freed, and the thread too when no preview is shown; they come back when the
+ * preview is shown again, see [CwfPreviewEngine.release].
  */
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 @ViewModelKey
@@ -95,15 +101,8 @@ class CwfLivePreviewViewModel(
 
     /** Keeps [event] until the next frame of each preview, in place of an older value of the same kind. */
     private fun keep(event: EventData) {
-        val kind = when (event) {
-            is EventData.SingleBg      -> "SingleBg${event.dataset}"
-            is EventData.Status        -> "Status${event.dataset}"
-            is EventData.GraphData     -> "GraphData"
-            is EventData.TreatmentData -> "TreatmentData"
-            is EventData.Weather       -> "Weather"
-            is EventData.Preferences   -> "Preferences"
-            else                       -> return
-        }
+        // The kinds of the watch face, and the weather the personal designs draw
+        val kind = LastWatchFaceValues.kindOf(event) ?: if (event is EventData.Weather) "Weather" else return
         waiting.values.forEach { slot ->
             synchronized(slot.values) {
                 slot.values.remove(kind)
@@ -124,7 +123,8 @@ class CwfLivePreviewViewModel(
 
     /**
      * Frames of the face of [slot], [sizePx] x [sizePx] pixels, for as long as the flow is collected:
-     * once a second, and at the speed of the animation while it plays.
+     * once a second, and at the speed of the animation while it plays. When the collection ends, what
+     * no screen shows any more is freed, see [CwfPreviewEngine.hidden].
      *
      * Gives null while the face can not be drawn right: no design, or no whole design on the phone (see
      * [CwfFullDesigns]); it goes on when the design changes. Gives null and ends when the preview
@@ -138,7 +138,7 @@ class CwfLivePreviewViewModel(
             val now = watchDesign(slot).value
             if (now !== shortCopy) {
                 shortCopy = now
-                design = now?.let { fullDesigns.complete(it) }
+                design = now?.let { watchDesign -> wholeDesign(watchDesign, slot) }
             }
             val drawn = design
             if (drawn == null) {
@@ -164,6 +164,15 @@ class CwfLivePreviewViewModel(
             withTimeoutOrNull(next.second) { waits.nudge.receive() }
         }
     }.catch { emit(null) }
+        .onStart { engine.shown(slot) }
+        .onCompletion { engine.hidden(slot) }
+
+    /**
+     * The design the watch has, with its pictures and fonts: from its zip on the phone, or as it is
+     * when it is the default design of the watch, which has no zip. Null when neither.
+     */
+    private suspend fun wholeDesign(watchDesign: CwfData, slot: PreviewSlot): CwfData? =
+        fullDesigns.complete(watchDesign) ?: watchDesign.takeIf { engine.use(slot) { it.isDefaultDesign(watchDesign) } == true }
 
     /** Plays the wake-up animation of [slot] again, as a tap on the watch does. */
     fun wake(slot: PreviewSlot) {
@@ -172,7 +181,7 @@ class CwfLivePreviewViewModel(
         }
     }
 
-    /** The screen is left: the faces and their pictures are freed, the values and settings stay. */
+    /** The screen is left: the kept layer pictures and the thread are freed, the values and settings stay. */
     override fun onCleared() {
         engine.release()
     }

@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.phonepreview
 
 import android.content.Context
@@ -16,8 +12,9 @@ import app.aaps.shared.impl.rx.bus.RxBusImpl
 import app.aaps.shared.impl.sharedPreferences.SPImpl
 import app.aaps.shared.impl.utils.DateUtilImpl
 import app.aaps.wear.data.ComplicationDataRepository
-import app.aaps.wear.health.HealthValues
+import app.aaps.wear.health.HealthValues // PERSONAL PATCH: heart rate and steps of the face
 import app.aaps.wear.watchfaces.CustomWatchface
+import app.aaps.wear.watchfaces.daynight.StoredWeather // PERSONAL PATCH: the weather of the face
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.SimpleUi
 import java.io.File
@@ -31,22 +28,30 @@ import java.io.File
  * fields with its own objects. The phone's dependency graph is not touched.
  *
  * Everything the face stores is kept apart from the phone's own data:
- * - files (the face's DataStore) go to their own folder, see [getFilesDir];
+ * - files (the face's DataStore) go to their own folder, see [getFilesDir]. That folder is emptied
+ *   when the host is made, once per run of the app;
  * - preferences go to files that start with the [name], see [getSharedPreferences];
  * - events go to an own [RxBus], so nothing the face sends reaches the phone's bus.
  *
- * The watch settings the face reads (show seconds, which fields to show, ...) are in [watchSettings].
+ * The watch settings the face reads (show seconds, which values to show, ...) are in [watchSettings].
  *
  * Only one instance per [name] may exist in a process: the face's DataStore allows one owner per
- * file. Two previews at once (the day face and the night face) each have their own [name].
+ * file. PERSONAL PATCH: two previews at once (the day face and the night face) each have their own
+ * [name]; the watch face designs repository uses its own name too.
  *
- * @param name the folder of the files and the start of the preferences file names
+ * @param name PERSONAL PATCH: the folder of the files and the start of the preferences file names
  */
 class PreviewHost(
     base: Context,
     private val logger: AAPSLogger,
-    private val name: String = DEFAULT_NAME
+    private val name: String = DEFAULT_NAME // PERSONAL PATCH: one host per face
 ) : ContextWrapper(base.applicationContext), MetroMemberInjector {
+
+    init {
+        // The face's DataStore keeps the values and the design on disk. Removed before anything reads
+        // it, so the preview only shows what the phone sent in this run of the app, never old values.
+        File(baseContext.filesDir, name).deleteRecursively()
+    }
 
     private val ownFilesDir: File by lazy { File(baseContext.filesDir, name).apply { mkdirs() } }
 
@@ -60,17 +65,23 @@ class PreviewHost(
     private val simpleUi: SimpleUi by lazy { SimpleUi(this, sp, dateUtil) }
 
     /**
-     * The heart rate and steps store of the face, in the same file as on the watch (see `HealthModule`),
-     * here behind [name]. The watch does not send these values, so on the phone it stays empty.
+     * PERSONAL PATCH: the heart rate and steps store of the face, in the same file as on the watch (see
+     * `HealthModule`), here behind [name]. The watch does not send these values, so on the phone it stays empty.
      */
     val healthValues: HealthValues by lazy { HealthValues(getSharedPreferences(HealthValues.FILE, MODE_PRIVATE)) }
+
+    init {
+        // PERSONAL PATCH: the weather is a value too, kept in the preferences: removed for the same reason.
+        // Here, after the properties it needs.
+        StoredWeather.clear(sp)
+    }
 
     override fun getApplicationContext(): Context = this
 
     override fun getFilesDir(): File = ownFilesDir
 
     override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences =
-        baseContext.getSharedPreferences("${this.name}_$name", mode)
+        baseContext.getSharedPreferences("${this.name}_$name", mode) // PERSONAL PATCH: this.name, was NAME
 
     override fun injectMembers(target: Any): Boolean {
         if (target !is BaseWatchFace) return false
@@ -82,17 +93,17 @@ class PreviewHost(
         target.simpleUi = simpleUi
         if (target is CustomWatchface) {
             target.context = this
-            target.healthValues = healthValues
+            target.healthValues = healthValues // PERSONAL PATCH: heart rate and steps
         }
         return true
     }
 
-    companion object {
+    companion object { // PERSONAL PATCH: public, for the name of the night preview
 
         /** The name of the first preview: its folder under the phone's files folder, and its preferences prefix. */
-        const val DEFAULT_NAME = "cwf_preview"
+        const val DEFAULT_NAME = "cwf_preview" // PERSONAL PATCH: DEFAULT_NAME, was NAME
 
         /** The watch settings file, after the name of the preview. */
-        const val SETTINGS_FILE = "watch_settings"
+        private const val SETTINGS_FILE = "watch_settings"
     }
 }

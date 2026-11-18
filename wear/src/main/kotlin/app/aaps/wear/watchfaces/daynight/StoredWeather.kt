@@ -27,6 +27,13 @@ object StoredWeather {
         sp.putString(R.string.key_weather_temperature, weather.temperature?.toString() ?: "")
     }
 
+    /** Forgets the weather kept in [sp]. The phone's live preview does this when it starts, so it never shows the weather of an earlier run. */
+    fun clear(sp: SP) {
+        sp.remove(R.string.key_weather_kind)
+        sp.remove(R.string.key_weather_time)
+        sp.remove(R.string.key_weather_temperature)
+    }
+
     /** The temperature kept in [sp], in °C, or null when there is none. Whether the weather is still current is for the caller. */
     fun temperature(sp: SP): Double? = sp.getString(R.string.key_weather_temperature, "").toDoubleOrNull()
 }
