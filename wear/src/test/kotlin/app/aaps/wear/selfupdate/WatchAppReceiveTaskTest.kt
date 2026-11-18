@@ -10,6 +10,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
 import java.util.zip.GZIPOutputStream
 
 /** The watch side of the watch app update: what reaches the installer, and what the phone is told */
@@ -52,6 +53,7 @@ internal class WatchAppReceiveTaskTest {
     private class FakeWifiBody(body: ByteArray) : WifiBody {
 
         override val input: InputStream = ByteArrayInputStream(body)
+        override val output: OutputStream = ByteArrayOutputStream()
         var closed = false
 
         override fun close() {

@@ -25,6 +25,7 @@ import app.aaps.wear.events.EventWearPreferenceChange
 import app.aaps.wear.heartrate.HeartRateListener
 import app.aaps.wear.interaction.ConfigurationActivity
 import app.aaps.wear.selfupdate.WatchAppSelfUpdate
+import app.aaps.wear.watchlog.WatchLogUpload // PERSONAL PATCH: watch log download
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import app.aaps.wear.wearStepCount.StepCountListener
 import com.google.android.gms.tasks.Tasks
@@ -59,6 +60,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     @Inject lateinit var aapsSchedulers: AapsSchedulers
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
     @Inject lateinit var watchAppSelfUpdate: WatchAppSelfUpdate
+    @Inject lateinit var watchLogUpload: WatchLogUpload // PERSONAL PATCH: watch log download
 
     private val dataClient by lazy { Wearable.getDataClient(this) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
@@ -160,6 +162,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     override fun onChannelOpened(channel: ChannelClient.Channel) {
         super.onChannelOpened(channel)
         watchAppSelfUpdate.onChannelOpened(channel)
+        watchLogUpload.onChannelOpened(channel) // PERSONAL PATCH: watch log download
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

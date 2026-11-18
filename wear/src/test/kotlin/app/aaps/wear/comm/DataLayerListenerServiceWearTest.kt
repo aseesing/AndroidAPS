@@ -7,6 +7,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.AAPSLoggerTest
 import app.aaps.wear.selfupdate.WatchAppSelfUpdate
+import app.aaps.wear.watchlog.WatchLogUpload // PERSONAL PATCH: watch log download
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.common.truth.Truth.assertThat
@@ -28,6 +29,7 @@ internal class DataLayerListenerServiceWearTest {
 
     private val rxBus: RxBus = mock()
     private val watchAppSelfUpdate: WatchAppSelfUpdate = mock()
+    private val watchLogUpload: WatchLogUpload = mock() // PERSONAL PATCH: watch log download
 
     private fun service(): DataLayerListenerServiceWear =
         Robolectric.buildService(DataLayerListenerServiceWear::class.java).get().also {
@@ -36,6 +38,7 @@ internal class DataLayerListenerServiceWearTest {
             it.sp = mock<SP>()
             it.aapsSchedulers = mock<AapsSchedulers>()
             it.watchAppSelfUpdate = watchAppSelfUpdate
+            it.watchLogUpload = watchLogUpload // PERSONAL PATCH: watch log download
         }
 
     @Test
@@ -80,5 +83,6 @@ internal class DataLayerListenerServiceWearTest {
         sut.onChannelOpened(channel)
 
         verify(watchAppSelfUpdate).onChannelOpened(channel)
+        verify(watchLogUpload).onChannelOpened(channel) // PERSONAL PATCH: watch log download
     }
 }

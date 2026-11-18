@@ -111,15 +111,7 @@ object WatchAppUpdateProtocol {
         data.writeLong(header.bodySize)
         if (header.version >= 2) {
             data.writeUTF(header.sha256)
-            val wifi = header.wifi
-            data.writeBoolean(wifi != null)
-            if (wifi != null) {
-                data.writeInt(wifi.port)
-                data.writeUTF(wifi.token)
-                val addresses = wifi.addresses.take(MAX_ADDRESSES)
-                data.writeInt(addresses.size)
-                addresses.forEach { data.writeUTF(it) }
-            }
+            writeWifiOffer(data, header.wifi)
         }
         data.flush()
     }
@@ -136,15 +128,30 @@ object WatchAppUpdateProtocol {
         if (bodySize !in 1..MAX_BODY_SIZE) throw IOException("Wrong update size $bodySize")
         if (version == VERSION_CHANNEL_ONLY) return Header(label, bodySize, version = version)
         val sha256 = data.readUTF()
-        val wifi = if (data.readBoolean()) {
-            val port = data.readInt()
-            if (port !in 1..65535) throw IOException("Wrong port $port")
-            val token = data.readUTF()
-            val count = data.readInt()
-            if (count !in 0..MAX_ADDRESSES) throw IOException("Wrong address count $count")
-            WifiOffer(List(count) { data.readUTF() }, port, token)
-        } else null
-        return Header(label, bodySize, sha256, wifi, version)
+        return Header(label, bodySize, sha256, readWifiOffer(data), version)
+    }
+
+    /** Writes an optional [WifiOffer]; also used by [WatchLogProtocol] */
+    internal fun writeWifiOffer(data: DataOutputStream, wifi: WifiOffer?) {
+        data.writeBoolean(wifi != null)
+        if (wifi != null) {
+            data.writeInt(wifi.port)
+            data.writeUTF(wifi.token)
+            val addresses = wifi.addresses.take(MAX_ADDRESSES)
+            data.writeInt(addresses.size)
+            addresses.forEach { data.writeUTF(it) }
+        }
+    }
+
+    /** Reads what [writeWifiOffer] wrote. @throws IOException when the values are out of range */
+    internal fun readWifiOffer(data: DataInputStream): WifiOffer? {
+        if (!data.readBoolean()) return null
+        val port = data.readInt()
+        if (port !in 1..65535) throw IOException("Wrong port $port")
+        val token = data.readUTF()
+        val count = data.readInt()
+        if (count !in 0..MAX_ADDRESSES) throw IOException("Wrong address count $count")
+        return WifiOffer(List(count) { data.readUTF() }, port, token)
     }
 
     /** The first thing the watch sends on the Wi-Fi connection: who it is, and the secret from the offer */
