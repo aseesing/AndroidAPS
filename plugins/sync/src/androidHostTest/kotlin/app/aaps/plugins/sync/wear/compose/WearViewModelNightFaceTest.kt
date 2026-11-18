@@ -1,30 +1,25 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.compose
 
-import android.net.Uri
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.Event
+import app.aaps.core.interfaces.rx.events.EventMobileToWear
 import app.aaps.core.interfaces.rx.events.EventMobileToWearWatchface
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfFile
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
+import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.versionChecker.VersionCheckerUtils
 import app.aaps.core.keys.PushedWatchfaceId
 import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.Preferences
-import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
-import app.aaps.plugins.sync.wear.keys.WearDesignImportKey
-import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
+import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,9 +38,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.atLeast
 import org.mockito.kotlin.eq
-import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
-import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -62,10 +55,10 @@ internal class WearViewModelNightFaceTest {
     @Mock private lateinit var fileListProvider: FileListProvider
     @Mock private lateinit var aapsLogger: AAPSLogger
     @Mock private lateinit var designImport: CwfDesignImport
+    @Mock private lateinit var wearNightFace: WearNightFace
 
     private val savedNightWatchfaceFlow = MutableStateFlow<CwfData?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
-    private val connectedDeviceFlow = MutableStateFlow<String?>("Galaxy Watch 5")
 
     private lateinit var sut: WearViewModel
 
@@ -82,15 +75,14 @@ internal class WearViewModelNightFaceTest {
     fun setUp() {
         MockitoAnnotations.openMocks(this)
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        whenever(wearPlugin.connectedDevice).thenReturn(connectedDeviceFlow)
+        whenever(wearPlugin.connectedDevice).thenReturn(MutableStateFlow("Galaxy Watch 5"))
         whenever(wearPlugin.savedCustomWatchface).thenReturn(savedCustomWatchfaceFlow)
-        whenever(wearPlugin.savedNightWatchface).thenReturn(savedNightWatchfaceFlow)
+        whenever(wearNightFace.saved).thenReturn(savedNightWatchfaceFlow)
         whenever(wearPlugin.watchFacePushStatus).thenReturn(MutableStateFlow(null))
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(MutableSharedFlow())
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(MutableStateFlow(PushedWatchfaceId.CWF))
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
-        whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace)
     }
 
     @AfterEach
@@ -138,7 +130,7 @@ internal class WearViewModelNightFaceTest {
         sut.selectWatchface(zip)
 
         assertThat(sentZips().single().night).isTrue()
-        verify(preferences).put(WearNightFaceKey.NightWatchfaceName, "Night")
+        verify(wearNightFace).chosen(zip.cwfData.metadata)
         verify(preferences, never()).put(eq(StringNonKey.WearCwfWatchfaceName), any<String>())
         assertThat(sut.uiState.value.nightFace.importForNight).isFalse()
         assertThat(sut.uiState.value.showImportList).isFalse()
@@ -152,7 +144,7 @@ internal class WearViewModelNightFaceTest {
 
         assertThat(sentZips().single().night).isFalse()
         verify(preferences).put(StringNonKey.WearCwfWatchfaceName, "Night")
-        verify(preferences, never()).put(eq(WearNightFaceKey.NightWatchfaceName), any<String>())
+        verify(wearNightFace, never()).chosen(any())
     }
 
     @Test
@@ -168,119 +160,70 @@ internal class WearViewModelNightFaceTest {
     }
 
     @Test
-    fun `remove night face asks the plugin to clear it`() {
-        whenever(dateUtil.now()).thenReturn(12345L)
-
-        sut.clearNightWatchface()
-
-        verify(wearPlugin).clearNightWatchface(12345L)
-    }
-
-    @Test
-    fun `a chosen night face shows as loading until the watch reports it`() {
+    fun `the normal load after a night load that was not closed sends the main face`() {
         sut.loadNightWatchfaceFiles()
         awaitImportList()
-        sut.selectWatchface(zip)
-        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isEqualTo("Night")
-        assertThat(sut.uiState.value.loadingWatchface).isNull()
-
-        // A report of the main face does not end the night load
-        savedCustomWatchfaceFlow.value = zip.cwfData.copy()
-        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isEqualTo("Night")
-
-        savedNightWatchfaceFlow.value = zip.cwfData.copy()
-        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isNull()
-    }
-
-    @Test
-    fun `a chosen main face does not show the night face as loading`() {
+        // The list goes away some other way than hideImportList or a pick
         sut.loadWatchfaceFiles()
+        assertThat(sut.uiState.value.nightFace.importForNight).isFalse()
         awaitImportList()
-        sut.selectWatchface(zip)
-
-        assertThat(sut.uiState.value.loadingWatchface).isEqualTo("Night")
-        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isNull()
-    }
-
-    @Test
-    fun `the night face loading ends when the watch disconnects`() {
-        sut.loadNightWatchfaceFiles()
-        awaitImportList()
-        sut.selectWatchface(zip)
-        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isEqualTo("Night")
-
-        connectedDeviceFlow.value = null
-
-        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isNull()
-    }
-
-    @Test
-    fun `without a watch a chosen night face does not show as loading`() {
-        sut.loadNightWatchfaceFiles()
-        awaitImportList()
-        connectedDeviceFlow.value = null
 
         sut.selectWatchface(zip)
 
-        assertThat(sentZips().single().night).isTrue()
-        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isNull()
+        assertThat(sentZips().single().night).isFalse()
+        verify(wearNightFace, never()).chosen(any())
     }
 
     @Test
-    fun `after an import in the night list the next pick is still the night face`() = runTest(UnconfinedTestDispatcher()) {
-        val uri: Uri = mock()
-        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
-        sut.loadNightWatchfaceFiles()
-        awaitImportList()
-
-        sut.importDesigns(listOf(uri))
-        // The list is read again on the IO dispatcher: wait for it, as the wearer does
-        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
-        assertThat(sut.uiState.value.nightFace.importForNight).isTrue()
-        sut.selectWatchface(zip)
-
-        assertThat(sentZips().single().night).isTrue()
-        verify(preferences, never()).put(eq(StringNonKey.WearCwfWatchfaceName), any<String>())
-    }
-
-    @Test
-    fun `after a delete in the night list the next pick is still the night face`() = runTest(UnconfinedTestDispatcher()) {
+    fun `a design deleted from the night list leaves the list for the night face`() = runTest(UnconfinedTestDispatcher()) {
         whenever(designImport.deleteFrom(zip)).thenReturn("Deleted: Night.zip")
         sut.loadNightWatchfaceFiles()
         awaitImportList()
 
         sut.deleteDesign(zip)
-        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
-        assertThat(sut.uiState.value.nightFace.importForNight).isTrue()
-        sut.selectWatchface(zip)
+        awaitImportList()
 
+        assertThat(sut.uiState.value.nightFace.importForNight).isTrue()
+        // So the next pick is still the night face, not the main face
+        sut.selectWatchface(zip)
         assertThat(sentZips().single().night).isTrue()
     }
 
     @Test
-    fun `after an import in the main list the next pick is still the main face`() = runTest(UnconfinedTestDispatcher()) {
-        val uri: Uri = mock()
-        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
-        sut.loadWatchfaceFiles()
-        awaitImportList()
+    fun `the day and night screen opens only with a night face and closes when it goes`() {
+        sut.showDayNight()
+        assertThat(sut.uiState.value.showDayNight).isFalse()
 
-        sut.importDesigns(listOf(uri))
-        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
-        sut.selectWatchface(zip)
+        savedNightWatchfaceFlow.value = zip.cwfData
+        sut.showDayNight()
+        assertThat(sut.uiState.value.showDayNight).isTrue()
 
-        assertThat(sentZips().single().night).isFalse()
+        savedNightWatchfaceFlow.value = null
+        assertThat(sut.uiState.value.showDayNight).isFalse()
     }
 
     @Test
-    fun `an import remembers the place of the pick for the next file picker`() = runTest(UnconfinedTestDispatcher()) {
-        val uri: Uri = mock()
-        whenever(uri.toString()).thenReturn("content://drive/doc1")
-        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+    fun `remove night face asks the watch to forget it`() {
+        sut.clearNightWatchface()
 
-        sut.importDesigns(listOf(uri))
+        verify(wearNightFace).remove()
+    }
 
-        verify(preferences).put(WearDesignImportKey.LastPickedDesign, "content://drive/doc1")
-        whenever(preferences.get(WearDesignImportKey.LastPickedDesign)).thenReturn("content://drive/doc1")
-        assertThat(sut.lastImportPlace()).isEqualTo("content://drive/doc1")
+    /** The requests the screen sent to the watch */
+    private fun sentRequests(): List<EventData.ActionrequestCustomWatchface> {
+        val captor = argumentCaptor<Event>()
+        verify(rxBus, atLeast(0)).send(captor.capture())
+        return captor.allValues.filterIsInstance<EventMobileToWear>().map { it.payload }.filterIsInstance<EventData.ActionrequestCustomWatchface>()
+    }
+
+    @Test
+    fun `the watch is asked about its night face only when the phone knows of one`() {
+        whenever(wearNightFace.isKnown()).thenReturn(false)
+        sut.requestCustomWatchface()
+        assertThat(sentRequests().single().night).isFalse()
+
+        whenever(wearNightFace.isKnown()).thenReturn(true)
+        sut.requestCustomWatchface()
+        assertThat(sentRequests().last().night).isTrue()
     }
 }

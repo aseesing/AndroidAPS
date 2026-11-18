@@ -199,6 +199,7 @@ class DataHandlerMobile(
     @Inject lateinit var sensitivityOverview: SensitivityOverview
     @Inject lateinit var eatReminder: EatReminder
     @Inject lateinit var clientControlDispatcher: ClientControlActionDispatcher
+    @Inject lateinit var wearNightFace: WearNightFace
     @Inject lateinit var cwfWatchSettings: CwfWatchSettingsStore // PERSONAL PATCH: the log time graph of the watch
 
     /** What the watch faces have now, for the live preview on the phone. Before the collectors below, which send. */
@@ -436,7 +437,8 @@ class DataHandlerMobile(
             .chunkedOnQuietPeriod(HEALTH_EVENT_QUIET_PERIOD_MS)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { handleStepsCountBatch(it) }
         onEventSync<EventData.ActionGetCustomWatchface>(detail = { " watchface=${it.customWatchface}" }) { handleGetCustomWatchface(it) }
-        onEventSync<EventData.ActionUpdateCustomWatchface>(detail = { " night=${it.night}" }) { handleUpdateCustomWatchfaceFromWatch(it) } // PERSONAL PATCH: day and night face
+        onEventSync<EventData.ActionUpdateCustomWatchface>(detail = { " night=${it.night}" }) { handleUpdateCustomWatchfaceFromWatch(it) }
+        onEventSync<EventData.ActionClearNightWatchface> { handleNoNightWatchface(it) }
     }
 
     private fun maxOfNullable(vararg values: Long?): Long? {
@@ -1264,8 +1266,9 @@ class DataHandlerMobile(
         sendToWear(EventData.QuickWizard(ArrayList(quickWizard.list().filter { e -> e.forDevice(QuickWizardEntry.DEVICE_WATCH) }.map { e -> e.toWear() })))
 
     /**
-     * The newest place any location provider of the phone still knows, rounded to 0.1 degree (about
-     * 10 km): enough for sunrise and sunset on the watch, and no more than that leaves the phone.
+     * Private patch: the newest place any location provider of the phone still knows, rounded to 0.1
+     * degree (about 10 km), for the weather only (see [refreshWeather]): it goes to the weather service,
+     * never to the watch. Day and night on the watch take their place from `WearDayNightSettings`.
      * Latitude and longitude, or null without location permission or without any known place. Starts
      * no location request.
      */
@@ -1361,9 +1364,10 @@ class DataHandlerMobile(
                 carbsButtonIncrement2 = preferences.get(IntKey.OverviewCarbsButtonIncrement2),
                 pushedWatchface = preferences.get(StringKey.WearPushedWatchface),
                 alertOverrideDnd = preferences.get(BooleanKey.AlertOverrideDoNotDisturb)
-            ).let { prefs -> roughLocation()?.let { (latitude, longitude) -> prefs.copy(latitude = latitude, longitude = longitude) } ?: prefs }
-                .let { nightFace.withDayNightLooks(it) } // PERSONAL PATCH: day and night face settings
+            )
         )
+        // The night face of the Custom watch face; nothing without one
+        wearNightFace.resendMessages().forEach { sendToWear(it) }
         // The last weather, so a watch that restarted has it at once
         lastWeather?.let { rxBus.send(EventMobileToWear(it)) }
         // QuickWizard
@@ -2041,7 +2045,7 @@ class DataHandlerMobile(
     }
 
     private fun handleGetCustomWatchface(command: EventData.ActionGetCustomWatchface) {
-        if (command.customWatchface.night) return handleGetNightWatchface(command) // PERSONAL PATCH: day and night face
+        if (command.customWatchface.night) return handleGetNightWatchface(command)
         val customWatchface = command.customWatchface
         aapsLogger.debug(LTag.WEAR, "Custom Watchface received from ${command.sourceNodeId}")
         val cwfData = customWatchface.customWatchfaceData
@@ -2058,28 +2062,29 @@ class DataHandlerMobile(
             importExportPrefs.exportCustomWatchface(cwfData, command.withDate)
     }
 
-    // ---- PERSONAL PATCH: day and night face, see WearNightFace.kt ----
+    // The night face of the Custom watch face, see CwfNight and WearNightFace
 
-    private val nightFace = WearNightFacePreferences(preferences)
-
-    /** The watch's night face: kept apart from the main face and its keys. */
+    /** The watch's night face: kept apart from the main face and its keys. The watch never exports it. */
     private fun handleGetNightWatchface(command: EventData.ActionGetCustomWatchface) {
-        val cwfData = command.customWatchface.customWatchfaceData
         aapsLogger.debug(LTag.WEAR, "Night watchface received from ${command.sourceNodeId}")
-        if (command.exportFile) {
-            importExportPrefs.exportCustomWatchface(cwfData, command.withDate)
-            return
-        }
-        nightFace.rememberIfNew(cwfData.metadata)
-        rxBus.send(EventWearNightWatchface(cwfData))
+        wearNightFace.reportedByWatch(command.customWatchface.customWatchfaceData)
     }
 
-    /** The watch may answer with ActionUpdateCustomWatchface: the design it now has in that slot. */
+    /**
+     * The watch answers with ActionUpdateCustomWatchface when it tells which design it now has in a
+     * slot: the night face, or the main face after the night face was removed.
+     */
     private fun handleUpdateCustomWatchfaceFromWatch(update: EventData.ActionUpdateCustomWatchface) =
         handleGetCustomWatchface(
             EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(update.customWatchfaceData, update.night))
                 .also { it.sourceNodeId = update.sourceNodeId }
         )
+
+    /** The watch has no night face (any more). */
+    private fun handleNoNightWatchface(command: EventData.ActionClearNightWatchface) {
+        aapsLogger.debug(LTag.WEAR, "No night watchface on ${command.sourceNodeId}")
+        wearNightFace.noneOnWatch()
+    }
 
     internal fun lastSentToWear(): List<EventData> = lastSentToWatchFace() + listOfNotNull(lastWeather) // PERSONAL PATCH: live watch face preview, with the weather
 
