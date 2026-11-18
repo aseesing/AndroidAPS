@@ -29,36 +29,53 @@ and it comes back with every new version. With this feature it is needed **once*
    drops the extension.
 
 2. **Phone.** The Wear screen shows a small **Update watch app** button in the connection card. It
-   opens a page with the included version, a hint (several minutes, keep the watch close), a
-   **Send to watch** button, a progress bar with the time left, and the result.
+   opens a page with the included version, a hint (several minutes over Bluetooth, much faster
+   with Wi-Fi, keep the watch close), a **Send to watch** button, a progress bar with the time left
+   and the way the body goes (Wi-Fi or Bluetooth), and the result.
    `WatchAppUpdater` (one app-wide instance, so the transfer goes on when the page is left) opens a
    Wear OS `ChannelClient` channel to the watch and `WatchAppSender` runs the protocol.
 
 3. **Protocol** (`WatchAppUpdateProtocol` in `:shared:impl`, path `/aaps/watch_app_update`):
-   phone sends a header (magic, version 3, label, size of the gzip body, size of the APK, SHA-256 of
-   the body); the watch answers *Ready* and the phone sends the gzip body over the channel; the watch
-   answers *Committed* or *Failed*. A watch app that is too old for this feature never answers, and
-   the phone says so after 30 seconds. A watch app with an older header version answers *Failed*
-   "Unknown update format"; the phone then says that the watch app must be installed once with adb.
-   A watch app with a newer header version answers *Failed* "Update format older than the watch
-   app"; the phone then asks for a newer phone app.
-   A watch that is still busy with another update answers *Failed* "Busy", and the phone says so.
-   When the channel breaks after the whole body was sent, the phone does not know whether the
-   install started, and asks the user to look on the watch. A watchdog (`ChannelWatchdog`) closes the channel when nothing
+   phone sends a header (magic, version 4, label, size of the gzip body, size of the APK, SHA-256 of
+   the body, and a Wi-Fi offer); the watch answers *Ready* and the phone sends the gzip body over the
+   channel; the watch answers *Committed* or *Failed*. A watch app that is too old for this feature
+   never answers, and the phone says so after 30 seconds. A watch app with an older header version
+   answers *Failed* "Unknown update format"; the phone then says that the watch app must be
+   installed once with adb. A watch app with a newer header version answers *Failed* "Update format
+   older than the watch app"; the phone then asks for a newer phone app. A watch that is still busy
+   with another update answers *Failed* "Busy", and the phone says so. When the channel breaks after
+   the whole body was sent, the phone does not know whether the install started, and asks the user
+   to look on the watch.
+   A watchdog (`ChannelWatchdog`) closes the channel when nothing
    moves for too long, because reads and writes on a channel block and cannot be cancelled.
 
+   **Wi-Fi.** The channel goes over Bluetooth, about 70 KB/s: 5 minutes for 21 MB. So when the
+   phone has a Wi-Fi address (its Wi-Fi, or its hotspot), it starts a one-time TCP server
+   (`SocketWifiBodyServer`) and puts its addresses, the port and a random token in the header. The
+   watch answers *WifiStarted*, asks Android for a Wi-Fi network (Wear OS then turns on the Wi-Fi of
+   the watch, if the user allows Wi-Fi and the watch knows a network), connects, sends the token
+   and reads the body (`NetworkWifiBodyFetcher`). When any of that fails, the watch answers *Ready*
+   and the body comes over the channel after all. The token keeps other devices on the network
+   from fetching the APK; the SHA-256 from the channel keeps them from giving the watch another one.
+   The server takes only connections that reached one of the offered addresses (not the mobile
+   network or a VPN). It serves one connection at a time, and the whole request must arrive within
+   2 seconds after the server took the connection; a slow or wrong request gets the socket closed.
+   After 5 such connections the server closes itself. The watch then fails at once and the body
+   comes over the channel.
+
 4. **Watch.** `DataLayerListenerServiceWear.onChannelOpened` hands the channel to
-   `WatchAppSelfUpdate`. `WatchAppReceiveTask` unpacks the APK while it arrives, straight into a
-   `PackageInstaller` session that is limited to the app's own package
+   `WatchAppSelfUpdate`. `WatchAppReceiveTask` unpacks the APK while it arrives, over Wi-Fi or over
+   the channel, straight into a `PackageInstaller` session that is limited to the app's own package
    (`setAppPackageName`) and to the APK size from the header. The unpack stops as soon as the APK
    gets larger than that size, so a broken body cannot fill the storage of the watch. gzip checks
    its CRC and the watch checks the SHA-256, so a damaged transfer is never installed. The watch
    commits the session first and only then answers *Committed*: *Committed* means that the
    installer has the APK, not that it is installed. After the commit the watch never abandons the
-   session, also when it cannot send the answer because the channel is closed. Android refuses an APK that is not signed with the same key as the
-   installed watch app. On Android 12 and newer the session asks for no user action
-   (`USER_ACTION_NOT_REQUIRED`, allowed for an app that updates itself); Wear OS 3 (Android 11) does
-   not have that call, so there the watch always asks. Where the watch still wants a confirmation,
+   session, also when it cannot send the answer because the channel is closed. Android refuses an
+   APK that is not signed with the same key as the installed watch app. On Android 12 and newer the
+   session asks for no user action (`USER_ACTION_NOT_REQUIRED`, allowed for an app that updates
+   itself); Wear OS 3 (Android 11) does not have that call, so there the watch always asks. Where
+   the watch still wants a confirmation,
    `WatchAppInstallStatusReceiver` opens it and posts a notification "Tap to confirm the update".
    The OnePlus Watch 2R asks for the confirmation.
 
@@ -100,7 +117,8 @@ needs it again.
    "Wear Installer" apps do. It removes the computer, not the developer options on the watch. It
    needs an adb client library on Android; that is a lot of code for a step that is needed once per
    watch.
-3. **Speed.** The channel goes over Bluetooth, about 70 KB/s: 5 minutes for 21 MB.
+3. **More watches.** Test the Wi-Fi path on more watches: whether Wear OS turns on the Wi-Fi for the
+   request on every model, and how fast it is. Also with the phone as a hotspot for the watch.
 4. **Release builds.** Decide whether release builds of AAPS should always carry the watch app (a
    bigger phone APK, about +21 MB) or whether it stays an option for people who build themselves.
 5. **User documentation** on the AAPS docs site: how to build with `-PembedWearApk`, the one-time

@@ -2,6 +2,7 @@ package app.aaps.shared.impl.weardata
 
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.Header
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.Reply
+import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -91,9 +92,52 @@ class WatchAppUpdateProtocolTest {
     }
 
     @Test
+    fun `a header with a hash and a Wi-Fi offer is read back as written`() {
+        val written = Header(
+            label = "4.0.1 (aaps-wear.apk)",
+            bodySize = 20_000_000,
+            apkSize = 58_000_000,
+            sha256 = sha,
+            wifi = WifiOffer(listOf("192.168.1.20", "10.0.0.5"), 45_123, "00112233445566778899aabbccddeeff")
+        )
+        val buffer = ByteArrayOutputStream()
+        WatchAppUpdateProtocol.writeHeader(buffer, written)
+
+        val header = WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray()))
+
+        assertThat(header).isEqualTo(written)
+    }
+
+    @Test
+    fun `the token never shows in the text of an offer or a header`() {
+        val token = "00112233445566778899aabbccddeeff"
+        val offer = WifiOffer(listOf("192.168.1.20"), 45_123, token)
+
+        assertThat(offer.toString()).doesNotContain(token)
+        assertThat(offer.toString()).contains("192.168.1.20")
+        assertThat(Header("x", 10, 20, sha, offer).toString()).doesNotContain(token)
+    }
+
+    @Test
+    fun `a Wi-Fi request is read back as written`() {
+        val buffer = ByteArrayOutputStream()
+        WatchAppUpdateProtocol.writeWifiRequest(buffer, "secret")
+
+        assertThat(WatchAppUpdateProtocol.readWifiRequest(ByteArrayInputStream(buffer.toByteArray()))).isEqualTo("secret")
+        assertThrows<IOException> { WatchAppUpdateProtocol.readWifiRequest(ByteArrayInputStream("GET / HTTP/1.1".toByteArray())) }
+    }
+
+    @Test
     fun `sha256 is the standard one`() {
         assertThat(WatchAppUpdateProtocol.sha256(ByteArrayInputStream("abc".toByteArray())))
             .isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    @Test
+    fun `tokens match only when equal`() {
+        assertThat(WatchAppUpdateProtocol.sameToken("abc", "abc")).isTrue()
+        assertThat(WatchAppUpdateProtocol.sameToken("abc", "abd")).isFalse()
+        assertThat(WatchAppUpdateProtocol.sameToken("abc", "abcd")).isFalse()
     }
 
     @Test
@@ -107,7 +151,7 @@ class WatchAppUpdateProtocolTest {
 
     @Test
     fun `every reply is read back as written`() {
-        val replies = listOf(Reply.Ready, Reply.Committed, Reply.Failed("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
+        val replies = listOf(Reply.Ready, Reply.WifiStarted, Reply.Committed, Reply.Failed("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
         val buffer = ByteArrayOutputStream()
         replies.forEach { WatchAppUpdateProtocol.writeReply(buffer, it) }
 

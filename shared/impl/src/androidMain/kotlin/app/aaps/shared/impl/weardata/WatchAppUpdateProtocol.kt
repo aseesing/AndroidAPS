@@ -14,22 +14,28 @@ import java.security.MessageDigest
  * The phone opens a channel on [PATH] and the two sides talk like this:
  *
  * 1. phone: [Header] - a magic number, the protocol version, a label, the size and the SHA-256 of
- *    the body, and the size of the unpacked APK
- * 2. watch: [Reply.Ready] - the watch can install. A watch app older than this feature does not
- *    know the path and never answers, so the phone stops after a timeout.
+ *    the body, the size of the unpacked APK, and a [WifiOffer] when the phone has a Wi-Fi address
+ * 2. watch, with a Wi-Fi offer: [Reply.WifiStarted]. The watch turns on its Wi-Fi, connects to the
+ *    phone (see [writeWifiRequest]) and fetches the body there, which is much faster than the
+ *    channel over Bluetooth. Then it answers [Reply.Committed] or [Reply.Failed] as in step 4, or
+ *    [Reply.Ready] when Wi-Fi did not work: then the body comes over the channel as in step 3.
+ * 2. watch, without a Wi-Fi offer: [Reply.Ready] - the watch can install. A watch app older than
+ *    this feature does not know the path and never answers, so the phone stops after a timeout.
  * 3. phone: the body - the watch APK, gzip compressed, exactly [Header.bodySize] bytes
  * 4. watch: [Reply.Committed] when the APK went to the package installer, or [Reply.Failed]
  *
  * gzip has its own CRC check, and the watch checks the SHA-256 from the header, so a damaged or
- * wrong body is never installed. The watch stops unpacking at the APK size from the header, so a
- * broken body cannot fill its storage. The installer itself also refuses an APK that is not signed
- * with the same key as the installed watch app.
+ * wrong body is never installed. The header comes over the channel, which only the paired phone
+ * can open, so the hash is a trusted one also for a body that came over Wi-Fi. The watch stops
+ * unpacking at the APK size from the header, so a broken body cannot fill its storage. The
+ * installer itself also refuses an APK that is not signed with the same key as the installed watch
+ * app.
  *
- * Versions 1 and 2 were early formats in test builds. When the versions of the two apps differ, the
- * watch answers [Reply.Failed]. For a header that is newer than the watch app, the message holds
- * [UNKNOWN_FORMAT], and the phone asks the user to install the watch app once with adb. For a header
- * that is older than the watch app, the message holds [OLD_FORMAT], and the phone asks for a newer
- * phone app.
+ * Versions 1 and 2 were early formats in test builds; version 3 had no [WifiOffer]. When the
+ * versions of the two apps differ, the watch answers [Reply.Failed]. For a header that is newer than
+ * the watch app, the message holds [UNKNOWN_FORMAT], and the phone asks the user to install the
+ * watch app once with adb. For a header that is older than the watch app, the message holds
+ * [OLD_FORMAT], and the phone asks for a newer phone app.
  */
 object WatchAppUpdateProtocol {
 
@@ -40,7 +46,7 @@ object WatchAppUpdateProtocol {
     const val MAGIC = 0x41415055
 
     /** Raise this when the format changes; the watch refuses a version it does not know */
-    const val VERSION = 3
+    const val VERSION = 4
 
     /**
      * The start of the [Reply.Failed] message for a header version the watch does not know.
@@ -57,6 +63,9 @@ object WatchAppUpdateProtocol {
     /** The [Reply.Failed] message when the watch is still busy with another update */
     const val BUSY = "Busy with another update"
 
+    /** At most this many phone addresses in a [WifiOffer] */
+    const val MAX_ADDRESSES = 8
+
     /** Larger than any real watch APK, so a broken header cannot make the watch wait for gigabytes */
     const val MAX_BODY_SIZE = 500L * 1024 * 1024
 
@@ -71,18 +80,36 @@ object WatchAppUpdateProtocol {
      * @param bodySize number of bytes of the gzip compressed APK
      * @param apkSize number of bytes of the APK after unpacking
      * @param sha256 of the gzip compressed APK, lower case hex
+     * @param wifi where the watch can fetch the body over Wi-Fi; null for the channel only
      */
     data class Header(
         val label: String,
         val bodySize: Long,
         val apkSize: Long,
-        val sha256: String
+        val sha256: String,
+        val wifi: WifiOffer? = null
     )
+
+    /**
+     * A one-time server on the phone, reachable over Wi-Fi, that sends the body.
+     *
+     * @param addresses the phone's IP addresses, best first; the watch tries them in this order
+     * @param port the TCP port of the server
+     * @param token a random secret for this one update; the server sends nothing without it.
+     *   [toString] never shows it, so it cannot end up in a log.
+     */
+    data class WifiOffer(val addresses: List<String>, val port: Int, val token: String) {
+
+        override fun toString(): String = "WifiOffer(addresses=$addresses, port=$port, token=hidden)"
+    }
 
     sealed class Reply {
 
         /** The watch is ready to receive the body over the channel */
         data object Ready : Reply()
+
+        /** The watch fetches the body over Wi-Fi now; the next reply comes when it is done */
+        data object WifiStarted : Reply()
 
         /** The watch gave the APK to the package installer. The watch may still ask the user to confirm. */
         data object Committed : Reply()
@@ -94,6 +121,7 @@ object WatchAppUpdateProtocol {
     private const val REPLY_READY = 1
     private const val REPLY_COMMITTED = 2
     private const val REPLY_FAILED = 3
+    private const val REPLY_WIFI_STARTED = 4
 
     fun writeHeader(output: OutputStream, header: Header) {
         val data = DataOutputStream(output)
@@ -103,6 +131,7 @@ object WatchAppUpdateProtocol {
         data.writeLong(header.bodySize)
         data.writeLong(header.apkSize)
         data.writeUTF(header.sha256)
+        writeWifiOffer(data, header.wifi)
         data.flush()
     }
 
@@ -121,8 +150,54 @@ object WatchAppUpdateProtocol {
         if (apkSize !in 1..MAX_APK_SIZE) throw IOException("Wrong APK size $apkSize")
         val sha256 = data.readUTF()
         if (!SHA256_HEX.matches(sha256)) throw IOException("Wrong update hash")
-        return Header(label, bodySize, apkSize, sha256)
+        return Header(label, bodySize, apkSize, sha256, readWifiOffer(data))
     }
+
+    /** Writes an optional [WifiOffer] */
+    internal fun writeWifiOffer(data: DataOutputStream, wifi: WifiOffer?) {
+        data.writeBoolean(wifi != null)
+        if (wifi != null) {
+            data.writeInt(wifi.port)
+            data.writeUTF(wifi.token)
+            val addresses = wifi.addresses.take(MAX_ADDRESSES)
+            data.writeInt(addresses.size)
+            addresses.forEach { data.writeUTF(it) }
+        }
+    }
+
+    /** Reads what [writeWifiOffer] wrote. @throws IOException when the values are out of range */
+    internal fun readWifiOffer(data: DataInputStream): WifiOffer? {
+        if (!data.readBoolean()) return null
+        val port = data.readInt()
+        if (port !in 1..65535) throw IOException("Wrong port $port")
+        val token = data.readUTF()
+        val count = data.readInt()
+        if (count !in 0..MAX_ADDRESSES) throw IOException("Wrong address count $count")
+        return WifiOffer(List(count) { data.readUTF() }, port, token)
+    }
+
+    /** The first thing the watch sends on the Wi-Fi connection: who it is, and the secret from the offer */
+    fun writeWifiRequest(output: OutputStream, token: String) {
+        val data = DataOutputStream(output)
+        data.writeInt(MAGIC)
+        data.writeUTF(token)
+        data.flush()
+    }
+
+    /**
+     * Reads what [writeWifiRequest] wrote. After it, the phone sends exactly [Header.bodySize] bytes.
+     *
+     * @return the token
+     * @throws IOException when the stream is something else
+     */
+    fun readWifiRequest(input: InputStream): String {
+        val data = DataInputStream(input)
+        if (data.readInt() != MAGIC) throw IOException("Not a watch app update request")
+        return data.readUTF()
+    }
+
+    /** Compares two tokens in a time that does not tell how much of them matched */
+    fun sameToken(a: String, b: String): Boolean = MessageDigest.isEqual(a.toByteArray(), b.toByteArray())
 
     /** The SHA-256 of all of [input] as lower case hex */
     fun sha256(input: InputStream): String {
@@ -142,9 +217,10 @@ object WatchAppUpdateProtocol {
     fun writeReply(output: OutputStream, reply: Reply) {
         val data = DataOutputStream(output)
         when (reply) {
-            Reply.Ready     -> data.writeInt(REPLY_READY)
-            Reply.Committed -> data.writeInt(REPLY_COMMITTED)
-            is Reply.Failed -> {
+            Reply.Ready       -> data.writeInt(REPLY_READY)
+            Reply.Committed   -> data.writeInt(REPLY_COMMITTED)
+            Reply.WifiStarted -> data.writeInt(REPLY_WIFI_STARTED)
+            is Reply.Failed   -> {
                 data.writeInt(REPLY_FAILED)
                 data.writeUTF(reply.message.take(1000))
             }
@@ -156,10 +232,11 @@ object WatchAppUpdateProtocol {
     fun readReply(input: InputStream): Reply {
         val data = DataInputStream(input)
         return when (val code = data.readInt()) {
-            REPLY_READY     -> Reply.Ready
-            REPLY_COMMITTED -> Reply.Committed
-            REPLY_FAILED    -> Reply.Failed(data.readUTF())
-            else            -> throw IOException("Unknown reply $code")
+            REPLY_READY        -> Reply.Ready
+            REPLY_COMMITTED    -> Reply.Committed
+            REPLY_WIFI_STARTED -> Reply.WifiStarted
+            REPLY_FAILED       -> Reply.Failed(data.readUTF())
+            else               -> throw IOException("Unknown reply $code")
         }
     }
 

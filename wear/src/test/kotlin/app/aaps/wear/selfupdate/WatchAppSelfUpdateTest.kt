@@ -44,6 +44,7 @@ internal class WatchAppSelfUpdateTest {
         aapsLogger = AAPSLoggerTest(),
         streams = streams,
         sessions = { throw AssertionError("no install in this test") },
+        wifi = { throw AssertionError("no Wi-Fi in this test") },
         notifier = mock(),
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
         closeDelayMs = 0
@@ -85,7 +86,7 @@ internal class WatchAppSelfUpdateTest {
     fun `the lock is released before the channel waits to close`() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         // A close delay much longer than the test: the next update must not wait for it
-        val slow = WatchAppSelfUpdate(AAPSLoggerTest(), streams, { throw AssertionError("no install in this test") }, mock(), scope, 60_000)
+        val slow = WatchAppSelfUpdate(AAPSLoggerTest(), streams, { throw AssertionError("no install in this test") }, { throw AssertionError("no Wi-Fi in this test") }, mock(), scope, 60_000)
         try {
             val first = channel()
             streams.inputs[first] = CompletableDeferred(ByteArrayInputStream("hello watch".toByteArray()))
