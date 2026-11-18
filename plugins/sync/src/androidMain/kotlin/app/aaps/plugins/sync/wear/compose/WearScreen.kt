@@ -75,6 +75,9 @@ import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateButton
 import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateContent
 import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateViewModel
+import app.aaps.plugins.sync.wear.watchlog.WatchLogButton
+import app.aaps.plugins.sync.wear.watchlog.WatchLogContent
+import app.aaps.plugins.sync.wear.watchlog.WatchLogViewModel
 
 @Composable
 internal fun WearScreen(
@@ -97,9 +100,13 @@ internal fun WearScreen(
     // The watch app update page; its button shows only in a phone app built with the watch app inside
     val watchAppUpdateViewModel: WatchAppUpdateViewModel = metroViewModel()
     var showWatchAppUpdate by rememberSaveable { mutableStateOf(false) }
+    // The watch log page; it needs no watch app inside this phone app
+    val watchLogViewModel: WatchLogViewModel = metroViewModel()
+    var showWatchLog by rememberSaveable { mutableStateOf(false) }
 
     // Back handler for sub-screens
     BackHandler(enabled = showWatchAppUpdate) { showWatchAppUpdate = false }
+    BackHandler(enabled = showWatchLog) { showWatchLog = false }
     BackHandler(enabled = uiState.showInfos) { viewModel.hideCwfInfos() }
     BackHandler(enabled = uiState.showImportList) { viewModel.hideImportList() }
 
@@ -107,10 +114,12 @@ internal fun WearScreen(
     val wearTitle = stringResource(CoreUiStrings.wear)
     val importTitle = stringResource(SyncStrings.wear_import_custom_watchface_title)
     val watchAppUpdateTitle = stringResource(SyncStrings.wear_app_update_button)
+    val watchLogTitle = stringResource(SyncStrings.wear_log_button)
 
     // Determine current sub-screen
     val subScreen = when {
         showWatchAppUpdate     -> SubScreen.WATCH_APP_UPDATE
+        showWatchLog           -> SubScreen.WATCH_LOG
         uiState.showImportList -> SubScreen.IMPORT_LIST
         uiState.showInfos      -> SubScreen.INFOS
         else                   -> SubScreen.MAIN
@@ -124,6 +133,7 @@ internal fun WearScreen(
                     SubScreen.IMPORT_LIST      -> importTitle
                     SubScreen.INFOS            -> uiState.cwfInfosState?.title ?: ""
                     SubScreen.WATCH_APP_UPDATE -> watchAppUpdateTitle
+                    SubScreen.WATCH_LOG        -> watchLogTitle
                     SubScreen.MAIN             -> wearTitle
                 },
                 navigationIcon = {
@@ -132,6 +142,7 @@ internal fun WearScreen(
                             SubScreen.IMPORT_LIST      -> viewModel.hideImportList()
                             SubScreen.INFOS            -> viewModel.hideCwfInfos()
                             SubScreen.WATCH_APP_UPDATE -> showWatchAppUpdate = false
+                            SubScreen.WATCH_LOG        -> showWatchLog = false
                             SubScreen.MAIN             -> onNavigateBack()
                         }
                     }) {
@@ -181,11 +192,13 @@ internal fun WearScreen(
             }
 
             SubScreen.WATCH_APP_UPDATE -> WatchAppUpdateContent(viewModel = watchAppUpdateViewModel, modifier = modifier)
+            SubScreen.WATCH_LOG        -> WatchLogContent(viewModel = watchLogViewModel, modifier = modifier)
 
             SubScreen.MAIN        -> {
                 WearMainContent(
                     uiState = uiState,
                     onWatchAppUpdate = if (watchAppUpdateViewModel.embedded != null) ({ showWatchAppUpdate = true }) else null,
+                    onWatchLog = { showWatchLog = true },
                     onResendData = { viewModel.resendData() },
                     onOpenSettings = { viewModel.openSettingsOnWear() },
                     onLoadWatchface = { viewModel.loadWatchfaceFiles() },
@@ -207,7 +220,7 @@ internal fun WearScreen(
     }
 }
 
-private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, WATCH_APP_UPDATE }
+private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, WATCH_APP_UPDATE, WATCH_LOG }
 
 /**
  * @see WearMainContentPreview
@@ -217,6 +230,7 @@ private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, WATCH_APP_UPDATE }
 internal fun WearMainContent(
     uiState: WearUiState,
     onWatchAppUpdate: (() -> Unit)? = null,
+    onWatchLog: (() -> Unit)? = null,
     onResendData: () -> Unit,
     onOpenSettings: () -> Unit,
     onLoadWatchface: () -> Unit,
@@ -289,6 +303,7 @@ internal fun WearMainContent(
                     button2 = ButtonDef(Icons.Default.Settings, stringResource(SyncStrings.open_settings_on_wear), onOpenSettings)
                 )
                 onWatchAppUpdate?.let { WatchAppUpdateButton(it) }
+                onWatchLog?.let { WatchLogButton(it) }
             }
         }
 
