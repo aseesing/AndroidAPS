@@ -73,6 +73,7 @@ import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.R
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.cwfsettings.CwfSettingsDialog
+import app.aaps.plugins.sync.wear.preview.CwfLivePreview
 
 @Composable
 internal fun WearScreen(
@@ -191,6 +192,8 @@ internal fun WearScreen(
                     onSelectPushedWatchface = { viewModel.selectPushedWatchface(it) },
                     onDismissCustomWatchfaceNotShown = { viewModel.dismissCustomWatchfaceNotShown() },
                     onCwfSettings = { cwfSettingsOpen = true },
+                    // One live preview at a time: while the settings are open it is drawn there
+                    livePreview = !cwfSettingsOpen,
                     modifier = modifier
                 )
             }
@@ -216,7 +219,8 @@ internal fun WearMainContent(
     onSelectPushedWatchface: (String) -> Unit,
     onDismissCustomWatchfaceNotShown: () -> Unit,
     onCwfSettings: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    livePreview: Boolean = true
 ) {
     // The face the wearer tapped, waiting for their confirmation; null while no dialog is open.
     // Confirmed first because the watch replaces its installed face at once.
@@ -377,14 +381,14 @@ internal fun WearMainContent(
                     // Watchface preview image
                     uiState.watchfaceImage?.let { image ->
                         Spacer(modifier = Modifier.height(AapsSpacing.small))
-                        Image(
-                            bitmap = image,
-                            contentDescription = uiState.watchfaceName,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = AapsSpacing.extraLarge),
-                            contentScale = ContentScale.FillWidth
-                        )
+                        val imageModifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = AapsSpacing.extraLarge)
+                        // The face drawn live by the watch face code
+                        if (livePreview)
+                            CwfLivePreview(bitmap = image, contentDescription = uiState.watchfaceName, modifier = imageModifier, contentScale = ContentScale.FillWidth)
+                        else
+                            Image(bitmap = image, contentDescription = uiState.watchfaceName, modifier = imageModifier, contentScale = ContentScale.FillWidth)
                     }
                 }
             }
