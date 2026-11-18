@@ -264,6 +264,18 @@
     <string name="wear_app_update_no_answer">The watch does not answer. The watch app on it may be too old for updates from the phone: install this version once with adb.</string>
     <string name="wear_app_update_timeout">The watch stopped answering. Try again with the watch close to the phone.</string>
     <string name="wear_app_update_failed" comment="%1$s=reason, in English. Example: Update failed: INSTALL_FAILED_UPDATE_INCOMPATIBLE">Update failed: %1$s</string>
+    <string name="wear_log_button">Download watch log</string>
+    <string name="wear_log_download">Download</string>
+    <string name="wear_log_hint">The log of the watch app is saved as a zip file in the Downloads folder of the phone. Other apps that can read your files can read it there. It holds the newest log files, up to 8 MB; older files stay on the watch. Over Bluetooth it holds fewer files, because Bluetooth is slow. Over Wi-Fi the log is encrypted.</string>
+    <string name="wear_log_preparing" comment="%1$s=name of the watch. Example: Pixel Watch is putting its log in a zip…">%1$s is putting its log in a zip…</string>
+    <string name="wear_log_receiving" comment="%1$s=name of the watch, %2$d=percent received. Example: Receiving from Pixel Watch: 42%">Receiving from %1$s: %2$d%%</string>
+    <string name="wear_log_receiving_time_left" comment="%1$s=name of the watch, %2$d=percent received, %3$s=time left with its unit. Example: Receiving from Pixel Watch: 42%, about 3 min left">Receiving from %1$s: %2$d%%, about %3$s left</string>
+    <string name="wear_log_saving">Saving to Downloads…</string>
+    <string name="wear_log_saved" comment="%1$s=file name. Example: Saved in Downloads as AndroidAPS_WEAR_LOG_2026-11-17_14-05-00.zip">Saved in Downloads as %1$s</string>
+    <string name="wear_log_busy">The watch is still sending a log. Try again in a minute.</string>
+    <string name="wear_log_old_watch_app">The watch app is too old for this download. Install a newer watch app first.</string>
+    <string name="wear_log_no_answer">The watch does not answer. The watch app on it may be too old for this. Install a newer watch app first.</string>
+    <string name="wear_log_failed" comment="%1$s=reason, in English. Example: Download failed: The log folder is not known">Download failed: %1$s</string>
 
     <string name="garmin_request_key">Request Key</string>
 
