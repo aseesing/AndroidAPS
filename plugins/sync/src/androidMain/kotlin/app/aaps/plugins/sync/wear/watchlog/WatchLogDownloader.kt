@@ -83,6 +83,9 @@ class WatchLogDownloader internal constructor(
                 aapsLogger.error(LTag.WEAR, "Watch log download failed", e)
                 _state.value = WatchLogState.Failed(WatchLogState.Reason.ERROR, e.message ?: e.javaClass.simpleName)
             } finally {
+                // PERSONAL PATCH: known and not fixed on purpose. The state is already not busy here (Failed inside
+                // receive, or Saved / Failed above), so a new download can start in the few milliseconds before this
+                // delete runs on the IO dispatcher. This old job then deletes the temp file of the new one, and its save fails.
                 withContext(Dispatchers.IO) { tempFile.delete() }
             }
         }
