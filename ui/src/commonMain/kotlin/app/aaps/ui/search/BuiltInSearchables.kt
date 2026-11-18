@@ -273,11 +273,19 @@ class BuiltInSearchables(
 
     // Container for the status-light settings bottom sheet — items are the 4 group subscreens above
     // (each searchable individually). The countdown switch is for all rows, so it sits on top, outside
-    // the groups. The parent is added to search as well, so a search for that switch lands here.
+    // the groups, with the sensor life for the countdown right under it (shown only while the switch is
+    // on). The parent is added to search as well, so a search for either of them lands here.
     val statusLights = PreferenceSubScreenDef(
         key = "statuslights_overview_advanced",
         title = CoreUiStrings.statuslights,
-        items = listOf(BooleanKey.OverviewStatusLightsCountdown, statusLightsCannula, statusLightsInsulin, statusLightsSensor, statusLightsPump),
+        items = listOf(
+            BooleanKey.OverviewStatusLightsCountdown,
+            IntKey.OverviewStatusLightsSensorLife,
+            statusLightsCannula,
+            statusLightsInsulin,
+            statusLightsSensor,
+            statusLightsPump
+        ),
         icon = Icons.Default.TipsAndUpdates
     )
 
@@ -363,7 +371,7 @@ class BuiltInSearchables(
         add(SearchableItem.Category(statusLightsInsulin))
         add(SearchableItem.Category(statusLightsSensor))
         add(SearchableItem.Category(statusLightsPump))
-        // The parent holds the countdown switch, which is in none of the groups.
+        // The parent holds the countdown switch and the sensor life, which are in none of the groups.
         add(SearchableItem.Category(statusLights))
         add(SearchableItem.Category(treatmentButtons))
         add(SearchableItem.Category(wizardSettings))

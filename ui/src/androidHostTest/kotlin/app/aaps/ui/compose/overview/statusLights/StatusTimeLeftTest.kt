@@ -48,6 +48,21 @@ internal class StatusTimeLeftTest {
     }
 
     @Test
+    fun `the sensor life the user set is used only when the life of the model is not known`() {
+        // Known model: its own life, whatever the user set
+        assertThat(DeviceLifetime.forSensor(SourceSensor.DEXCOM_G6, userLifetimeHours = 100)?.lifetimeHours).isEqualTo(240)
+        // Unknown model: the user's value, with no grace period
+        val g7 = DeviceLifetime.forSensor(SourceSensor.DEXCOM_G7, userLifetimeHours = 360)
+        assertThat(g7?.lifetimeHours).isEqualTo(360)
+        assertThat(g7?.graceHours).isEqualTo(0)
+        // No reading at all: the user's value too
+        assertThat(DeviceLifetime.forSensor(null, userLifetimeHours = 48)?.lifetimeHours).isEqualTo(48)
+        // 0 means not set: no countdown
+        assertThat(DeviceLifetime.forSensor(SourceSensor.DEXCOM_G7, userLifetimeHours = 0)).isNull()
+        assertThat(DeviceLifetime.forSensor(SourceSensor.LIBRE_2, userLifetimeHours = 0)).isNull()
+    }
+
+    @Test
     fun `a fresh part counts down in days and hours to the end of its grace period`() {
         // 10 days and 12 hours in all, 2 days gone
         val view = withGrace(ago = 2 * DAY)

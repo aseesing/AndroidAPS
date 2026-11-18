@@ -472,6 +472,7 @@ statuslights_sage_critical|IntKey|true
 statuslights_sage_warning|IntKey|true
 statuslights_sbat_critical|IntKey|true
 statuslights_sbat_warning|IntKey|true
+statuslights_sensor_life|IntKey|true
 sw_version|MedtrumStringNonKey|true
 synced_pref_modified_%s|LongComposedKey|false
 synced_sequence_number|MedtrumIntNonKey|true
