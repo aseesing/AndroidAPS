@@ -7,8 +7,12 @@
     <string name="start_hypo_tt">Start Hypo TT</string>
     <string name="time_offset">Time offset</string>
     <string name="values_with_plus" comment="Two items with a plus between them. Example: Bolus + Carbs, or 20 g + eCarbs 10 g / 3 h (+60 min)">%1$s + %2$s</string>
-    <string name="status_age_short" comment="Age of a sensor, cannula or battery, short. d=days, h=hours. %1$d=days, %2$d=hours. Example: 2d5h">%1$dd%2$dh</string>
-    <string name="status_age_short_hours" comment="Age of a sensor, cannula or battery, short, used on the first day when there are no full days yet. h=hours. %1$d=hours. Example: 5h">%1$dh</string>
+    <string name="status_age_short" comment="Age of a sensor, cannula or battery, or the time left until a sensor or pod stops, short. d=days, h=hours. %1$d=days, %2$d=hours. Example: 2d5h">%1$dd%2$dh</string>
+    <string name="status_age_short_hours" comment="Age of a sensor, cannula or battery, or the time left until a sensor or pod stops, short, used when there are no full days. h=hours. %1$d=hours. Example: 5h">%1$dh</string>
+    <string name="status_time_left_hours_minutes" comment="Time left before a sensor or pod stops, used when less than 10 hours are left. h=hours, m=minutes. %1$d=hours, %2$02d=minutes. Example: 9h05m">%1$dh%2$02dm</string>
+    <string name="status_time_left_minutes" comment="Time left before a sensor or pod stops, used when less than 1 hour is left. m=minutes. %1$d=minutes. Example: 45m">%1$dm</string>
+    <string name="status_time_left" comment="Time left before a sensor or pod stops, shown in a narrow status row. Keep it short. %1$s=time, like 3d4h, 15h or 9h05m. Example: 3d4h left">%1$s left</string>
+    <string name="status_time_overdue" comment="Time since a sensor or pod stopped, shown in a narrow status row. %1$s=time, like 3h or 2h10m. The minus means the end has passed. In a right-to-left language you may put the sign where it reads correctly, or add a direction mark. Example: -3h">-%1$s</string>
 
 
     <!--    Widget-->

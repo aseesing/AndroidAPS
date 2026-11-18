@@ -12,9 +12,10 @@ import app.aaps.core.keys.IntKey
 import app.aaps.core.keys.interfaces.Preferences
 
 /**
- * When the sensor and the pump part (the pod, or the cannula of another pump) stop, for the watch. The
- * same ends as the status lights count down to: the real end of a known model, grace period included
- * ([DeviceLifetime]), else the user's critical threshold.
+ * When the sensor and the pump part (the pod, or the cannula of another pump) stop, for the watch: the
+ * real end of a known model, grace period included ([DeviceLifetime]), else the user's critical
+ * threshold. The status lights on the phone have their own rule (a switch and a "Sensor life"
+ * setting), see [DeviceLifetime] for how the two differ.
  */
 class WearPartTimes(
     private val persistenceLayer: PersistenceLayer,

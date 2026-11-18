@@ -39,6 +39,8 @@ import app.aaps.core.interfaces.source.BgSource
 import app.aaps.core.interfaces.stats.TddCalculator
 import app.aaps.core.interfaces.sync.NsClient
 import app.aaps.core.interfaces.utils.DecimalFormatter
+import app.aaps.core.keys.BooleanKey
+import app.aaps.core.keys.IntKey
 import app.aaps.core.keys.UnitDoubleKey
 import app.aaps.core.keys.interfaces.ClientRole
 import app.aaps.core.keys.interfaces.VisibilityContext
@@ -48,6 +50,7 @@ import app.aaps.ui.compose.manageSheet.FakePumpPlugin
 import app.aaps.ui.compose.manageSheet.ManageViewModel
 import app.aaps.ui.compose.overview.chips.ChipsViewModel
 import app.aaps.ui.compose.overview.graphs.GraphViewModel
+import app.aaps.ui.compose.overview.statusLights.StatusTimeLeft
 import app.aaps.ui.compose.overview.statusLights.StatusViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -125,9 +128,10 @@ internal class OverviewViewModelFixture(private val screen: AapsScreenFixture) {
         // modules, so it would throw. Answered from the real resources, like everything else here.
         doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_age_short)).whenever(rh).gs(UiStrings.status_age_short)
         doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_age_short_hours)).whenever(rh).gs(UiStrings.status_age_short_hours)
-        doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_overdue)).whenever(rh).gs(UiStrings.status_overdue)
+        doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_time_left)).whenever(rh).gs(UiStrings.status_time_left)
         doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_time_left_hours_minutes)).whenever(rh).gs(UiStrings.status_time_left_hours_minutes)
         doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_time_left_minutes)).whenever(rh).gs(UiStrings.status_time_left_minutes)
+        doReturn(RuntimeEnvironment.getApplication().getString(R.string.status_time_overdue)).whenever(rh).gs(UiStrings.status_time_overdue)
 
         // ----- shared ambient -----
         whenever(screen.dateUtil.now()).thenReturn(NOW)
@@ -183,6 +187,8 @@ internal class OverviewViewModelFixture(private val screen: AapsScreenFixture) {
         whenever(persistenceLayer.observeChanges(EB::class)).thenReturn(emptyFlow())
         whenever(persistenceLayer.observeChanges(TB::class)).thenReturn(emptyFlow())
         whenever(persistenceLayer.databaseClearedFlow).thenReturn(emptyFlow())
+        whenever(screen.preferences.observe(BooleanKey.OverviewStatusLightsCountdown)).thenReturn(MutableStateFlow(false))
+        whenever(screen.preferences.observe(IntKey.OverviewStatusLightsSensorLife)).thenReturn(MutableStateFlow(0))
         whenever(nsClient.masterOrPairedClientFlow).thenReturn(MutableStateFlow(false))
         // A mock returns null for these, not the interface default; the Manage sheet checks the role of each element.
         whenever(nsClient.clientRole).thenReturn(MutableStateFlow(ClientRole.Admin))
@@ -200,7 +206,8 @@ internal class OverviewViewModelFixture(private val screen: AapsScreenFixture) {
     val statusViewModel: StatusViewModel by lazy {
         StatusViewModel(
             rh, activePlugin, profileFunction, screen.config, persistenceLayer, screen.dateUtil, rxBus,
-            screen.preferences, tddCalculator, decimalFormatter, processedDeviceStatusData, aapsLogger
+            screen.preferences, tddCalculator, decimalFormatter, processedDeviceStatusData,
+            StatusTimeLeft(rh, screen.dateUtil), aapsLogger
         )
     }
 

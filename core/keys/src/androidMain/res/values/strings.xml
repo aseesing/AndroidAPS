@@ -249,6 +249,10 @@
     <string name="pref_title_res_critical">Threshold critical reservoir level</string>
     <string name="pref_title_batt_warning">Threshold warning pump battery level</string>
     <string name="pref_title_batt_critical">Threshold critical pump battery level</string>
+    <string name="pref_title_statuslights_countdown">Show time left instead of age</string>
+    <string name="pref_summary_statuslights_countdown">For a Dexcom G6 sensor and an Omnipod Eros or DASH pod, show the time left until it stops, grace period included, instead of its age. For any other sensor you can set the sensor life below. Everything else keeps showing its age. The thresholds below are only used for parts that show their age.</string>
+    <string name="pref_title_statuslights_sensor_life">Sensor life</string>
+    <string name="pref_summary_statuslights_sensor_life">Used for the countdown when AAPS does not know how long your sensor lasts. 0 shows the age.</string>
     <string name="pref_title_bolus_percentage">Bolus percentage</string>
     <string name="deliverpartofboluswizard">Apply this value to BG and carbs correction in bolus wizard\'s result</string>
     <string name="pref_title_reset_bolus_percentage_time">Reset bolus percentage time</string>
