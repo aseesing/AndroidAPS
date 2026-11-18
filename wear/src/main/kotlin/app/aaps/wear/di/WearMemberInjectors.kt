@@ -68,6 +68,7 @@ import app.aaps.wear.tile.SceneTileSettingsActivity
 import app.aaps.wear.tile.TempTargetTileService
 import app.aaps.wear.tile.TempTargetTileSettingsActivity
 import app.aaps.wear.tile.TileBase
+import app.aaps.wear.selfupdate.WatchAppInstallStatusReceiver
 import app.aaps.wear.tile.UserActionTileService
 import app.aaps.wear.watchfaces.CircleWatchface
 import app.aaps.wear.watchfaces.CustomWatchface
@@ -301,6 +302,12 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(PhoneAlarmReceiver::class)
     fun bindPhoneAlarmReceiver(injector: MembersInjector<PhoneAlarmReceiver>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(WatchAppInstallStatusReceiver::class)
+    fun bindWatchAppInstallStatusReceiver(injector: MembersInjector<WatchAppInstallStatusReceiver>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors
