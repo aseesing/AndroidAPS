@@ -319,7 +319,7 @@ class WearViewModel(
      * Opens the import list. [forNight] is set every time, so a list that closed some other way never
      * sends the next zip to the wrong slot.
      */
-    private fun openImportList(forNight: Boolean) {
+    private fun openImportList(forNight: Boolean, reload: Boolean = false) {
         _uiState.update { it.copy(nightFace = it.nightFace.copy(importForNight = forNight)) }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val cwfAuthorization = preferences.get(BooleanKey.WearCustomWatchfaceAuthorization)
@@ -344,7 +344,8 @@ class WearViewModel(
                     watchfaceImage = decodeWatchfaceImage(cwfFile.cwfData)
                 )
             }
-            _uiState.update { it.copy(showImportList = true, importItems = items) }
+            // PERSONAL PATCH: a reload never opens a list the user closed meanwhile (by picking a design)
+            _uiState.update { if (reload && !it.showImportList) it else it.copy(showImportList = true, importItems = items) }
         }
     }
 
@@ -473,5 +474,5 @@ class WearViewModel(
      * Shows the import list again for the same slot. A list opened for the night face stays one, so the
      * next zip the wearer picks does not replace the main face.
      */
-    private fun reloadImportList() = openImportList(forNight = _uiState.value.nightFace.importForNight)
+    private fun reloadImportList() = openImportList(forNight = _uiState.value.nightFace.importForNight, reload = true)
 }

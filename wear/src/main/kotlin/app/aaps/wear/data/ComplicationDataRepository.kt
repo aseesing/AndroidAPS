@@ -444,7 +444,7 @@ class ComplicationDataRepository(
     suspend fun clearNightWatchface() {
         try {
             val main = getCustomWatchface() // PERSONAL PATCH: a main design that needs the place keeps the rule
-            nightStore.updateData { current -> NightWatchfaceData(dayNightRule = current.dayNightRule.takeIf { placeRule.mainNeedsPlace(main) }) } // PERSONAL PATCH
+            nightStore.updateData { current -> NightWatchfaceData(dayNightRule = current.dayNightRule.takeIf { placeRule.mainNeedsRule(main) }) } // PERSONAL PATCH
             aapsLogger.debug(LTag.WEAR, "Cleared night watchface")
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to clear night watchface", e)

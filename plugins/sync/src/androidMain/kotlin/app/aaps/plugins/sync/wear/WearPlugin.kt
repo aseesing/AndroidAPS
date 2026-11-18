@@ -20,6 +20,7 @@ import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
+import app.aaps.core.interfaces.rx.events.EventMobileToWearWatchface // PERSONAL PATCH: a new design ends the carry-over
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.events.EventWearUpdateTiles
 import app.aaps.core.interfaces.rx.weardata.CwfData
@@ -226,6 +227,7 @@ class WearPlugin(
                 // Never what is only for this phone's own watch (see isForOwnWatchOnly)
                 if (config.AAPSCLIENT && preferences.get(BooleanKey.WearBroadcastData) && !isForOwnWatchOnly(it.payload)) broadcastData(it.payload)
             }
+        rxBus.toFlow(EventMobileToWearWatchface::class).collectResilient(newScope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { if (!it.night) dayNightCarryOver.designSentByPhone() } // PERSONAL PATCH: a new design ends the carry-over, see WearDayNightCarryOver.kt
     }
 
     fun checkCustomWatchfacePreferences() {

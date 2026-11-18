@@ -52,7 +52,7 @@ class WearNightFaceTest {
         whenever(location.hasPermission()).thenReturn(true)
         whenever(location.read()).thenReturn(DayNightRule.Place(52.4, 4.9))
         val settings = WearDayNightSettings(store.preferences, location, TimeZoneCities())
-        val placeUse = WearPlaceUse(store.preferences, settings, location, WearDayNightCarryOver(store.preferences, mock()), rxBus, dateUtil) // PERSONAL PATCH
+        val placeUse = WearPlaceUse(store.preferences, settings, location, WearDayNightCarryOver(store.preferences, location, mock()), rxBus, dateUtil, mock()) // PERSONAL PATCH
         sut = WearNightFace(store.preferences, rxBus, dateUtil, mock<AAPSLogger>(), settings, placeUse) // PERSONAL PATCH: placeUse
     }
 

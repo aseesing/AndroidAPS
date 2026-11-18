@@ -25,8 +25,9 @@ import java.net.URL
  * Looked up at most every half hour, and only when a design on the watch shows the weather and there
  * may be a place for it ([WearPlaceUse.weatherAllowed]): the phone's rough place with the switch "Use
  * the phone's location" on (and the permission), else a city the user chose (public data). Without
- * that, no location is read and nothing goes to the weather service; the watch is told once that
- * there is no weather, so it forgets the last one at once (see `StoredWeather` on the watch).
+ * that, no location is read and nothing goes to the weather service; the watch is told once (in each
+ * process, and again after each new weather) that there is no weather, so it forgets the last one at
+ * once (see `StoredWeather` on the watch).
  *
  * Nothing about the place is logged: not the place, not the request (it holds the place), not the
  * text of an error.
@@ -46,34 +47,55 @@ class WearWeather(
     @Volatile private var last: EventData.Weather? = null
     @Volatile private var askedAt = 0L
 
+    /**
+     * True when the watch was told "no weather" and got no weather since. Starts false, so the first
+     * refresh of a process without weather tells the watch: after a restart (revoking the permission
+     * stops the app) the phone does not know what the watch still shows.
+     */
+    @Volatile private var toldNoWeather = false
+
     /** The last weather sent to the watch, so a watch that restarted has it at once; null when there is none. */
     fun last(): EventData.Weather? = last
 
     /**
      * Looks up the weather when the last look-up is half an hour old, in [scope], and sends it to the
      * watch. Sent also when it did not change, so the watch knows it is still current.
+     *
+     * Never throws: it runs before the status goes to the watch, and the status must always go.
      */
     fun refresh(scope: CoroutineScope) {
-        if (!placeUse.weatherAllowed()) return forget()
-        val now = dateUtil.now()
-        if (now - askedAt < OpenMeteoWeather.REFRESH_MS) return
-        val place = placeUse.weatherPlace() ?: return
-        askedAt = now
-        scope.launch {
-            val reading = lookUp(place.latitude, place.longitude) ?: return@launch
-            aapsLogger.debug(LTag.WEAR, "Weather for the watch: $reading")
-            EventData.Weather(now, reading.kind, reading.temperature).also {
-                last = it
-                rxBus.send(EventMobileToWear(it))
+        try {
+            if (!placeUse.weatherAllowed()) return forget()
+            val now = dateUtil.now()
+            if (now - askedAt < OpenMeteoWeather.REFRESH_MS) return
+            val place = placeUse.weatherPlace() ?: return
+            askedAt = now
+            scope.launch {
+                val reading = try {
+                    lookUp(place.latitude, place.longitude)
+                } catch (e: Exception) {
+                    // Only the kind of error: the text could hold the place
+                    aapsLogger.debug(LTag.WEAR, "Weather not read: ${e.javaClass.simpleName}")
+                    null
+                } ?: return@launch
+                aapsLogger.debug(LTag.WEAR, "Weather for the watch: $reading")
+                EventData.Weather(now, reading.kind, reading.temperature).also {
+                    last = it
+                    toldNoWeather = false
+                    rxBus.send(EventMobileToWear(it))
+                }
             }
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Weather not refreshed: ${e.javaClass.simpleName}")
         }
     }
 
-    /** No weather any more: the watch forgets the last one, once. */
+    /** No weather any more: the watch forgets the last one. Told once, and again only after a new weather. */
     private fun forget() {
         askedAt = 0L
-        if (last == null) return
         last = null
+        if (toldNoWeather) return
+        toldNoWeather = true
         rxBus.send(EventMobileToWear(EventData.Weather(dateUtil.now(), NO_WEATHER)))
     }
 

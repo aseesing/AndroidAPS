@@ -104,10 +104,14 @@ internal fun WearPlaceUseText(line: WearPlaceUseLine, source: DayNightSource) {
 
 /**
  * The text of what leaves the phone with the phone's place: as upstream with a night face; else the
- * personal text, since the place then goes for the design, not for a night face.
+ * personal text, since the place then goes for the design, not for a night face. For the weather
+ * alone the watch gets no place (the phone looks up the weather), and the text says so.
  */
-internal fun sendsPlaceText(line: WearPlaceUseLine?): TextRef =
-    if (line == null || line.dayAndNight) SyncStrings.wear_day_night_sends_place else SyncStrings.wear_place_sends_place
+internal fun sendsPlaceText(line: WearPlaceUseLine?): TextRef = when {
+    line == null || line.dayAndNight                       -> SyncStrings.wear_day_night_sends_place
+    line.weather && !line.sunAndMoon && !line.asked        -> SyncStrings.wear_place_sends_weather_only
+    else                                                   -> SyncStrings.wear_place_sends_place
+}
 
 @Composable
 private fun UseText(text: String) {

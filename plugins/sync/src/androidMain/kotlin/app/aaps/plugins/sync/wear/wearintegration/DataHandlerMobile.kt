@@ -1600,7 +1600,7 @@ class DataHandlerMobile(
     }
 
     private suspend fun sendStatus(caller: String) {
-        wearWeather.refresh(scope) // PERSONAL PATCH: only when a design shows the weather and it is allowed, see WearWeather.kt
+        wearWeather.refresh(scope) // PERSONAL PATCH: only when a design shows the weather and it is allowed; never throws, see WearWeather.kt
         val profile = profileFunction.getProfile()
         var status = rh.gs(CoreUiStrings.noprofile)
         var iobSum = ""
@@ -2019,6 +2019,7 @@ class DataHandlerMobile(
     /** The watch has no night face (any more). */
     private fun handleNoNightWatchface(command: EventData.ActionClearNightWatchface) {
         aapsLogger.debug(LTag.WEAR, "No night watchface on ${command.sourceNodeId}")
+        if (!wearNightFace.isKnown()) placeUse.ruleRefused()?.let { rxBus.send(EventMobileToWear(it)) } // PERSONAL PATCH: the watch refused the rule, see WearPlaceUse.kt
         wearNightFace.noneOnWatch()
     }
 

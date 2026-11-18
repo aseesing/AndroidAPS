@@ -148,4 +148,23 @@ internal class WearViewModelPlaceUseTest {
         sut.showDayNight()
         assertThat(sut.uiState.value.showDayNight).isFalse()
     }
+
+    @Test
+    fun `for the temperature alone the screen says the watch gets no place`() {
+        mainFlow.value = design("Warm", """{"dynData": {"temperature": {"valueKey": "weather_temperature"}}}""")
+
+        val line = sut.uiState.value.placeUseLine()
+        assertThat(line).isEqualTo(WearPlaceUseLine(weather = true))
+        assertThat(sendsPlaceText(line)).isEqualTo(SyncStrings.wear_place_sends_weather_only)
+        // The entry stays: the switch decides whether the phone's place is used for the weather
+        assertThat(sut.uiState.value.showsPlaceEntry()).isTrue()
+    }
+
+    @Test
+    fun `with the sun and moon or a night face the screen says the place goes to the watch`() {
+        assertThat(sendsPlaceText(WearPlaceUseLine(sunAndMoon = true, weather = true))).isEqualTo(SyncStrings.wear_place_sends_place)
+        assertThat(sendsPlaceText(WearPlaceUseLine(asked = true))).isEqualTo(SyncStrings.wear_place_sends_place)
+        assertThat(sendsPlaceText(WearPlaceUseLine(dayAndNight = true, weather = true))).isEqualTo(SyncStrings.wear_day_night_sends_place)
+        assertThat(sendsPlaceText(null)).isEqualTo(SyncStrings.wear_day_night_sends_place)
+    }
 }

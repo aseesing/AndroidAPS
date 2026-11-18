@@ -12,8 +12,10 @@ import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.DayNightRule
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.DateUtil
+import app.aaps.core.keys.StringNonKey
 import app.aaps.plugins.sync.wear.PreferencesInMemory
 import app.aaps.plugins.sync.wear.keys.WearDayNightBooleanKey
+import app.aaps.plugins.sync.wear.keys.WearDayNightCarryOverKey
 import app.aaps.plugins.sync.wear.keys.WearDayNightStringKey
 import app.aaps.plugins.sync.wear.keys.WearPlaceUseKey
 import app.aaps.plugins.sync.wear.wearintegration.isForOwnWatchOnly
@@ -42,6 +44,8 @@ class WearPlaceUseTest {
     /** What the phone sent to the watch */
     private val sent = mutableListOf<EventData>()
 
+    private var now = NOW
+
     private val phonePlace = DayNightRule.Place(52.4, 4.9)
     private val fixedTimes = DayNightRule.FixedTimes(dayStartMinute = 7 * 60, nightStartMinute = 19 * 60)
     private val amsterdam = TimeZoneCities().byZoneId("Europe/Amsterdam")!!.let { DayNightRule.Place(it.latitude, it.longitude) }
@@ -55,12 +59,12 @@ class WearPlaceUseTest {
         val rxBus = mock<RxBus>()
         doAnswer { (it.arguments[0] as? EventMobileToWear)?.let { event -> sent.add(event.payload) }; Unit }.whenever(rxBus).send(any<Event>())
         val dateUtil = mock<DateUtil>()
-        whenever(dateUtil.now()).thenReturn(NOW)
+        whenever(dateUtil.now()).thenAnswer { now }
         location = mock()
         whenever(location.hasPermission()).thenReturn(true)
         whenever(location.read()).thenReturn(phonePlace)
         val settings = WearDayNightSettings(store.preferences, location, TimeZoneCities())
-        sut = WearPlaceUse(store.preferences, settings, location, WearDayNightCarryOver(store.preferences, mock<AAPSLogger>()), rxBus, dateUtil)
+        sut = WearPlaceUse(store.preferences, settings, location, WearDayNightCarryOver(store.preferences, location, mock<AAPSLogger>()), rxBus, dateUtil, mock<AAPSLogger>())
     }
 
     private fun design(json: String) = CwfData(json, mutableMapOf(), mutableMapOf())
@@ -197,7 +201,7 @@ class WearPlaceUseTest {
         sut.mainDesignReported(design(SKY), nightFaceOnWatch = false)
 
         assertThat(store.values[WearPlaceUseKey.MainDesign]).isEqualTo("SUN_AND_MOON")
-        assertThat(sut.mainNeedsPlace()).isTrue()
+        assertThat(sut.mainNeedsRule()).isTrue()
     }
 
     @Test
@@ -280,7 +284,7 @@ class WearPlaceUseTest {
         assertThat(sut.designRequest(nightFaceKnown = true)).isEqualTo(EventData.ActionrequestCustomWatchface(false, night = true))
         assertThat(sut.designRequest(nightFaceKnown = true)).isNull()
         // Until the watch answers it counts as a design that needs nothing
-        assertThat(sut.mainNeedsPlace()).isFalse()
+        assertThat(sut.mainNeedsRule()).isFalse()
     }
 
     @Test
@@ -288,6 +292,107 @@ class WearPlaceUseTest {
         sut.mainDesignReported(design(NOTHING), nightFaceOnWatch = false)
 
         assertThat(sut.designRequest(nightFaceKnown = false)).isNull()
+    }
+
+    @Test
+    fun `a request round without an answer ends the carry-over of the design`() {
+        store.values[StringNonKey.WearCwfWatchfaceName] = "Old" // a phone that ran the old build
+        assertThat(sut.designRequest(nightFaceKnown = false)).isNotNull()
+
+        // A resend soon after: the watch may still answer
+        assertThat(sut.designRequest(nightFaceKnown = false)).isNull()
+        assertThat(store.values[WearDayNightCarryOverKey.DesignDone]).isNull()
+
+        // A resend a minute later: the watch with only the default design did not answer
+        now += WearPlaceUse.DESIGN_ROUND_MS
+        assertThat(sut.designRequest(nightFaceKnown = false)).isNull()
+        assertThat(store.values[WearDayNightCarryOverKey.DesignDone]).isEqualTo(true)
+
+        // A sun and moon design loaded later does not turn the switch on
+        sut.mainDesignReported(design(SKY), nightFaceOnWatch = false)
+        assertThat(store.values).doesNotContainKey(WearDayNightBooleanKey.UsePhoneLocation)
+    }
+
+    // ---- the weather alone: the phone looks it up, the watch gets no rule ----
+
+    @Test
+    fun `a design with only the temperature gets no rule, but the weather is looked up`() {
+        switchOn()
+        sut.mainDesignReported(design(TEMPERATURE), nightFaceOnWatch = false)
+
+        assertThat(sent).isEmpty()
+        assertThat(sut.ruleMessage(nightFaceOnWatch = false)).isNull()
+        assertThat(sut.weatherAllowed()).isTrue()
+        assertThat(sut.weatherPlace()).isEqualTo(phonePlace)
+    }
+
+    @Test
+    fun `from a sun and moon design to one with only the temperature - no rule`() {
+        switchOn()
+        sut.mainDesignReported(design(SKY), nightFaceOnWatch = false)
+        sent.clear()
+
+        sut.mainDesignReported(design(TEMPERATURE), nightFaceOnWatch = false)
+
+        assertThat(sent).containsExactly(EventData.ActionClearDayNightRule(NOW))
+    }
+
+    // ---- the watch refuses the rule: it lost its design ----
+
+    @Test
+    fun `the watch lost its design - after the refusal nothing is read or sent any more`() {
+        switchOn()
+        sut.mainDesignReported(design(SKY), nightFaceOnWatch = false)
+        assertThat(sut.ruleMessage(nightFaceOnWatch = false)).isEqualTo(EventData.ActionSetDayNightRule(phonePlace))
+        sent.clear()
+        clearInvocations(location)
+
+        // The watch was reset and has only the default design: it refuses the rule, the phone hears "no night face"
+        val ask = sut.ruleRefused()
+
+        // The phone asks once for the main design; the default design gives no answer
+        assertThat(ask).isEqualTo(EventData.ActionrequestCustomWatchface(false, night = false))
+        assertThat(sut.mainUses()).isEmpty()
+        // Every resend after it: no rule, no read
+        repeat(3) { assertThat(sut.ruleMessage(nightFaceOnWatch = false)).isNull() }
+        assertThat(sut.weatherPlace()).isNull()
+        verify(location, never()).read()
+        // And no "no rule" either: the watch has none
+        assertThat(sent).isEmpty()
+    }
+
+    @Test
+    fun `a refusal while the watch still has the design - its answer brings the rule back`() {
+        switchOn()
+        sut.mainDesignReported(design(SKY), nightFaceOnWatch = false)
+        sent.clear()
+
+        assertThat(sut.ruleRefused()).isNotNull()
+        // The watch answers the request with its design: the need is stored again and the rule goes
+        sut.mainDesignReported(design(SKY), nightFaceOnWatch = false)
+
+        assertThat(sut.mainNeedsRule()).isTrue()
+        assertThat(sent).containsExactly(EventData.ActionSetDayNightRule(phonePlace))
+    }
+
+    @Test
+    fun `a watch that keeps refusing is asked only once - the phone does not read the location again and again`() {
+        switchOn()
+        sut.mainDesignReported(design(SKY), nightFaceOnWatch = false)
+        assertThat(sut.ruleRefused()).isNotNull()
+        sut.mainDesignReported(design(SKY), nightFaceOnWatch = false)
+
+        // Refused again (an older watch app): forgotten, and not asked again
+        assertThat(sut.ruleRefused()).isNull()
+        assertThat(sut.mainNeedsRule()).isFalse()
+        assertThat(sut.ruleMessage(nightFaceOnWatch = false)).isNull()
+    }
+
+    @Test
+    fun `a refusal with nothing stored changes nothing`() {
+        sut.mainDesignReported(design(NOTHING), nightFaceOnWatch = false)
+
+        assertThat(sut.ruleRefused()).isNull()
     }
 
     @Test
@@ -302,8 +407,11 @@ class WearPlaceUseTest {
         /** D2: the next sunrise or sunset */
         const val SKY = """{"dynData": {"sunTime": {"valueKey": "sun_next_time", "textvalue1": "@time"}}}"""
 
-        /** Grand Complication: weather looks */
+        /** Grand Complication: weather looks, which follow sunrise and sunset too */
         const val WEATHER = """{"weatherLooks": {"rain": {"images": {"Cloud": "CloudRain"}}}}"""
+
+        /** Only the temperature of the weather */
+        const val TEMPERATURE = """{"dynData": {"temperature": {"valueKey": "weather_temperature"}}}"""
 
         /** A design that needs nothing */
         const val NOTHING = """{"dynData": {"bg": {"valueKey": "sgv"}}}"""

@@ -4,9 +4,11 @@
 // ============================================================================================
 package app.aaps.shared.impl.weardata
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -34,13 +36,25 @@ enum class CwfPlaceUse {
  *     `sun_progress`, `night_progress`, `sun_cycle`, `moon_cycle` or [SUN_NEXT_TIME],
  *   - a view with `"moonLight": true` (the moon drawn the way it stands in the sky there),
  *   - a layer with `"moon": true` inside an `animation`,
- *   - a `dayLook`, laid over the design from sunrise to sunset;
+ *   - a `dayLook`, laid over the design from sunrise to sunset,
+ *   - `weatherLooks`: their names say day or night (`day_rain`), so they follow sunrise and sunset;
  * - [CwfPlaceUse.WEATHER]: `weatherLooks`, or a `valueKey` that is [WEATHER_TEMPERATURE];
  * - [CwfPlaceUse.ASKED]: `"needsPlace": true` at the top of the json, for a design that wants the
  *   place for another reason. Older code does not know the key and leaves it alone.
  *
- * Everything else, the moon phase (`moon_phase`) too, is the same all over the world. A json that
- * cannot be read needs nothing. Pure functions only.
+ * Only [needsRule] designs get the rule (which can hold the place) on the watch. The weather alone
+ * does not: the phone looks it up and sends only the weather.
+ *
+ * Everything else, the moon phase (`moon_phase`) too, is the same all over the world.
+ *
+ * The json is read as leniently as the watch reads it (`org.json`): comments (line comments and block comments),
+ * commas before a closing bracket, keys and texts without quotes. The watch also takes `#` comments,
+ * single quotes and `=` or `;` as separators; a design with those cannot be read here. A json that
+ * cannot be read counts as needing nothing (so nothing is read or sent for it), and the caller is told
+ * with `onUnreadable`. A very deep json cannot crash this: the parser stops at 400 levels (then the
+ * json cannot be read), and the walk keeps its own list instead of calling itself.
+ *
+ * Pure functions only.
  */
 object CwfPlaceNeeds {
 
@@ -75,45 +89,74 @@ object CwfPlaceNeeds {
         JsonKeyValues.SUN_PROGRESS.key, JsonKeyValues.NIGHT_PROGRESS.key, JsonKeyValues.SUN_CYCLE.key, JsonKeyValues.MOON_CYCLE.key, SUN_NEXT_TIME
     )
 
-    private val json = Json { isLenient = true }
+    @OptIn(ExperimentalSerializationApi::class)
+    private val json = Json {
+        isLenient = true
+        allowComments = true
+        allowTrailingComma = true
+    }
 
-    /** What the design with [designJson] needs the place for; empty when it needs nothing or the json cannot be read. */
-    fun of(designJson: String?): Set<CwfPlaceUse> {
+    /**
+     * What the design with [designJson] needs the place for; empty when it needs nothing or the json
+     * cannot be read. [onUnreadable] is called when a json that is not empty cannot be read.
+     */
+    fun of(designJson: String?, onUnreadable: () -> Unit = {}): Set<CwfPlaceUse> {
         if (designJson.isNullOrBlank()) return emptySet()
         val root = try {
             json.parseToJsonElement(designJson) as? JsonObject
         } catch (_: Exception) {
             null
-        } ?: return emptySet()
+        }
+        if (root == null) {
+            onUnreadable()
+            return emptySet()
+        }
         val uses = mutableSetOf<CwfPlaceUse>()
         if (root[NEEDS_PLACE].isTrue()) uses += CwfPlaceUse.ASKED
-        walk(root, inAnimation = false, uses)
+        walk(root, uses)
         return uses
     }
 
     /** True when the design with [designJson] needs the place for anything. */
     fun needsPlace(designJson: String?): Boolean = of(designJson).isNotEmpty()
 
-    private fun walk(element: JsonElement, inAnimation: Boolean, uses: MutableSet<CwfPlaceUse>) {
-        when (element) {
-            is JsonArray  -> element.forEach { walk(it, inAnimation, uses) }
-            is JsonObject -> element.forEach { (key, value) ->
-                when {
-                    key == VALUE_KEY && value.text() in SKY_VALUES           -> uses += CwfPlaceUse.SUN_AND_MOON
-                    key == VALUE_KEY && value.text() == WEATHER_TEMPERATURE  -> uses += CwfPlaceUse.WEATHER
-                    key == MOON_LIGHT && value.isTrue()                      -> uses += CwfPlaceUse.SUN_AND_MOON
-                    key == ANIMATION_MOON && inAnimation && value.isTrue()   -> uses += CwfPlaceUse.SUN_AND_MOON
-                    key == DAY_LOOK && value is JsonObject                   -> uses += CwfPlaceUse.SUN_AND_MOON
-                    key == WEATHER_LOOKS && value is JsonObject              -> uses += CwfPlaceUse.WEATHER
-                }
-                walk(value, inAnimation || key == ANIMATION, uses)
-            }
+    /**
+     * True when a design with [uses] needs the rule for when it is day (which can hold the place) on
+     * the watch: for the sun and the moon, or because it asks for the place. Not for the weather alone.
+     */
+    fun needsRule(uses: Set<CwfPlaceUse>): Boolean = CwfPlaceUse.SUN_AND_MOON in uses || CwfPlaceUse.ASKED in uses
 
-            else          -> Unit
+    /** True when the design with [designJson] needs the rule on the watch, see [needsRule]. */
+    fun needsRule(designJson: String?): Boolean = needsRule(of(designJson))
+
+    /** Goes through every value of [root], with a list of its own, so a deep json does not fill the call stack. */
+    private fun walk(root: JsonObject, uses: MutableSet<CwfPlaceUse>) {
+        // Each element, and whether it is inside the animation
+        val toVisit = ArrayDeque<Pair<JsonElement, Boolean>>()
+        toVisit.addLast(root to false)
+        while (toVisit.isNotEmpty()) {
+            val (element, inAnimation) = toVisit.removeLast()
+            when (element) {
+                is JsonArray  -> element.forEach { toVisit.addLast(it to inAnimation) }
+                is JsonObject -> element.forEach { (key, value) ->
+                    when {
+                        key == VALUE_KEY && value.text() in SKY_VALUES           -> uses += CwfPlaceUse.SUN_AND_MOON
+                        key == VALUE_KEY && value.text() == WEATHER_TEMPERATURE  -> uses += CwfPlaceUse.WEATHER
+                        key == MOON_LIGHT && value.isTrue()                      -> uses += CwfPlaceUse.SUN_AND_MOON
+                        key == ANIMATION_MOON && inAnimation && value.isTrue()   -> uses += CwfPlaceUse.SUN_AND_MOON
+                        key == DAY_LOOK && value is JsonObject                   -> uses += CwfPlaceUse.SUN_AND_MOON
+                        key == WEATHER_LOOKS && value is JsonObject              -> uses += setOf(CwfPlaceUse.WEATHER, CwfPlaceUse.SUN_AND_MOON)
+                    }
+                    toVisit.addLast(value to (inAnimation || key == ANIMATION))
+                }
+
+                else          -> Unit
+            }
         }
     }
 
-    private fun JsonElement?.text(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
+    /** The text of a value, also of one without quotes, as the watch reads it (`optString`). */
+    private fun JsonElement?.text(): String? = (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
 
     /** `true`, or the text "true", as the watch reads a boolean of a design (`optBoolean`). */
     private fun JsonElement?.isTrue(): Boolean = (this as? JsonPrimitive)?.content?.equals("true", ignoreCase = true) == true

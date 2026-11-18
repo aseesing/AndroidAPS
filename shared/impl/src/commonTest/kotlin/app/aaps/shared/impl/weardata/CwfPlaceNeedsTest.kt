@@ -53,13 +53,73 @@ class CwfPlaceNeedsTest {
             }
         """
         assertEquals(setOf(CwfPlaceUse.WEATHER), uses(d2))
+        // The phone looks up the weather: the watch does not need the rule for it
+        assertFalse(CwfPlaceNeeds.needsRule(d2))
     }
 
     @Test
-    fun weatherLooksNeedThePlaceForTheWeather() {
+    fun weatherLooksNeedThePlaceForTheWeatherAndForSunriseAndSunset() {
         // Grand Complication, one line
         val grand = """{"weatherLooks":{"partly":{"images":{"Cloud":"CloudPartly"}},"rain":{"images":{"Cloud":"CloudRain"}}}}"""
-        assertEquals(setOf(CwfPlaceUse.WEATHER), uses(grand))
+        assertEquals(setOf(CwfPlaceUse.WEATHER, CwfPlaceUse.SUN_AND_MOON), uses(grand))
+        // The look of the weather follows day and night, so the watch needs the rule
+        assertTrue(CwfPlaceNeeds.needsRule(grand))
+    }
+
+    @Test
+    fun theRuleGoesToTheWatchOnlyForTheSunAndMoonOrWhenAsked() {
+        assertTrue(CwfPlaceNeeds.needsRule(setOf(CwfPlaceUse.SUN_AND_MOON)))
+        assertTrue(CwfPlaceNeeds.needsRule(setOf(CwfPlaceUse.ASKED)))
+        assertTrue(CwfPlaceNeeds.needsRule(setOf(CwfPlaceUse.WEATHER, CwfPlaceUse.ASKED)))
+        assertFalse(CwfPlaceNeeds.needsRule(setOf(CwfPlaceUse.WEATHER)))
+        assertFalse(CwfPlaceNeeds.needsRule(emptySet<CwfPlaceUse>()))
+        assertFalse(CwfPlaceNeeds.needsRule(null as String?))
+    }
+
+    @Test
+    fun commentsAndTrailingCommasAreReadAsTheWatchReadsThem() {
+        val design = """
+            {
+                // the next sunrise or sunset
+                "dynData": {
+                    /* D2 */
+                    "sunTime": {"valueKey": "sun_next_time",},
+                },
+                "views": [1, 2,],
+            }
+        """
+        var unreadable = 0
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), CwfPlaceNeeds.of(design) { unreadable++ })
+        assertEquals(0, unreadable)
+    }
+
+    @Test
+    fun keysAndTextsWithoutQuotesAreReadToo() {
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{dynData: {sunTime: {valueKey: sun_next_time}}}"""))
+    }
+
+    @Test
+    fun aVeryDeepJsonDoesNotCrash() {
+        fun nested(depth: Int) = """{"a": """ + "[".repeat(depth) + """{"valueKey": "sun_progress"}""" + "]".repeat(depth) + "}"
+        // Far deeper than any design: still read
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses(nested(300)))
+        // Deeper than the parser takes (400 levels): cannot be read, needs nothing, no crash
+        var unreadable = 0
+        assertTrue(CwfPlaceNeeds.of(nested(100_000)) { unreadable++ }.isEmpty())
+        // Not closed either
+        assertTrue(CwfPlaceNeeds.of("""{"a": """ + "[".repeat(100_000)) { unreadable++ }.isEmpty())
+        assertEquals(2, unreadable)
+    }
+
+    @Test
+    fun aBrokenJsonIsReportedAndNeedsNothing() {
+        var unreadable = 0
+        assertTrue(CwfPlaceNeeds.of("""{"dynData": {"sunTime": {"valueKey": "sun_next_time"}""") { unreadable++ }.isEmpty())
+        assertEquals(1, unreadable)
+        // Empty is not broken: it is no design
+        CwfPlaceNeeds.of("") { unreadable++ }
+        CwfPlaceNeeds.of(null) { unreadable++ }
+        assertEquals(1, unreadable)
     }
 
     @Test

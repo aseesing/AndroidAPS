@@ -42,6 +42,8 @@ class WearWeatherTest {
     private lateinit var location: PhoneRoughLocation
     private lateinit var placeUse: WearPlaceUse
     private lateinit var sut: WearWeather
+    private lateinit var rxBus: RxBus
+    private lateinit var dateUtil: DateUtil
 
     private val sent = mutableListOf<EventData>()
     private val lookedUp = mutableListOf<Pair<Double, Double>>()
@@ -57,15 +59,15 @@ class WearWeatherTest {
         store = PreferencesInMemory()
         whenever(store.preferences.getIfExists(WearDayNightBooleanKey.UsePhoneLocation)).thenAnswer { store.values[WearDayNightBooleanKey.UsePhoneLocation] as Boolean? }
         WearPlaceUseKey.entries.forEach { key -> whenever(store.preferences.getIfExists(key)).thenAnswer { store.values[key] as String? } }
-        val rxBus = mock<RxBus>()
+        rxBus = mock()
         doAnswer { (it.arguments[0] as? EventMobileToWear)?.let { event -> sent.add(event.payload) }; Unit }.whenever(rxBus).send(any<Event>())
-        val dateUtil = mock<DateUtil>()
+        dateUtil = mock()
         whenever(dateUtil.now()).thenAnswer { now }
         location = mock()
         whenever(location.hasPermission()).thenReturn(true)
         whenever(location.read()).thenReturn(phonePlace)
         val settings = WearDayNightSettings(store.preferences, location, TimeZoneCities())
-        placeUse = WearPlaceUse(store.preferences, settings, location, WearDayNightCarryOver(store.preferences, mock<AAPSLogger>()), rxBus, dateUtil)
+        placeUse = WearPlaceUse(store.preferences, settings, location, WearDayNightCarryOver(store.preferences, location, mock<AAPSLogger>()), rxBus, dateUtil, mock<AAPSLogger>())
         sut = WearWeather(placeUse, rxBus, dateUtil, mock<AAPSLogger>())
         sut.lookUp = { latitude, longitude ->
             lookedUp += latitude to longitude
@@ -98,26 +100,83 @@ class WearWeatherTest {
     }
 
     @Test
-    fun `no design shows the weather - nothing read, nothing asked`() {
+    fun `no design shows the weather - nothing read, nothing asked, the watch told once there is none`() {
         designOnWatch(SKY)
 
         sut.refresh(scope)
+        sut.refresh(scope)
 
         assertThat(lookedUp).isEmpty()
-        assertThat(sent).isEmpty()
+        assertThat(sent).containsExactly(EventData.Weather(now, WearWeather.NO_WEATHER))
         verify(location, never()).read()
     }
 
     @Test
-    fun `the switch off - nothing read, nothing asked`() {
+    fun `the switch off - nothing read, nothing asked, the watch told once there is none`() {
         store.values[WearDayNightBooleanKey.UsePhoneLocation] = false
         designOnWatch(WEATHER)
 
         sut.refresh(scope)
+        sut.refresh(scope)
 
         assertThat(lookedUp).isEmpty()
-        assertThat(sent).isEmpty()
+        assertThat(sent).containsExactly(EventData.Weather(now, WearWeather.NO_WEATHER))
         verify(location, never()).read()
+    }
+
+    @Test
+    fun `after a restart without the weather allowed the watch forgets its old weather`() {
+        // The weather went to the watch, then the user revoked the permission, which stops the app
+        designOnWatch(WEATHER)
+        sut.refresh(scope)
+        whenever(location.hasPermission()).thenReturn(false)
+        val afterRestart = WearWeather(placeUse, rxBus, dateUtil, mock<AAPSLogger>())
+        sent.clear()
+
+        afterRestart.refresh(scope)
+        afterRestart.refresh(scope)
+
+        // The new process has no weather of its own, but the watch is told: once
+        assertThat(sent).containsExactly(EventData.Weather(now, WearWeather.NO_WEATHER))
+        assertThat(afterRestart.last()).isNull()
+    }
+
+    @Test
+    fun `no weather is told again after a new weather stopped`() {
+        designOnWatch(WEATHER)
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = false
+        sut.refresh(scope)
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = true
+        sut.refresh(scope)
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = false
+        sut.refresh(scope)
+
+        assertThat(sent).containsExactly(
+            EventData.Weather(now, WearWeather.NO_WEATHER),
+            EventData.Weather(now, EventData.Weather.RAIN, 12.5),
+            EventData.Weather(now, WearWeather.NO_WEATHER)
+        ).inOrder()
+    }
+
+    @Test
+    fun `a failure never comes out of refresh, so the status still goes to the watch`() {
+        designOnWatch(WEATHER)
+        whenever(location.hasPermission()).thenThrow(IllegalStateException("broken"))
+
+        sut.refresh(scope) // does not throw
+
+        assertThat(sent).isEmpty()
+    }
+
+    @Test
+    fun `a failing look-up is caught too`() {
+        designOnWatch(WEATHER)
+        sut.lookUp = { _, _ -> throw IllegalStateException("broken") }
+
+        sut.refresh(scope) // does not throw, also not from the launched look-up
+
+        assertThat(sent).isEmpty()
+        assertThat(sut.last()).isNull()
     }
 
     @Test

@@ -36,6 +36,7 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever // PERSONAL PATCH
 import kotlin.reflect.KClass
 
 /**
@@ -118,6 +119,28 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
         rxBus.send(EventData.ActionClearNightWatchface(1L))
 
         verify(wearNightFace, timeout(5_000)).noneOnWatch()
+    }
+
+    // PERSONAL PATCH: "no night face" while the phone knew of none is the watch refusing the rule, see WearPlaceUse.ruleRefused
+
+    @Test
+    fun `no night face while the phone knew of none - the phone forgets the need of the design`() {
+        whenever(wearNightFace.isKnown()).thenReturn(false)
+
+        rxBus.send(EventData.ActionClearNightWatchface(1L))
+
+        verify(placeUse, timeout(5_000)).ruleRefused()
+        verify(wearNightFace, timeout(5_000)).noneOnWatch()
+    }
+
+    @Test
+    fun `no night face while the phone knew of one - only the night face is forgotten`() {
+        whenever(wearNightFace.isKnown()).thenReturn(true)
+
+        rxBus.send(EventData.ActionClearNightWatchface(1L))
+
+        verify(wearNightFace, timeout(5_000)).noneOnWatch()
+        verify(placeUse, never()).ruleRefused()
     }
 
     @Test

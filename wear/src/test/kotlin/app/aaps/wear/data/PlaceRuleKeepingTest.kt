@@ -52,6 +52,7 @@ class PlaceRuleKeepingTest {
     private val skyDesign = cwf("D2", """{"metadata": {"name": "D2"}, "dynData": {"sunTime": {"valueKey": "sun_next_time"}}}""")
     private val weatherDesign = cwf("Wilds", """{"weatherLooks": {"rain": {}}}""")
     private val askingDesign = cwf("Mine", """{"needsPlace": true}""")
+    private val temperatureDesign = cwf("Warm", """{"dynData": {"temperature": {"valueKey": "weather_temperature"}}}""")
     private val plainDesign = cwf("AAPS V2", """{"metadata": {"name": "AAPS V2"}, "dynData": {"bg": {"valueKey": "sgv"}}}""")
 
     private suspend fun rule() = repository.getNightWatchfaceData().dayNightRule
@@ -74,6 +75,15 @@ class PlaceRuleKeepingTest {
 
         repository.storeCustomWatchface(askingDesign)
         assertThat(rule()).isEqualTo(place)
+    }
+
+    @Test
+    fun aDesignThatOnlyShowsTheTemperatureKeepsNoRule() = runBlocking<Unit> {
+        // The phone looks up the weather and sends only the weather: the watch does not need the place
+        repository.storeCustomWatchface(temperatureDesign)
+
+        assertThat(repository.storeDayNightRule(place)).isFalse()
+        assertThat(rule()).isNull()
     }
 
     @Test
@@ -175,10 +185,10 @@ class PlaceRuleKeepingTest {
     fun theAnswerForTheSameDesignIsKept() {
         val keeping = PlaceRuleKeeping()
 
-        assertThat(keeping.mainNeedsPlace(skyDesign)).isTrue()
-        assertThat(keeping.mainNeedsPlace(skyDesign)).isTrue()
-        assertThat(keeping.mainNeedsPlace(plainDesign)).isFalse()
-        assertThat(keeping.mainNeedsPlace(null)).isFalse()
+        assertThat(keeping.mainNeedsRule(skyDesign)).isTrue()
+        assertThat(keeping.mainNeedsRule(skyDesign)).isTrue()
+        assertThat(keeping.mainNeedsRule(plainDesign)).isFalse()
+        assertThat(keeping.mainNeedsRule(null)).isFalse()
         assertThat(keeping.keepsRule(nightFace = plainDesign, mainDesign = null)).isTrue()
         assertThat(keeping.keepsRule(nightFace = null, mainDesign = plainDesign)).isFalse()
     }

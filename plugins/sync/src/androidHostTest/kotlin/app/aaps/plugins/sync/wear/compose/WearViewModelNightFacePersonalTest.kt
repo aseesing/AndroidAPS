@@ -48,6 +48,8 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** The personal extras of the night face on the Wear screen: its loading indicator, its import list after an import, the last import place. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -198,16 +200,48 @@ internal class WearViewModelNightFacePersonalTest {
     }
 
     @Test
+    fun `a design picked while the list reloads after an import - the reload does not open the list again`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+        val reloadStarted = CountDownLatch(1)
+        val picked = CountDownLatch(1)
+        // The first read shows the list; the second one, after the import, waits until the wearer picked
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf()).thenAnswer {
+            reloadStarted.countDown()
+            picked.await(5, TimeUnit.SECONDS)
+            mutableListOf<CwfFile>()
+        }
+        sut.loadWatchfaceFiles()
+        awaitImportList()
+
+        sut.importDesigns(listOf(uri))
+        assertThat(reloadStarted.await(5, TimeUnit.SECONDS)).isTrue()
+        sut.selectWatchface(zip)
+        picked.countDown()
+
+        // The reload ends on the IO thread; the list must stay closed
+        val until = System.currentTimeMillis() + 500
+        while (System.currentTimeMillis() < until) {
+            assertThat(sut.uiState.value.showImportList).isFalse()
+            Thread.sleep(10)
+        }
+        assertThat(sentZips()).hasSize(1)
+    }
+
+    @Test
     fun `an import remembers the place of the pick for the next file picker`() = runTest(UnconfinedTestDispatcher()) {
         val uri: Uri = mock()
         whenever(uri.toString()).thenReturn("content://drive/doc1")
         whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+        // The import starts from the open list, as in the app
+        sut.loadWatchfaceFiles()
+        awaitImportList()
 
         sut.importDesigns(listOf(uri))
         // After the import the list is read again on Dispatchers.IO, and that reads the preferences
-        // too. Wait until it is done: stubbing a mock while another thread calls it can put the
-        // answer on the other call.
-        awaitImportList()
+        // first. Wait until the list was read: stubbing a mock while another thread calls it can put
+        // the answer on the other call.
+        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
 
         verify(preferences).put(WearDesignImportKey.LastPickedDesign, "content://drive/doc1")
         whenever(preferences.get(WearDesignImportKey.LastPickedDesign)).thenReturn("content://drive/doc1")
