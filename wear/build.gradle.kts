@@ -247,6 +247,7 @@ dependencies {
     implementation(libs.androidx.wear.watchface.complications.rendering)
     implementation(libs.androidx.wear.watchface.editor)
     implementation(libs.androidx.wear.watchface.client)
+    implementation(libs.androidx.health.services.client)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
