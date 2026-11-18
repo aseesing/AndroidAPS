@@ -187,6 +187,8 @@ class DataHandlerMobile(
     // masterActionExecutor stays on the wear path for Fill ONLY (no relay command for Fill).
     private val batchExecutor: BatchExecutor,
     private val wizardExecutor: WizardExecutor,
+    /** Reset here on an explicit resend request. The filtering itself is in `DataLayerListenerServiceMobile`. */
+    private val unchangedToWear: UnchangedToWearFilter,
 ) {
 
     @Inject lateinit var automation: Automation
@@ -198,6 +200,9 @@ class DataHandlerMobile(
     @Inject lateinit var eatReminder: EatReminder
     @Inject lateinit var clientControlDispatcher: ClientControlActionDispatcher
     @Inject lateinit var cwfWatchSettings: CwfWatchSettingsStore // PERSONAL PATCH: the log time graph of the watch
+
+    /** What the watch faces have now, for the live preview on the phone. Before the collectors below, which send. */
+    private val lastWatchFaceValues = LastWatchFaceValues()
 
     // App lifetime: this is a @Singleton that subscribes in init and
     // never tears down. Dispatchers.IO because that is what the io scheduler gave these handlers, and
@@ -268,12 +273,7 @@ class DataHandlerMobile(
             loop.acceptChangeRequest()?.let { sendError(it) }
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(Constants.NOTIFICATION_ID)
         }
-        onEvent<EventData.ActionResendData> {
-            // Asked for explicitly - by the watch, a new connection or the wear screen: send everything,
-            // also what the watch should already have
-            unchangedToWear.reset()
-            resendData(it.from)
-        }
+        onEvent<EventData.ActionResendData> { handleResendRequest(it.from) }
         // The watch's word on Watch Face Push, kept by WearPlugin for the wear screen
         onEvent<EventData.WatchFacePushStatus> { rxBus.send(EventWearUpdateGui(watchFacePushStatus = it)) }
         onEvent<EventData.ActionPumpStatus> {
@@ -1326,6 +1326,15 @@ class DataHandlerMobile(
         null
     }
 
+    /**
+     * A resend asked for explicitly (by the watch, a new connection or the wear screen): send everything,
+     * also what the watch should already have, see [UnchangedToWearFilter].
+     */
+    internal suspend fun handleResendRequest(from: String) {
+        unchangedToWear.reset()
+        resendData(from)
+    }
+
     suspend fun resendData(from: String) {
         aapsLogger.debug(LTag.WEAR, "Sending data to wear from $from")
         // Wear can request a resend before MainApp's init scope has populated pluginStore.plugins
@@ -1991,13 +2000,13 @@ class DataHandlerMobile(
         sendToWear(EventData.ConfirmAction(rh.gs(CoreUiStrings.error), errorMessage, returnCommand = EventData.Error(dateUtil.now()))) // ignore return path
     }
 
-    /** Leaves out state messages the watch already has, see [UnchangedToWearFilter]. */
-    private val unchangedToWear = UnchangedToWearFilter()
-
     private fun sendToWear(event: EventData) {
-        if (!unchangedToWear.shouldSend(event, dateUtil.now())) return
+        lastWatchFaceValues.note(event)
         rxBus.send(EventMobileToWear(event))
     }
+
+    /** The last value of each kind that a watch face draws, as last sent to the watch. */
+    internal fun lastSentToWatchFace(): List<EventData> = lastWatchFaceValues.all()
 
     /** Stores heart rate events coming from the Wear device. */
     private suspend fun handleHeartRateBatch(events: List<EventData.ActionHeartRate>) {
@@ -2072,7 +2081,7 @@ class DataHandlerMobile(
                 .also { it.sourceNodeId = update.sourceNodeId }
         )
 
-    internal fun lastSentToWear(): List<EventData> = unchangedToWear.lastSeen() + listOfNotNull(lastWeather) // PERSONAL PATCH: live watch face preview
+    internal fun lastSentToWear(): List<EventData> = lastSentToWatchFace() + listOfNotNull(lastWeather) // PERSONAL PATCH: live watch face preview, with the weather
 
     private val lastLoopEnact = LastLoopEnact() // PERSONAL PATCH: the loop time for the watch, kept across loop runs
     private val graphHistory = WearGraphHistory(T.hours(WEAR_GRAPH_HOURS).msecs()) { WearGraphHistory.logGraphOn(cwfWatchSettings.values.value) } // PERSONAL PATCH: log time graph
