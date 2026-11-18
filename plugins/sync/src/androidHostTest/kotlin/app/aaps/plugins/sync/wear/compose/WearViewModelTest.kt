@@ -1,5 +1,6 @@
 package app.aaps.plugins.sync.wear.compose
 
+import android.net.Uri
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
@@ -20,12 +21,16 @@ import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -34,8 +39,13 @@ import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doSuspendableAnswer
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.timeout
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -49,6 +59,7 @@ internal class WearViewModelTest {
     @Mock private lateinit var versionCheckerUtils: VersionCheckerUtils
     @Mock private lateinit var fileListProvider: FileListProvider
     @Mock private lateinit var aapsLogger: AAPSLogger
+    @Mock private lateinit var designImport: CwfDesignImport
 
     private val connectedDeviceFlow = MutableStateFlow<String?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
@@ -69,7 +80,7 @@ internal class WearViewModelTest {
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(eventWearUpdateGuiFlow)
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(pushedWatchfaceFlow)
         whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport)
     }
 
     @AfterEach
@@ -298,5 +309,47 @@ internal class WearViewModelTest {
 
         sut.hideCwfInfos()
         assertThat(sut.uiState.value.showInfos).isFalse()
+    }
+
+    @Test
+    fun `importing designs says how it went and shows the list again`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        val messages = mutableListOf<String>()
+        backgroundScope.launch { sut.toastEvent.toList(messages) }
+
+        sut.importDesigns(listOf(uri))
+
+        assertThat(messages).containsExactly("Designs imported: 1")
+        // The list is read again on the IO dispatcher
+        verify(fileListProvider, timeout(2_000)).listCustomWatchfaceFiles()
+    }
+
+    @Test
+    fun `only one import runs at a time and the state says so`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        val gate = CompletableDeferred<Unit>()
+        whenever(designImport.importFrom(any())).doSuspendableAnswer {
+            gate.await()
+            "Designs imported: 1"
+        }
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+
+        sut.importDesigns(listOf(uri))
+        assertThat(sut.uiState.value.importingDesigns).isTrue()
+        // A second tap while the first import still reads from Drive
+        sut.importDesigns(listOf(uri))
+
+        gate.complete(Unit)
+        assertThat(sut.uiState.value.importingDesigns).isFalse()
+        verify(designImport, times(1)).importFrom(any())
+    }
+
+    @Test
+    fun `an empty pick imports nothing`() {
+        sut.importDesigns(emptyList())
+
+        verifyNoInteractions(designImport)
     }
 }

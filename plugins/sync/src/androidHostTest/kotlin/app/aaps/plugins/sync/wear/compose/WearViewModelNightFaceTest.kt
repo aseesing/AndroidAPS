@@ -55,6 +55,7 @@ internal class WearViewModelNightFaceTest {
     @Mock private lateinit var versionCheckerUtils: VersionCheckerUtils
     @Mock private lateinit var fileListProvider: FileListProvider
     @Mock private lateinit var aapsLogger: AAPSLogger
+    @Mock private lateinit var designImport: CwfDesignImport
 
     private val savedNightWatchfaceFlow = MutableStateFlow<CwfData?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
@@ -81,7 +82,7 @@ internal class WearViewModelNightFaceTest {
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(MutableSharedFlow())
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(MutableStateFlow(PushedWatchfaceId.CWF))
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport)
     }
 
     @AfterEach

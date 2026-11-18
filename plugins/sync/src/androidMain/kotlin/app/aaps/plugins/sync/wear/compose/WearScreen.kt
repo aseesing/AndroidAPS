@@ -162,7 +162,11 @@ internal fun WearScreen(
                             )
                         }
                     }
-                    if (subScreen == SubScreen.IMPORT_LIST) DesignImportAction(viewModel) // PERSONAL PATCH: import designs from Google Drive
+                    if (subScreen == SubScreen.IMPORT_LIST) {
+                        // The toolbar is set up once per sub-screen, so it reads the state itself
+                        val importState by viewModel.uiState.collectAsStateWithLifecycle()
+                        CwfImportAction(importing = importState.importingDesigns, onImport = { uris -> viewModel.importDesigns(uris) })
+                    }
                 }
             )
         )
@@ -178,9 +182,9 @@ internal fun WearScreen(
             SubScreen.IMPORT_LIST -> {
                 CwfImportContent(
                     items = uiState.importItems,
+                    importing = uiState.importingDesigns,
                     onItemClick = { item -> viewModel.selectWatchface(item.cwfFile) },
-                    modifier = modifier,
-                    onItemDelete = { item -> viewModel.deleteDesign(context.contentResolver, item.cwfFile) } // PERSONAL PATCH: delete designs
+                    modifier = modifier
                 )
             }
 
