@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Folder
@@ -43,6 +44,7 @@ import app.aaps.core.ui.CoreUiStrings
 import app.aaps.core.ui.compose.TonalIcon
 import app.aaps.core.ui.compose.consumeOverscroll
 import app.aaps.core.ui.compose.stringResource
+import app.aaps.ui.UiStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +52,8 @@ fun MaintenanceBottomSheet(
     onDismiss: () -> Unit,
     onLogSettingsClick: () -> Unit,
     onSendLogsClick: () -> Unit,
+    showSaveLogs: Boolean,
+    onSaveLogsClick: () -> Unit,
     onDeleteLogsClick: () -> Unit,
     onDirectoryClick: () -> Unit,
     onCloudDirectoryClick: () -> Unit,
@@ -81,6 +85,8 @@ fun MaintenanceBottomSheet(
             onDismiss = onDismiss,
             onLogSettingsClick = onLogSettingsClick,
             onSendLogsClick = onSendLogsClick,
+            showSaveLogs = showSaveLogs,
+            onSaveLogsClick = onSaveLogsClick,
             onDeleteLogsClick = onDeleteLogsClick,
             onDirectoryClick = onDirectoryClick,
             onCloudDirectoryClick = onCloudDirectoryClick,
@@ -112,6 +118,8 @@ internal fun MaintenanceBottomSheetContent(
     onDismiss: () -> Unit = {},
     onLogSettingsClick: () -> Unit = {},
     onSendLogsClick: () -> Unit = {},
+    showSaveLogs: Boolean = false,
+    onSaveLogsClick: () -> Unit = {},
     onDeleteLogsClick: () -> Unit = {},
     onDirectoryClick: () -> Unit = {},
     onCloudDirectoryClick: () -> Unit = {},
@@ -176,6 +184,17 @@ internal fun MaintenanceBottomSheetContent(
                 }
             }
         )
+        // Absent, not dead, where the platform cannot save to a Downloads folder
+        if (showSaveLogs) {
+            MaintenanceItem(
+                text = stringResource(UiStrings.save_logs),
+                description = stringResource(UiStrings.maintenance_save_logs_desc),
+                icon = Icons.Default.Download,
+                color = primaryColor,
+                onDismiss = onDismiss,
+                onClick = onSaveLogsClick
+            )
+        }
         MaintenanceItem(
             text = stringResource(CoreUiStrings.delete_logs),
             description = stringResource(CoreUiStrings.maintenance_delete_logs_desc),
