@@ -162,9 +162,14 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
 
             is EventData.Weather       -> StoredWeather.save(sp, event)
 
-            // The place and the day / night looks are no longer sent with these (see `CwfNight`): the
-            // preview has no rule for when it is day, so it draws the day look from 07:00 to 19:00
+            // The place and the day / night looks are no longer sent with these (see `CwfNight`)
             is EventData.Preferences   -> sp.putBoolean(R.string.key_units_mgdl, event.unitsMgdl)
+
+            // The rule for when it is day, as the watch gets it: kept as the watch keeps it (only while
+            // the design needs the place, see `PlaceRuleKeeping`), so the preview shows the same sun,
+            // moon and day look. Without one it draws the day look from 07:00 to 19:00.
+            is EventData.ActionSetDayNightRule   -> runBlocking { repository.storeDayNightRule(event.rule) }
+            is EventData.ActionClearDayNightRule -> runBlocking { repository.clearDayNightRule() }
 
             else                       -> return
         }

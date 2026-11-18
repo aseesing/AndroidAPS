@@ -89,4 +89,57 @@ class WearDayNightCarryOverTest {
 
         assertThat(store.values).doesNotContainKey(WearDayNightBooleanKey.UsePhoneLocation)
     }
+
+    // The design of the watch, carried over with the first design the phone learns of
+
+    @Test
+    fun `a first design that needs the place keeps the phone's location, and the screen shows the switch on`() {
+        sut.runOnce() // no night face: nothing yet
+        assertThat(store.values).doesNotContainKey(WearDayNightBooleanKey.UsePhoneLocation)
+
+        sut.designKnown(needsPlace = true)
+
+        assertThat(settings.usePhoneLocationStored()).isTrue()
+        assertThat(settings.usesPhoneLocation()).isTrue()
+        assertThat(store.values[WearDayNightCarryOverKey.DesignDone]).isEqualTo(true)
+    }
+
+    @Test
+    fun `a first design that needs nothing turns nothing on`() {
+        sut.designKnown(needsPlace = false)
+
+        assertThat(store.values).doesNotContainKey(WearDayNightBooleanKey.UsePhoneLocation)
+        assertThat(store.values[WearDayNightCarryOverKey.DesignDone]).isEqualTo(true)
+    }
+
+    @Test
+    fun `only the first design counts`() {
+        sut.designKnown(needsPlace = false)
+
+        // A design that needs the place, loaded later: the user decides on the screen
+        sut.designKnown(needsPlace = true)
+
+        assertThat(store.values).doesNotContainKey(WearDayNightBooleanKey.UsePhoneLocation)
+    }
+
+    @Test
+    fun `a switch the user set is never changed by the design either`() {
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = false
+
+        sut.designKnown(needsPlace = true)
+
+        assertThat(settings.usePhoneLocationStored()).isFalse()
+    }
+
+    @Test
+    fun `the design part runs also after the night face part has run`() {
+        store.values[WearNightFaceKey.NightWatchfaceName] = "Night"
+        sut.runOnce()
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = false // the user turned it off again
+
+        sut.designKnown(needsPlace = true)
+
+        assertThat(settings.usePhoneLocationStored()).isFalse()
+        assertThat(store.values[WearDayNightCarryOverKey.DesignDone]).isEqualTo(true)
+    }
 }

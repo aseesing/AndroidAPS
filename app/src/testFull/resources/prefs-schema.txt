@@ -588,6 +588,7 @@ wear_cwf_night_on_watch|WearNightFaceBooleanKey|false
 wear_cwf_night_removal_pending|WearNightFaceBooleanKey|false
 wear_cwf_night_watchface_name|WearNightFaceKey|true
 wear_cwf_watchface_name|StringNonKey|true
+wear_day_night_carried_over_design|WearDayNightCarryOverKey|false
 wear_day_night_carried_over|WearDayNightCarryOverKey|false
 wear_day_night_city|WearDayNightStringKey|true
 wear_day_night_day_start|WearDayNightIntKey|true
@@ -595,6 +596,8 @@ wear_day_night_mode|WearDayNightStringKey|true
 wear_day_night_night_start|WearDayNightIntKey|true
 wear_day_night_use_phone_location|WearDayNightBooleanKey|false
 wear_notifySMB|BooleanKey|true
+wear_place_uses_main|WearPlaceUseKey|false
+wear_place_uses_night|WearPlaceUseKey|false
 wear_pushed_watchface|StringKey|true
 wearcontrol|BooleanKey|true
 wearwizard_bg|BooleanKey|true

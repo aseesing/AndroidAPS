@@ -46,6 +46,7 @@ val wearShared = listOf(
     "data/ComplicationStore.kt",
     "data/LiveComplicationData.kt", // PERSONAL PATCH
     "data/NightFaceFromDesignFile.kt", // PERSONAL PATCH
+    "data/PlaceRuleKeeping.kt", // PERSONAL PATCH
     "events/EventWearPreferenceChange.kt",
     "health/HealthComplicationData.kt", // PERSONAL PATCH
     "health/HealthValues.kt", // PERSONAL PATCH

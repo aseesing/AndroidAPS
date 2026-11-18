@@ -15,6 +15,8 @@ import app.aaps.plugins.sync.wear.PreferencesInMemory
 import app.aaps.plugins.sync.wear.daynight.PhoneRoughLocation
 import app.aaps.plugins.sync.wear.daynight.TimeZoneCities
 import app.aaps.plugins.sync.wear.daynight.WearDayNightSettings
+import app.aaps.plugins.sync.wear.daynight.WearDayNightCarryOver // PERSONAL PATCH
+import app.aaps.plugins.sync.wear.daynight.WearPlaceUse // PERSONAL PATCH
 import app.aaps.plugins.sync.wear.keys.WearDayNightBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
@@ -49,7 +51,9 @@ class WearNightFaceTest {
         location = mock()
         whenever(location.hasPermission()).thenReturn(true)
         whenever(location.read()).thenReturn(DayNightRule.Place(52.4, 4.9))
-        sut = WearNightFace(store.preferences, rxBus, dateUtil, mock<AAPSLogger>(), WearDayNightSettings(store.preferences, location, TimeZoneCities()))
+        val settings = WearDayNightSettings(store.preferences, location, TimeZoneCities())
+        val placeUse = WearPlaceUse(store.preferences, settings, location, WearDayNightCarryOver(store.preferences, mock()), rxBus, dateUtil) // PERSONAL PATCH
+        sut = WearNightFace(store.preferences, rxBus, dateUtil, mock<AAPSLogger>(), settings, placeUse) // PERSONAL PATCH: placeUse
     }
 
     private fun face(name: String, version: String = "1", fileName: String = name, authorization: Boolean? = null) =

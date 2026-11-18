@@ -81,8 +81,13 @@ class PreviewHost(
     override fun getFilesDir(): File = ownFilesDir
 
     // PERSONAL PATCH: the night face file of the face (see `ComplicationDataRepository`) stays apart too:
-    // two previews at once must not share one DataStore file, and the phone's own folder is not the face's
-    override fun getNoBackupFilesDir(): File = ownFilesDir
+    // two previews at once must not share one DataStore file, and the phone's own folder is not the face's.
+    // In the phone's no-backup folder, as on the watch: that file can hold the user's place (the rule
+    // for when it is day), which must never be in a backup or a move to a new phone.
+    override fun getNoBackupFilesDir(): File = ownNoBackupDir
+
+    // PERSONAL PATCH: emptied when the host is made, like the files above
+    private val ownNoBackupDir: File by lazy { File(baseContext.noBackupFilesDir, name).apply { deleteRecursively(); mkdirs() } }
 
     override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences =
         baseContext.getSharedPreferences("${this.name}_$name", mode) // PERSONAL PATCH: this.name, was NAME

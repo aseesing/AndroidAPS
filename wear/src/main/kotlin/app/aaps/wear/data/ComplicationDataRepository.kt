@@ -305,6 +305,7 @@ class ComplicationDataRepository(
                 }
             }
             aapsLogger.debug(LTag.WEAR, "Stored custom watchface ${if (isDefault) "(default)" else ""}: ${customWatchface.metadata}")
+            dropUnusedRule() // PERSONAL PATCH: the place stays only while something needs it, see PlaceRuleKeeping.kt
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to store custom watchface", e)
         }
@@ -347,6 +348,7 @@ class ComplicationDataRepository(
                     current.copy(customWatchface = default)
                 } ?: current
             }
+            dropUnusedRule() // PERSONAL PATCH: the place stays only while something needs it, see PlaceRuleKeeping.kt
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to set default watchface", e)
         }
@@ -423,13 +425,15 @@ class ComplicationDataRepository(
 
     /**
      * Stores [rule] for when it is day, but only while there is a night face: without one the rule
-     * has no use, so it is not kept.
+     * has no use, so it is not kept. PERSONAL PATCH: also while the main design needs the place, see
+     * [PlaceRuleKeeping].
      *
      * @return true when stored, false when there is no night face
      */
     suspend fun storeDayNightRule(rule: DayNightRule): Boolean =
         try {
-            nightStore.updateData { current -> if (current.customWatchfaceNight != null) current.copy(dayNightRule = rule) else current }
+            val main = getCustomWatchface() // PERSONAL PATCH: a design that needs the place keeps the rule too
+            nightStore.updateData { current -> if (placeRule.keepsRule(current.customWatchfaceNight, main)) current.copy(dayNightRule = rule) else current } // PERSONAL PATCH
                 .dayNightRule == rule
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to store day and night rule", e)
@@ -439,10 +443,46 @@ class ComplicationDataRepository(
     /** Forgets the night face and its rule, so the main face shows day and night again. */
     suspend fun clearNightWatchface() {
         try {
-            nightStore.updateData { NightWatchfaceData() }
+            val main = getCustomWatchface() // PERSONAL PATCH: a main design that needs the place keeps the rule
+            nightStore.updateData { current -> NightWatchfaceData(dayNightRule = current.dayNightRule.takeIf { placeRule.mainNeedsPlace(main) }) } // PERSONAL PATCH
             aapsLogger.debug(LTag.WEAR, "Cleared night watchface")
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to clear night watchface", e)
+        }
+    }
+
+    // ---- PERSONAL PATCH: the rule without a night face, see PlaceRuleKeeping.kt ----
+
+    private val placeRule = PlaceRuleKeeping()
+
+    /**
+     * The phone says nothing needs the rule any more: it is forgotten, unless the watch still has a
+     * night face (then the phone is wrong about it and must be told, see `DataHandlerWear`).
+     *
+     * @return true when the watch has no rule now, false when it keeps it for its night face
+     */
+    suspend fun clearDayNightRule(): Boolean =
+        try {
+            nightStore.updateData { current -> if (current.customWatchfaceNight != null) current else current.copy(dayNightRule = null) }
+                .dayNightRule == null
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Failed to clear day and night rule", e)
+            true
+        }
+
+    /**
+     * Forgets the rule when neither a night face nor the main design needs it, after the main design
+     * changed. Without the night face file there is no rule: then the file is not opened.
+     */
+    private suspend fun dropUnusedRule() {
+        if (!File(context.noBackupFilesDir, NIGHT_WATCHFACE_FILE).exists()) return
+        try {
+            val main = getCustomWatchface()
+            nightStore.updateData { current ->
+                if (current.dayNightRule != null && !placeRule.keepsRule(current.customWatchfaceNight, main)) current.copy(dayNightRule = null) else current
+            }
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Failed to drop the day and night rule", e)
         }
     }
 

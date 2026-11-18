@@ -46,6 +46,7 @@ import app.aaps.plugins.sync.wear.keys.WearDayNightStringKey
 import app.aaps.plugins.sync.wear.keys.WearDesignImportKey // PERSONAL PATCH: design import
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
+import app.aaps.plugins.sync.wear.keys.WearPlaceUseKey // PERSONAL PATCH: what the designs need the place for
 import app.aaps.plugins.sync.wear.receivers.WearDataReceiver
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
 import app.aaps.plugins.sync.wear.wearintegration.DataLayerListenerServiceMobileHelper
@@ -99,7 +100,7 @@ class WearPlugin(
         .composeContent { WearComposeContent() },
     ownPreferences = WearNightFaceKey.entries + WearNightFaceBooleanKey.entries +
         WearDayNightBooleanKey.entries + WearDayNightIntKey.entries + WearDayNightStringKey.entries +
-        WearDesignImportKey.entries + WearDayNightCarryOverKey.entries, // PERSONAL PATCH: design import, day and night of the personal build
+        WearDesignImportKey.entries + WearDayNightCarryOverKey.entries + WearPlaceUseKey.entries, // PERSONAL PATCH: design import, day and night of the personal build, what the designs need the place for
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
 

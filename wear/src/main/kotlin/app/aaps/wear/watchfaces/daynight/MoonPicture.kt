@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import androidx.core.graphics.createBitmap
+import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import org.json.JSONObject
 import kotlin.math.cos
 import kotlin.math.sin
@@ -48,7 +49,7 @@ class MoonPicture(private val loadPhoto: () -> Bitmap?) {
     companion object {
 
         /** The key of a view in the design json that shows the moon. */
-        const val JSON_KEY = "moonLight"
+        const val JSON_KEY = CwfPlaceNeeds.MOON_LIGHT
 
         /** How often the moon is drawn again. The tilt changes the most: about 15 degrees an hour. */
         const val REDRAW_MS = 15 * 60_000L

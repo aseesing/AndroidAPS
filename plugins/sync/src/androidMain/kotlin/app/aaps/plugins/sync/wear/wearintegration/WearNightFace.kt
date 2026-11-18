@@ -13,6 +13,7 @@ import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.sync.wear.daynight.WearDayNightSettings
+import app.aaps.plugins.sync.wear.daynight.WearPlaceUse // PERSONAL PATCH: a design can need the place too
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
 import dev.zacsweers.metro.AppScope
@@ -30,7 +31,8 @@ fun watchfacePath(dataPath: String, night: Boolean): String =
  * True for a message only for the phone's own watch, which never goes into the AAPSClient broadcast
  * to another AAPS app: the rule for when it is day can hold the phone's place.
  */
-fun isForOwnWatchOnly(payload: EventData): Boolean = payload is EventData.ActionSetDayNightRule
+fun isForOwnWatchOnly(payload: EventData): Boolean = payload is EventData.ActionSetDayNightRule ||
+    payload is EventData.ActionClearDayNightRule // PERSONAL PATCH: "no rule" is for the own watch only too
 
 /**
  * The phone side of the night face of the Custom watch face, see [CwfNight].
@@ -51,7 +53,8 @@ class WearNightFace(
     private val rxBus: RxBus,
     private val dateUtil: DateUtil,
     private val aapsLogger: AAPSLogger,
-    private val dayNightSettings: WearDayNightSettings
+    private val dayNightSettings: WearDayNightSettings,
+    private val placeUse: WearPlaceUse // PERSONAL PATCH: a design can need the place too, see WearPlaceUse.kt
 ) {
 
     private val _saved = MutableStateFlow<CwfData?>(null)
@@ -96,6 +99,7 @@ class WearNightFace(
         rememberIfNew(cwf.metadata)
         if (!preferences.get(WearNightFaceBooleanKey.OnWatch)) preferences.put(WearNightFaceBooleanKey.OnWatch, true)
         _saved.value = cwf
+        placeUse.nightDesignReported(cwf) // PERSONAL PATCH: what the night design needs the place for
         checkMetadata()
         // Now the watch has a night face, it gets the rule for when it is day
         ruleMessage()?.let { rxBus.send(EventMobileToWear(it)) }
@@ -133,7 +137,7 @@ class WearNightFace(
      * null, and the settings are not read, so the phone's location is not read either.
      */
     internal fun ruleMessage(): EventData.ActionSetDayNightRule? =
-        if (isOnWatch()) EventData.ActionSetDayNightRule(dayNightSettings.rule()) else null
+        placeUse.ruleMessage(isOnWatch()) // PERSONAL PATCH: also for a main design that needs the place, see WearPlaceUse.kt
 
     /** Sends new metadata for the night face when the phone settings ask for it, see [metadataUpdate]. */
     fun checkMetadata() {
@@ -188,5 +192,6 @@ class WearNightFace(
         preferences.put(WearNightFaceKey.NightFileName, "")
         preferences.put(WearNightFaceBooleanKey.OnWatch, false)
         preferences.put(WearNightFaceBooleanKey.RemovalPending, false)
+        placeUse.nightDesignReported(null) // PERSONAL PATCH: no night design needs the place now
     }
 }

@@ -101,8 +101,12 @@ class CwfLivePreviewViewModel(
 
     /** Keeps [event] until the next frame of each preview, in place of an older value of the same kind. */
     private fun keep(event: EventData) {
-        // The kinds of the watch face, and the weather the personal designs draw
-        val kind = LastWatchFaceValues.kindOf(event) ?: if (event is EventData.Weather) "Weather" else return
+        // The kinds of the watch face, the weather the personal designs draw, and the rule for their sun and moon
+        val kind = LastWatchFaceValues.kindOf(event) ?: when (event) {
+            is EventData.Weather                                                       -> "Weather"
+            is EventData.ActionSetDayNightRule, is EventData.ActionClearDayNightRule -> "DayNightRule"
+            else                                                                       -> return
+        }
         waiting.values.forEach { slot ->
             synchronized(slot.values) {
                 slot.values.remove(kind)

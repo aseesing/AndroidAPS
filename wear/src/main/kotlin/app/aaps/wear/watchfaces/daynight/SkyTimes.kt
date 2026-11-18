@@ -5,6 +5,7 @@
 package app.aaps.wear.watchfaces.daynight
 
 import app.aaps.core.interfaces.rx.weardata.DayNightRule
+import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -174,7 +175,7 @@ internal class SkyTimes(
     companion object {
 
         /** The value of [nextSunEvent] for a design (`dynData`): a time, shown with `@time` (see `DesignTimeText`). */
-        const val NEXT_SUN_EVENT_KEY = "sun_next_time"
+        const val NEXT_SUN_EVENT_KEY = CwfPlaceNeeds.SUN_NEXT_TIME
 
         private const val DAYS_AROUND = 2L
         private const val MINUTES_PER_DAY = 24 * 60

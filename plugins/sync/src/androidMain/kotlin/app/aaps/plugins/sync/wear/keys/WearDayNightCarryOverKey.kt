@@ -15,5 +15,8 @@ enum class WearDayNightCarryOverKey(
 
     /** True once the carry-over has run on this phone; it never runs again. */
     Done(key = "wear_day_night_carried_over", defaultValue = false),
+
+    /** True once the carry-over for the design of the watch has run, see `WearDayNightCarryOver.designKnown`. */
+    DesignDone(key = "wear_day_night_carried_over_design", defaultValue = false),
     ;
 }

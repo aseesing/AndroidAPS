@@ -401,6 +401,8 @@ class DataHandlerWear(
                 if (!complicationDataRepository.storeDayNightRule(it.rule)) sendNightWatchface()
             }
         }
+        // PERSONAL PATCH: nothing needs the rule any more; with a night face the phone is told about it, see PlaceRuleKeeping.kt
+        onEvent<EventData.ActionClearDayNightRule> { inFaceOrder { if (!complicationDataRepository.clearDayNightRule()) sendNightWatchface() } }
         onEvent<EventData.ActionrequestSetDefaultWatchface> {
             inFaceOrder {
                 complicationDataRepository.setDefaultWatchface()

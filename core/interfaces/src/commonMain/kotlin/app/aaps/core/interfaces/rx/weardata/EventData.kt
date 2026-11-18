@@ -619,6 +619,17 @@ sealed class EventData : Event() {
     data class ActionSetDayNightRule(val rule: DayNightRule) : EventData()
 
     /**
+     * PERSONAL PATCH: phone to watch: nothing on the watch needs the rule any more (no night face,
+     * and the design does not need the place), so the watch forgets it. A watch that still has a
+     * night face keeps it and reports its night face. See `WearPlaceUse` on the phone. Never part of
+     * the AAPSClient broadcast.
+     *
+     * @param timeStamp when it was sent, for the log, like [ActionPing]
+     */
+    @Serializable
+    data class ActionClearDayNightRule(val timeStamp: Long) : EventData()
+
+    /**
      * Phone to watch: send the main face back, as [ActionGetCustomWatchface].
      *
      * @param night true when the phone knows about a night face (see [CwfNight]): the watch then also

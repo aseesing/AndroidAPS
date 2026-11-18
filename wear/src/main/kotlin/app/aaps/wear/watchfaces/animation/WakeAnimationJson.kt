@@ -6,6 +6,7 @@ package app.aaps.wear.watchfaces.animation
 
 import android.graphics.Color
 import android.graphics.drawable.Drawable
+import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
@@ -234,7 +235,7 @@ class WakeAnimationJson(
         const val DEFAULT_GLOW_RADIUS = 10f
 
         /** The key of a layer that draws the moon of now (see [LayerSource.Moon]). */
-        const val MOON = "moon"
+        const val MOON = CwfPlaceNeeds.ANIMATION_MOON
 
         private val SOURCES = listOf("image", "shape", "view")
         private val COPIES = listOf("count", "slices", "points")

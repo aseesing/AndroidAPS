@@ -5,6 +5,7 @@
 package app.aaps.wear.watchfaces.daynight
 
 import app.aaps.core.interfaces.rx.weardata.CwfResDataMap
+import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import org.json.JSONObject
 
 /**
@@ -31,10 +32,10 @@ import org.json.JSONObject
 object DayOverlay {
 
     /** The key of the day look in the design json. */
-    const val JSON_KEY = "dayLook"
+    const val JSON_KEY = CwfPlaceNeeds.DAY_LOOK
 
     /** The key of the weather looks in the design json. */
-    const val WEATHER_KEY = "weatherLooks"
+    const val WEATHER_KEY = CwfPlaceNeeds.WEATHER_LOOKS
 
     /** The key in a look that names the pictures to swap. */
     const val IMAGES_KEY = "images"

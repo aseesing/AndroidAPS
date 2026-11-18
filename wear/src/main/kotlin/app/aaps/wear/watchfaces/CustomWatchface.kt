@@ -175,9 +175,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private var styleShowsNightFace = false
 
     /**
-     * PERSONAL PATCH: the rule for when it is day that the watch keeps with its night face, as read in
-     * [setWatchfaceStyle]; null without a night face. The day look, the sun and the moon of the personal
-     * designs follow it, see `SkyTimes`. The place is on the watch only while it has a night face.
+     * PERSONAL PATCH: the rule for when it is day that the watch keeps, as read in [setWatchfaceStyle];
+     * null when nothing on the watch needs it. The day look, the sun and the moon of the personal designs
+     * follow it, see `SkyTimes`. The place is on the watch only while it has a night face or its design
+     * needs the place, see `PlaceRuleKeeping`.
      */
     private var skyRule: DayNightRule? = null
 

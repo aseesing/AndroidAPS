@@ -20,6 +20,7 @@ import app.aaps.core.interfaces.utils.TrendCalculator
 import app.aaps.core.keys.StringNonKey
 import app.aaps.core.objects.runningMode.RunningModeGuard
 import app.aaps.core.objects.wizard.QuickWizard
+import app.aaps.plugins.sync.wear.daynight.WearPlaceUse // PERSONAL PATCH
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineStart
@@ -63,6 +64,7 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
     private val mainFace = CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "AAPS V2"), mutableMapOf())
 
     @Mock private lateinit var wearNightFace: WearNightFace
+    @Mock private lateinit var placeUse: WearPlaceUse // PERSONAL PATCH
 
     @BeforeEach
     fun prepare() {
@@ -74,7 +76,10 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
             constraintsChecker, activePlugin, commandQueue, fabricPrivacy, uiInteraction,
             persistenceLayer, importExportPrefs, decimalFormatter, pumpStatusProvider,
             ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor, UnchangedToWearFilter()
-        ).also { it.wearNightFace = wearNightFace }
+        ).also {
+            it.wearNightFace = wearNightFace
+            it.placeUse = placeUse // PERSONAL PATCH
+        }
     }
 
     /** Sends [fromWatch] and waits for the first [T] the phone sends after it. */
