@@ -235,6 +235,7 @@ private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, WATCH_APP_UPDATE, WATCH
 /**
  * @see WearMainContentPreview
  * @see WearMainContentDisconnectedPreview
+ * @see WearMainContentLoadingPreview
  */
 @Composable
 internal fun WearMainContent(
@@ -408,9 +409,9 @@ internal fun WearMainContent(
                         button2 = ButtonDef(Icons.Default.Download, stringResource(SyncStrings.wear_export_watchface), onExportTemplate)
                     )
 
-                    // Watchface preview image
-                    uiState.loading.day?.let { FaceLoadingIndicator(it) } // PERSONAL PATCH: loading indicator
-                    uiState.watchfaceImage?.takeIf { uiState.loading.day == null }?.let { image -> // PERSONAL PATCH: loading indicator, was without takeIf
+                    // Watchface preview image, or a loading indicator while a new face goes to the watch
+                    uiState.loadingWatchface?.let { name -> FaceLoadingIndicator(name) }
+                    uiState.watchfaceImage?.takeIf { uiState.loadingWatchface == null }?.let { image ->
                         Spacer(modifier = Modifier.height(AapsSpacing.small))
                         CwfPreviewAndSettings( // PERSONAL PATCH: live watch face preview and its settings, was Image(
                             bitmap = image,
@@ -423,7 +424,7 @@ internal fun WearMainContent(
                     }
                 }
             }
-            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface, loading = uiState.loading.night) // PERSONAL PATCH: day and night face
+            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface) // PERSONAL PATCH: day and night face
         }
     }
 }

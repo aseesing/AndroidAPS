@@ -62,7 +62,7 @@ internal fun importListTitle(uiState: WearUiState, mainTitle: String): String =
  * face, a button to remove it, and under the preview the button for the watch face settings.
  *
  * @param loading the name of a night face on its way to the watch: shown with a loading indicator
- *   in place of the preview, see [WearFaceLoading]
+ *   in place of the preview, see [WearFaceLoadingTracker]
  *
  * @see NightWatchfaceCardPreview
  */

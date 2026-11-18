@@ -32,7 +32,6 @@ import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
-import app.aaps.plugins.sync.wear.preview.PreviewSlot // PERSONAL PATCH: loading indicator
 import app.aaps.plugins.sync.wear.wearintegration.WearNightFacePreferences
 import app.aaps.shared.impl.weardata.JsonKeyValues
 import app.aaps.shared.impl.weardata.JsonKeys
@@ -78,8 +77,9 @@ data class WearUiState(
     val importItems: List<CwfImportItemState> = emptyList(),
     /** True while picked designs are copied into AAPS/export: the list shows progress and the import button is off */
     val importingDesigns: Boolean = false,
-    val nightFace: WearNightFaceState = WearNightFaceState(), // PERSONAL PATCH: day and night face
-    val loading: WearFaceLoading = WearFaceLoading() // PERSONAL PATCH: loading indicator, see WearFaceLoading.kt
+    /** Name of a custom watchface on its way to the watch: shown with a loading indicator instead of the old face, or null */
+    val loadingWatchface: String? = null,
+    val nightFace: WearNightFaceState = WearNightFaceState() // PERSONAL PATCH: day and night face
 )
 
 @Immutable
@@ -139,6 +139,8 @@ class WearViewModel(
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
+    private val faceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(loadingWatchface = name) } }
+
     init {
         viewModelScope.launch {
             wearPlugin.connectedDevice.collect { device ->
@@ -148,6 +150,8 @@ class WearViewModel(
                         isDeviceConnected = device != null
                     )
                 }
+                // A watch that is gone will not report the new face: stop waiting for it
+                if (device == null) faceLoading.stop()
             }
         }
         viewModelScope.launch {
@@ -334,7 +338,8 @@ class WearViewModel(
         preferences.put(StringNonKey.WearCwfAuthorVersion, metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] ?: "")
         preferences.put(StringNonKey.WearCwfFileName, metadata[CwfMetadataKey.CWF_FILENAME] ?: "")
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray))
-        faceLoading.start(PreviewSlot.DAY, metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedCustomWatchface) // PERSONAL PATCH: loading indicator
+        // Without a watch nothing will report the face back, so there is nothing to wait for
+        if (_uiState.value.isDeviceConnected) faceLoading.start(metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedCustomWatchface)
         _uiState.update { state ->
             // Sent and stored either way; but with the complications face on the wrist nothing
             // draws it, and the wearer should hear that now rather than wonder later
@@ -387,7 +392,6 @@ class WearViewModel(
         val metadata = cwfFile.cwfData.metadata
         nightFacePreferences.remember(metadata)
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray, night = true))
-        faceLoading.start(PreviewSlot.NIGHT, metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedNightWatchface)
         _uiState.update { state ->
             // The same note as for the main face: with the complications face on the wrist nothing draws it
             val hidden = state.watchFacePushSupported && !state.customWatchfaceSelected
@@ -404,10 +408,6 @@ class WearViewModel(
     fun clearNightWatchface() {
         wearPlugin.clearNightWatchface(dateUtil.now())
     }
-
-    // ---- PERSONAL PATCH: loading indicator, see WearFaceLoading.kt ----
-
-    private val faceLoading = WearFaceLoadingTracker(viewModelScope) { loading -> _uiState.update { it.copy(loading = loading) } }
 
     /**
      * Copies the picked zips into AAPS/export, says how it went, and shows the list again with the
