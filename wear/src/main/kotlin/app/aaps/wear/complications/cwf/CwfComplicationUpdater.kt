@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -188,9 +189,6 @@ class CwfComplicationUpdater(
          */
         private const val DEMAND_TIMEOUT_MS = 10 * 60_000L
 
-        /** How often an idle loop looks whether somebody asked, cheap enough to not matter. */
-        private const val IDLE_POLL_MS = 5_000L
-
         /**
          * Whether a request at [lastRequestMs] still counts as demand at [now]. Pure, so the rule
          * can be checked without a watch; 0 means nobody has asked yet.
@@ -335,6 +333,9 @@ class CwfComplicationUpdater(
     /** When the most recent trigger arrived, so the loop can wait for a quiet gap after it. */
     private val lastTrigger = AtomicLong(0)
 
+    /** Wakes the coalescing loop, which sleeps while nothing is [pending] instead of polling. */
+    private val triggered = Channel<Unit>(Channel.CONFLATED)
+
     /**
      * Refreshes as soon as the watch enters or leaves ambient.
      *
@@ -409,6 +410,7 @@ class CwfComplicationUpdater(
             if (current == null || quietMs < current.quietMs) Pending(reason, quietMs) else current
         }
         lastTrigger.set(System.currentTimeMillis())
+        triggered.trySend(Unit)
     }
 
     /** Consecutive clock ticks that found no prepared frame. Reset as soon as one is ready. */
@@ -457,18 +459,23 @@ class CwfComplicationUpdater(
      */
     @Volatile private var idleAnnounced = false
 
+    /** Whether the producer or the clock loop still runs. They end by themselves without demand. */
+    internal fun loopsRunning(): Boolean = producerJob?.isActive == true || clockJob?.isActive == true
+
     private fun startProducer() {
         producerJob?.cancel()
         producerJob = scope.launch {
             while (true) {
                 // Nothing at all without demand - not even the minute frame that prepareAhead keeps
-                // ready, and no watch face is ever inflated for a picture nobody has asked for
-                val demand = hasDemand()
-                val wanted = demand && !CwfFaceComplication.isAmbient(context) && CwfFaceComplication.showsSeconds()
+                // ready, and no watch face is ever inflated for a picture nobody has asked for. The
+                // loop ends rather than looks again every few seconds all day: the first request of a
+                // returning face starts it again, see onDemandResumed in start().
+                if (!hasDemand()) return@launch
+                val wanted = !CwfFaceComplication.isAmbient(context) && CwfFaceComplication.showsSeconds()
                 val built = wanted && CwfFaceComplication.prepareAhead(context, aapsLogger)
                 // Nothing to build: wait out the second rather than spin. The queue empties as frames
-                // are served, so there is work again within a second or so. Idle, look less often.
-                if (!built) delay(if (demand) PRODUCER_IDLE_MS else IDLE_POLL_MS)
+                // are served, so there is work again within a second or so.
+                if (!built) delay(PRODUCER_IDLE_MS)
             }
         }
     }
@@ -510,16 +517,13 @@ class CwfComplicationUpdater(
             var announced = 0L
             while (true) {
                 // Nobody asked: no requests either, they would only reach a face that is not there.
-                // The first request of a returning face restarts this loop, so the wait here is
-                // never what the wearer sees.
+                // The loop ends; the first request of a returning face starts it again.
                 if (!hasDemand()) {
-                    announced = 0L
                     if (!idleAnnounced) {
                         idleAnnounced = true
                         aapsLogger.debug(LTag.WEAR, "CwfComplicationUpdater: idle, no face has asked for the picture")
                     }
-                    delay(IDLE_POLL_MS)
-                    continue
+                    return@launch
                 }
                 val interval =
                     if (!CwfFaceComplication.isAmbient(context) && CwfFaceComplication.showsSeconds()) secondsInterval()
@@ -607,6 +611,9 @@ class CwfComplicationUpdater(
         }
         scope.launch {
             while (true) {
+                // Nothing waiting: sleep until a trigger comes, rather than wake five times a second
+                // all day for a face that is mostly not even in use.
+                if (pending.get() == null) triggered.receive()
                 delay(COALESCE_POLL_MS)
                 val waiting = pending.get() ?: continue
                 if (System.currentTimeMillis() - lastTrigger.get() >= waiting.quietMs)
