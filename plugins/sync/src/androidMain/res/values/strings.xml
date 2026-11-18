@@ -184,6 +184,12 @@
     <string name="wear_general_settings">General Settings</string>
     <string name="wear_custom_watchface_settings">Custom Watchface Settings</string>
     <string name="wear_custom_watchface">Custom Watchface: %1$s</string>
+    <string name="wear_day_night_day_title" comment="Title of the main Custom watch face on the Wear screen when a night face is also set. %1$s=name of the watch face. Example: Day face: AAPS V2">Day face: %1$s</string>
+    <string name="wear_day_night_night_title" comment="Title of the night Custom watch face on the Wear screen. %1$s=name of the watch face. Example: Night face: AAPS V2">Night face: %1$s</string>
+    <string name="wear_day_night_no_night_face">No night face. The face above shows day and night.</string>
+    <string name="wear_day_night_load_night_face" comment="Button: choose a watch face file and send it to the watch as the night face">Load night face</string>
+    <string name="wear_day_night_remove_night_face" comment="Button: the watch forgets its night face and shows the day face day and night">Remove night face</string>
+    <string name="wear_day_night_select_night_face" comment="Title of the list of watch face files when loading a night face">Select night face</string>
     <string name="wear_pushed_watchface_installing" comment="Short note after the selected watchface while the watch is still replacing its face">Installing…</string>
     <string name="wear_custom_watchface_not_shown" comment="Dialog after a custom watchface was sent while the complications watchface is selected. %1$s=name of the sent custom watchface">The watch shows the Complications watchface. Select Custom watchface to see %1$s on the watch.</string>
     <string name="wear_pushed_watchface_confirm_title">Change the watchface on the watch?</string>

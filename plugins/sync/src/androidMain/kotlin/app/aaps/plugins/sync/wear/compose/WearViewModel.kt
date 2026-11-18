@@ -31,6 +31,7 @@ import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import app.aaps.shared.impl.weardata.JsonKeyValues
 import app.aaps.shared.impl.weardata.JsonKeys
 import app.aaps.shared.impl.weardata.ResFileMap
@@ -72,7 +73,9 @@ data class WearUiState(
     val showInfos: Boolean = false,
     val cwfInfosState: CwfInfosState? = null,
     val showImportList: Boolean = false,
-    val importItems: List<CwfImportItemState> = emptyList()
+    val importItems: List<CwfImportItemState> = emptyList(),
+    /** The night face of the Custom watch face, see `CwfNight` */
+    val nightFace: WearNightFaceState = WearNightFaceState()
 )
 
 @Immutable
@@ -122,7 +125,8 @@ class WearViewModel(
     private val preferences: Preferences,
     private val versionCheckerUtils: VersionCheckerUtils,
     private val fileListProvider: FileListProvider,
-    private val aapsLogger: AAPSLogger
+    private val aapsLogger: AAPSLogger,
+    private val wearNightFace: WearNightFace
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WearUiState())
@@ -179,11 +183,13 @@ class WearViewModel(
                 }
             }
         }
+        collectNightFace()
     }
 
     fun requestCustomWatchface() {
         if (wearPlugin.savedCustomWatchface.value == null) {
-            rxBus.send(EventMobileToWear(EventData.ActionrequestCustomWatchface(false)))
+            // About the night face too, when the phone knows of one (see CwfNight)
+            rxBus.send(EventMobileToWear(EventData.ActionrequestCustomWatchface(false, night = wearNightFace.isKnown())))
         }
     }
 
@@ -290,7 +296,15 @@ class WearViewModel(
         }
     }
 
-    fun loadWatchfaceFiles() {
+    /** Opens the import list for the main face. */
+    fun loadWatchfaceFiles() = openImportList(forNight = false)
+
+    /**
+     * Opens the import list. [forNight] is set every time, so a list that closed some other way never
+     * sends the next zip to the wrong slot.
+     */
+    private fun openImportList(forNight: Boolean) {
+        _uiState.update { it.copy(nightFace = it.nightFace.copy(importForNight = forNight)) }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val cwfAuthorization = preferences.get(BooleanKey.WearCustomWatchfaceAuthorization)
             val files = fileListProvider.listCustomWatchfaceFiles()
@@ -319,6 +333,7 @@ class WearViewModel(
     }
 
     fun selectWatchface(cwfFile: CwfFile) {
+        if (_uiState.value.nightFace.importForNight) return selectNightWatchface(cwfFile)
         val metadata = cwfFile.cwfData.metadata
         preferences.put(StringNonKey.WearCwfWatchfaceName, metadata[CwfMetadataKey.CWF_NAME] ?: "")
         preferences.put(StringNonKey.WearCwfAuthorVersion, metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] ?: "")
@@ -341,6 +356,49 @@ class WearViewModel(
     }
 
     fun hideImportList() {
-        _uiState.update { it.copy(showImportList = false, importItems = emptyList()) }
+        _uiState.update { it.copy(showImportList = false, importItems = emptyList(), nightFace = it.nightFace.copy(importForNight = false)) }
+    }
+
+    // The night face, see CwfNight and WearNightFace.kt
+
+    private fun collectNightFace() {
+        viewModelScope.launch {
+            wearNightFace.saved.collect { cwfData ->
+                _uiState.update {
+                    it.copy(
+                        nightFace = it.nightFace.copy(
+                            hasNightWatchface = cwfData != null,
+                            nightWatchfaceName = cwfData?.metadata?.get(CwfMetadataKey.CWF_NAME) ?: "",
+                            nightWatchfaceImage = cwfData?.let { cwf -> decodeWatchfaceImage(cwf) }
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    /** Opens the same import list as [loadWatchfaceFiles], but the chosen zip goes to the watch as the night face. */
+    fun loadNightWatchfaceFiles() = openImportList(forNight = true)
+
+    /** Sends [cwfFile] as the night face. The watch then reports it, and only then does the screen show it. */
+    private fun selectNightWatchface(cwfFile: CwfFile) {
+        val metadata = cwfFile.cwfData.metadata
+        wearNightFace.chosen(metadata)
+        rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray, night = true))
+        _uiState.update { state ->
+            // The same note as for the main face: with the complications face on the wrist nothing draws it
+            val hidden = state.watchFacePushSupported && !state.customWatchfaceSelected
+            state.copy(
+                showImportList = false,
+                importItems = emptyList(),
+                customWatchfaceNotShown = if (hidden) metadata[CwfMetadataKey.CWF_NAME] ?: "" else null,
+                nightFace = state.nightFace.copy(importForNight = false)
+            )
+        }
+    }
+
+    /** The watch forgets its night face and shows the main face day and night. */
+    fun clearNightWatchface() {
+        wearNightFace.remove()
     }
 }
