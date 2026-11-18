@@ -204,6 +204,10 @@ internal class WearViewModelNightFacePersonalTest {
         whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
 
         sut.importDesigns(listOf(uri))
+        // After the import the list is read again on Dispatchers.IO, and that reads the preferences
+        // too. Wait until it is done: stubbing a mock while another thread calls it can put the
+        // answer on the other call.
+        awaitImportList()
 
         verify(preferences).put(WearDesignImportKey.LastPickedDesign, "content://drive/doc1")
         whenever(preferences.get(WearDesignImportKey.LastPickedDesign)).thenReturn("content://drive/doc1")

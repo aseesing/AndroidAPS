@@ -148,9 +148,12 @@ internal class DataHandlerWearNightFaceTest : WearTestBase() {
         whenever(complicationDataRepository.storeNightWatchface(any())).thenAnswer { stored = it.arguments[0] as CwfData; Unit }
         whenever(complicationDataRepository.getSimplifiedNightWatchface()).thenAnswer { stored }
         whenever(complicationDataRepository.getNightWatchface()).thenAnswer { stored }
-        // A slow read of the main face for the request that comes first
+        // A slow read of the main face for the request that comes first. The answer below does not
+        // depend on it; it is there so that work which does not wait for the request overtakes it.
         whenever(complicationDataRepository.getSimplifiedCustomWatchface(false)).thenAnswer { Thread.sleep(300); main }
 
+        // Two types sent right after each other: they must keep their order also on their way to
+        // the face work, not only in it
         rxBus.send(EventData.ActionrequestCustomWatchface(false, night = true))
         rxBus.send(EventData.ActionSetCustomWatchface(night, night = true))
 
