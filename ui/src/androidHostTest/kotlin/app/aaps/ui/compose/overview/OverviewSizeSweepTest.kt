@@ -23,18 +23,23 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import app.aaps.core.data.model.GV
 import app.aaps.core.data.model.GlucoseUnit
 import app.aaps.core.data.model.RM
+import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TDD
 import app.aaps.core.data.model.TE
+import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.interfaces.overview.graph.TbrState
 import app.aaps.core.interfaces.utils.TimeDiff
+import app.aaps.core.keys.BooleanKey
 import app.aaps.core.ui.compose.preference.PreferenceSubScreenDef
 import app.aaps.ui.compose.main.TempTargetChipState
 import app.aaps.ui.compose.overview.statusLights.StatusViewModel
 import app.aaps.ui.compose.testing.AapsScreenFixture
 import app.aaps.ui.compose.testing.OverviewViewModelFixture
 import app.aaps.ui.compose.testing.OverviewViewModelFixture.Companion.NOW
+import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -49,6 +54,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -109,6 +115,28 @@ class OverviewSizeSweepTest {
         // The stacked layout starts with the status card collapsed, the wide ones expanded. This opens
         // it everywhere, so the rows are checked at phone widths too.
         assertNoProblems(sweep(expandStatus = true))
+    }
+
+    @Test
+    fun `the countdown fits at any window size`() {
+        withLongestCountdown()
+        assertNoProblems(sweep(expandStatus = false))
+        assertCountdownShown()
+    }
+
+    @Test
+    fun `the expanded countdown rows fit at any window size`() {
+        withLongestCountdown()
+        assertNoProblems(sweep(expandStatus = true))
+        assertCountdownShown()
+    }
+
+    /** The sweep above really had the countdown texts on screen, not the ages. */
+    private fun assertCountdownShown() {
+        val state = viewModels.statusViewModel.uiState.value
+        assertThat(state.sensorStatus?.age).isEqualTo("9d23h left")
+        assertThat(state.cannulaStatus?.age).isEqualTo("3d7h left")
+        assertThat(state.insulinStatus?.age).isEqualTo("3d7h left")
     }
 
     private fun assertNoProblems(problems: List<String>) {
@@ -193,6 +221,25 @@ class OverviewSizeSweepTest {
         }
         // Shows the battery row, with its age
         viewModels.pumpDescription.isBatteryReplaceable = true
+    }
+
+    /**
+     * The countdown switch on, with its widest texts: a G6 started 1 hour ago ("9d23h left"), and a pod
+     * started 1 hour ago ("3d7h left") on the cannula and the insulin row. The battery keeps "8d23h".
+     */
+    private fun withLongestCountdown() {
+        val changedAt = NOW - HOUR
+        runBlocking {
+            for (type in listOf(TE.Type.CANNULA_CHANGE, TE.Type.INSULIN_CHANGE, TE.Type.SENSOR_CHANGE)) {
+                whenever(viewModels.persistenceLayer.getLastTherapyRecordUpToNow(type))
+                    .thenReturn(TE(timestamp = changedAt, type = type, glucoseUnit = GlucoseUnit.MGDL))
+            }
+            val reading = mock<GV>()
+            whenever(reading.sourceSensor).thenReturn(SourceSensor.DEXCOM_G6)
+            whenever(viewModels.persistenceLayer.getLastGlucoseValue()).thenReturn(reading)
+        }
+        whenever(viewModels.activePump.model()).thenReturn(PumpType.OMNIPOD_DASH)
+        whenever(screen.preferences.get(BooleanKey.OverviewStatusLightsCountdown)).thenReturn(true)
     }
 
     @Composable
