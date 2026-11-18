@@ -13,7 +13,9 @@ import app.aaps.core.interfaces.rx.weardata.CwfFile
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
+import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -69,6 +71,7 @@ internal data class DesignImportResult(val imported: List<String>, val refused: 
  *
  * @param fileListProvider gives the AAPS/export folder
  */
+@SingleIn(AppScope::class)
 @Inject
 class CwfDesignImport(
     private val context: Context,

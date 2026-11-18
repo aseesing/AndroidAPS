@@ -4,7 +4,9 @@ import app.aaps.core.interfaces.resources.TextResolver
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.ui.compose.StatusLevel
 import app.aaps.ui.UiStrings
+import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 
 /** What a status row shows about the age or the time left of a part: the text, its color and the progress bar. */
 class AgeDisplay(val text: String, val status: StatusLevel, val percent: Float)
@@ -17,6 +19,7 @@ class AgeDisplay(val text: String, val status: StatusLevel, val percent: Float)
  * The user's warning and critical thresholds are not used here: they are hours of age, and the
  * maker's lifetime is the better limit when it is known.
  */
+@SingleIn(AppScope::class)
 @Inject
 class StatusTimeLeft(
     private val rh: TextResolver,
