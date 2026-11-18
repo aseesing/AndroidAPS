@@ -14,7 +14,7 @@ import java.security.MessageDigest
  * The phone opens a channel on [PATH] and the two sides talk like this:
  *
  * 1. phone: [Header] - a magic number, the protocol version, a label, the size and the SHA-256 of
- *    the body, and a [WifiOffer] when the phone has a Wi-Fi address
+ *    the body, the size of the unpacked APK, and a [WifiOffer] when the phone has a Wi-Fi address
  * 2. watch, with a Wi-Fi offer: [Reply.WifiStarted]. The watch turns on its Wi-Fi, connects to the
  *    phone (see [writeWifiRequest]) and fetches the body there, which is much faster than the
  *    channel over Bluetooth. Then it answers [Reply.Committed] or [Reply.Failed] as in step 4, or
@@ -26,12 +26,16 @@ import java.security.MessageDigest
  *
  * gzip has its own CRC check, and the watch checks the SHA-256 from the header, so a damaged or
  * wrong body is never installed. The header comes over the channel, which only the paired phone
- * can open, so the hash is a trusted one also for a body that came over Wi-Fi. The installer itself
- * also refuses an APK that is not signed with the same key as the installed watch app.
+ * can open, so the hash is a trusted one also for a body that came over Wi-Fi. The watch stops
+ * unpacking at the APK size from the header, so a broken body cannot fill its storage. The
+ * installer itself also refuses an APK that is not signed with the same key as the installed watch
+ * app.
  *
- * Version 1 had no hash and no Wi-Fi. A watch app with only version 1 answers a newer header with
- * [Reply.Failed] with a message that holds [UNKNOWN_FORMAT]; the phone then tries again with
- * version 1.
+ * Versions 1 and 2 were early formats in test builds; version 3 had no [WifiOffer]. When the
+ * versions of the two apps differ, the watch answers [Reply.Failed]. For a header that is newer than
+ * the watch app, the message holds [UNKNOWN_FORMAT], and the phone asks the user to install the
+ * watch app once with adb. For a header that is older than the watch app, the message holds
+ * [OLD_FORMAT], and the phone asks for a newer phone app.
  */
 object WatchAppUpdateProtocol {
 
@@ -42,16 +46,22 @@ object WatchAppUpdateProtocol {
     const val MAGIC = 0x41415055
 
     /** Raise this when the format changes; the watch refuses a version it does not know */
-    const val VERSION = 2
-
-    /** The first version: no hash, no Wi-Fi, the body always comes over the channel */
-    const val VERSION_CHANNEL_ONLY = 1
+    const val VERSION = 4
 
     /**
      * The start of the [Reply.Failed] message for a header version the watch does not know.
-     * Watch apps with version 1 send this text, so it must never change.
+     * Watch apps of every version send this text, so it must never change.
      */
     const val UNKNOWN_FORMAT = "Unknown update format"
+
+    /**
+     * The start of the [Reply.Failed] message for a header version that is older than the watch app:
+     * the phone app is older than the watch app. This text must never change either.
+     */
+    const val OLD_FORMAT = "Update format older than the watch app"
+
+    /** The [Reply.Failed] message when the watch is still busy with another update */
+    const val BUSY = "Busy with another update"
 
     /** At most this many phone addresses in a [WifiOffer] */
     const val MAX_ADDRESSES = 8
@@ -59,19 +69,25 @@ object WatchAppUpdateProtocol {
     /** Larger than any real watch APK, so a broken header cannot make the watch wait for gigabytes */
     const val MAX_BODY_SIZE = 500L * 1024 * 1024
 
+    /** The same for the unpacked APK */
+    const val MAX_APK_SIZE = 500L * 1024 * 1024
+
+    /** A SHA-256 as [sha256] writes it: the watch never installs a body without one */
+    private val SHA256_HEX = Regex("[0-9a-f]{64}")
+
     /**
      * @param label shown to the user, for example the version and file name of the watch APK
      * @param bodySize number of bytes of the gzip compressed APK
-     * @param sha256 of the gzip compressed APK, lower case hex; empty in version 1
+     * @param apkSize number of bytes of the APK after unpacking
+     * @param sha256 of the gzip compressed APK, lower case hex
      * @param wifi where the watch can fetch the body over Wi-Fi; null for the channel only
-     * @param version of the format; only the phone sets an older one, for an older watch app
      */
     data class Header(
         val label: String,
         val bodySize: Long,
-        val sha256: String = "",
-        val wifi: WifiOffer? = null,
-        val version: Int = VERSION
+        val apkSize: Long,
+        val sha256: String,
+        val wifi: WifiOffer? = null
     )
 
     /**
@@ -79,9 +95,13 @@ object WatchAppUpdateProtocol {
      *
      * @param addresses the phone's IP addresses, best first; the watch tries them in this order
      * @param port the TCP port of the server
-     * @param token a random secret for this one update; the server sends nothing without it
+     * @param token a random secret for this one update; the server sends nothing without it.
+     *   [toString] never shows it, so it cannot end up in a log.
      */
-    data class WifiOffer(val addresses: List<String>, val port: Int, val token: String)
+    data class WifiOffer(val addresses: List<String>, val port: Int, val token: String) {
+
+        override fun toString(): String = "WifiOffer(addresses=$addresses, port=$port, token=hidden)"
+    }
 
     sealed class Reply {
 
@@ -106,13 +126,12 @@ object WatchAppUpdateProtocol {
     fun writeHeader(output: OutputStream, header: Header) {
         val data = DataOutputStream(output)
         data.writeInt(MAGIC)
-        data.writeInt(header.version)
+        data.writeInt(VERSION)
         data.writeUTF(header.label)
         data.writeLong(header.bodySize)
-        if (header.version >= 2) {
-            data.writeUTF(header.sha256)
-            writeWifiOffer(data, header.wifi)
-        }
+        data.writeLong(header.apkSize)
+        data.writeUTF(header.sha256)
+        writeWifiOffer(data, header.wifi)
         data.flush()
     }
 
@@ -122,16 +141,19 @@ object WatchAppUpdateProtocol {
         val magic = data.readInt()
         if (magic != MAGIC) throw IOException("Not a watch app update")
         val version = data.readInt()
-        if (version !in VERSION_CHANNEL_ONLY..VERSION) throw IOException("$UNKNOWN_FORMAT $version, expected $VERSION")
+        if (version < VERSION) throw IOException("$OLD_FORMAT $version, expected $VERSION")
+        if (version != VERSION) throw IOException("$UNKNOWN_FORMAT $version, expected $VERSION")
         val label = data.readUTF()
         val bodySize = data.readLong()
         if (bodySize !in 1..MAX_BODY_SIZE) throw IOException("Wrong update size $bodySize")
-        if (version == VERSION_CHANNEL_ONLY) return Header(label, bodySize, version = version)
+        val apkSize = data.readLong()
+        if (apkSize !in 1..MAX_APK_SIZE) throw IOException("Wrong APK size $apkSize")
         val sha256 = data.readUTF()
-        return Header(label, bodySize, sha256, readWifiOffer(data), version)
+        if (!SHA256_HEX.matches(sha256)) throw IOException("Wrong update hash")
+        return Header(label, bodySize, apkSize, sha256, readWifiOffer(data))
     }
 
-    /** Writes an optional [WifiOffer]; also used by [WatchLogProtocol] */
+    /** Writes an optional [WifiOffer] */
     internal fun writeWifiOffer(data: DataOutputStream, wifi: WifiOffer?) {
         data.writeBoolean(wifi != null)
         if (wifi != null) {

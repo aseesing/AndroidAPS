@@ -10,6 +10,7 @@ import app.aaps.core.interfaces.maintenance.ExportConfig
 internal fun MaintenanceBottomSheetContentPreview() {
     MaterialTheme {
         MaintenanceBottomSheetContent(
+            showSaveLogs = true,
             exportConfig = ExportConfig(
                 isCloudActive = true,
                 isCloudError = false,

@@ -7,6 +7,9 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesBinding
+import dev.zacsweers.metro.Inject
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -23,7 +26,9 @@ import java.util.concurrent.TimeoutException
  * network makes Wear OS turn it on, when the user allows Wi-Fi and the watch knows a network. The
  * connection is bound to that network, so it never goes through the Bluetooth proxy of the phone.
  */
-internal class NetworkWifiBodyFetcher(private val context: Context) : WifiBodyFetcher {
+@ContributesBinding(AppScope::class)
+@Inject
+class NetworkWifiBodyFetcher(private val context: Context) : WifiBodyFetcher {
 
     override fun open(offer: WifiOffer): WifiBody {
         val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: throw IOException("No connectivity service")

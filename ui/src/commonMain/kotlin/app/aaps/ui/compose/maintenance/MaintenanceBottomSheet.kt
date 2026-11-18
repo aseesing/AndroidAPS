@@ -52,6 +52,7 @@ fun MaintenanceBottomSheet(
     onDismiss: () -> Unit,
     onLogSettingsClick: () -> Unit,
     onSendLogsClick: () -> Unit,
+    showSaveLogs: Boolean,
     onSaveLogsClick: () -> Unit,
     onDeleteLogsClick: () -> Unit,
     onDirectoryClick: () -> Unit,
@@ -84,6 +85,7 @@ fun MaintenanceBottomSheet(
             onDismiss = onDismiss,
             onLogSettingsClick = onLogSettingsClick,
             onSendLogsClick = onSendLogsClick,
+            showSaveLogs = showSaveLogs,
             onSaveLogsClick = onSaveLogsClick,
             onDeleteLogsClick = onDeleteLogsClick,
             onDirectoryClick = onDirectoryClick,
@@ -116,6 +118,7 @@ internal fun MaintenanceBottomSheetContent(
     onDismiss: () -> Unit = {},
     onLogSettingsClick: () -> Unit = {},
     onSendLogsClick: () -> Unit = {},
+    showSaveLogs: Boolean = false,
     onSaveLogsClick: () -> Unit = {},
     onDeleteLogsClick: () -> Unit = {},
     onDirectoryClick: () -> Unit = {},
@@ -181,14 +184,17 @@ internal fun MaintenanceBottomSheetContent(
                 }
             }
         )
-        MaintenanceItem(
-            text = stringResource(UiStrings.save_logs),
-            description = stringResource(UiStrings.maintenance_save_logs_desc),
-            icon = Icons.Default.Download,
-            color = primaryColor,
-            onDismiss = onDismiss,
-            onClick = onSaveLogsClick
-        )
+        // Absent, not dead, where the platform cannot save to a Downloads folder
+        if (showSaveLogs) {
+            MaintenanceItem(
+                text = stringResource(UiStrings.save_logs),
+                description = stringResource(UiStrings.maintenance_save_logs_desc),
+                icon = Icons.Default.Download,
+                color = primaryColor,
+                onDismiss = onDismiss,
+                onClick = onSaveLogsClick
+            )
+        }
         MaintenanceItem(
             text = stringResource(CoreUiStrings.delete_logs),
             description = stringResource(CoreUiStrings.maintenance_delete_logs_desc),

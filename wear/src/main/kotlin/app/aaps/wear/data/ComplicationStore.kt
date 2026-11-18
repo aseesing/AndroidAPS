@@ -1,6 +1,7 @@
 package app.aaps.wear.data
 
 import app.aaps.core.interfaces.rx.weardata.CwfData
+import app.aaps.core.interfaces.rx.weardata.DayNightRule
 import app.aaps.core.interfaces.rx.weardata.EventData
 import kotlinx.serialization.Serializable
 
@@ -130,9 +131,25 @@ data class ComplicationData(
     val customWatchfaceDefault: CwfData? = null,
     val customWatchfaceDefaultFull: CwfData? = null,
     val lastUpdateTimestamp: Long = 0L,
-    // Private patch: the optional night face, shown at night instead of customWatchface. Last, so
-    // its protobuf number is new and a file written before it still reads. See CwfNight.
+    // PERSONAL PATCH: where the personal build kept the night face before it got a file of its own
+    // (NightWatchfaceData). Read once to move it there, then cleared, see NightFaceFromDesignFile.
+    // Last, so the protobuf number stays the one the old file was written with.
     val customWatchfaceNight: CwfData? = null
+)
+
+/**
+ * The optional night face of the Custom watch face, shown at night instead of
+ * [ComplicationData.customWatchface] (see `CwfNight`), and the rule for when it is day. Kept in its
+ * own DataStore file, so the frequent BG and status writes to [ComplicationData] do not write this
+ * design again each time. The file is in the no-backup folder, and the rule is kept here, not in the
+ * shared preferences: so it goes with the night face, and Auto Backup never copies it.
+ *
+ * @param dayNightRule from the phone; only kept while there is a night face
+ */
+@Serializable
+data class NightWatchfaceData(
+    val customWatchfaceNight: CwfData? = null,
+    val dayNightRule: DayNightRule? = null
 )
 
 /**

@@ -34,7 +34,7 @@ class ConfigurationActivity : WearPreferenceActivity(), CustomWatchfaceSettingsH
 
     // Blocking: the preference screen is built synchronously in onCreate, and this is a local read.
     override fun storedWatchfaceConfiguration(): String? = runBlocking { complicationDataRepository.getCustomWatchface()?.json }
-    override fun hasNightWatchface(): Boolean = runBlocking { complicationDataRepository.getNightWatchface() != null } // Private patch
+    override fun hasNightWatchface(): Boolean = runBlocking { complicationDataRepository.getNightWatchface() != null }
 
     private var watchfaceComponentName: ComponentName? = null
 

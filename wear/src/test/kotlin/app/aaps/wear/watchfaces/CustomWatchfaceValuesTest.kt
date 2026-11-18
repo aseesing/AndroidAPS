@@ -6,6 +6,9 @@ package app.aaps.wear.watchfaces
 
 import android.content.Intent
 import android.os.BatteryManager
+import app.aaps.core.interfaces.rx.weardata.CwfData
+import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
+import app.aaps.core.interfaces.rx.weardata.DayNightRule
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.wear.R
 import app.aaps.wear.watchfaces.daynight.DayNightClock
@@ -76,8 +79,13 @@ class CustomWatchfaceValuesTest {
                 )
             )
         }
-        face.sp.putDouble(R.string.key_location_latitude, PLACE.latitude)
-        face.sp.putDouble(R.string.key_location_longitude, PLACE.longitude)
+        runBlocking {
+            // The watch keeps the place only for a design that needs it (see `PlaceRuleKeeping`)
+            face.complicationDataRepository.storeCustomWatchface(
+                CwfData("""{"needsPlace": true}""", mutableMapOf(CwfMetadataKey.CWF_NAME to "Values", CwfMetadataKey.CWF_AUTHOR_VERSION to "1"), mutableMapOf())
+            )
+            face.complicationDataRepository.storeDayNightRule(DayNightRule.Place(PLACE.latitude, PLACE.longitude))
+        }
         StoredWeather.save(face.sp, EventData.Weather(now - 10 * MINUTE, EventData.Weather.CLEAR, 7.5))
         face.reload()
         face.setRenderInstant(now)

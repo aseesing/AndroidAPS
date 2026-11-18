@@ -19,7 +19,7 @@
          lets Android install an update of the app itself without a dialog where the watch allows it. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
-    <!-- The update itself comes over Wi-Fi from the phone where possible, see NetworkWifiBodyFetcher -->
+    <!-- The update and the watch log go over Wi-Fi to and from the phone where possible, see NetworkWifiBodyFetcher -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
@@ -172,7 +172,7 @@
                     android:scheme="wear" />
             </intent-filter>
 
-            <!-- PERSONAL PATCH: the phone app downloads the watch log, see WatchLogProtocol.PATH -->
+            <!-- The phone app downloads the watch log, see WatchLogProtocol.PATH -->
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
 
@@ -205,7 +205,9 @@
 
         <service android:name=".wearStepCount.StepCountListener" />
 
-        <!-- Heart rate and steps from Health Services, for watch face complications -->
+        <!-- Heart rate and steps from Health Services, for watch face complications.
+             Asked again every 10 minutes, so a heart rate older than 30 minutes disappears
+             and the steps go back to 0 after midnight, also when no new data comes in. -->
         <service
             android:name=".health.HeartRateComplication"
             android:exported="true"
@@ -221,7 +223,7 @@
                 android:value="RANGED_VALUE,SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
+                android:value="600" />
         </service>
 
         <service
@@ -239,7 +241,7 @@
                 android:value="RANGED_VALUE,GOAL_PROGRESS,SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
+                android:value="600" />
         </service>
 
         <service
@@ -251,7 +253,6 @@
             android:name=".health.HealthPermissionActivity"
             android:excludeFromRecents="true"
             android:exported="false"
-            android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 

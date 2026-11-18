@@ -1,5 +1,6 @@
 package app.aaps.plugins.sync.wear.compose
 
+import android.net.Uri
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
@@ -19,13 +20,18 @@ import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -34,8 +40,13 @@ import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doSuspendableAnswer
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.timeout
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -49,6 +60,8 @@ internal class WearViewModelTest {
     @Mock private lateinit var versionCheckerUtils: VersionCheckerUtils
     @Mock private lateinit var fileListProvider: FileListProvider
     @Mock private lateinit var aapsLogger: AAPSLogger
+    @Mock private lateinit var designImport: CwfDesignImport
+    @Mock private lateinit var wearNightFace: WearNightFace
 
     private val connectedDeviceFlow = MutableStateFlow<String?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
@@ -65,11 +78,11 @@ internal class WearViewModelTest {
         whenever(wearPlugin.connectedDevice).thenReturn(connectedDeviceFlow)
         whenever(wearPlugin.savedCustomWatchface).thenReturn(savedCustomWatchfaceFlow)
         whenever(wearPlugin.watchFacePushStatus).thenReturn(watchFacePushStatusFlow)
-        whenever(wearPlugin.savedNightWatchface).thenReturn(MutableStateFlow(null)) // PERSONAL PATCH: day and night face
+        whenever(wearNightFace.saved).thenReturn(MutableStateFlow(null))
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(eventWearUpdateGuiFlow)
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(pushedWatchfaceFlow)
         whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace)
     }
 
     @AfterEach
@@ -193,6 +206,45 @@ internal class WearViewModelTest {
     }
 
     @Test
+    fun `a chosen face shows as loading until the watch reports it`() {
+        connectedDeviceFlow.value = "Galaxy Watch 5"
+
+        sut.selectWatchface(analogZip())
+        assertThat(sut.uiState.value.loadingWatchface).isEqualTo("Analog G-Watch")
+
+        // The watch reports the face back as a new object
+        savedCustomWatchfaceFlow.value = analogZip().cwfData
+
+        assertThat(sut.uiState.value.loadingWatchface).isNull()
+        assertThat(sut.uiState.value.watchfaceName).isEqualTo("Analog G-Watch")
+    }
+
+    @Test
+    fun `without a watch a chosen face does not show as loading`() {
+        connectedDeviceFlow.value = null
+
+        sut.selectWatchface(analogZip())
+
+        assertThat(sut.uiState.value.loadingWatchface).isNull()
+    }
+
+    @Test
+    fun `the loading ends when the watch disconnects`() {
+        connectedDeviceFlow.value = "Galaxy Watch 5"
+        sut.selectWatchface(analogZip())
+        assertThat(sut.uiState.value.loadingWatchface).isEqualTo("Analog G-Watch")
+
+        connectedDeviceFlow.value = null
+
+        assertThat(sut.uiState.value.loadingWatchface).isNull()
+    }
+
+    private fun analogZip() = CwfFile(
+        cwfData = CwfData(json = "{}", metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Analog G-Watch"), resData = mutableMapOf()),
+        zipByteArray = ByteArray(0)
+    )
+
+    @Test
     fun `selectPushedWatchface stores the choice for the plugin to resend`() {
         sut.selectPushedWatchface(PushedWatchfaceId.WFS)
         verify(preferences).put(StringKey.WearPushedWatchface, PushedWatchfaceId.WFS)
@@ -298,5 +350,65 @@ internal class WearViewModelTest {
 
         sut.hideCwfInfos()
         assertThat(sut.uiState.value.showInfos).isFalse()
+    }
+
+    @Test
+    fun `importing designs says how it went and shows the list again`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        val messages = mutableListOf<String>()
+        backgroundScope.launch { sut.toastEvent.toList(messages) }
+
+        sut.importDesigns(listOf(uri))
+
+        assertThat(messages).containsExactly("Designs imported: 1")
+        // The list is read again on the IO dispatcher
+        verify(fileListProvider, timeout(2_000)).listCustomWatchfaceFiles()
+    }
+
+    @Test
+    fun `only one import runs at a time and the state says so`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        val gate = CompletableDeferred<Unit>()
+        whenever(designImport.importFrom(any())).doSuspendableAnswer {
+            gate.await()
+            "Designs imported: 1"
+        }
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+
+        sut.importDesigns(listOf(uri))
+        assertThat(sut.uiState.value.importingDesigns).isTrue()
+        // A second tap while the first import still reads from Drive
+        sut.importDesigns(listOf(uri))
+
+        gate.complete(Unit)
+        assertThat(sut.uiState.value.importingDesigns).isFalse()
+        verify(designImport, times(1)).importFrom(any())
+    }
+
+    @Test
+    fun `deleting a design says how it went and shows the list again`() = runTest(UnconfinedTestDispatcher()) {
+        val zip = CwfFile(
+            cwfData = CwfData(json = "{}", metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Analog G-Watch"), resData = mutableMapOf()),
+            zipByteArray = ByteArray(0)
+        )
+        whenever(designImport.deleteFrom(zip)).thenReturn("Deleted: Analog_G-Watch.zip")
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        val messages = mutableListOf<String>()
+        backgroundScope.launch { sut.toastEvent.toList(messages) }
+
+        sut.deleteDesign(zip)
+
+        assertThat(messages).containsExactly("Deleted: Analog_G-Watch.zip")
+        // The list is read again on the IO dispatcher
+        verify(fileListProvider, timeout(2_000)).listCustomWatchfaceFiles()
+    }
+
+    @Test
+    fun `an empty pick imports nothing`() {
+        sut.importDesigns(emptyList())
+
+        verifyNoInteractions(designImport)
     }
 }

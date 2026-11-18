@@ -161,12 +161,16 @@ private fun stateText(state: WatchAppUpdateState): String? =
         is WatchAppUpdateState.Installing -> stringResource(SyncStrings.wear_app_update_installing, state.watchName)
         is WatchAppUpdateState.Sent       -> stringResource(SyncStrings.wear_app_update_sent, state.watchName)
         is WatchAppUpdateState.Failed     -> when (state.reason) {
-            WatchAppUpdateState.Reason.NOT_EMBEDDED -> stringResource(SyncStrings.wear_app_update_not_embedded)
-            WatchAppUpdateState.Reason.NO_WATCH     -> stringResource(SyncStrings.wear_app_update_no_watch)
-            WatchAppUpdateState.Reason.NO_ANSWER    -> stringResource(SyncStrings.wear_app_update_no_answer)
-            WatchAppUpdateState.Reason.TIMEOUT      -> stringResource(SyncStrings.wear_app_update_timeout)
+            WatchAppUpdateState.Reason.NOT_EMBEDDED  -> stringResource(SyncStrings.wear_app_update_not_embedded)
+            WatchAppUpdateState.Reason.NO_WATCH      -> stringResource(SyncStrings.wear_app_update_no_watch)
+            WatchAppUpdateState.Reason.NO_ANSWER     -> stringResource(SyncStrings.wear_app_update_no_answer)
+            WatchAppUpdateState.Reason.TIMEOUT       -> stringResource(SyncStrings.wear_app_update_timeout)
+            WatchAppUpdateState.Reason.CHECK_WATCH   -> stringResource(SyncStrings.wear_app_update_check_watch)
+            WatchAppUpdateState.Reason.OLD_WATCH_APP -> stringResource(SyncStrings.wear_app_update_old_watch_app)
+            WatchAppUpdateState.Reason.OLD_PHONE_APP -> stringResource(SyncStrings.wear_app_update_old_phone_app)
+            WatchAppUpdateState.Reason.BUSY          -> stringResource(SyncStrings.wear_app_update_busy)
             WatchAppUpdateState.Reason.WATCH_ERROR,
-            WatchAppUpdateState.Reason.ERROR        -> stringResource(SyncStrings.wear_app_update_failed, state.detail)
+            WatchAppUpdateState.Reason.ERROR         -> stringResource(SyncStrings.wear_app_update_failed, state.detail)
         }
     }
 
@@ -176,7 +180,7 @@ private fun stateText(state: WatchAppUpdateState): String? =
 internal fun WatchAppUpdatePagePreview() {
     MaterialTheme {
         WatchAppUpdatePage(
-            embedded = EmbeddedWatchApp("4.0.1 (aaps-wear-4.0.1.apk)", 20_000_000),
+            embedded = EmbeddedWatchApp("4.0.1 (aaps-wear-4.0.1.apk)", 20_000_000, 58_000_000),
             state = WatchAppUpdateState.Sending("Pixel Watch 3", 42, secondsLeft = 20, overWifi = true),
             onSend = {}
         )

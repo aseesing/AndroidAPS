@@ -80,21 +80,24 @@ now). Not added: a unit test for `FrameHandOff`; the light-path test of section 
 The snapshot harness now renders each design in its own JVM (`-PsnapshotOut`), which seems to remove the
 font flake; the item in section 4 can be dropped if it stays away.
 
-## 6. When this meets the branch `local/upstream-tickets` (note from another session, 2026-11-18)
+## 6. After the merge with the reviewed night face (`local/personal` of 2026-11-18)
 
-That branch changes how the watch gets the phone's place: no longer the `key_location_*` preferences,
-but a rule kept by the repository (`storeDayNightRule(DayNightRule.Place(lat, lon))`).
+The watch now gets the phone's place as a rule the repository keeps (`storeDayNightRule`), no longer
+from the `key_location_*` preferences. The engine reads it (`skyRule`, `skyPlace()` in `CustomWatchface`).
 
-- [ ] `CustomWatchface.storedLocation()` and its users here (`DynamicImages` moon inputs, `DayNightClock`,
-      the values) read the place the old way: expect a merge conflict there, take the rule.
-- [ ] `CwfPlaceNeeds.of(json)` (in `shared/impl/.../weardata/CwfPlaceNeeds.kt` on that branch) decides from
-      the design JSON whether a design needs the place. It knows the OLD keys (`moonLight`, `moon: true`,
-      `dayLook`, `weatherLooks`, the sun and moon value keys). Old zips are still found, because the
-      translator runs later, on the watch. But once designs are ported, add the new forms there:
+- [ ] `CwfPlaceNeeds.of(json)` (`shared/impl/.../weardata/CwfPlaceNeeds.kt`) decides from the design
+      JSON whether a design needs the place. It knows the OLD keys only. Old zips are found, because the
+      translator runs later, on the watch. Before a design is ported, teach it the new forms:
       `"image": "@moon"` (layer or view), a formula that reads `v_sun_progress`, `v_night_progress`,
       `v_sun_cycle`, `v_moon_cycle`, `v_sun_next_time`, `v_is_day`, `v_weather_kind` or
       `v_weather_temperature` (in a layer, a `let` or the `when` of a look). Or give the design
       `"needsPlace": true`.
-- [ ] Design repo: `CwfD2DesignTest.theNextSunriseOrSunsetShowsWithAPlace` and the snapshot harness
-      (`SnapshotEngine.kt`, it sends the place in the Preferences message) must store the rule instead.
 - [ ] Designs should look sensible with no place (day look 07:00 to 19:00, moon north up, "--:--").
+- [ ] `drawLayeredFrame` in `CustomWatchface` and `LayeredFrame.kt` are reviewed upstream code now. They
+      are kept as they are, and one hook (`personalFrame`) draws the frame with `FrameLayers` first, so the
+      upstream body does not run in this build. When upstream has merged that code and it is stable,
+      decide: keep the hook, or give upstream the one frame cache.
+- [ ] The phone preview draws a frame of the animation without the pipeline (`showInstant`) only while
+      the views are up to date; the reviewed rules of the personal preview (a new face per size, new
+      values kept until a frame reads them, `WatchLineSpacing`) run on every other frame. Not tried on
+      a phone.

@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.data
 
 import android.content.Context
@@ -39,8 +35,10 @@ import java.nio.file.attribute.BasicFileAttributes
  * DataStore writes a temp file and renames it over the old one, so every real write gives the file
  * a new inode - that is what is counted.
  *
- * Baseline, measured with the original code and the same hour sent one message at a time: 76
- * messages gave 76 rewrites of the one 879 KB file, 65 MB written per hour.
+ * The hour is played in a few seconds: [ComplicationDataRepository.batchWindowMs] is 50 ms here, and
+ * the once-a-minute renewal of the timestamp never comes due. On a watch that renewal adds at most
+ * one small write per minute in which a message brought nothing new. Before this change, every
+ * message was one write of the whole file with the designs.
  */
 class ComplicationDataWritePerfTest {
 
@@ -69,9 +67,8 @@ class ComplicationDataWritePerfTest {
 
     /**
      * Delivers the messages of one sync the way the watch does: each in its own coroutine, all at
-     * once. Counts a rewrite when the file was replaced, so a sync counts at most one - which is
-     * what the store should do; the baseline (one write per message) was measured with one message
-     * per sync, see the class comment.
+     * once, so all of them come within the batch window. Counts a rewrite when the file was replaced,
+     * so a sync counts at most one - which is what the store should do.
      */
     private suspend fun sync(vararg calls: suspend () -> Unit) {
         val liveBefore = fileId(liveFile)
@@ -156,10 +153,9 @@ class ComplicationDataWritePerfTest {
 
         println(
             "PERF store: $messages messages -> $rewrites live rewrites of ${liveFile.length() / 1024} KB and $designRewrites design rewrites " +
-                "of ${designFile.length() / 1024} KB = ${bytesWritten / 1024} KB written per hour (baseline 65 MB)"
+                "of ${designFile.length() / 1024} KB = ${bytesWritten / 1024} KB written"
         )
-        // Before: one rewrite of the whole file per message, 76. Now one live write per sync that
-        // brings something new, and the designs are not touched at all.
+        // One live write per sync that brings something new, and the designs are not touched at all
         assertThat(rewrites).isEqualTo(12)
         assertThat(designRewrites).isEqualTo(0)
         assertThat(bytesWritten).isLessThan(200_000L)
@@ -223,6 +219,26 @@ class ComplicationDataWritePerfTest {
         val data = updated.complicationData.first()
 
         assertThat(data.bgData.sgvString).isEqualTo("141")
+        assertThat(data.customWatchface?.metadata?.get(CwfMetadataKey.CWF_NAME)).isEqualTo("current")
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    @Test
+    fun aDamagedLiveFileDoesNotBringBackTheFrozenValuesOfTheOldFile() = runBlocking {
+        // The old file still holds the live values of the day of the update, maybe months ago
+        val old = ComplicationData(bgData = bg(T0, 141.0), customWatchface = cwf("current", 1000))
+        File(tempDir, "datastore").mkdirs()
+        designFile.writeBytes(ProtoBuf.encodeToByteArray(ComplicationData.serializer(), old))
+        liveFile.writeBytes(byteArrayOf(0x0A, 0x7F, 0x01))   // damaged: says 127 bytes follow, 1 does
+        val context = mock<Context>()
+        whenever(context.applicationContext).thenReturn(context)
+        whenever(context.filesDir).thenReturn(tempDir)
+        val restarted = ComplicationDataRepository(context, AAPSLoggerTest(), mock<SP>())
+
+        val data = restarted.complicationData.first()
+
+        assertThat(data.bgData.sgvString).isNotEqualTo("141")
+        assertThat(data.bgData).isEqualTo(LiveComplicationData.EMPTY.bgData)
         assertThat(data.customWatchface?.metadata?.get(CwfMetadataKey.CWF_NAME)).isEqualTo("current")
     }
 

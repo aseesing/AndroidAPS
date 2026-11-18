@@ -1,19 +1,20 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.complications.cwf
 
 import android.app.Application
+import app.aaps.core.interfaces.logging.AAPSLogger
+import app.aaps.core.interfaces.logging.LTag
 import app.aaps.shared.impl.rx.bus.RxBusImpl
 import app.aaps.wear.AAPSLoggerTest
 import app.aaps.wear.data.ComplicationData
 import app.aaps.wear.data.ComplicationDataRepository
+import app.aaps.wear.events.EventWearPreferenceChange
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.timeout
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -59,5 +60,21 @@ class CwfComplicationUpdaterIdleTest {
         // ... and end again when it lets go
         CwfFaceComplication.noteDeactivated("test", logger)
         assertThat(waitFor(3_000) { !updater.loopsRunning() }).isTrue()
+    }
+
+    @Test
+    fun theSleepingRefreshLoopStillRefreshesAfterATrigger() {
+        val recording = mock<AAPSLogger>()
+        val repository = mock<ComplicationDataRepository>()
+        whenever(repository.complicationData).thenReturn(flowOf(ComplicationData()))
+        val rxBus = RxBusImpl(logger)
+        val updater = CwfComplicationUpdater(RuntimeEnvironment.getApplication(), rxBus, repository, recording)
+        updater.start()
+
+        // The loop waits on its channel now, nothing to do yet. A preference change wakes it, and it
+        // refreshes once the quiet second after the change has passed.
+        rxBus.send(EventWearPreferenceChange("test"))
+
+        verify(recording, timeout(5_000)).debug(LTag.WEAR, "CwfComplicationUpdater: refresh all (preference changed)")
     }
 }

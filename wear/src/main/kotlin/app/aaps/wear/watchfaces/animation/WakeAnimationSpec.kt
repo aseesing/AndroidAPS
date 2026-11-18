@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.wear.watchfaces.animation
 
+import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import kotlin.math.ceil
 
 /**
@@ -82,7 +83,7 @@ data class WakeAnimationSpec(
     companion object {
 
         /** The key of the animation in the design json. */
-        const val JSON_KEY = "animation"
+        const val JSON_KEY = CwfPlaceNeeds.ANIMATION
 
         const val MIN_DURATION_MS = 500L
         const val MAX_DURATION_MS = 30_000L

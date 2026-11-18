@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.preview
 
 import app.aaps.core.interfaces.maintenance.FileListProvider
@@ -26,8 +22,12 @@ import kotlinx.coroutines.withContext
 @Inject
 class CwfFullDesigns(private val fileListProvider: FileListProvider) {
 
-    /** Found designs, by the short copy they were found for. */
-    private val found = HashMap<CwfData, CwfData>()
+    /**
+     * The last design found, with the json and metadata of the short copy it was found for. Only the
+     * last one: a design holds all its pictures. Matched by json and metadata, because each new copy
+     * from the watch has new picture arrays, which `CwfData` compares by reference.
+     */
+    @Volatile private var last: Pair<Pair<String, Map<CwfMetadataKey, String>>, CwfData>? = null
 
     /**
      * [design] with the pictures and fonts of its zip on the phone, or null when there is no such zip.
@@ -35,9 +35,10 @@ class CwfFullDesigns(private val fileListProvider: FileListProvider) {
      */
     suspend fun complete(design: CwfData): CwfData? {
         if (isWhole(design)) return design
-        synchronized(found) { found[design] }?.let { return it }
+        val key = design.json to design.metadata.toMap()
+        last?.takeIf { it.first == key }?.let { return it.second }
         val zips = withContext(Dispatchers.IO) { fileListProvider.listCustomWatchfaceFiles().map { it.cwfData } }
-        return completeFrom(design, zips)?.also { synchronized(found) { found[design] = it } }
+        return completeFrom(design, zips)?.also { last = key to it }
     }
 
     companion object {

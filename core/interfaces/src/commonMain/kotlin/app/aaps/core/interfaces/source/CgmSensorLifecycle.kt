@@ -26,11 +26,27 @@ enum class StagingState { ABSENT, WARMUP, SETTLING, READY }
  * new sensor) without naming a vendor.
  *
  * Times are in ms. Fields are null when the source cannot know them.
+ *
+ * @property startedAtEpochMs the start of the session the source works with. It can be the time
+ *   AAPS connected to the sensor or started it, so it is not always the real start.
+ * @property sessionLengthMs PERSONAL PATCH: the whole session as the sensor itself reported it,
+ *   grace period included (a Dexcom ONE+ / G7 says 10.5 days, or 15.5 days for a 15 day G7). The
+ *   sensor stops at [startedAtEpochMs] + this. Null when the sensor did not report it: the source
+ *   must not put a length it only assumes here.
+ * @property gracePeriodMs PERSONAL PATCH: the last part of [sessionLengthMs] that is the grace
+ *   period (12 hours for a Dexcom ONE+ / G7), so the nominal life ends [gracePeriodMs] before the
+ *   session ends. Null together with [sessionLengthMs], or when the source does not know it.
+ * @property confirmedStartEpochMs PERSONAL PATCH: the session start when the source is sure of it:
+ *   the sensor itself reported it, or the user set it by hand. Null when [startedAtEpochMs] is only
+ *   the time AAPS connected to the sensor or started it.
  */
 data class CgmSensorLifecycle(
     val startedAtEpochMs: Long?,
     val ageMs: Long?,
     val endOfLife: Boolean,
+    val sessionLengthMs: Long? = null, // PERSONAL PATCH
+    val gracePeriodMs: Long? = null, // PERSONAL PATCH
+    val confirmedStartEpochMs: Long? = null, // PERSONAL PATCH
 )
 
 /**

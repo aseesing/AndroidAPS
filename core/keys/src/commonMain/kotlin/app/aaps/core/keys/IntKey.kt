@@ -127,6 +127,19 @@ enum class IntKey(
         unitType = UnitType.HOURS,
         sync = SyncSpec(SyncChannel.Cold, SyncDirection.Bidirectional)
     ),
+    // Status lights countdown: the life of a sensor whose life AAPS does not know. 0 = not set, show the age
+    OverviewStatusLightsSensorLife(
+        key = "statuslights_sensor_life",
+        defaultValue = 0,
+        min = 0,
+        max = 720,
+        title = KeysStrings.pref_title_statuslights_sensor_life,
+        summary = KeysStrings.pref_summary_statuslights_sensor_life,
+        defaultedBySM = true,
+        dependency = BooleanKey.OverviewStatusLightsCountdown,
+        unitType = UnitType.HOURS,
+        sync = SyncSpec(SyncChannel.Cold, SyncDirection.Bidirectional)
+    ),
     OverviewSbatWarning(
         key = "statuslights_sbat_warning",
         defaultValue = 25,

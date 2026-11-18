@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.watchlog
 
 import android.content.ContentValues
@@ -9,9 +5,10 @@ import android.content.Context
 import android.provider.MediaStore
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.plugins.sync.wear.watchapp.AndroidWifiBodyServerFactory
-import app.aaps.plugins.sync.wear.watchapp.WearableChannelOpener
+import app.aaps.plugins.sync.wear.watchapp.WatchChannelOpener
+import app.aaps.plugins.sync.wear.watchapp.WifiBodyServerFactory
 import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CancellationException
@@ -29,20 +26,34 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Saves a downloaded log zip where the user finds it: the Downloads folder on Android, a fake in tests */
+fun interface LogZipSaver {
+
+    /** @throws Exception when it cannot be saved; nothing half written stays behind then */
+    fun save(source: File, name: String)
+}
+
 /**
  * Downloads the log of the watch app and saves it in the Downloads folder of the phone.
  *
  * One app-wide instance, so a download keeps running when the user leaves the screen.
+ *
+ * @param tempFile where the zip waits between the download and the save; deleted after every download
+ * @param scope runs the downloads; the state may be read from any thread
  */
 @SingleIn(AppScope::class)
-@Inject
-class WatchLogDownloader(
-    private val context: Context,
-    private val aapsLogger: AAPSLogger
+class WatchLogDownloader internal constructor(
+    private val receiver: WatchLogReceiver,
+    private val saver: LogZipSaver,
+    private val tempFile: File,
+    private val aapsLogger: AAPSLogger,
+    private val scope: CoroutineScope
 ) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val receiver = WatchLogReceiver(WearableChannelOpener(context), AndroidWifiBodyServerFactory(context))
+    @Inject
+    constructor(context: Context, opener: WatchChannelOpener, wifiServers: WifiBodyServerFactory, saver: LogZipSaver, aapsLogger: AAPSLogger) : this(
+        WatchLogReceiver(opener, wifiServers), saver, File(context.cacheDir, TEMP_NAME), aapsLogger, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    )
 
     private val _state = MutableStateFlow<WatchLogState>(WatchLogState.Idle)
     val state: StateFlow<WatchLogState> = _state.asStateFlow()
@@ -52,13 +63,12 @@ class WatchLogDownloader(
         if (_state.value.isBusy) return
         _state.value = WatchLogState.Connecting
         scope.launch {
-            val temp = File(context.cacheDir, TEMP_NAME)
             try {
-                val result = receiver.receive(temp) { _state.value = it }
+                val result = receiver.receive(tempFile) { _state.value = it }
                 if (result is WatchLogState.Received) {
                     val name = fileName(System.currentTimeMillis())
                     _state.value = try {
-                        withContext(Dispatchers.IO) { saveToDownloads(temp, name) }
+                        withContext(Dispatchers.IO) { saver.save(tempFile, name) }
                         WatchLogState.Saved(name)
                     } catch (e: Exception) {
                         aapsLogger.error(LTag.WEAR, "Watch log: cannot save to Downloads", e)
@@ -73,12 +83,30 @@ class WatchLogDownloader(
                 aapsLogger.error(LTag.WEAR, "Watch log download failed", e)
                 _state.value = WatchLogState.Failed(WatchLogState.Reason.ERROR, e.message ?: e.javaClass.simpleName)
             } finally {
-                withContext(Dispatchers.IO) { temp.delete() }
+                // PERSONAL PATCH: known and not fixed on purpose. The state is already not busy here (Failed inside
+                // receive, or Saved / Failed above), so a new download can start in the few milliseconds before this
+                // delete runs on the IO dispatcher. This old job then deletes the temp file of the new one, and its save fails.
+                withContext(Dispatchers.IO) { tempFile.delete() }
             }
         }
     }
 
-    private fun saveToDownloads(source: File, name: String) {
+    companion object {
+
+        private const val TEMP_NAME = "watch_log_download.zip"
+
+        /** Like the log export of the phone (`AndroidAPS_LOG_...`), but with a readable time */
+        fun fileName(timeMs: Long): String =
+            "AndroidAPS_WEAR_LOG_" + SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date(timeMs)) + ".zip"
+    }
+}
+
+/** Saves into the shared Downloads folder through MediaStore; needs no permission */
+@ContributesBinding(AppScope::class)
+@Inject
+class DownloadsLogZipSaver(private val context: Context) : LogZipSaver {
+
+    override fun save(source: File, name: String) {
         val resolver = context.contentResolver
         val pending = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, name)
@@ -97,14 +125,5 @@ class WatchLogDownloader(
             runCatching { resolver.delete(target, null, null) }
             throw e
         }
-    }
-
-    companion object {
-
-        private const val TEMP_NAME = "watch_log_download.zip"
-
-        /** Like the log export of the phone (`AndroidAPS_LOG_...`), but with a readable time */
-        fun fileName(timeMs: Long): String =
-            "AndroidAPS_WEAR_LOG_" + SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date(timeMs)) + ".zip"
     }
 }

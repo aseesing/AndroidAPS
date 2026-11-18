@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.wear.watchfaces.design
 
+import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import app.aaps.wear.watchfaces.animation.BuiltInTemplates
 import app.aaps.wear.watchfaces.animation.Templates
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
@@ -37,10 +38,10 @@ import kotlin.math.sin
 object LegacyDesign {
 
     /** The old key of the day look. */
-    const val DAY_LOOK_KEY = "dayLook"
+    const val DAY_LOOK_KEY = CwfPlaceNeeds.DAY_LOOK
 
     /** The old key of the weather looks, by `day_<weather>`, `night_<weather>` or `<weather>`. */
-    const val WEATHER_LOOKS_KEY = "weatherLooks"
+    const val WEATHER_LOOKS_KEY = CwfPlaceNeeds.WEATHER_LOOKS
 
     /** The key in an old look (and in a new one) that names the pictures to swap. */
     const val IMAGES_KEY = Looks.IMAGES
@@ -49,10 +50,10 @@ object LegacyDesign {
     const val DAY_SUFFIX = "Day"
 
     /** The old key of a view that shows the moon. */
-    const val MOON_LIGHT_KEY = "moonLight"
+    const val MOON_LIGHT_KEY = CwfPlaceNeeds.MOON_LIGHT
 
     /** The old key of a layer that draws the moon. */
-    const val MOON_KEY = "moon"
+    const val MOON_KEY = CwfPlaceNeeds.ANIMATION_MOON
 
     /** The old key of a view that moves along an arc, see [Orbit]. */
     const val ORBIT_KEY = "orbit"

@@ -1,11 +1,11 @@
 // ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
+// PERSONAL PATCH - the upstream screen (issue 5610) with personal extras: the choices of the
+// watch face menu (colours, wake-up animation, log time graph, ...), the look rows only of what the
+// design uses, and a screen per face (day face, night face). Marked lines differ from upstream.
 // ============================================================================================
 package app.aaps.plugins.sync.wear.cwfsettings
 
 import android.content.res.Configuration
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,14 +26,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
@@ -42,6 +37,7 @@ import androidx.compose.ui.unit.min
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.aaps.core.keys.KeysStrings
 import app.aaps.core.ui.CoreUiStrings
 import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.metroViewModel
@@ -51,8 +47,6 @@ import app.aaps.core.ui.compose.preference.ProvidePreferenceTheme
 import app.aaps.core.ui.compose.preference.SwitchPreference
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
-import app.aaps.plugins.sync.wear.compose.ButtonDef
-import app.aaps.plugins.sync.wear.compose.ButtonRow
 import app.aaps.plugins.sync.wear.preview.CwfLivePreview
 import app.aaps.plugins.sync.wear.preview.PreviewSlot
 import app.aaps.wear.watchfaces.settingsync.CwfSyncedSetting
@@ -60,40 +54,26 @@ import app.aaps.wear.watchfaces.settingsync.CwfSyncedSettings
 import androidx.compose.ui.res.stringResource as androidStringResource
 
 /**
- * The live preview of the Custom watch face on the wear screen, with a button under it that opens
- * the watch face settings. Takes the place of the static picture, with the same parameters as [Image],
- * and [slot] for the face it shows: the day face card and the night face card each have one.
+ * The watch face settings over the whole screen, with the live preview of the watch face at the top.
+ * A change shows in the preview at once.
  *
- * While the settings are open the preview is drawn there, and here the static picture stands in: one
- * live preview at a time is enough work.
+ * @param bitmap the static picture of the watch face, or null when the phone has none yet
+ * @param slot PERSONAL PATCH: the face whose settings and preview are shown, the day face or the night face
  */
 @Composable
-fun CwfPreviewAndSettings(
-    bitmap: ImageBitmap,
-    contentDescription: String?,
-    modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Fit,
-    slot: PreviewSlot = PreviewSlot.DAY
-) {
-    var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    if (settingsOpen) Image(bitmap = bitmap, contentDescription = contentDescription, modifier = modifier, contentScale = contentScale)
-    else CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = modifier, contentScale = contentScale, slot = slot)
-    ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings)) { settingsOpen = true }, button2 = null)
-    if (settingsOpen && !LocalInspectionMode.current) CwfSettingsDialog(bitmap, contentDescription, slot, onClose = { settingsOpen = false })
-}
-
-/** The watch face settings over the whole screen, with the live preview of [slot] at the top. */
-@Composable
-private fun CwfSettingsDialog(bitmap: ImageBitmap, contentDescription: String?, slot: PreviewSlot, onClose: () -> Unit) {
+internal fun CwfSettingsDialog(bitmap: ImageBitmap?, contentDescription: String?, onClose: () -> Unit, slot: PreviewSlot = PreviewSlot.DAY) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             val viewModel: CwfSettingsViewModel = metroViewModel()
-            val state by viewModel.uiState(slot).collectAsStateWithLifecycle()
+            val state by viewModel.uiState(slot).collectAsStateWithLifecycle() // PERSONAL PATCH: one state per face
             CwfSettingsContent(
                 state = state,
                 onChange = viewModel::set,
                 onClose = onClose,
-                preview = { CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize(), slot = slot) }
+                preview = {
+                    if (bitmap != null)
+                        CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit, slot = slot)
+                }
             )
         }
     }
@@ -115,7 +95,7 @@ internal fun CwfSettingsContent(
     Column(modifier = Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(AapsSpacing.small)) {
             IconButton(onClick = onClose) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(CoreUiStrings.close))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(CoreUiStrings.back))
             }
             Text(text = stringResource(SyncStrings.wear_cwf_settings), style = MaterialTheme.typography.titleLarge)
         }
@@ -147,6 +127,15 @@ internal fun CwfSettingsContent(
                         modifier = Modifier.padding(horizontal = AapsSpacing.extraLarge, vertical = AapsSpacing.medium)
                     )
                 }
+                // The values shown are all rows, also those the loaded design does not use (the watch menu hides those)
+                item {
+                    Text(
+                        text = stringResource(SyncStrings.wear_cwf_settings_only_if_used),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = AapsSpacing.extraLarge, vertical = AapsSpacing.medium)
+                    )
+                }
                 if (state.look.isNotEmpty()) {
                     item { PreferenceCategory(title = { Text(stringResource(SyncStrings.wear_cwf_settings_look)) }) }
                     items(state.look, key = { it.name }) { row -> CwfSettingItem(row, onChange) }
@@ -163,7 +152,7 @@ internal fun CwfSettingsContent(
 private fun CwfSettingItem(row: CwfSettingRow, onChange: (name: String, value: String) -> Unit) {
     val title: @Composable () -> Unit = { Text(androidStringResource(row.setting.title)) }
     val setByDesign: @Composable (() -> Unit)? =
-        if (row.setByDesign) ({ Text(stringResource(SyncStrings.wear_cwf_settings_set_by_design)) }) else null
+        if (row.setByDesign) ({ Text(stringResource(SyncStrings.wear_cwf_settings_set_by_design, stringResource(KeysStrings.pref_title_wear_custom_watchface_authorization))) }) else null
     when (val setting = row.setting) {
         is CwfSyncedSetting.Toggle -> SwitchPreference(
             value = row.value.toBooleanStrictOrNull() ?: setting.default,

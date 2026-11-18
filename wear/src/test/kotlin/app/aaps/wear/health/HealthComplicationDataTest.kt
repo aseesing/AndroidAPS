@@ -1,23 +1,20 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.health
 
 import android.app.Application
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import org.robolectric.RuntimeEnvironment
 import androidx.wear.watchface.complications.data.ComplicationText
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.GoalProgressComplicationData
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import androidx.wear.watchface.complications.data.TimeRange
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.time.Instant
 
@@ -41,6 +38,26 @@ class HealthComplicationDataTest {
         assertThat(data.max).isEqualTo(HealthReading.HEART_RATE_MAX)
         assertThat(data.contentDescription.plain()).isEqualTo("Heart rate 72 per minute")
         assertThat(data.monochromaticImage).isNotNull()
+    }
+
+    @Test
+    fun aHeartRateIsNotDrawnAfterItIsTooOld() {
+        val until = Instant.parse("2026-11-18T10:30:00Z")
+        val reading = HealthReading(HealthKind.HEART_RATE, 72, false, until.toEpochMilli())
+        // The watch face's ComplicationRenderer draws nothing at a time outside the valid time range
+        listOf(ComplicationType.RANGED_VALUE, ComplicationType.SHORT_TEXT).forEach { type ->
+            val data = healthComplicationData(context, reading, type, null)!!
+            assertThat(until.minusSeconds(60) in data.validTimeRange).isTrue()
+            assertThat(until.plusSeconds(1) in data.validTimeRange).isFalse()
+        }
+        val goal = healthComplicationData(context, HealthReading(HealthKind.STEPS, 6482, false, until.toEpochMilli()), ComplicationType.GOAL_PROGRESS, null)!!
+        assertThat(until.plusSeconds(1) in goal.validTimeRange).isFalse()
+    }
+
+    @Test
+    fun aValueWithoutATimeLimitIsAlwaysValid() {
+        val data = healthComplicationData(context, HealthReading(HealthKind.STEPS, 6482, false), ComplicationType.SHORT_TEXT, null)!!
+        assertThat(data.validTimeRange).isEqualTo(TimeRange.ALWAYS)
     }
 
     @Test
@@ -79,6 +96,7 @@ class HealthComplicationDataTest {
     fun aMissingPermissionSaysSoAndATapAsksForIt() {
         val data = healthComplicationData(context, HealthReading(HealthKind.HEART_RATE, null, true), ComplicationType.RANGED_VALUE, tap) as RangedValueComplicationData
         assertThat(data.text.plain()).isEqualTo("Allow")
+        assertThat(data.contentDescription.plain()).isEqualTo("Tap to allow AAPS to read this value")
         assertThat(data.tapAction).isEqualTo(tap)
     }
 

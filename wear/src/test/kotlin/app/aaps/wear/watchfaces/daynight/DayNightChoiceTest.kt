@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchfaces.daynight
 
 import com.google.common.truth.Truth.assertThat
@@ -29,46 +25,32 @@ class DayNightChoiceTest {
     }
 
     @Test
-    fun alwaysOnIsNightUnlessChosenOtherwise() {
-        for (active in listOf(null, DayNightChoice.AUTO, DayNightChoice.DAY, DayNightChoice.NIGHT)) {
-            assertThat(show(active, null, ambient = true, sunUp = true)).isFalse()
-            assertThat(show(active, DayNightChoice.NIGHT, ambient = true, sunUp = true)).isFalse()
-            assertThat(show(active, "something else", ambient = true, sunUp = true)).isFalse()
-            assertThat(show(active, DayNightChoice.DAY, ambient = true, sunUp = false)).isTrue()
+    fun alwaysOnFollowsTheActiveScreenUnlessChosenOtherwise() {
+        for (alwaysOn in listOf(null, DayNightChoice.AS_ACTIVE, "something else")) {
+            assertThat(show(DayNightChoice.DAY, alwaysOn, ambient = true, sunUp = false)).isTrue()
+            assertThat(show(DayNightChoice.NIGHT, alwaysOn, ambient = true, sunUp = true)).isFalse()
+            assertThat(show(DayNightChoice.AUTO, alwaysOn, ambient = true, sunUp = true)).isTrue()
+            assertThat(show(DayNightChoice.AUTO, alwaysOn, ambient = true, sunUp = false)).isFalse()
+            // So in the day raising the wrist does not change the face
+            assertThat(show(null, alwaysOn, ambient = true, sunUp = true)).isEqualTo(show(null, null, ambient = false, sunUp = true))
         }
     }
 
     @Test
-    fun alwaysOnCanFollowTheActiveScreen() {
-        assertThat(show(DayNightChoice.DAY, DayNightChoice.AS_ACTIVE, ambient = true, sunUp = false)).isTrue()
-        assertThat(show(DayNightChoice.NIGHT, DayNightChoice.AS_ACTIVE, ambient = true, sunUp = true)).isFalse()
-        assertThat(show(DayNightChoice.AUTO, DayNightChoice.AS_ACTIVE, ambient = true, sunUp = true)).isTrue()
-        assertThat(show(DayNightChoice.AUTO, DayNightChoice.AS_ACTIVE, ambient = true, sunUp = false)).isFalse()
+    fun alwaysOnCanBeFixed() {
+        for (active in listOf(null, DayNightChoice.AUTO, DayNightChoice.DAY, DayNightChoice.NIGHT)) {
+            assertThat(show(active, DayNightChoice.NIGHT, ambient = true, sunUp = true)).isFalse()
+            assertThat(show(active, DayNightChoice.DAY, ambient = true, sunUp = false)).isTrue()
+        }
     }
 
     @Test
     fun theSunIsOnlyAskedForAutomatic() {
         var asked = 0
         DayNightChoice.showDay(DayNightChoice.DAY, null, ambient = false) { asked++; true }
-        DayNightChoice.showDay(DayNightChoice.AUTO, null, ambient = true) { asked++; true }
+        DayNightChoice.showDay(DayNightChoice.AUTO, DayNightChoice.NIGHT, ambient = true) { asked++; true }
         assertThat(asked).isEqualTo(0)
         DayNightChoice.showDay(DayNightChoice.AUTO, null, ambient = false) { asked++; true }
         assertThat(asked).isEqualTo(1)
-    }
-
-    @Test
-    fun aValueFromThePhoneIsTakenOnlyWhenThePhoneChangedIt() {
-        val allowed = DayNightChoice.ACTIVE_VALUES
-        // First time, or the phone setting changed: taken
-        assertThat(DayNightChoice.fromPhone(DayNightChoice.NIGHT, null, allowed)).isEqualTo(DayNightChoice.NIGHT)
-        assertThat(DayNightChoice.fromPhone(DayNightChoice.NIGHT, "", allowed)).isEqualTo(DayNightChoice.NIGHT)
-        assertThat(DayNightChoice.fromPhone(DayNightChoice.DAY, DayNightChoice.NIGHT, allowed)).isEqualTo(DayNightChoice.DAY)
-        // The same as last time: the watch keeps what the wearer chose there
-        assertThat(DayNightChoice.fromPhone(DayNightChoice.NIGHT, DayNightChoice.NIGHT, allowed)).isNull()
-        // An older phone sends nothing, and an unknown value is never stored
-        assertThat(DayNightChoice.fromPhone(null, DayNightChoice.NIGHT, allowed)).isNull()
-        assertThat(DayNightChoice.fromPhone("something else", null, allowed)).isNull()
-        assertThat(DayNightChoice.fromPhone(DayNightChoice.AS_ACTIVE, null, allowed)).isNull()
-        assertThat(DayNightChoice.fromPhone(DayNightChoice.AS_ACTIVE, null, DayNightChoice.ALWAYS_ON_VALUES)).isEqualTo(DayNightChoice.AS_ACTIVE)
     }
 }

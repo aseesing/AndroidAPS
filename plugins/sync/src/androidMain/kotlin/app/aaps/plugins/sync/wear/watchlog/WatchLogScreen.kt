@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.watchlog
 
 import android.content.res.Configuration
@@ -158,11 +154,13 @@ private fun stateText(state: WatchLogState): String? =
         is WatchLogState.Received    -> stringResource(SyncStrings.wear_log_saving)
         is WatchLogState.Saved       -> stringResource(SyncStrings.wear_log_saved, state.fileName)
         is WatchLogState.Failed      -> when (state.reason) {
-            WatchLogState.Reason.NO_WATCH    -> stringResource(SyncStrings.wear_app_update_no_watch)
-            WatchLogState.Reason.NO_ANSWER   -> stringResource(SyncStrings.wear_log_no_answer)
-            WatchLogState.Reason.TIMEOUT     -> stringResource(SyncStrings.wear_app_update_timeout)
+            WatchLogState.Reason.NO_WATCH      -> stringResource(SyncStrings.wear_app_update_no_watch)
+            WatchLogState.Reason.NO_ANSWER     -> stringResource(SyncStrings.wear_log_no_answer)
+            WatchLogState.Reason.TIMEOUT       -> stringResource(SyncStrings.wear_app_update_timeout)
+            WatchLogState.Reason.OLD_WATCH_APP -> stringResource(SyncStrings.wear_log_old_watch_app)
+            WatchLogState.Reason.BUSY          -> stringResource(SyncStrings.wear_log_busy)
             WatchLogState.Reason.WATCH_ERROR,
-            WatchLogState.Reason.ERROR       -> stringResource(SyncStrings.wear_log_failed, state.detail)
+            WatchLogState.Reason.ERROR         -> stringResource(SyncStrings.wear_log_failed, state.detail)
         }
     }
 

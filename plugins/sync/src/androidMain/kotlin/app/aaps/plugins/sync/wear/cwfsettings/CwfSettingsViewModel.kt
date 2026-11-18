@@ -47,8 +47,10 @@ data class CwfSettingRow(
 /**
  * @param look the settings of how the face looks, only those the design uses, as on the watch
  * @param shownValues which values the face shows
- * @param fromWatch false until the watch sent its settings (or the user set one here): then the
- *   rows show the defaults, which may not be what the watch has
+ * @param fromWatch false until the watch ever sent its settings: then the rows show the defaults,
+ *   which may not be what the watch has, and a watch app that does not know these settings
+ *   messages does not take a change from here. A change made here does not count: only an answer
+ *   of the watch does, see [CwfWatchSettingsStore.heardFromWatch].
  * @param sharedWithOtherFace true when the watch has a day face and a night face: the watch has one
  *   set of settings for both, so a change here changes the other face too
  */
@@ -79,7 +81,9 @@ class CwfSettingsViewModel(
             PreviewSlot.DAY   -> wearPlugin.savedCustomWatchface to wearPlugin.savedNightWatchface
             PreviewSlot.NIGHT -> wearPlugin.savedNightWatchface to wearPlugin.savedCustomWatchface
         }
-        combine(store.values, design, other) { values, face, otherFace -> uiStateOf(sync.names, values, face, sharedWithOtherFace = otherFace != null) }
+        combine(store.values, store.heardFromWatch, design, other) { values, heard, face, otherFace ->
+            uiStateOf(sync.names, values, face, fromWatch = heard, sharedWithOtherFace = otherFace != null)
+        }
             .flowOn(Dispatchers.Default) // reads the design json
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), CwfSettingsUiState())
     }
@@ -98,6 +102,7 @@ class CwfSettingsViewModel(
             names: CwfSettingNames,
             values: Map<String, CwfSettingValue>,
             design: CwfData?,
+            fromWatch: Boolean,
             sharedWithOtherFace: Boolean = false
         ): CwfSettingsUiState {
             val authorized = design?.metadata?.get(CwfMetadataKey.CWF_AUTHORIZATION)?.toBooleanStrictOrNull() == true
@@ -109,7 +114,7 @@ class CwfSettingsViewModel(
             return CwfSettingsUiState(
                 look = CwfSyncedSettings.faceLookFor(design?.json).map(::row),
                 shownValues = CwfSyncedSettings.shownValues.map(::row),
-                fromWatch = values.isNotEmpty(),
+                fromWatch = fromWatch,
                 sharedWithOtherFace = sharedWithOtherFace
             )
         }

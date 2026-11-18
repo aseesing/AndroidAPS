@@ -15,6 +15,7 @@ internal class WearComposeContent : ComposablePluginContent {
         onSettings: (() -> Unit)?
     ) {
         val viewModel: WearViewModel = metroViewModel()
+        val dayNightViewModel: WearDayNightViewModel = metroViewModel()
 
         LaunchedEffect(Unit) {
             viewModel.requestCustomWatchface()
@@ -22,6 +23,7 @@ internal class WearComposeContent : ComposablePluginContent {
 
         WearScreen(
             viewModel = viewModel,
+            dayNightViewModel = dayNightViewModel,
             setToolbarConfig = setToolbarConfig,
             onNavigateBack = onNavigateBack,
             onSettings = onSettings

@@ -14,7 +14,7 @@ if (gradle.parent != null) { apply from: 'watchfaces.settings.gradle'; return } 
 include ':app'
 include ':wear'
 include ':wear:watchfacepush'
-include ':wear:cwfrender' // PERSONAL PATCH: live watch face preview on the phone
+include ':wear:cwfrender'
 include ':core:data'
 include ':core:graph'
 include ':core:interfaces'

@@ -75,15 +75,29 @@ internal object DexcomOnePlusStaging {
     /**
      * Derive a [CgmSensorLifecycle] from a sensor session start. Returns null when the start is
      * unknown (0) so the status screen simply shows nothing special.
+     *
+     * @param sessionLengthMs the session length the sensor reported, grace included, or null.
+     * @param startConfirmed the start came from the sensor itself or from the user (the store's
+     *   "settled" mark), not only from the time AAPS connected to the sensor.
      */
-    fun computeLifecycle(sessionStartMs: Long, nowMs: Long, sessionLengthMs: Long? = null): CgmSensorLifecycle? {
+    fun computeLifecycle(
+        sessionStartMs: Long,
+        nowMs: Long,
+        sessionLengthMs: Long? = null,
+        startConfirmed: Boolean = false, // PERSONAL PATCH
+    ): CgmSensorLifecycle? {
         val expires = expiresAtMs(sessionStartMs, sessionLengthMs) ?: return null
         val age = (nowMs - sessionStartMs).coerceAtLeast(0L)
         val remaining = expires - nowMs
+        // PERSONAL PATCH: only what the sensor really reported, never the assumed 10.5 days.
+        val reportedLengthMs = sessionLengthMs?.takeIf { it > SENSOR_GRACE_MS }
         return CgmSensorLifecycle(
             startedAtEpochMs = sessionStartMs,
             ageMs = age,
             endOfLife = remaining < END_OF_LIFE_MS,
+            sessionLengthMs = reportedLengthMs, // PERSONAL PATCH
+            gracePeriodMs = reportedLengthMs?.let { SENSOR_GRACE_MS }, // PERSONAL PATCH
+            confirmedStartEpochMs = sessionStartMs.takeIf { startConfirmed }, // PERSONAL PATCH
         )
     }
 

@@ -217,6 +217,15 @@ internal class MaintenanceViewModelTest {
     }
 
     @Test
+    fun `saving logs to Downloads is offered only where the platform can do it`() {
+        whenever(maintenance.canSaveLogsToDownloads).thenReturn(false)
+        assertThat(sut.canSaveLogsToDownloads).isFalse()
+
+        whenever(maintenance.canSaveLogsToDownloads).thenReturn(true)
+        assertThat(sut.canSaveLogsToDownloads).isTrue()
+    }
+
+    @Test
     fun `cleanupDatabases reports what it removed when it works`() = runBlocking {
         runEagerly()
         whenever(persistenceLayer.cleanupDatabase(any(), any())).thenReturn("GlucoseValue 12")

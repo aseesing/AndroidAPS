@@ -19,14 +19,16 @@ internal class WatchAppReceiveTaskTest {
     private val apk = ByteArray(500_000) { (it % 251).toByte() }
     private val gzipped = ByteArrayOutputStream().also { out -> GZIPOutputStream(out).use { it.write(apk) } }.toByteArray()
 
-    private class FakeSession : WatchAppInstallSession {
+    private class FakeSession(private val failCommit: Boolean = false, private val onCommit: () -> Unit = {}) : WatchAppInstallSession {
 
         override val output = ByteArrayOutputStream()
         var committed = false
         var abandoned = false
 
         override fun commit() {
+            if (failCommit) throw IllegalStateException("Session was abandoned")
             committed = true
+            onCommit()
         }
 
         override fun abandon() {
@@ -38,10 +40,19 @@ internal class WatchAppReceiveTaskTest {
     private val toPhone = ByteArrayOutputStream()
     private val progress = mutableListOf<Int>()
 
-    /** What the phone sends: header, body, and the bytes that follow while the channel stays open */
-    private fun fromPhone(body: ByteArray = gzipped, size: Long = body.size.toLong(), sha256: String = "", wifi: WifiOffer? = null): InputStream {
+    /**
+     * What the phone sends: header, body, and the bytes that follow while the channel stays open.
+     * The hash is the one of the first [size] bytes of [body], so only the gzip check can find a damaged body.
+     */
+    private fun fromPhone(
+        body: ByteArray = gzipped,
+        size: Long = body.size.toLong(),
+        sha256: String = WatchAppUpdateProtocol.sha256(ByteArrayInputStream(body, 0, minOf(body.size.toLong(), size).toInt())),
+        apkSize: Long = apk.size.toLong(),
+        wifi: WifiOffer? = null
+    ): InputStream {
         val out = ByteArrayOutputStream()
-        WatchAppUpdateProtocol.writeHeader(out, Header("4.0.1 (wear.apk)", size, sha256, wifi))
+        WatchAppUpdateProtocol.writeHeader(out, Header("4.0.1 (wear.apk)", size, apkSize, sha256, wifi))
         out.write(body)
         return ByteArrayInputStream(out.toByteArray())
     }
@@ -116,6 +127,60 @@ internal class WatchAppReceiveTaskTest {
     }
 
     @Test
+    fun `the unpack stops at the APK size from the header`() {
+        // A small body that unpacks to much more than the header says, like a gzip bomb
+        val bomb = ByteArrayOutputStream().also { out -> GZIPOutputStream(out).use { it.write(ByteArray(5_000_000)) } }.toByteArray()
+
+        val result = WatchAppReceiveTask { session }.receive(fromPhone(bomb, apkSize = 100_000), toPhone)
+
+        assertThat(result).isEqualTo(WatchAppReceiveTask.Result.Failed("The APK is larger than 100000 bytes"))
+        assertThat(session.output.size()).isAtMost(100_000)
+        assertThat(session.committed).isFalse()
+        assertThat(session.abandoned).isTrue()
+    }
+
+    @Test
+    fun `an APK smaller than the header says is not installed`() {
+        val result = WatchAppReceiveTask { session }.receive(fromPhone(apkSize = apk.size + 1L), toPhone)
+
+        assertThat(result).isInstanceOf(WatchAppReceiveTask.Result.Failed::class.java)
+        assertThat(session.committed).isFalse()
+    }
+
+    @Test
+    fun `the installer gets the APK size, and a failing commit is never reported as committed`() {
+        var askedSize = 0L
+        val failing = FakeSession(failCommit = true)
+
+        val result = WatchAppReceiveTask { askedSize = it; failing }.receive(fromPhone(), toPhone)
+
+        assertThat(askedSize).isEqualTo(apk.size.toLong())
+        assertThat(result).isEqualTo(WatchAppReceiveTask.Result.Failed("Session was abandoned"))
+        assertThat(replies()).containsExactly(Reply.Ready, Reply.Failed("Session was abandoned")).inOrder()
+        assertThat(failing.abandoned).isTrue()
+    }
+
+    @Test
+    fun `a committed install is never abandoned, also when the phone is gone`() {
+        // The channel closes right after the commit, so the answer "committed" cannot be written
+        val channel = object : OutputStream() {
+            var closed = false
+            override fun write(b: Int) {
+                if (closed) throw IOException("Channel is closed")
+                toPhone.write(b)
+            }
+        }
+        val closing = FakeSession(onCommit = { channel.closed = true })
+
+        val result = WatchAppReceiveTask { closing }.receive(fromPhone(), channel)
+
+        assertThat(result).isEqualTo(WatchAppReceiveTask.Result.Committed("4.0.1 (wear.apk)"))
+        assertThat(closing.committed).isTrue()
+        assertThat(closing.abandoned).isFalse()
+        assertThat(replies()).containsExactly(Reply.Ready)
+    }
+
+    @Test
     fun `a body that ends early is not installed`() {
         val result = WatchAppReceiveTask { session }.receive(fromPhone(gzipped.copyOf(gzipped.size - 100), size = gzipped.size.toLong()), toPhone)
 
@@ -139,6 +204,19 @@ internal class WatchAppReceiveTaskTest {
         assertThat(wifiBody.closed).isTrue()
         assertThat(replies()).containsExactly(Reply.WifiStarted, Reply.Committed).inOrder()
         assertThat(progress.last()).isEqualTo(100)
+    }
+
+    @Test
+    fun `a failing commit after Wi-Fi is a failure, the body is not asked for again`() {
+        val logged = mutableListOf<String>()
+        val channel = fromPhone(ByteArray(0), size = gzipped.size.toLong(), sha256 = sha256, wifi = offer)
+
+        val result = WatchAppReceiveTask(wifi = { FakeWifiBody(gzipped) }, log = { logged += it }) { FakeSession(failCommit = true) }
+            .receive(channel, toPhone)
+
+        assertThat(result).isEqualTo(WatchAppReceiveTask.Result.Failed("Session was abandoned"))
+        assertThat(replies()).containsExactly(Reply.WifiStarted, Reply.Failed("Session was abandoned")).inOrder()
+        assertThat(logged).isEmpty()
     }
 
     @Test

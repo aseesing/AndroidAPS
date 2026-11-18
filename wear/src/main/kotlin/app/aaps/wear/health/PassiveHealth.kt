@@ -1,18 +1,12 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.health
 
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.SystemClock
-import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.health.services.client.HealthServices
 import androidx.health.services.client.PassiveListenerService
+import androidx.health.services.client.PassiveMonitoringClient
 import androidx.health.services.client.clearPassiveListenerService
 import androidx.health.services.client.data.DataPointContainer
 import androidx.health.services.client.data.DataType
@@ -20,6 +14,15 @@ import androidx.health.services.client.data.PassiveListenerConfig
 import androidx.health.services.client.getCapabilities
 import androidx.health.services.client.setPassiveListenerService
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
+import app.aaps.core.interfaces.di.injectMetroMembers
+import app.aaps.core.interfaces.logging.AAPSLogger
+import app.aaps.core.interfaces.logging.LTag
+import dev.zacsweers.metro.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 
 /** The Health Services data type behind each [HealthKind], and the permission it needs. */
@@ -43,9 +46,10 @@ interface PassiveClient {
     suspend fun clear()
 }
 
-class HealthServicesPassiveClient(context: Context) : PassiveClient {
+class HealthServicesPassiveClient(private val context: Context) : PassiveClient {
 
-    private val client = HealthServices.getClient(context).passiveMonitoringClient
+    /** Made on first use only, so a watch that never shows a health complication never binds to Health Services. */
+    private val client: PassiveMonitoringClient by lazy { HealthServices.getClient(context).passiveMonitoringClient }
 
     override suspend fun supported(): Set<DataType<*, *>> = client.getCapabilities().supportedDataTypesPassiveMonitoring
 
@@ -65,43 +69,80 @@ class HealthServicesPassiveClient(context: Context) : PassiveClient {
  *
  * Passive data costs no sensor of its own: the watch measures heart rate and steps anyway for its own
  * health tracking, and Health Services hands the values over in batches. Registrations do not survive
- * a reboot, so [update] is also called whenever the app starts.
+ * a reboot, so [updateInBackground] is also called whenever the app starts.
+ *
+ * One instance for the whole app (see `HealthModule`): its lock makes sure two updates never run at
+ * the same time, so the last update always wins with the newest list of shown complications.
+ *
+ * @param granted whether the app has this Android permission now
  */
 class PassiveHealthRegistration(
     private val client: PassiveClient,
     private val values: HealthValues,
+    private val aapsLogger: AAPSLogger,
+    private val scope: CoroutineScope,
     private val granted: (String) -> Boolean
 ) {
 
-    /** What was asked for last, for tests and the log. Empty means nothing is registered. */
-    var registered: Set<DataType<*, *>> = emptySet()
-        private set
+    private val lock = Mutex()
 
-    suspend fun update() {
-        val wanted = values.wanted().filter { granted(it.permission) }.map { it.dataType }.toSet()
+    /**
+     * The permissions that were granted at the last update, to notice when they change. Null before the
+     * first update. Written under [lock], read without it from the complication requests.
+     */
+    @Volatile private var grantedAtLastUpdate: Set<String>? = null
+
+    fun isGranted(kind: HealthKind): Boolean = granted(kind.permission)
+
+    /**
+     * The permissions to ask for after a tap on a complication of [tapped]: the missing ones of every
+     * kind a watch face shows, and always the one of [tapped] when it is missing, even if the list of
+     * shown complications was lost.
+     */
+    fun missingPermissions(tapped: HealthKind?): List<String> =
+        (values.wanted() + listOfNotNull(tapped)).filterNot { isGranted(it) }.map { it.permission }.distinct()
+
+    /** Registers what is shown now, or clears the registration when nothing is shown. Throws when Health Services fails. */
+    suspend fun update() = lock.withLock {
+        val grantedNow = grantedPermissions()
+        val wanted = values.wanted().filter { it.permission in grantedNow }.map { it.dataType }.toSet()
         val types = if (wanted.isEmpty()) emptySet() else wanted intersect client.supported()
-        if (types.isEmpty()) client.clear() else client.register(types)
-        registered = types
-    }
-
-    companion object {
-
-        fun of(context: Context) = PassiveHealthRegistration(
-            HealthServicesPassiveClient(context.applicationContext),
-            HealthValues.of(context)
-        ) { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-
-        /** Runs [update], logging instead of failing: a watch without Health Services shows "--". */
-        suspend fun updateQuietly(context: Context) {
-            try {
-                of(context).update()
-            } catch (e: Exception) {
-                Log.w(TAG, "Health Services registration failed", e)
-            }
+        if (types.isNotEmpty()) {
+            client.register(types)
+            values.passiveRegistered = true
+        } else if (values.passiveRegistered) {
+            client.clear()
+            values.passiveRegistered = false
         }
-
-        private const val TAG = "AAPS.Health"
+        grantedAtLastUpdate = grantedNow
+        aapsLogger.debug(LTag.WEAR, "Health Services passive data: ${types.map { it.name }}")
     }
+
+    /** Runs [update], logging instead of failing: a watch without Health Services shows "--". */
+    suspend fun updateQuietly() {
+        try {
+            update()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Health Services registration failed", e)
+        }
+    }
+
+    /** [updateQuietly] without waiting for it. */
+    fun updateInBackground() {
+        scope.launch { updateQuietly() }
+    }
+
+    /**
+     * Updates when a permission was granted or taken away since the last update. The permissions are
+     * shared with the heart rate and steps sampling for the phone, so the user may grant them there.
+     */
+    fun updateIfPermissionsChanged() {
+        if (grantedPermissions() != grantedAtLastUpdate) updateInBackground()
+    }
+
+    private fun grantedPermissions(): Set<String> = HealthKind.entries.map { it.permission }.filter(granted).toSet()
 }
 
 /**
@@ -136,9 +177,16 @@ fun requestHealthComplicationUpdates(context: Context, kinds: Set<HealthKind>) {
 /** Receives the batches. Health Services binds it itself; the manifest allows nothing else to. */
 class HealthPassiveService : PassiveListenerService() {
 
+    @Inject lateinit var healthValues: HealthValues
+
+    override fun onCreate() {
+        injectMetroMembers(this)
+        super.onCreate()
+    }
+
     override fun onNewDataPointsReceived(dataPoints: DataPointContainer) {
         val bootMs = System.currentTimeMillis() - SystemClock.elapsedRealtime()
-        val changed = HealthValues.of(this).record(dataPoints, bootMs)
+        val changed = healthValues.record(dataPoints, bootMs)
         if (changed.isNotEmpty()) requestHealthComplicationUpdates(this, changed)
     }
 }

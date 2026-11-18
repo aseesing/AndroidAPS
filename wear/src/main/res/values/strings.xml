@@ -180,6 +180,12 @@
     <string name="cwf_complication_layout_description">Position and size of the complications, taken from the loaded custom watch face.</string>
     <string name="pref_include_external">Include external views in template</string>
     <string name="pref_switch_external">Switch external data in Watchface</string>
+    <string name="pref_day_night_look" comment="Setting of the Custom watch face with a night face: when the watch shows the day face and when the night face">Day / night look</string>
+    <string name="pref_day_night_always_on" comment="Setting of the Custom watch face with a night face: which face the dim always-on screen shows">Always-on look</string>
+    <string name="day_night_auto" comment="Choice of the setting Day / night look: day face in the day and night face at night, as set in the AAPS app on the phone">Automatic</string>
+    <string name="day_night_day" comment="Choice of the settings Day / night look and Always-on look: always the day face">Day face</string>
+    <string name="day_night_night" comment="Choice of the settings Day / night look and Always-on look: always the night face">Night face</string>
+    <string name="day_night_as_active" comment="Choice of the setting Always-on look: the always-on screen shows the same face as the active screen">Same as active screen</string>
     <string name="custom_pref_show_seconds">Show seconds</string>
     <string name="digitalstyle_pref_your_style">Your style</string>
     <string name="digitalstyle_style_none">no style</string>
@@ -276,6 +282,8 @@
     <string name="key_show_complication_5" translatable="false">show_complication_5</string>
     <string name="key_include_external" translatable="false">include_external</string>
     <string name="key_switch_external" translatable="false">switch_external</string>
+    <string name="key_day_night_look" translatable="false">day_night_look</string>
+    <string name="key_day_night_always_on" translatable="false">day_night_always_on</string>
     <string name="key_last_selected_watchface" translatable="false">last_selected_watchface</string>
     <string name="key_complication_1" translatable="false">complication_1</string>
     <string name="key_complication_2" translatable="false">complication_2</string>
@@ -471,6 +479,15 @@
     <string name="wizard_result_correction_percentage">%1$d%%</string>
     <string name="wizard_carbs_with_time" comment="%1$d=grams, %2$s=signed minute offset e.g. +20 or -5. Example: 30 g (+20 min)">%1$d g (%2$s min)</string>
     <string name="wizard_result_ecarbs" comment="%1$d=grams, %2$d=duration hours, %3$d=delay minutes. Example: 16 g / 2 h (+90 min)">%1$d g / %2$d h (+%3$d min)</string>
+
+    <!-- Heart rate and steps complications (Health Services) -->
+    <string name="health_heart_rate_label">AAPS heart rate</string>
+    <string name="health_steps_label">AAPS steps</string>
+    <string name="health_no_value" translatable="false">--</string>
+    <string name="health_allow" comment="Very short, shown in a small round complication: at most 6 characters">Allow</string>
+    <string name="health_allow_description">Tap to allow AAPS to read this value</string>
+    <string name="health_heart_rate_description" comment="%1$s=heart rate value or --. Example: Heart rate 72 per minute">Heart rate %1$s per minute</string>
+    <string name="health_steps_description" comment="%1$s=number of steps or --. Example: 6482 steps today">%1$s steps today</string>
     <!-- Direct-to-watch: the watch reads the Dexcom ONE+ / G7 itself, next to the phone -->
     <string name="watch_direct_title">Direct to watch</string>
     <string name="watch_direct_channel">Direct to watch</string>

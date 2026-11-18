@@ -11,9 +11,18 @@ import app.aaps.core.data.pump.defs.PumpType
  * until it stops by itself.
  *
  * Only models whose lifetime is certain are listed. For everything else [of] gives null, and the
- * status lights (and the watch) count down to the user's own critical threshold as before.
+ * watch counts down to the user's own critical threshold.
  *
- * In `:core:data`, so that the status lights (`:ui`) and the data for the watch (`:plugins:sync`) share it.
+ * Only the watch uses this table (the sensor and pump hands of the D2 face, through `WearPartTimes`
+ * in `:plugins:sync`). The status lights on the phone use the upstream table
+ * `app.aaps.ui.compose.overview.statusLights.DeviceLifetime` in `:ui`, which `:plugins:sync` cannot
+ * reach. The two differ on purpose: this one still counts a Dexcom G7 as 10 days + 12 h, as the watch
+ * always did, while the upstream one leaves the G7 out (a 15 day G7 sends the same label) and uses the
+ * "Sensor life" setting instead. The G6 and pod entries are the same in both: change them together.
+ *
+ * Both come after the session a glucose source read from its own sensor (the Dexcom ONE+ / G7
+ * driver), `CgmReportedSession` in `:core:interfaces`: when there is one, the phone and the watch
+ * count to that same end, and this table is not used for the sensor.
  *
  * This is a personal addition, not in upstream AAPS. The table lives here, in its own file, and not
  * in the [SourceSensor] and [PumpType] enums, so that a new AAPS release merges without conflicts.

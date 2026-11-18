@@ -1,13 +1,9 @@
 package app.aaps.plugins.sync.wear.wearintegration
 
-import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.content.res.Configuration
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.content.ContextCompat
 import app.aaps.core.data.configuration.Constants
 import app.aaps.core.data.iob.InMemoryGlucoseValue
 import app.aaps.core.data.model.ActiveSceneState
@@ -119,6 +115,7 @@ import app.aaps.core.ui.extensions.toStringShort
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.LastLoopEnact // PERSONAL PATCH
 import app.aaps.plugins.sync.wear.cwfsettings.CwfWatchSettingsStore // PERSONAL PATCH
+import app.aaps.plugins.sync.wear.daynight.WearPlaceUse // PERSONAL PATCH
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -126,9 +123,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -136,7 +130,6 @@ import java.util.LinkedList
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 // Quiet-period that closes a Wear-event batch. Long enough to absorb a Data Layer reconnect-flush,
 // short enough that live data stays effectively real-time.
@@ -187,6 +180,8 @@ class DataHandlerMobile(
     // masterActionExecutor stays on the wear path for Fill ONLY (no relay command for Fill).
     private val batchExecutor: BatchExecutor,
     private val wizardExecutor: WizardExecutor,
+    /** Reset here on an explicit resend request. The filtering itself is in `DataLayerListenerServiceMobile`. */
+    private val unchangedToWear: UnchangedToWearFilter,
 ) {
 
     @Inject lateinit var automation: Automation
@@ -197,7 +192,13 @@ class DataHandlerMobile(
     @Inject lateinit var sensitivityOverview: SensitivityOverview
     @Inject lateinit var eatReminder: EatReminder
     @Inject lateinit var clientControlDispatcher: ClientControlActionDispatcher
+    @Inject lateinit var wearNightFace: WearNightFace
     @Inject lateinit var cwfWatchSettings: CwfWatchSettingsStore // PERSONAL PATCH: the log time graph of the watch
+    @Inject lateinit var placeUse: WearPlaceUse // PERSONAL PATCH: when the place may be read for the watch, see WearPlaceUse.kt
+    @Inject lateinit var wearWeather: WearWeather // PERSONAL PATCH: the weather of the watch face, see WearWeather.kt
+
+    /** What the watch faces have now, for the live preview on the phone. Before the collectors below, which send. */
+    private val lastWatchFaceValues = LastWatchFaceValues()
 
     // App lifetime: this is a @Singleton that subscribes in init and
     // never tears down. Dispatchers.IO because that is what the io scheduler gave these handlers, and
@@ -268,12 +269,7 @@ class DataHandlerMobile(
             loop.acceptChangeRequest()?.let { sendError(it) }
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(Constants.NOTIFICATION_ID)
         }
-        onEvent<EventData.ActionResendData> {
-            // Asked for explicitly - by the watch, a new connection or the wear screen: send everything,
-            // also what the watch should already have
-            unchangedToWear.reset()
-            resendData(it.from)
-        }
+        onEvent<EventData.ActionResendData> { handleResendRequest(it.from) }
         // The watch's word on Watch Face Push, kept by WearPlugin for the wear screen
         onEvent<EventData.WatchFacePushStatus> { rxBus.send(EventWearUpdateGui(watchFacePushStatus = it)) }
         onEvent<EventData.ActionPumpStatus> {
@@ -436,7 +432,8 @@ class DataHandlerMobile(
             .chunkedOnQuietPeriod(HEALTH_EVENT_QUIET_PERIOD_MS)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { handleStepsCountBatch(it) }
         onEventSync<EventData.ActionGetCustomWatchface>(detail = { " watchface=${it.customWatchface}" }) { handleGetCustomWatchface(it) }
-        onEventSync<EventData.ActionUpdateCustomWatchface>(detail = { " night=${it.night}" }) { handleUpdateCustomWatchfaceFromWatch(it) } // PERSONAL PATCH: day and night face
+        onEventSync<EventData.ActionUpdateCustomWatchface>(detail = { " night=${it.night}" }) { handleUpdateCustomWatchfaceFromWatch(it) }
+        onEventSync<EventData.ActionClearNightWatchface> { handleNoNightWatchface(it) }
     }
 
     private fun maxOfNullable(vararg values: Long?): Long? {
@@ -1263,67 +1260,16 @@ class DataHandlerMobile(
     private fun sendQuickWizardListToWear() =
         sendToWear(EventData.QuickWizard(ArrayList(quickWizard.list().filter { e -> e.forDevice(QuickWizardEntry.DEVICE_WATCH) }.map { e -> e.toWear() })))
 
-    /**
-     * The newest place any location provider of the phone still knows, rounded to 0.1 degree (about
-     * 10 km): enough for sunrise and sunset on the watch, and no more than that leaves the phone.
-     * Latitude and longitude, or null without location permission or without any known place. Starts
-     * no location request.
-     */
-    private fun roughLocation(): Pair<Double, Double>? {
-        val granted = listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
-            .any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-        if (!granted) return null
-        val manager = context.getSystemService(LocationManager::class.java) ?: return null
-        val newest = try {
-            manager.getProviders(false).mapNotNull { manager.getLastKnownLocation(it) }.maxByOrNull { it.time }
-        } catch (_: SecurityException) {
-            null
-        } ?: return null
-        return Pair((newest.latitude * 10).roundToInt() / 10.0, (newest.longitude * 10).roundToInt() / 10.0)
-    }
-
     /** Private patch: when the sensor and the pod or cannula stop, for the gauges of the Custom watch face. */
     private val partTimes = WearPartTimes(persistenceLayer, activePlugin, preferences)
 
-    /** Private patch: the weather for the look of the Custom watch face, see [OpenMeteoWeather]. */
-    private val weather = OpenMeteoWeather(::httpGet)
-    @Volatile private var lastWeather: EventData.Weather? = null
-    @Volatile private var weatherAskedAt = 0L
-
     /**
-     * Reads the weather at the phone's rough place when the last read is half an hour old, and sends
-     * it to the watch. Sent also when it did not change, so the watch knows it is still current.
-     * Nothing happens without location permission or a known place.
+     * A resend asked for explicitly (by the watch, a new connection or the wear screen): send everything,
+     * also what the watch should already have, see [UnchangedToWearFilter].
      */
-    private fun refreshWeather() {
-        val now = dateUtil.now()
-        if (now - weatherAskedAt < OpenMeteoWeather.REFRESH_MS) return
-        val (latitude, longitude) = roughLocation() ?: return
-        weatherAskedAt = now
-        scope.launch {
-            val reading = weather.read(latitude, longitude) ?: return@launch
-            aapsLogger.debug(LTag.WEAR, "Weather for the watch: $reading")
-            EventData.Weather(now, reading.kind, reading.temperature).also {
-                lastWeather = it
-                rxBus.send(EventMobileToWear(it))
-            }
-        }
-    }
-
-    /** The body of an https GET, or null when it fails. Short timeouts: the weather can wait. */
-    private fun httpGet(url: String): String? = try {
-        (URL(url).openConnection() as HttpURLConnection).run {
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            try {
-                if (responseCode == HttpURLConnection.HTTP_OK) inputStream.bufferedReader().use { it.readText() } else null
-            } finally {
-                disconnect()
-            }
-        }
-    } catch (e: Exception) {
-        aapsLogger.debug(LTag.WEAR, "Weather not read: ${e.message}")
-        null
+    internal suspend fun handleResendRequest(from: String) {
+        unchangedToWear.reset()
+        resendData(from)
     }
 
     suspend fun resendData(from: String) {
@@ -1352,11 +1298,13 @@ class DataHandlerMobile(
                 carbsButtonIncrement2 = preferences.get(IntKey.OverviewCarbsButtonIncrement2),
                 pushedWatchface = preferences.get(StringKey.WearPushedWatchface),
                 alertOverrideDnd = preferences.get(BooleanKey.AlertOverrideDoNotDisturb)
-            ).let { prefs -> roughLocation()?.let { (latitude, longitude) -> prefs.copy(latitude = latitude, longitude = longitude) } ?: prefs }
-                .let { nightFace.withDayNightLooks(it) } // PERSONAL PATCH: day and night face settings
+            )
         )
+        // The night face of the Custom watch face; nothing without one
+        wearNightFace.resendMessages().forEach { sendToWear(it) }
+        placeUse.designRequest(wearNightFace.isKnown())?.let { rxBus.send(EventMobileToWear(it)) } // PERSONAL PATCH: once after the update, see WearPlaceUse.kt
         // The last weather, so a watch that restarted has it at once
-        lastWeather?.let { rxBus.send(EventMobileToWear(it)) }
+        wearWeather.last()?.let { rxBus.send(EventMobileToWear(it)) } // PERSONAL PATCH
         // QuickWizard
         sendQuickWizardListToWear()
         //UserAction
@@ -1652,7 +1600,7 @@ class DataHandlerMobile(
     }
 
     private suspend fun sendStatus(caller: String) {
-        refreshWeather()
+        wearWeather.refresh(scope) // PERSONAL PATCH: only when a design shows the weather and it is allowed; never throws, see WearWeather.kt
         val profile = profileFunction.getProfile()
         var status = rh.gs(CoreUiStrings.noprofile)
         var iobSum = ""
@@ -1991,13 +1939,13 @@ class DataHandlerMobile(
         sendToWear(EventData.ConfirmAction(rh.gs(CoreUiStrings.error), errorMessage, returnCommand = EventData.Error(dateUtil.now()))) // ignore return path
     }
 
-    /** Leaves out state messages the watch already has, see [UnchangedToWearFilter]. */
-    private val unchangedToWear = UnchangedToWearFilter()
-
     private fun sendToWear(event: EventData) {
-        if (!unchangedToWear.shouldSend(event, dateUtil.now())) return
+        lastWatchFaceValues.note(event)
         rxBus.send(EventMobileToWear(event))
     }
+
+    /** The last value of each kind that a watch face draws, as last sent to the watch. */
+    internal fun lastSentToWatchFace(): List<EventData> = lastWatchFaceValues.all()
 
     /** Stores heart rate events coming from the Wear device. */
     private suspend fun handleHeartRateBatch(events: List<EventData.ActionHeartRate>) {
@@ -2032,11 +1980,12 @@ class DataHandlerMobile(
     }
 
     private fun handleGetCustomWatchface(command: EventData.ActionGetCustomWatchface) {
-        if (command.customWatchface.night) return handleGetNightWatchface(command) // PERSONAL PATCH: day and night face
+        if (command.customWatchface.night) return handleGetNightWatchface(command)
         val customWatchface = command.customWatchface
         aapsLogger.debug(LTag.WEAR, "Custom Watchface received from ${command.sourceNodeId}")
         val cwfData = customWatchface.customWatchfaceData
         rxBus.send(EventWearUpdateGui(cwfData, command.exportFile))
+        if (!command.exportFile) placeUse.mainDesignReported(cwfData, wearNightFace.isOnWatch()) // PERSONAL PATCH: what the design needs the place for
         val watchfaceName = preferences.get(StringNonKey.WearCwfWatchfaceName)
         val authorVersion = preferences.get(StringNonKey.WearCwfAuthorVersion)
         if (cwfData.metadata[CwfMetadataKey.CWF_NAME] != watchfaceName || cwfData.metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] != authorVersion) {
@@ -2049,30 +1998,32 @@ class DataHandlerMobile(
             importExportPrefs.exportCustomWatchface(cwfData, command.withDate)
     }
 
-    // ---- PERSONAL PATCH: day and night face, see WearNightFace.kt ----
+    // The night face of the Custom watch face, see CwfNight and WearNightFace
 
-    private val nightFace = WearNightFacePreferences(preferences)
-
-    /** The watch's night face: kept apart from the main face and its keys. */
+    /** The watch's night face: kept apart from the main face and its keys. The watch never exports it. */
     private fun handleGetNightWatchface(command: EventData.ActionGetCustomWatchface) {
-        val cwfData = command.customWatchface.customWatchfaceData
         aapsLogger.debug(LTag.WEAR, "Night watchface received from ${command.sourceNodeId}")
-        if (command.exportFile) {
-            importExportPrefs.exportCustomWatchface(cwfData, command.withDate)
-            return
-        }
-        nightFace.rememberIfNew(cwfData.metadata)
-        rxBus.send(EventWearNightWatchface(cwfData))
+        wearNightFace.reportedByWatch(command.customWatchface.customWatchfaceData)
     }
 
-    /** The watch may answer with ActionUpdateCustomWatchface: the design it now has in that slot. */
+    /**
+     * The watch answers with ActionUpdateCustomWatchface when it tells which design it now has in a
+     * slot: the night face, or the main face after the night face was removed.
+     */
     private fun handleUpdateCustomWatchfaceFromWatch(update: EventData.ActionUpdateCustomWatchface) =
         handleGetCustomWatchface(
             EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(update.customWatchfaceData, update.night))
                 .also { it.sourceNodeId = update.sourceNodeId }
         )
 
-    internal fun lastSentToWear(): List<EventData> = unchangedToWear.lastSeen() + listOfNotNull(lastWeather) // PERSONAL PATCH: live watch face preview
+    /** The watch has no night face (any more). */
+    private fun handleNoNightWatchface(command: EventData.ActionClearNightWatchface) {
+        aapsLogger.debug(LTag.WEAR, "No night watchface on ${command.sourceNodeId}")
+        if (!wearNightFace.isKnown()) placeUse.ruleRefused()?.let { rxBus.send(EventMobileToWear(it)) } // PERSONAL PATCH: the watch refused the rule, see WearPlaceUse.kt
+        wearNightFace.noneOnWatch()
+    }
+
+    internal fun lastSentToWear(): List<EventData> = lastSentToWatchFace() + listOfNotNull(wearWeather.last(), placeUse.lastRule()) // PERSONAL PATCH: live watch face preview, with the weather and the rule
 
     private val lastLoopEnact = LastLoopEnact() // PERSONAL PATCH: the loop time for the watch, kept across loop runs
     private val graphHistory = WearGraphHistory(T.hours(WEAR_GRAPH_HOURS).msecs()) { WearGraphHistory.logGraphOn(cwfWatchSettings.values.value) } // PERSONAL PATCH: log time graph

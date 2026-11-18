@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchfaces.utils
 
 import android.os.Handler
@@ -17,19 +13,18 @@ import kotlinx.coroutines.launch
  * Keeps the first frame after a wake cheap.
  *
  * When the wrist is raised or the button is pressed, the watch waits for the first frame of the face.
- * Some watches show their own low-power face when that frame comes too late: the OnePlus Watch 2R in
- * Smart mode then stays on its own face until the button is pressed twice. So the first frame after a
- * wake only brings the clock up to date and draws the views as they are. The full refresh - data,
- * colours, chart - runs right after that frame is on the screen, and the next frame shows it.
+ * Some watches show their own low-power face when that frame comes too late, and stay on it until the
+ * button is pressed again. So the first frame after a wake only brings the clock and the ages of the
+ * values up to date and draws the views as they are. The full refresh (data, colours, chart) runs
+ * right after that frame is on the screen, and the next frame shows it.
  *
  * A wake is: out of ambient, or shown again after hidden. Only an interactive frame can be the wake
  * frame; a wake seen during ambient waits for the first interactive frame.
  *
  * All calls come from the main thread, where the watch face renders.
  *
- * Hooks in upstream files: `WatchFace` calls [watch], [beginFrame], [endFrame] and [release] and
- * draws the wake frame the plain way; `BaseWatchFace` asks [isActive] where it would refresh
- * everything, and uses [refreshAfterFrame] instead.
+ * `WatchFace` keeps one per renderer, calls [watch], [beginFrame], [endFrame] and [release] and draws
+ * the wake frame the plain way; `BaseWatchFace` calls [refresh] where it would refresh everything.
  *
  * @param post runs a task on the main thread after the current frame
  */
@@ -75,6 +70,21 @@ class FirstFrameAfterWake(private val post: (Runnable) -> Unit = { task -> mainH
     }
 
     /**
+     * A full refresh of the views, kept cheap in the wake frame.
+     *
+     * Outside the wake frame, or when [quickIsEnough] says no, runs [full] now. In the wake frame runs
+     * [quick] now and [later] once after the frame (see [refreshAfterFrame]).
+     */
+    fun refresh(quickIsEnough: () -> Boolean, full: () -> Unit, quick: () -> Unit, later: () -> Unit) {
+        if (!isActive || !quickIsEnough()) {
+            full()
+            return
+        }
+        quick()
+        refreshAfterFrame(later)
+    }
+
+    /**
      * Runs [refresh] once after the current frame, however often it is asked for during the frame.
      * Does nothing after [release].
      */
@@ -87,7 +97,7 @@ class FirstFrameAfterWake(private val post: (Runnable) -> Unit = { task -> mainH
         })
     }
 
-    /** The watch face is gone: stops watching, and a refresh that is still waiting is dropped. */
+    /** The renderer is gone: stops watching, and a refresh that is still waiting is dropped. */
     fun release() {
         released = true
         isActive = false

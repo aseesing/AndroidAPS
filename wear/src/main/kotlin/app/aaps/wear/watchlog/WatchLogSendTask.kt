@@ -1,14 +1,13 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchlog
 
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
+import app.aaps.shared.impl.weardata.WatchLogCrypto
+import app.aaps.shared.impl.weardata.WatchLogCrypto.Secret
 import app.aaps.shared.impl.weardata.WatchLogProtocol
 import app.aaps.shared.impl.weardata.WatchLogProtocol.Reply
 import app.aaps.wear.selfupdate.WifiBodyFetcher
+import java.io.ByteArrayInputStream
 import java.io.Closeable
 import java.io.IOException
 import java.io.InputStream
@@ -19,8 +18,9 @@ import kotlin.concurrent.thread
  * The watch side of [WatchLogProtocol]: reads the request of the phone and sends the log zip.
  *
  * When the phone offers Wi-Fi, the watch connects first and only then makes the zip with all log
- * files, so it does not zip twice when Wi-Fi is off. When Wi-Fi does not work, a zip with fewer
- * files goes over the channel.
+ * files, so it does not zip twice when Wi-Fi is off. Over Wi-Fi the zip is encrypted with the secret
+ * from the request ([WatchLogCrypto]). When Wi-Fi does not work, a zip with fewer files goes over the
+ * channel, as it is.
  *
  * @param zipper makes the zip of the log files
  * @param wifi connects to the phone over Wi-Fi; null for the channel only
@@ -53,7 +53,9 @@ class WatchLogSendTask(
         try {
             // At once, so the phone knows this watch app can do it; zipping can take a while
             WatchLogProtocol.writeReply(output, Reply.Accepted)
-            val wifiZip = request.wifi?.let { offer -> wifi?.let { sendOverWifi(it, offer, request, output) } }
+            val offer = request.wifi
+            val secret = request.secret
+            val wifiZip = if (offer != null && secret != null && wifi != null) sendOverWifi(wifi, offer, secret, request, output) else null
             if (wifiZip is WifiResult.Sent) return Result.Sent(wifiZip.zip.fileCount, wifiZip.zip.zip.size, overWifi = true)
 
             // The same zip, when it has the files the channel may carry; otherwise a smaller one
@@ -75,7 +77,7 @@ class WatchLogSendTask(
     }
 
     /** @return null when the watch could not connect; a failing zip throws */
-    private fun sendOverWifi(fetcher: WifiBodyFetcher, offer: WifiOffer, request: WatchLogProtocol.Request, output: OutputStream): WifiResult? {
+    private fun sendOverWifi(fetcher: WifiBodyFetcher, offer: WifiOffer, secret: Secret, request: WatchLogProtocol.Request, output: OutputStream): WifiResult? {
         val connection = try {
             fetcher.open(offer)
         } catch (e: Exception) {
@@ -84,11 +86,14 @@ class WatchLogSendTask(
         }
         connection.use {
             val zip = zipper.zip(request.filesOverWifi)
-            WatchLogProtocol.writeReply(output, Reply.WifiZip(zip.zip))
+            // Only the phone that sent the secret over the channel can read it; the zip is at most
+            // MAX_ZIP_SIZE, so it fits in memory once
+            val body = WatchLogCrypto.encrypt(zip.file.readBytes(), secret)
+            WatchLogProtocol.writeReply(output, Reply.WifiZip(body.size.toLong()))
             try {
                 // A socket write has no timeout of its own: when the phone is gone, it could wait for minutes
                 StallGuard(stallTimeoutMs) { runCatching { connection.close() } }.use { guard ->
-                    zip.file.inputStream().use { body -> WatchAppUpdateProtocol.copyBody(body, connection.output, zip.zip.size) { guard.touch() } }
+                    WatchAppUpdateProtocol.copyBody(ByteArrayInputStream(body), connection.output, body.size.toLong()) { guard.touch() }
                 }
             } catch (e: Exception) {
                 log("Wi-Fi broke off, the log goes over the channel: ${e.message ?: e.javaClass.simpleName}")

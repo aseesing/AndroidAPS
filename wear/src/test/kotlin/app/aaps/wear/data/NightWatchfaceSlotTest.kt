@@ -1,12 +1,10 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.data
 
 import android.content.Context
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
+import app.aaps.core.interfaces.rx.weardata.DayNightRule
+import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.rx.weardata.ResData
 import app.aaps.core.interfaces.rx.weardata.ResFormat
 import app.aaps.core.interfaces.sharedPreferences.SP
@@ -23,23 +21,24 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.io.File
 
-/** The night face slot of the watch's store (see `CwfNight`): it never touches the main face. */
+/**
+ * The night face slot of the watch's store (see `CwfNight`): it never touches the main face, and it
+ * has its own file, which the data writes leave alone.
+ */
 class NightWatchfaceSlotTest {
 
     @TempDir lateinit var tempDir: File
 
     private lateinit var repository: ComplicationDataRepository
+    private val sp = mock<SP>()
 
     @BeforeEach
     fun setUp() {
-        repository = newRepository()
-    }
-
-    private fun newRepository(): ComplicationDataRepository {
         val context = mock<Context>()
         whenever(context.applicationContext).thenReturn(context)
         whenever(context.filesDir).thenReturn(tempDir)
-        return ComplicationDataRepository(context, AAPSLoggerTest(), mock<SP>())
+        whenever(context.noBackupFilesDir).thenReturn(File(tempDir, "no_backup"))
+        repository = ComplicationDataRepository(context, AAPSLoggerTest(), sp)
     }
 
     private fun cwf(name: String, version: String = "1") = CwfData(
@@ -67,9 +66,25 @@ class NightWatchfaceSlotTest {
 
         assertThat(repository.getCustomWatchface().name()).isEqualTo("main")
         assertThat(repository.getNightWatchface().name()).isEqualTo("night")
-        // Kept in the file, so a new start reads it back
-        val stored = ProtoBuf.decodeFromByteArray(ComplicationData.serializer(), File(tempDir, "datastore/complication_data.pb").readBytes())
+        // Kept in its own file, so a new start reads it back
+        val stored = ProtoBuf.decodeFromByteArray(NightWatchfaceData.serializer(), nightFile().readBytes())
         assertThat(stored.customWatchfaceNight.name()).isEqualTo("night")
+    }
+
+    private fun nightFile() = File(tempDir, "no_backup/" + ComplicationDataRepository.NIGHT_WATCHFACE_FILE)
+
+    @Test
+    fun dataWritesDoNotWriteTheNightFaceAgain() = runBlocking<Unit> {
+        repository.storeNightWatchface(cwf("night"))
+        val before = nightFile().readBytes()
+        val modified = nightFile().lastModified()
+        Thread.sleep(20)
+
+        repository.updateBgData(EventData.SingleBg(dataset = 0, timeStamp = 1L, sgv = 100.0, high = 180.0, low = 70.0))
+
+        assertThat(nightFile().lastModified()).isEqualTo(modified)
+        assertThat(nightFile().readBytes()).isEqualTo(before)
+        assertThat(repository.getNightWatchface().name()).isEqualTo("night")
     }
 
     @Test
@@ -81,14 +96,54 @@ class NightWatchfaceSlotTest {
     }
 
     @Test
-    fun clearingForgetsOnlyTheNightFace() = runBlocking<Unit> {
+    fun clearingForgetsOnlyTheNightFaceAndItsRule() = runBlocking<Unit> {
         repository.storeCustomWatchface(cwf("main"))
         repository.storeNightWatchface(cwf("night"))
+        repository.storeDayNightRule(DayNightRule.Place(52.4, 4.9))
 
         repository.clearNightWatchface()
 
         assertThat(repository.getNightWatchface()).isNull()
+        assertThat(repository.getNightWatchfaceData().dayNightRule).isNull()
         assertThat(repository.getCustomWatchface().name()).isEqualTo("main")
+    }
+
+    @Test
+    fun aRuleIsKeptOnlyWithANightFace() = runBlocking<Unit> {
+        val rule = DayNightRule.FixedTimes(dayStartMinute = 6 * 60, nightStartMinute = 22 * 60)
+
+        assertThat(repository.storeDayNightRule(rule)).isFalse()
+        assertThat(repository.getNightWatchfaceData().dayNightRule).isNull()
+
+        repository.storeNightWatchface(cwf("night"))
+        assertThat(repository.storeDayNightRule(rule)).isTrue()
+        assertThat(repository.getNightWatchfaceData().dayNightRule).isEqualTo(rule)
+
+        // Another night face keeps the rule
+        repository.storeNightWatchface(cwf("other night"))
+        assertThat(repository.getNightWatchfaceData().dayNightRule).isEqualTo(rule)
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    @Test
+    fun thePlaceIsStoredInTheNoBackupFolder() = runBlocking<Unit> {
+        repository.storeNightWatchface(cwf("night"))
+        repository.storeDayNightRule(DayNightRule.Place(52.4, 4.9))
+
+        val stored = ProtoBuf.decodeFromByteArray(NightWatchfaceData.serializer(), nightFile().readBytes())
+        assertThat(stored.dayNightRule).isEqualTo(DayNightRule.Place(52.4, 4.9))
+        assertThat(nightFile().parentFile?.name).isEqualTo("no_backup")
+    }
+
+    @Test
+    fun anUnreadableFileMeansNoNightFace() = runBlocking<Unit> {
+        nightFile().parentFile?.mkdirs()
+        nightFile().writeBytes(byteArrayOf(-1, -1, -1, -1, 7, 3))
+
+        assertThat(repository.getNightWatchface()).isNull()
+        // The file is replaced, so a night face can be stored again
+        repository.storeNightWatchface(cwf("night"))
+        assertThat(repository.getNightWatchface().name()).isEqualTo("night")
     }
 
     @Test
@@ -111,19 +166,5 @@ class NightWatchfaceSlotTest {
 
         assertThat(repository.getNightWatchface()?.metadata?.get(CwfMetadataKey.CWF_FILENAME)).isEqualTo("night.zip")
         assertThat(repository.getCustomWatchface()?.metadata?.get(CwfMetadataKey.CWF_FILENAME)).isNull()
-    }
-
-    @OptIn(ExperimentalSerializationApi::class)
-    @Test
-    fun aFileWrittenBeforeTheNightSlotStillReads() = runBlocking<Unit> {
-        // The night field is the last one, so the main face of an older file keeps its place
-        val bytes = ProtoBuf.encodeToByteArray(ComplicationData.serializer(), ComplicationData(customWatchface = cwf("main")))
-        File(tempDir, "datastore").mkdirs()
-        File(tempDir, "datastore/complication_data.pb").writeBytes(bytes)
-
-        val updated = newRepository()
-
-        assertThat(updated.getCustomWatchface().name()).isEqualTo("main")
-        assertThat(updated.getNightWatchface()).isNull()
     }
 }

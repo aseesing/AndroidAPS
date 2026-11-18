@@ -25,7 +25,7 @@ import app.aaps.wear.events.EventWearPreferenceChange
 import app.aaps.wear.heartrate.HeartRateListener
 import app.aaps.wear.interaction.ConfigurationActivity
 import app.aaps.wear.selfupdate.WatchAppSelfUpdate
-import app.aaps.wear.watchlog.WatchLogUpload // PERSONAL PATCH: watch log download
+import app.aaps.wear.watchlog.WatchLogUpload
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import app.aaps.wear.wearStepCount.StepCountListener
 import com.google.android.gms.tasks.Tasks
@@ -60,7 +60,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     @Inject lateinit var aapsSchedulers: AapsSchedulers
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
     @Inject lateinit var watchAppSelfUpdate: WatchAppSelfUpdate
-    @Inject lateinit var watchLogUpload: WatchLogUpload // PERSONAL PATCH: watch log download
+    @Inject lateinit var watchLogUpload: WatchLogUpload
 
     private val dataClient by lazy { Wearable.getDataClient(this) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
@@ -76,7 +76,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
 
     private val rxPath get() = getString(app.aaps.core.interfaces.R.string.path_rx_bridge)
     private val rxDataPath get() = getString(app.aaps.core.interfaces.R.string.path_rx_data_bridge)
-    // Private patch: a night face zip, see CwfNight
+    // A night face zip, see CwfNight
     private val rxNightDataPath get() = rxDataPath + CwfNight.PATH_SUFFIX
 
     @ExperimentalSerializationApi
@@ -158,11 +158,11 @@ class DataLayerListenerServiceWear : WearableListenerService() {
         }
     }
 
-    // A new watch app sent by the phone app
+    // A channel from the phone app: a new watch app, or a request for the watch log
     override fun onChannelOpened(channel: ChannelClient.Channel) {
         super.onChannelOpened(channel)
         watchAppSelfUpdate.onChannelOpened(channel)
-        watchLogUpload.onChannelOpened(channel) // PERSONAL PATCH: watch log download
+        watchLogUpload.onChannelOpened(channel)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

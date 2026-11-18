@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchlog
 
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol
@@ -23,7 +19,8 @@ class LogZip(val file: File, val zip: WatchLogProtocol.Zip, val fileCount: Int)
 fun interface LogZipSource {
 
     /**
-     * @param maxFiles the newest this many log files; [WatchLogProtocol.ALL_FILES] for all
+     * @param maxFiles the newest this many log files; [WatchLogProtocol.ALL_FILES] for all. Never more
+     *   than [WatchLogProtocol.MAX_LOG_BYTES] of files together.
      * @throws IOException when there is no log, or the zip cannot be written
      */
     fun zip(maxFiles: Int): LogZip
@@ -34,7 +31,9 @@ fun interface LogZipSource {
  *
  * logback writes `AndroidAPS.log` and rolls older parts into `AndroidAPS._<date>_<time>_.<n>.zip`
  * (see `wear/src/main/assets/logback.xml`). The zip holds them as they are, so an old part is a zip
- * inside the zip, like in the log export of the phone.
+ * inside the zip, like in the log export of the phone. Only these files, directly in the log folder,
+ * with their plain names as entries. Newest first, up to [WatchLogProtocol.MAX_LOG_BYTES] together:
+ * older files stay on the watch.
  *
  * @param logDirectory where logback writes; null when it is not known
  */
@@ -42,7 +41,7 @@ class WatchLogZipper(private val logDirectory: () -> File?, private val target: 
 
     override fun zip(maxFiles: Int): LogZip {
         val directory = logDirectory() ?: throw IOException("The log folder is not known")
-        val files = logFiles(directory, maxFiles)
+        val files = logFiles(directory, maxFiles, WatchLogProtocol.MAX_LOG_BYTES)
         if (files.isEmpty()) throw IOException("No log files in ${directory.absolutePath}")
         target.parentFile?.mkdirs()
         val digest = MessageDigest.getInstance("SHA-256")
@@ -61,11 +60,20 @@ class WatchLogZipper(private val logDirectory: () -> File?, private val target: 
 
     companion object {
 
-        /** The log files in [directory], newest first; at most [maxFiles] of them, or all for [WatchLogProtocol.ALL_FILES] */
-        fun logFiles(directory: File, maxFiles: Int): List<File> {
+        /**
+         * The log files in [directory], newest first: at most [maxFiles] of them (all for
+         * [WatchLogProtocol.ALL_FILES]), and only as many as fit in [maxBytes] together. Stops at the
+         * first file that does not fit, so the zip always holds the newest part of the log.
+         */
+        fun logFiles(directory: File, maxFiles: Int, maxBytes: Long): List<File> {
             val all = directory.listFiles { file -> file.isFile && isLogFile(file.name) }.orEmpty()
                 .sortedWith(compareByDescending<File> { it.lastModified() }.thenByDescending { it.name })
-            return if (maxFiles == WatchLogProtocol.ALL_FILES) all else all.take(maxFiles)
+            val counted = if (maxFiles == WatchLogProtocol.ALL_FILES) all else all.take(maxFiles)
+            var total = 0L
+            return counted.takeWhile { file ->
+                total += file.length()
+                total <= maxBytes
+            }
         }
 
         private fun isLogFile(name: String): Boolean =

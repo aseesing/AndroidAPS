@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.compose
 
 import android.content.res.Configuration
@@ -13,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -27,28 +24,35 @@ import androidx.compose.ui.tooling.preview.Preview
 import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
-import app.aaps.plugins.sync.wear.cwfsettings.CwfPreviewAndSettings
-import app.aaps.plugins.sync.wear.preview.PreviewSlot
+import app.aaps.plugins.sync.wear.cwfsettings.CwfPreviewAndSettings // PERSONAL PATCH: live preview and settings of the night face
+import app.aaps.plugins.sync.wear.preview.PreviewSlot // PERSONAL PATCH: live preview and settings of the night face
 
 /**
  * The night face on the Wear screen, see `CwfNight`.
  *
  * @param hasNightWatchface whether the watch reported a night face
  * @param importForNight whether the open import list sends the chosen zip as the night face
+ * @param loadingNightWatchface PERSONAL PATCH: the name of a night face on its way to the watch, or
+ *   null. The card shows it with a loading indicator in place of the preview, as the main face card
+ *   does, see [WearFaceLoadingTracker]
  */
 @Immutable
 data class WearNightFaceState(
     val hasNightWatchface: Boolean = false,
     val nightWatchfaceName: String = "",
     val nightWatchfaceImage: ImageBitmap? = null,
-    val importForNight: Boolean = false
+    val importForNight: Boolean = false,
+    val loadingNightWatchface: String? = null // PERSONAL PATCH: loading indicator of the night face
 )
 
-/** The title of the main face card: the day face, or the only face, day and night. */
+/**
+ * The title of the main face card: as before while it is the only face, "Day face" when a night
+ * face is set too.
+ */
 @Composable
 internal fun dayWatchfaceTitle(uiState: WearUiState): String =
     stringResource(
-        if (uiState.nightFace.hasNightWatchface) SyncStrings.wear_day_night_day_title else SyncStrings.wear_day_night_both_title,
+        if (uiState.nightFace.hasNightWatchface) SyncStrings.wear_day_night_day_title else SyncStrings.wear_custom_watchface,
         uiState.watchfaceName
     )
 
@@ -59,10 +63,7 @@ internal fun importListTitle(uiState: WearUiState, mainTitle: String): String =
 
 /**
  * The night face card: its name and preview, a button to load one from the same list as the main
- * face, a button to remove it, and under the preview the button for the watch face settings.
- *
- * @param loading the name of a night face on its way to the watch: shown with a loading indicator
- *   in place of the preview, see [WearFaceLoading]
+ * face, and with a night face a button to remove it and a button to the "Day and night" screen.
  *
  * @see NightWatchfaceCardPreview
  */
@@ -71,9 +72,10 @@ internal fun NightWatchfaceCard(
     state: WearNightFaceState,
     onLoadNightWatchface: () -> Unit,
     onRemoveNightWatchface: () -> Unit,
-    modifier: Modifier = Modifier,
-    loading: String? = null
+    onDayNightSettings: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val loading = state.loadingNightWatchface // PERSONAL PATCH: loading indicator of the night face
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -97,12 +99,14 @@ internal fun NightWatchfaceCard(
                     ButtonDef(Icons.Default.Delete, stringResource(SyncStrings.wear_day_night_remove_night_face), onRemoveNightWatchface)
                 else null
             )
+            // When the watch shows the night face. Only with a night face: without one there is nothing to set.
+            if (state.hasNightWatchface)
+                ButtonRow(button1 = ButtonDef(Icons.Default.Schedule, stringResource(SyncStrings.wear_day_night_settings), onDayNightSettings), button2 = null)
 
-            loading?.let { FaceLoadingIndicator(it) }
+            loading?.let { FaceLoadingIndicator(it) } // PERSONAL PATCH: loading indicator of the night face
             state.nightWatchfaceImage?.takeIf { loading == null }?.let { image ->
                 Spacer(modifier = Modifier.height(AapsSpacing.small))
-                // Live, as the main face: drawn by the watch's code, the static picture until then.
-                // With the settings button under it, as the main face has.
+                // PERSONAL PATCH: live, as the main face, with the settings button under it (see CwfPreviewAndSettings)
                 CwfPreviewAndSettings(
                     bitmap = image,
                     contentDescription = state.nightWatchfaceName,
@@ -126,12 +130,14 @@ internal fun NightWatchfaceCardPreview() {
             NightWatchfaceCard(
                 state = WearNightFaceState(hasNightWatchface = true, nightWatchfaceName = "Night"),
                 onLoadNightWatchface = {},
-                onRemoveNightWatchface = {}
+                onRemoveNightWatchface = {},
+                onDayNightSettings = {}
             )
             NightWatchfaceCard(
                 state = WearNightFaceState(),
                 onLoadNightWatchface = {},
-                onRemoveNightWatchface = {}
+                onRemoveNightWatchface = {},
+                onDayNightSettings = {}
             )
         }
     }

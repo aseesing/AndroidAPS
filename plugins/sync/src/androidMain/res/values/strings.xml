@@ -184,6 +184,33 @@
     <string name="wear_general_settings">General Settings</string>
     <string name="wear_custom_watchface_settings">Custom Watchface Settings</string>
     <string name="wear_custom_watchface">Custom Watchface: %1$s</string>
+    <string name="wear_day_night_day_title" comment="Title of the main Custom watch face on the Wear screen when a night face is also set. %1$s=name of the watch face. Example: Day face: AAPS V2">Day face: %1$s</string>
+    <string name="wear_day_night_night_title" comment="Title of the night Custom watch face on the Wear screen. %1$s=name of the watch face. Example: Night face: AAPS V2">Night face: %1$s</string>
+    <string name="wear_day_night_no_night_face">No night face. The face above shows day and night.</string>
+    <string name="wear_day_night_load_night_face" comment="Button: choose a watch face file and send it to the watch as the night face">Load night face</string>
+    <string name="wear_day_night_remove_night_face" comment="Button: the watch forgets its night face and shows the day face day and night">Remove night face</string>
+    <string name="wear_day_night_select_night_face" comment="Title of the list of watch face files when loading a night face">Select night face</string>
+    <string name="wear_day_night_settings" comment="Title of the screen, and its button on the night face card: when the watch shows the night face">Day and night</string>
+    <string name="wear_day_night_use_phone_location">Use the phone\'s location</string>
+    <string name="wear_day_night_use_phone_location_summary">The phone\'s rough place (rounded to 0.1 degree, about 10 km) is sent to the watch, which works out sunrise and sunset from it.</string>
+    <string name="wear_day_night_no_permission">No location permission, so the phone\'s location is not used. The choice below is used.</string>
+    <string name="wear_day_night_no_place">The phone knows no place from the last day, so the choice below is used.</string>
+    <string name="wear_day_night_fallback">Used when the phone knows no place from the last day.</string>
+    <string name="wear_day_night_by" comment="Heading of a choice: what decides when it is day and when it is night for the watch">Day and night by</string>
+    <string name="wear_day_night_fixed_times" comment="Choice: day and night start at times the user sets">Fixed times</string>
+    <string name="wear_day_night_chosen_place" comment="Choice: day from sunrise to sunset in a city the user chooses">A place I choose</string>
+    <string name="wear_day_night_day_starts">Day starts at</string>
+    <string name="wear_day_night_night_starts">Night starts at</string>
+    <string name="wear_day_night_equal_times">Both times are the same, so the watch shows the day face all the time.</string>
+    <string name="wear_day_night_city_in_country" comment="A city and its country. %1$s=city, %2$s=country. Example: Amsterdam, Netherlands">%1$s, %2$s</string>
+    <string name="wear_day_night_no_city">No city chosen. The fixed times are used.</string>
+    <string name="wear_day_night_choose_city" comment="Button, and title of the list of cities">Choose a city</string>
+    <string name="wear_day_night_choose_country" comment="Title of the list of countries, the first step of choosing a city">Choose a country</string>
+    <string name="wear_day_night_suggested" comment="Heading above the city of the phone\'s time zone, offered first">The phone\'s time zone</string>
+    <string name="wear_day_night_search">Search</string>
+    <string name="wear_day_night_sends_times">Leaves the phone: only the two times. Nothing private.</string>
+    <string name="wear_day_night_sends_city">Leaves the phone: only the place of the chosen city, which is public data. Nothing private.</string>
+    <string name="wear_day_night_sends_place">Leaves the phone: its rough place, rounded to 0.1 degree (about 10 km), each time the data goes to the watch. Only while the watch has a night face.</string>
     <string name="wear_pushed_watchface_installing" comment="Short note after the selected watchface while the watch is still replacing its face">Installing…</string>
     <string name="wear_custom_watchface_not_shown" comment="Dialog after a custom watchface was sent while the complications watchface is selected. %1$s=name of the sent custom watchface">The watch shows the Complications watchface. Select Custom watchface to see %1$s on the watch.</string>
     <string name="wear_pushed_watchface_confirm_title">Change the watchface on the watch?</string>
@@ -192,11 +219,28 @@
     <string name="wear_load_watchface">Load Watchface</string>
     <string name="wear_infos_watchface">Infos Watchface</string>
     <string name="wear_export_watchface">Export template</string>
+    <string name="wear_cwf_settings" comment="Button on the Wear screen, and title of the screen it opens: the settings of the Custom watch face, set from the phone">Watch face settings</string>
+    <string name="wear_cwf_settings_look" comment="Header of a group of settings: how the Custom watch face looks (seconds, date, dark, ...)">Look</string>
+    <string name="wear_cwf_settings_shown_values" comment="Header of a group of settings: which values the Custom watch face shows (BG, IOB, COB, ...)">Values shown</string>
+    <string name="wear_cwf_settings_not_from_watch">The watch has not sent its settings yet. Until it does, the defaults are shown here. An older AAPS watch app does not take changes from here: update it.</string>
+    <string name="wear_cwf_settings_only_if_used">A setting has an effect only when the watch face design uses it.</string>
+    <string name="wear_cwf_settings_set_by_design" comment="Shown under a setting that the user cannot change, because the loaded watch face sets it. %1$s=name of a setting in the wear settings. Example: Set by the watch face, because of the setting Authorize custom watchfaces">Set by the watch face, because of the setting \"%1$s\"</string>
     <string name="wear_new_custom_watchface_exported">Custom watchface template exported</string>
     <string name="wear_link_to_more_cwf_doc">https://androidaps.readthedocs.io/en/latest/ExchangeSiteCustomWatchfaces/index.html</string>
     <string name="resend_all_data">Resend All Data</string>
     <string name="open_settings_on_wear">Open Settings on Wear</string>
     <string name="wear_import_custom_watchface_title">Select Custom Watchface</string>
+    <string name="wear_design_import" comment="Button in the list of watch face designs: opens the file picker to copy new design zips into the AAPS export folder">Import designs from Google Drive or phone storage</string>
+    <string name="wear_design_import_done" comment="%1$d=number of design zips copied into the AAPS export folder. Example: Designs imported: 6">Designs imported: %1$d</string>
+    <string name="wear_design_import_too_big" comment="One line under the import result, for a picked file that was left out. %1$s=file name. Example: Big_design.zip is too big to be a watch face design">%1$s is too big to be a watch face design</string>
+    <string name="wear_design_import_not_a_design" comment="One line under the import result, for a picked file that was left out. %1$s=file name. Example: notes.txt is not a watch face design">%1$s is not a watch face design</string>
+    <string name="wear_design_import_not_read" comment="One line under the import result, for a picked file that was left out. %1$s=file name. Example: AAPS_V2.zip could not be read">%1$s could not be read</string>
+    <string name="wear_design_import_not_written" comment="One line under the import result, for a picked file that was left out. %1$s=file name. Example: AAPS_V2.zip could not be saved in the export folder">%1$s could not be saved in the export folder</string>
+    <string name="wear_design_delete_question" comment="%1$s=name of the watch face design. Example: Delete the design AAPS V2 from the AAPS export folder? The watch keeps the face it shows now.">Delete the design %1$s from the AAPS export folder? The watch keeps the face it shows now.</string>
+    <string name="wear_design_delete_done" comment="%1$s=file name of the deleted design zip. Example: Deleted: AAPS_V2.zip">Deleted: %1$s</string>
+    <string name="wear_design_delete_failed" comment="%1$s=file name of the design zip. Example: Could not delete AAPS_V2.zip">Could not delete %1$s</string>
+    <string name="wear_face_loading" comment="Shown with a loading indicator on the Wear screen while a new watch face is sent to the watch. %1$s=name of the watch face. Example: Loading AAPS V2 on the watch…">Loading %1$s on the watch…</string>
+    <string name="wear_design_import_no_folder">Choose the AAPS directory first. The designs are copied to its export folder.</string>
     <string name="cwf_infos_pref_locked">List of prefs locked by the Watchface</string>
     <string name="cwf_infos_pref_required">List of prefs required for the Watchface</string>
     <string name="cwf_infos_view_title">List of fields included into the Watchface</string>
@@ -243,12 +287,28 @@
     <string name="wear_app_update_over_wifi">Over Wi-Fi</string>
     <string name="wear_app_update_over_bluetooth">Over Bluetooth, which is slow. Next time, turn on Wi-Fi on the watch, on the same network as the phone.</string>
     <string name="wear_app_update_installing" comment="%1$s=name of the watch">%1$s is preparing the install…</string>
-    <string name="wear_app_update_sent" comment="%1$s=name of the watch">Sent to %1$s. Confirm the update on the watch when it asks. The watch app restarts by itself.</string>
+    <string name="wear_app_update_sent" comment="%1$s=name of the watch">%1$s handed the update to its installer. Confirm the update on the watch when it asks. The watch app then restarts by itself.</string>
+    <string name="wear_app_update_check_watch">All was sent, but the watch did not say whether the install started. Look on the watch: confirm the update there when it asks.</string>
+    <string name="wear_app_update_old_watch_app">The watch app is too old for this update. Install this version on the watch once with adb.</string>
+    <string name="wear_app_update_old_phone_app">The watch app is newer than this phone app. Install a newer phone app.</string>
+    <string name="wear_app_update_busy">The watch is still busy with another update. Try again in a minute.</string>
     <string name="wear_app_update_not_embedded">This phone app has no watch app inside.</string>
     <string name="wear_app_update_no_watch">No watch is connected.</string>
     <string name="wear_app_update_no_answer">The watch does not answer. The watch app on it may be too old for updates from the phone: install this version once with adb.</string>
     <string name="wear_app_update_timeout">The watch stopped answering. Try again with the watch close to the phone.</string>
     <string name="wear_app_update_failed" comment="%1$s=reason, in English. Example: Update failed: INSTALL_FAILED_UPDATE_INCOMPATIBLE">Update failed: %1$s</string>
+    <string name="wear_log_button">Download watch log</string>
+    <string name="wear_log_download">Download</string>
+    <string name="wear_log_hint">The log of the watch app is saved as a zip file in the Downloads folder of the phone. Other apps that can read your files can read it there. It holds the newest log files, up to 8 MB; older files stay on the watch. Over Bluetooth it holds fewer files, because Bluetooth is slow. Over Wi-Fi the log is encrypted.</string>
+    <string name="wear_log_preparing" comment="%1$s=name of the watch. Example: Pixel Watch is putting its log in a zip…">%1$s is putting its log in a zip…</string>
+    <string name="wear_log_receiving" comment="%1$s=name of the watch, %2$d=percent received. Example: Receiving from Pixel Watch: 42%">Receiving from %1$s: %2$d%%</string>
+    <string name="wear_log_receiving_time_left" comment="%1$s=name of the watch, %2$d=percent received, %3$s=time left with its unit. Example: Receiving from Pixel Watch: 42%, about 3 min left">Receiving from %1$s: %2$d%%, about %3$s left</string>
+    <string name="wear_log_saving">Saving to Downloads…</string>
+    <string name="wear_log_saved" comment="%1$s=file name. Example: Saved in Downloads as AndroidAPS_WEAR_LOG_2026-11-17_14-05-00.zip">Saved in Downloads as %1$s</string>
+    <string name="wear_log_busy">The watch is still sending a log. Try again in a minute.</string>
+    <string name="wear_log_old_watch_app">The watch app is too old for this download. Install a newer watch app first.</string>
+    <string name="wear_log_no_answer">The watch does not answer. The watch app on it may be too old for this. Install a newer watch app first.</string>
+    <string name="wear_log_failed" comment="%1$s=reason, in English. Example: Download failed: The log folder is not known">Download failed: %1$s</string>
 
     <string name="garmin_request_key">Request Key</string>
 

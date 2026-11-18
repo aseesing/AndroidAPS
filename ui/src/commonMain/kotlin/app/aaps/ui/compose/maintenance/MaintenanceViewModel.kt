@@ -213,6 +213,9 @@ class MaintenanceViewModel(
         }
     }
 
+    /** Shows "Save logs to Downloads" only on a platform that can do it. */
+    val canSaveLogsToDownloads: Boolean get() = maintenance.canSaveLogsToDownloads
+
     fun saveLogsToDownloads() {
         maintenanceAction("saving logs") {
             val fileName = withContext(aapsIoDispatcher) {

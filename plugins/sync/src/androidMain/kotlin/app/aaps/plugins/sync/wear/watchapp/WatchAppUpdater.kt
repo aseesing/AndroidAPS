@@ -8,8 +8,10 @@ import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.Wearable
 import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,17 +32,23 @@ import java.util.concurrent.TimeUnit
  * Only a phone app built with `-PembedWearApk=<signed watch APK>` carries the watch app; without it
  * [embedded] is null and the Wear screen shows nothing. One app-wide instance, so an update keeps
  * running when the user leaves the screen.
+ *
+ * @param scope runs the updates; the state may be read from any thread
  */
 @SingleIn(AppScope::class)
-@Inject
-class WatchAppUpdater(
-    private val context: Context,
-    private val aapsLogger: AAPSLogger
+class WatchAppUpdater internal constructor(
+    private val source: EmbeddedWatchAppSource,
+    opener: WatchChannelOpener,
+    wifiServers: WifiBodyServerFactory,
+    private val aapsLogger: AAPSLogger,
+    private val scope: CoroutineScope
 ) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val source = AssetWatchAppSource(context)
-    private val sender = WatchAppSender(source, WearableChannelOpener(context), AndroidWifiBodyServerFactory(context))
+    @Inject
+    constructor(source: EmbeddedWatchAppSource, opener: WatchChannelOpener, wifiServers: WifiBodyServerFactory, aapsLogger: AAPSLogger) :
+        this(source, opener, wifiServers, aapsLogger, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+
+    private val sender = WatchAppSender(source, opener, wifiServers)
 
     private val _state = MutableStateFlow<WatchAppUpdateState>(WatchAppUpdateState.Idle)
     val state: StateFlow<WatchAppUpdateState> = _state.asStateFlow()
@@ -53,14 +61,24 @@ class WatchAppUpdater(
         if (_state.value.isBusy) return
         _state.value = WatchAppUpdateState.Connecting
         scope.launch {
-            val result = sender.send { _state.value = it }
-            aapsLogger.info(LTag.WEAR, "Watch app update: $result")
+            try {
+                val result = sender.send { _state.value = it }
+                aapsLogger.info(LTag.WEAR, "Watch app update: $result")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Never crash the app, and never leave the button disabled
+                aapsLogger.error(LTag.WEAR, "Watch app update failed", e)
+                _state.value = WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.ERROR, e.message ?: e.javaClass.simpleName)
+            }
         }
     }
 }
 
 /** The watch APK in the assets, put there by the `embedWearApk` build property */
-internal class AssetWatchAppSource(private val context: Context) : EmbeddedWatchAppSource {
+@ContributesBinding(AppScope::class)
+@Inject
+class AssetWatchAppSource(private val context: Context) : EmbeddedWatchAppSource {
 
     override fun info(): EmbeddedWatchApp? =
         try {
@@ -68,7 +86,8 @@ internal class AssetWatchAppSource(private val context: Context) : EmbeddedWatch
                 val properties = Properties().apply { load(stream) }
                 EmbeddedWatchApp(
                     label = properties.getProperty("label") ?: "",
-                    bodySize = properties.getProperty("size")?.toLongOrNull() ?: return null
+                    bodySize = properties.getProperty("size")?.toLongOrNull() ?: return null,
+                    apkSize = properties.getProperty("apkSize")?.toLongOrNull() ?: return null
                 )
             }
         } catch (_: FileNotFoundException) {
@@ -86,7 +105,9 @@ internal class AssetWatchAppSource(private val context: Context) : EmbeddedWatch
 }
 
 /** Opens a Wear OS channel to the nearest watch that runs the AAPS watch app */
-internal class WearableChannelOpener(private val context: Context) : WatchChannelOpener {
+@ContributesBinding(AppScope::class)
+@Inject
+class WearableChannelOpener(private val context: Context) : WatchChannelOpener {
 
     override suspend fun open(path: String): WatchChannel? = withContext(Dispatchers.IO) {
         val capability = Tasks.await(

@@ -25,15 +25,10 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.Arrays
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
@@ -84,30 +79,36 @@ class MaintenanceImpl(
         return ExportResult(localSuccess = emailSuccess, cloudSuccess = cloudSuccess)
     }
 
+    override val canSaveLogsToDownloads: Boolean = true
+
     /**
-     * Makes the same zip as [executeSendLogs], then copies it to Downloads through MediaStore. Since
+     * Zips the same log files as [executeSendLogs] straight into Downloads through MediaStore. Since
      * Android 10 an app may add files there without any storage permission, and the file shows up in
-     * the Files app at once.
+     * the Files app at once. No copy goes to the AAPS temp folder, so this works also when no AAPS
+     * directory was chosen.
+     *
+     * When there are no log files, or the zip cannot be written completely, nothing is left in
+     * Downloads and the result is null.
      */
     override suspend fun saveLogsToDownloads(): String? {
+        val files = getLogFiles(preferences.get(IntKey.MaintenanceLogsAmount))
+        if (files.isEmpty()) {
+            aapsLogger.debug("no log files to save")
+            return null
+        }
         val name = constructName()
-        val zipFile = fileListProvider.ensureTempDirExists()?.createFile("application/zip", name) ?: return null
-        val zip = zipLogs(zipFile, getLogFiles(preferences.get(IntKey.MaintenanceLogsAmount)))
         val resolver = context.contentResolver
         val pending = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, name)
             put(MediaStore.Downloads.MIME_TYPE, "application/zip")
-            // Hidden from other apps until the copy is complete
+            // Hidden from other apps until the zip is complete
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
         val target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, pending) ?: return null
         return try {
-            resolver.openInputStream(zip.uri).use { input ->
-                resolver.openOutputStream(target).use { output ->
-                    requireNotNull(input).copyTo(requireNotNull(output))
-                }
-            }
-            resolver.update(target, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+            writeLogsZip(files, requireNotNull(resolver.openOutputStream(target)))
+            val published = resolver.update(target, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+            check(published == 1) { "MediaStore did not publish $name" }
             aapsLogger.debug("saved logs to Downloads as $name")
             name
         } catch (e: Exception) {
@@ -201,22 +202,7 @@ class MaintenanceImpl(
         "AndroidAPS_LOG_" + System.currentTimeMillis() + loggerUtils.suffix
 
     private fun zip(zipFile: DocumentFile, files: List<File>) {
-        val bufferSize = 2048
-        val out = ZipOutputStream(BufferedOutputStream(FileOutputStream(context.contentResolver.openFileDescriptor(zipFile.uri, "w")?.fileDescriptor)))
-        for (file in files) {
-            val data = ByteArray(bufferSize)
-            FileInputStream(file).use { fileInputStream ->
-                BufferedInputStream(fileInputStream, bufferSize).use { origin ->
-                    val entry = ZipEntry(file.name)
-                    out.putNextEntry(entry)
-                    var count: Int
-                    while (origin.read(data, 0, bufferSize).also { count = it } != -1) {
-                        out.write(data, 0, count)
-                    }
-                }
-            }
-        }
-        out.close()
+        writeLogsZip(files, FileOutputStream(context.contentResolver.openFileDescriptor(zipFile.uri, "w")?.fileDescriptor))
     }
 
     @Suppress("SameParameterValue")

@@ -569,7 +569,7 @@ abstract class BaseWatchFace : WatchFace() {
         if (layoutSet && (newTime.hasHourChanged(oldTime) || newTime.hasMinuteChanged(oldTime))) {
             missedReadingAlert()
             checkVibrateHourly(oldTime, newTime)
-            if (!simpleUi.isEnabled(currentWatchMode)) setDataFieldsAfterWakeFrame() // PERSONAL PATCH
+            if (!simpleUi.isEnabled(currentWatchMode)) setDataFieldsAfterWakeFrame()
         } else if (layoutSet && !simpleUi.isEnabled(currentWatchMode) && showSecond && newTime.hasSecondChanged(oldTime)) {
             setSecond()
         }
@@ -761,6 +761,7 @@ abstract class BaseWatchFace : WatchFace() {
         //************************************************************************
         strikeThroughSgvIfNeeded()
         setColor()
+        shownFreshness = freshness()
     }
 
     override fun on24HourFormatChanged(is24HourFormat: Boolean) {
@@ -838,7 +839,7 @@ abstract class BaseWatchFace : WatchFace() {
         lowResMode = isLowRes(watchMode)
         if (simpleUi.isEnabled(currentWatchMode)) simpleUi.setAntiAlias(currentWatchMode)
         else
-            setDataFieldsAfterWakeFrame() // PERSONAL PATCH
+            setDataFieldsAfterWakeFrame()
         invalidate()
     }
 
@@ -936,23 +937,56 @@ abstract class BaseWatchFace : WatchFace() {
      */
     protected open fun frameTime(): Long = dateUtil.now()
 
-    // ---- PERSONAL PATCH: fast first frame after a wake, see FirstFrameAfterWake ----
-
     /**
-     * [setDataFields], except in the first frame after a wake: then only the date and time now, so
-     * the frame is ready fast, and the full [setDataFields] - values, colours, design, chart - right
-     * after that frame is on the screen. The next frame shows it. Until then the other views keep
-     * what they showed before the wake.
+     * [setDataFields], except in the first frame after a wake (see [FirstFrameAfterWake]): then only
+     * the date, the time and the ages of the reading and of the loop now, so the frame is ready fast,
+     * and the full [setDataFields] (values, colours, design, chart) right after that frame is on the
+     * screen. The next frame shows it.
+     *
+     * When a reading or the loop has become old (or fresh again) since the last full refresh, the
+     * full refresh runs at once: the stale marks and colours must never claim fresh data, not even for
+     * one frame.
      */
     private fun setDataFieldsAfterWakeFrame() {
-        if (!wakeFrame.isActive) {
-            setDataFields()
-            return
-        }
+        wakeFrame.refresh(
+            quickIsEnough = { freshness() == shownFreshness },
+            full = ::setDataFields,
+            quick = ::setDateTimeAndAges,
+            later = {
+                if (::binding.isInitialized && layoutSet && !simpleUi.isEnabled(currentWatchMode)) setDataFields()
+                invalidate()
+            }
+        )
+    }
+
+    /** What [freshness] was at the last full [setDataFields], so what the stale marks and colours show. */
+    private var shownFreshness: List<Int>? = null
+
+    /**
+     * Per dataset, the age class of the reading ([ageLevel]) and of the loop ([loopLevelNow]). The
+     * stale marks and colours of [setDataFields] change only when one of these changes.
+     */
+    private fun freshness(): List<Int> = (0..2).flatMap { listOf(ageLevel(it), loopLevelNow(it)) }
+
+    /** The loop level [setDataFields] shows for dataset [id]: -1 never ran, 0 older than 14 minutes, 1 fresh. */
+    private fun loopLevelNow(id: Int): Int = loopMinutes(id)?.let { if (it > 14) 0 else 1 } ?: -1
+
+    /** Minutes since the loop of dataset [id] last ran, or null when it never ran. */
+    private fun loopMinutes(id: Int): Int? =
+        status[id].openApsStatus.takeIf { it != -1L }?.let { ((System.currentTimeMillis() - it) / 1000 / 60).toInt() }
+
+    /** The cheap part of [setDataFields]: date, time, and the minutes since the reading and the loop. */
+    private fun setDateTimeAndAges() {
         setDateAndTime()
-        wakeFrame.refreshAfterFrame {
-            if (::binding.isInitialized && layoutSet && !simpleUi.isEnabled(currentWatchMode)) setDataFields()
-            invalidate()
+        binding.timestamp.text = readingAge()
+        binding.loop?.text = loopMinutes(0)?.let { "$it'" } ?: "-"
+        if (enableExt1) {
+            binding.timestampExt1?.text = readingAge(id = 1)
+            binding.loopExt1?.text = loopMinutes(1)?.let { "$it'" } ?: "-"
+        }
+        if (enableExt2) {
+            binding.timestampExt2?.text = readingAge(id = 2)
+            binding.loopExt2?.text = loopMinutes(2)?.let { "$it'" } ?: "-"
         }
     }
 }

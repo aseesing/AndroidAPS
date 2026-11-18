@@ -5,12 +5,9 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Watch
-import app.aaps.core.data.model.RM
-import app.aaps.core.data.model.TT
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
-import app.aaps.core.interfaces.db.observeChanges
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.notifications.NotificationManager
@@ -22,10 +19,8 @@ import app.aaps.core.interfaces.receivers.Intents
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.collectResilient
-import app.aaps.core.interfaces.rx.events.EventAutosensCalculationFinished
-import app.aaps.core.interfaces.rx.events.EventLoopUpdateGui
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
-import app.aaps.core.interfaces.rx.events.EventNsClientStatusUpdated
+import app.aaps.core.interfaces.rx.events.EventMobileToWearWatchface // PERSONAL PATCH: a new design ends the carry-over
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.events.EventWearUpdateTiles
 import app.aaps.core.interfaces.rx.weardata.CwfData
@@ -43,16 +38,21 @@ import app.aaps.core.ui.CoreUiStrings
 import app.aaps.core.ui.compose.preference.PreferenceSubScreenDef
 import app.aaps.core.utils.DeferredForegroundStart
 import app.aaps.plugins.sync.SyncStrings
-import app.aaps.plugins.sync.wear.WearPlugin.Companion.RESEND_DEBOUNCE
 import app.aaps.plugins.sync.wear.compose.WearComposeContent
-import app.aaps.plugins.sync.wear.keys.WearDayNightKey
+import app.aaps.plugins.sync.wear.daynight.WearDayNightCarryOver // PERSONAL PATCH: day and night of the personal build
+import app.aaps.plugins.sync.wear.keys.WearDayNightBooleanKey
+import app.aaps.plugins.sync.wear.keys.WearDayNightCarryOverKey // PERSONAL PATCH: day and night of the personal build
+import app.aaps.plugins.sync.wear.keys.WearDayNightIntKey
+import app.aaps.plugins.sync.wear.keys.WearDayNightStringKey
 import app.aaps.plugins.sync.wear.keys.WearDesignImportKey // PERSONAL PATCH: design import
+import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
+import app.aaps.plugins.sync.wear.keys.WearPlaceUseKey // PERSONAL PATCH: what the designs need the place for
 import app.aaps.plugins.sync.wear.receivers.WearDataReceiver
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
 import app.aaps.plugins.sync.wear.wearintegration.DataLayerListenerServiceMobileHelper
-import app.aaps.plugins.sync.wear.wearintegration.EventWearNightWatchface
-import app.aaps.plugins.sync.wear.wearintegration.WearNightFacePreferences
+import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
+import app.aaps.plugins.sync.wear.wearintegration.isForOwnWatchOnly
 import app.aaps.shared.impl.extensions.safeQueryBroadcastReceivers
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
@@ -62,22 +62,15 @@ import dev.zacsweers.metro.binding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
-import kotlin.time.Duration.Companion.seconds
 import dev.zacsweers.metro.IntKey as MetroIntKey
 
 @SingleIn(AppScope::class)
@@ -98,6 +91,7 @@ class WearPlugin(
     private val scenes: SceneAutomationApi,
     private val eatReminder: EatReminder,
     notificationManager: NotificationManager,
+    private val wearNightFace: WearNightFace,
 ) : PluginBaseWithPreferences(
     pluginDescription = PluginDescription()
         .mainType(PluginType.SYNC)
@@ -105,9 +99,14 @@ class WearPlugin(
         .pluginName(CoreUiStrings.wear)
         .description(SyncStrings.description_wear)
         .composeContent { WearComposeContent() },
-    ownPreferences = WearDayNightKey.entries + WearNightFaceKey.entries + WearDesignImportKey.entries, // PERSONAL PATCH: day and night face, design import
+    ownPreferences = WearNightFaceKey.entries + WearNightFaceBooleanKey.entries +
+        WearDayNightBooleanKey.entries + WearDayNightIntKey.entries + WearDayNightStringKey.entries +
+        WearDesignImportKey.entries + WearDayNightCarryOverKey.entries + WearPlaceUseKey.entries, // PERSONAL PATCH: design import, day and night of the personal build, what the designs need the place for
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
+
+    @Inject lateinit var resendTiming: WearResendTiming // PERSONAL PATCH: when the watch gets a resend
+    @Inject lateinit var dayNightCarryOver: WearDayNightCarryOver // PERSONAL PATCH: day and night of the personal build
 
     private var scope: CoroutineScope? = null
     private val deferredStart = DeferredForegroundStart()
@@ -137,6 +136,7 @@ class WearPlugin(
 
     override suspend fun onStart() {
         super.onStart()
+        dayNightCarryOver.runOnce() // PERSONAL PATCH: before the first rule goes to the watch, see WearDayNightCarryOver.kt
         val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         scope = newScope
         deferredStart.start { dataLayerListenerServiceMobileHelper.startService(context) }
@@ -178,16 +178,18 @@ class WearPlugin(
             preferences.observe(StringNonKey.WearCwfFileName).drop(1).map {},
             // Which Watch Face Format face the watch installs; the watch swaps its slot on arrival
             preferences.observe(StringKey.WearPushedWatchface).drop(1).map {},
-            preferences.observe(WearDayNightKey.DayNightLookSetting).drop(1).map {}, // PERSONAL PATCH: day and night face
-            preferences.observe(WearDayNightKey.AlwaysOnLookSetting).drop(1).map {}, // PERSONAL PATCH: day and night face
+            // Day and night for the night face; sent only while the watch has one
+            preferences.observe(WearDayNightBooleanKey.UsePhoneLocation).drop(1).map {},
+            preferences.observe(WearDayNightStringKey.Mode).drop(1).map {},
+            preferences.observe(WearDayNightStringKey.City).drop(1).map {},
+            preferences.observe(WearDayNightIntKey.DayStart).drop(1).map {},
+            preferences.observe(WearDayNightIntKey.NightStart).drop(1).map {},
         ).collectResilient(newScope, aapsLogger, LTag.WEAR) {
             dataHandlerMobile.resendData("PreferenceChange")
             checkCustomWatchfacePreferences()
-            checkNightWatchfacePreferences() // PERSONAL PATCH: day and night face
+            wearNightFace.checkMetadata()
         }
-        collectNightWatchface(newScope) // PERSONAL PATCH: day and night face
-        resendRequests(newScope)
-            .collectResilient(newScope, aapsLogger, LTag.WEAR) { reason -> dataHandlerMobile.resendData(reason) }
+        resendTiming.start(newScope) // PERSONAL PATCH: when the watch gets a resend, see WearResendSchedule.kt
         // Refresh wear scene tile whenever the scene list changes (add / update / delete). The
         // active state goes too: an edited follow-up changes which button the tile offers.
         scenes.scenesFlow
@@ -222,55 +224,10 @@ class WearPlugin(
                 //  AAPSClient want pass data to AAPS
                 //  AAPSClient2 want pass data to AAPS or AAPSClient 1
                 // ) do it here as the data is prepared
-                if (config.AAPSCLIENT && preferences.get(BooleanKey.WearBroadcastData)) broadcastData(it.payload)
+                // Never what is only for this phone's own watch (see isForOwnWatchOnly)
+                if (config.AAPSCLIENT && preferences.get(BooleanKey.WearBroadcastData) && !isForOwnWatchOnly(it.payload)) broadcastData(it.payload)
             }
-    }
-
-    /**
-     * The events after which the watch gets everything again, as one flow with one [RESEND_DEBOUNCE].
-     *
-     * Every resend builds the whole graph and all treatments again. After a BG the calculation, the loop
-     * and NS each send their event within seconds, often twice, and each one used to start its own
-     * resend: 9 full resends in 45 s were measured on a phone. Gives the reason of the last event of a
-     * burst, for the log.
-     *
-     * The sources are subscribed here, undispatched, into a channel. `merge` would subscribe a moment
-     * later in its own coroutines, and an event sent before that would be lost (see `collectResilient`).
-     * The channel keeps the request until the debounce reads it.
-     */
-    @OptIn(FlowPreview::class)
-    internal fun resendRequests(scope: CoroutineScope, now: () -> Long = { System.currentTimeMillis() }): Flow<String> {
-        val requests = Channel<String>(Channel.CONFLATED)
-        fun forward(source: Flow<*>, reason: String) {
-            source.collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { requests.trySend(reason) }
-        }
-        forward(rxBus.toFlow(EventAutosensCalculationFinished::class), "EventAutosensCalculationFinished")
-        forward(rxBus.toFlow(EventLoopUpdateGui::class), "EventLoopUpdateGui")
-        // AAPSCLIENT: fresh predictions arrive via NS devicestatus, not a local loop run — without this the
-        // watch graph trails the phone by one loop cycle (the BG-triggered autosens resend fires BEFORE the
-        // master's new devicestatus lands). Event is only sent on AAPSCLIENT; processedDeviceStatusData is
-        // updated synchronously before it fires, so the resend reads the new predictions.
-        forward(rxBus.toFlow(EventNsClientStatusUpdated::class), "EventNsClientStatusUpdated")
-        // Push status to watch quickly when a TT changes, without waiting for the loop's 10s debounce
-        forward(persistenceLayer.observeChanges<TT>().drop(1), "TempTargetChange") // drop: the initial emission on collection start
-        // The "time to eat" timer: the watch draws its end and rings at it, so a start, stop or +5 min goes out at once
-        forward(eatReminder.state.drop(1), "EatReminderChange") // drop: the current state on collection start
-        // Push status to watch quickly when the running mode changes on the phone, so the
-        // running-mode complication and tile do not wait for the next loop run. A wear-side
-        // change already refreshes through handleRunningModeConfirmed.
-        forward(persistenceLayer.observeChanges<RM>().drop(1), "RunningModeChange")
-        // The first resend after a quiet spell goes out fast, it brings the new BG. What follows within
-        // RESEND_SETTLE_WINDOW - the loop result, a new TBR and its recalculation, NS - waits for
-        // RESEND_SETTLE_DEBOUNCE of quiet and goes out as one. That is 2 resends per BG cycle instead
-        // of 5, each one about ten messages that wake the watch. A change the user made goes out fast
-        // always, see FAST_REASONS.
-        var lastResend = Long.MIN_VALUE
-        return requests.receiveAsFlow()
-            .debounce { reason ->
-                val settling = lastResend != Long.MIN_VALUE && now() - lastResend < RESEND_SETTLE_WINDOW.inWholeMilliseconds
-                if (settling && reason !in FAST_REASONS) RESEND_SETTLE_DEBOUNCE else RESEND_DEBOUNCE
-            }
-            .onEach { lastResend = now() }
+        rxBus.toFlow(EventMobileToWearWatchface::class).collectResilient(newScope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { if (!it.night) dayNightCarryOver.designSentByPhone() } // PERSONAL PATCH: a new design ends the carry-over, see WearDayNightCarryOver.kt
     }
 
     fun checkCustomWatchfacePreferences() {
@@ -354,9 +311,7 @@ class WearPlugin(
                 key = "wear_custom_watchface_settings",
                 title = SyncStrings.wear_custom_watchface_settings,
                 items = listOf(
-                    BooleanKey.WearCustomWatchfaceAuthorization,
-                    WearDayNightKey.DayNightLookSetting, // PERSONAL PATCH: day and night face
-                    WearDayNightKey.AlwaysOnLookSetting // PERSONAL PATCH: day and night face
+                    BooleanKey.WearCustomWatchfaceAuthorization
                 )
             ),
             PreferenceSubScreenDef(
@@ -370,53 +325,6 @@ class WearPlugin(
         icon = Icons.Default.Watch
     )
 
-    // ---- PERSONAL PATCH: day and night face, see WearNightFace.kt ----
-
-    private val nightFace = WearNightFacePreferences(preferences)
-
-    private val _savedNightWatchface = MutableStateFlow<CwfData?>(null)
-
-    /** The night face the watch confirmed, like [savedCustomWatchface] for the main face. Null when the watch has none. */
-    val savedNightWatchface: StateFlow<CwfData?> = _savedNightWatchface.asStateFlow()
-
-    /** Keeps the night face the watch reports, and gives it the metadata the phone settings ask for. */
-    internal fun collectNightWatchface(scope: CoroutineScope) {
-        rxBus.toFlow(EventWearNightWatchface::class)
-            .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { event ->
-                _savedNightWatchface.value = event.customWatchfaceData
-                checkNightWatchfacePreferences()
-            }
-    }
-
-    /** The night face version of [checkCustomWatchfacePreferences]. */
-    fun checkNightWatchfacePreferences() {
-        _savedNightWatchface.value?.let { nightFace.metadataUpdate(it) }?.let {
-            rxBus.send(EventMobileToWear(EventData.ActionUpdateCustomWatchface(it, night = true)))
-        }
-    }
-
-    /**
-     * Asks the watch to forget its night face, so the main face shows day and night again. The
-     * watch then reports its main face only, so the night face is marked as gone here.
-     */
-    fun clearNightWatchface(timeStamp: Long) {
-        rxBus.send(EventMobileToWear(EventData.ActionClearNightWatchface(timeStamp)))
-        _savedNightWatchface.value = null
-        nightFace.forget()
-    }
-
-    internal companion object {
-
-        /** The same 2 s the TT and running mode changes waited before they were merged in here. */
-        val RESEND_DEBOUNCE = 2.seconds
-
-        /** How long after a resend further events count as part of the same BG cycle. */
-        val RESEND_SETTLE_WINDOW = 60.seconds
-
-        /** The quiet those further events wait for. Longer than any gap in a measured BG cycle (20 s). */
-        val RESEND_SETTLE_DEBOUNCE = 30.seconds
-
-        /** Changes the user made and expects to see on the watch at once: never the settle wait. */
-        val FAST_REASONS = setOf("TempTargetChange", "RunningModeChange", "EatReminderChange")
-    }
+    /** PERSONAL PATCH: the night face the watch confirmed, for its live preview and settings (see `PreviewSlot.NIGHT`). */
+    val savedNightWatchface: StateFlow<CwfData?> get() = wearNightFace.saved
 }

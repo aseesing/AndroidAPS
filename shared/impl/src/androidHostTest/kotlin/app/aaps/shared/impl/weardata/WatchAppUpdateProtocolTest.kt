@@ -13,14 +13,16 @@ import java.io.IOException
 
 class WatchAppUpdateProtocolTest {
 
+    private val sha = "ab".repeat(32)
+
     @Test
     fun `a header is read back as written`() {
         val buffer = ByteArrayOutputStream()
-        WatchAppUpdateProtocol.writeHeader(buffer, Header("4.0.1 (aaps-wear.apk)", 20_000_000))
+        WatchAppUpdateProtocol.writeHeader(buffer, Header("4.0.1 (aaps-wear.apk)", 20_000_000, 58_000_000, sha))
 
         val header = WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray()))
 
-        assertThat(header).isEqualTo(Header("4.0.1 (aaps-wear.apk)", 20_000_000))
+        assertThat(header).isEqualTo(Header("4.0.1 (aaps-wear.apk)", 20_000_000, 58_000_000, sha))
     }
 
     @Test
@@ -29,7 +31,7 @@ class WatchAppUpdateProtocolTest {
     }
 
     @Test
-    fun `a newer protocol version is refused`() {
+    fun `a newer header is refused with the text for an old watch app`() {
         val buffer = ByteArrayOutputStream()
         DataOutputStream(buffer).apply {
             writeInt(WatchAppUpdateProtocol.MAGIC)
@@ -39,8 +41,54 @@ class WatchAppUpdateProtocolTest {
         }
 
         val e = assertThrows<IOException> { WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray())) }
-        // The phone looks for this text to try an older version
-        assertThat(e.message).contains(WatchAppUpdateProtocol.UNKNOWN_FORMAT)
+        assertThat(e.message).startsWith(WatchAppUpdateProtocol.UNKNOWN_FORMAT)
+    }
+
+    @Test
+    fun `an older header is refused with the text for an old phone app`() {
+        val buffer = ByteArrayOutputStream()
+        DataOutputStream(buffer).apply {
+            writeInt(WatchAppUpdateProtocol.MAGIC)
+            writeInt(WatchAppUpdateProtocol.VERSION - 1)
+            writeUTF("x")
+            writeLong(10)
+            writeUTF("ab".repeat(32))
+        }
+
+        val e = assertThrows<IOException> { WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray())) }
+        assertThat(e.message).startsWith(WatchAppUpdateProtocol.OLD_FORMAT)
+        assertThat(e.message).doesNotContain(WatchAppUpdateProtocol.UNKNOWN_FORMAT)
+    }
+
+    @Test
+    fun `an empty or huge APK size is refused`() {
+        for (size in listOf(0L, -1L, WatchAppUpdateProtocol.MAX_APK_SIZE + 1)) {
+            val buffer = ByteArrayOutputStream()
+            WatchAppUpdateProtocol.writeHeader(buffer, Header("x", 10, size, sha))
+            assertThrows<IOException> { WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray())) }
+        }
+    }
+
+    @Test
+    fun `a version 1 header, without a hash, is refused`() {
+        val buffer = ByteArrayOutputStream()
+        DataOutputStream(buffer).apply {
+            writeInt(WatchAppUpdateProtocol.MAGIC)
+            writeInt(1)
+            writeUTF("old")
+            writeLong(10)
+        }
+
+        assertThrows<IOException> { WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray())) }
+    }
+
+    @Test
+    fun `a header without a proper hash is refused`() {
+        for (hash in listOf("", "AB".repeat(32), "ab".repeat(31), "zz".repeat(32))) {
+            val buffer = ByteArrayOutputStream()
+            WatchAppUpdateProtocol.writeHeader(buffer, Header("x", 10, 30, hash))
+            assertThrows<IOException> { WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray())) }
+        }
     }
 
     @Test
@@ -48,7 +96,8 @@ class WatchAppUpdateProtocolTest {
         val written = Header(
             label = "4.0.1 (aaps-wear.apk)",
             bodySize = 20_000_000,
-            sha256 = "ab".repeat(32),
+            apkSize = 58_000_000,
+            sha256 = sha,
             wifi = WifiOffer(listOf("192.168.1.20", "10.0.0.5"), 45_123, "00112233445566778899aabbccddeeff")
         )
         val buffer = ByteArrayOutputStream()
@@ -57,32 +106,16 @@ class WatchAppUpdateProtocolTest {
         val header = WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray()))
 
         assertThat(header).isEqualTo(written)
-        assertThat(header.version).isEqualTo(WatchAppUpdateProtocol.VERSION)
     }
 
     @Test
-    fun `a version 1 header is still read, without hash and Wi-Fi`() {
-        val buffer = ByteArrayOutputStream()
-        // What a phone app with version 1 wrote
-        DataOutputStream(buffer).apply {
-            writeInt(WatchAppUpdateProtocol.MAGIC)
-            writeInt(1)
-            writeUTF("old")
-            writeLong(10)
-        }
+    fun `the token never shows in the text of an offer or a header`() {
+        val token = "00112233445566778899aabbccddeeff"
+        val offer = WifiOffer(listOf("192.168.1.20"), 45_123, token)
 
-        val header = WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray()))
-
-        assertThat(header).isEqualTo(Header("old", 10, version = WatchAppUpdateProtocol.VERSION_CHANNEL_ONLY))
-    }
-
-    @Test
-    fun `a version 1 header is written the way version 1 reads it`() {
-        val buffer = ByteArrayOutputStream()
-        WatchAppUpdateProtocol.writeHeader(buffer, Header("old", 10, sha256 = "ignored", version = WatchAppUpdateProtocol.VERSION_CHANNEL_ONLY))
-
-        // magic, version, label (2 + 3 bytes), size, and nothing more
-        assertThat(buffer.size()).isEqualTo(4 + 4 + 5 + 8)
+        assertThat(offer.toString()).doesNotContain(token)
+        assertThat(offer.toString()).contains("192.168.1.20")
+        assertThat(Header("x", 10, 20, sha, offer).toString()).doesNotContain(token)
     }
 
     @Test
@@ -111,7 +144,7 @@ class WatchAppUpdateProtocolTest {
     fun `an empty or huge body size is refused`() {
         for (size in listOf(0L, -1L, WatchAppUpdateProtocol.MAX_BODY_SIZE + 1)) {
             val buffer = ByteArrayOutputStream()
-            WatchAppUpdateProtocol.writeHeader(buffer, Header("x", size))
+            WatchAppUpdateProtocol.writeHeader(buffer, Header("x", size, 30, sha))
             assertThrows<IOException> { WatchAppUpdateProtocol.readHeader(ByteArrayInputStream(buffer.toByteArray())) }
         }
     }

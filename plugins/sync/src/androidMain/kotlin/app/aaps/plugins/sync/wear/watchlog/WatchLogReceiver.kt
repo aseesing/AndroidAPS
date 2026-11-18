@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.watchlog
 
 import app.aaps.plugins.sync.wear.watchapp.ChannelStop
@@ -15,6 +11,8 @@ import app.aaps.plugins.sync.wear.watchapp.WifiBodyServerFactory
 import app.aaps.plugins.sync.wear.watchapp.runWithWatchdog
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
+import app.aaps.shared.impl.weardata.WatchLogCrypto
+import app.aaps.shared.impl.weardata.WatchLogCrypto.Secret
 import app.aaps.shared.impl.weardata.WatchLogProtocol
 import app.aaps.shared.impl.weardata.WatchLogProtocol.Reply
 import kotlinx.coroutines.CompletableDeferred
@@ -24,6 +22,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.BufferedOutputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -64,6 +63,12 @@ sealed class WatchLogState {
         /** The watch answered first, but then stopped */
         TIMEOUT,
 
+        /** The watch app knows an older request format: it needs a newer watch app */
+        OLD_WATCH_APP,
+
+        /** The watch is still sending a log to another download */
+        BUSY,
+
         /** The watch could not send its log, see the detail */
         WATCH_ERROR,
 
@@ -79,7 +84,9 @@ sealed class WatchLogState {
  *
  * The zip comes over Wi-Fi when the phone has a Wi-Fi address and the watch can reach it, and
  * otherwise over the Wear OS channel, which is Bluetooth and much slower. That is why the channel
- * gets only the newest [filesOverChannel] log files.
+ * gets only the newest [filesOverChannel] log files. Over Wi-Fi the zip is encrypted with a new key
+ * that only travels over the channel ([WatchLogCrypto]); the phone uses nothing of it before the tag
+ * is checked.
  *
  * Reads on a channel block and cannot be cancelled. A [ChannelWatchdog] closes the channel when
  * nothing moves for too long, which ends the blocked call with an [IOException].
@@ -92,6 +99,8 @@ sealed class WatchLogState {
  * @param prepareTimeoutMs how long the watch may take after that to connect over Wi-Fi, or to give
  *   up on it, and to zip its log
  * @param stallTimeoutMs how long a running transfer may stand still
+ * @param fallbackTimeoutMs how long the watch may take, after Wi-Fi broke, to notice it (it waits a
+ *   stall time too) and to start the zip over the channel
  * @param nowMs a clock in milliseconds, for the time estimate and the watchdog
  */
 class WatchLogReceiver(
@@ -103,6 +112,7 @@ class WatchLogReceiver(
     private val answerTimeoutMs: Long = 30_000,
     private val prepareTimeoutMs: Long = 150_000,
     private val stallTimeoutMs: Long = 60_000,
+    private val fallbackTimeoutMs: Long = 150_000,
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 }
 ) {
 
@@ -145,10 +155,12 @@ class WatchLogReceiver(
     ): WatchLogState {
         watchdog.extend(answerTimeoutMs)
         val offer = server?.let { WifiOffer(it.addresses, it.port, WatchAppSender.newToken()) }
-        WatchLogProtocol.writeRequest(channel.output, WatchLogProtocol.Request(filesOverWifi, filesOverChannel, offer))
+        // A new key for every download; it only travels over the channel
+        val secret = offer?.let { WatchLogCrypto.newSecret() }
+        WatchLogProtocol.writeRequest(channel.output, WatchLogProtocol.Request(filesOverWifi, filesOverChannel, offer, secret))
         when (val first = WatchLogProtocol.readReply(channel.input)) {
             Reply.Accepted  -> watchdog.answered = true
-            is Reply.Failed -> return WatchLogState.Failed(WatchLogState.Reason.WATCH_ERROR, first.message)
+            is Reply.Failed -> return refusal(first.message)
             else            -> throw IOException("Unexpected reply $first")
         }
 
@@ -156,8 +168,8 @@ class WatchLogReceiver(
         onState(WatchLogState.Preparing(channel.watchName))
         watchdog.extend(prepareTimeoutMs)
         val reply =
-            if (offer != null && server != null)
-                receiveOverWifi(offer, server, channel, target, watchdog, onState) ?: return WatchLogState.Received(channel.watchName, overWifi = true)
+            if (offer != null && secret != null && server != null)
+                receiveOverWifi(offer, secret, server, channel, target, watchdog, onState) ?: return WatchLogState.Received(channel.watchName, overWifi = true)
             else WatchLogProtocol.readReply(channel.input)
 
         return when (reply) {
@@ -172,7 +184,7 @@ class WatchLogReceiver(
                 WatchLogState.Received(channel.watchName, overWifi = false)
             }
 
-            is Reply.Failed      -> WatchLogState.Failed(WatchLogState.Reason.WATCH_ERROR, reply.message)
+            is Reply.Failed      -> refusal(reply.message)
             else                 -> throw IOException("Unexpected reply $reply")
         }
     }
@@ -184,39 +196,48 @@ class WatchLogReceiver(
      */
     private suspend fun receiveOverWifi(
         offer: WifiOffer,
+        secret: Secret,
         server: WifiBodyServer,
         channel: WatchChannel,
         target: File,
         watchdog: ChannelWatchdog,
         onState: (WatchLogState) -> Unit
     ): Reply? {
-        // Size and hash come over the channel, after the watch connected and made the zip
-        val zipInfo = CompletableDeferred<WatchLogProtocol.Zip>()
+        // The size comes over the channel, after the watch connected and made the zip
+        val bodySize = CompletableDeferred<Long>()
         return coroutineScope {
             val receiving = async {
                 try {
                     server.accept(offer.token).use { socket ->
                         // The watchdog only closes the channel; a stalled socket must end by itself
                         socket.soTimeout = stallTimeoutMs.toInt()
-                        val zip = zipInfo.await()
-                        val progress = receivingProgress(channel.watchName, zip.size, overWifi = true, onState)
-                        receiveZip(socket.getInputStream(), zip, target) { received ->
-                            watchdog.extend(stallTimeoutMs)
+                        val size = bodySize.await()
+                        val progress = receivingProgress(channel.watchName, size, overWifi = true, onState)
+                        // In one piece, so nothing is used before the AES-GCM tag is checked; the size is limited
+                        val body = ByteArrayOutputStream(size.toInt())
+                        WatchAppUpdateProtocol.copyBody(socket.getInputStream(), body, size) { received ->
+                            // Longer than the stall time of the socket: when Wi-Fi breaks, the socket
+                            // ends first, and then the watch still has time to fall back to the channel
+                            watchdog.extend(stallTimeoutMs + fallbackTimeoutMs)
                             progress.report(received)
                         }
+                        target.writeBytes(WatchLogCrypto.decrypt(body.toByteArray(), secret, WatchLogProtocol.MAX_ZIP_SIZE))
                     }
                     null
                 } catch (e: IOException) {
-                    // The watch gave up on Wi-Fi, or the server is closed: its reply says what comes next
+                    // The watch gave up on Wi-Fi, the server is closed, or the body is not the right one:
+                    // the reply of the watch says what comes next. The watch notices a broken Wi-Fi only
+                    // after its own stall time, so wait for that.
+                    watchdog.extend(fallbackTimeoutMs)
                     e
                 }
             }
             try {
                 var next = WatchLogProtocol.readReply(channel.input)
                 if (next is Reply.WifiZip) {
-                    watchdog.extend(stallTimeoutMs)
+                    watchdog.extend(stallTimeoutMs + fallbackTimeoutMs)
                     onState(WatchLogState.Receiving(channel.watchName, 0, overWifi = true))
-                    zipInfo.complete(next.zip)
+                    bodySize.complete(next.size)
                     next = WatchLogProtocol.readReply(channel.input)
                     // All is written on the watch side; the last bytes may still be on their way
                     if (next == Reply.WifiDone) {
@@ -248,6 +269,14 @@ class WatchLogReceiver(
         TransferProgress(size, nowMs) { percent, secondsLeft -> onState(WatchLogState.Receiving(watchName, percent, secondsLeft, overWifi)) }
 
     companion object {
+
+        /** What a refusal of the watch means for the user */
+        internal fun refusal(message: String): WatchLogState.Failed =
+            when {
+                message == WatchLogProtocol.BUSY                  -> WatchLogState.Failed(WatchLogState.Reason.BUSY)
+                message.contains(WatchLogProtocol.UNKNOWN_FORMAT) -> WatchLogState.Failed(WatchLogState.Reason.OLD_WATCH_APP, message)
+                else                                              -> WatchLogState.Failed(WatchLogState.Reason.WATCH_ERROR, message)
+            }
 
         /**
          * Over Bluetooth only the newest log files: the current log and the parts before it. One

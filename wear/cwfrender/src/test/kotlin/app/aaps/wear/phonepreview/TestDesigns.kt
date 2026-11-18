@@ -35,6 +35,9 @@ internal object TestDesigns {
     /** A face like [animated] in other colours, without animation and without slots. */
     fun still(): CwfData = load("Test_Still", face("Test Still", "#3A1020"), "#3A1020")
 
+    /** A face that asks for the place (`"needsPlace": true`), so it keeps the rule for when it is day, see `PlaceRuleKeeping`. */
+    fun withPlace(): CwfData = load("Test_Place", face("Test Place", "#101828").put("needsPlace", true), "#101828")
+
     /** A light face with slot 2 at 6 o'clock (left 142, top 318, 116 x 32), in the ink [STEPS_INK]. */
     fun steps(): CwfData = load("Test_Steps", face("Test Steps", "#F2EAD8").apply {
         put("complication2", slot(left = 142, top = 318, width = 116, height = 32, color = STEPS_INK))

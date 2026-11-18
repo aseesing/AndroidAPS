@@ -4,8 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
-import android.util.Log
 import androidx.core.content.IntentCompat
+import app.aaps.core.interfaces.di.injectMetroMembers
+import app.aaps.core.interfaces.logging.AAPSLogger
+import app.aaps.core.interfaces.logging.LTag
+import dev.zacsweers.metro.Inject
 
 /**
  * The result of an update of this app that the phone sent, see [WatchAppSelfUpdate].
@@ -16,11 +19,14 @@ import androidx.core.content.IntentCompat
  */
 class WatchAppInstallStatusReceiver : BroadcastReceiver() {
 
+    @Inject lateinit var aapsLogger: AAPSLogger
+    @Inject lateinit var notifier: WatchAppUpdateNotifier
+
     override fun onReceive(context: Context, intent: Intent) {
-        val notifier = WatchAppUpdateNotifier(context)
+        context.injectMetroMembers(this)
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
-        Log.i(TAG, "Watch app update status $status $message")
+        aapsLogger.info(LTag.WEAR, "Watch app update status $status $message")
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java) ?: return
@@ -29,17 +35,12 @@ class WatchAppInstallStatusReceiver : BroadcastReceiver() {
                     context.startActivity(Intent(confirm).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 } catch (e: Exception) {
                     // Android may block an activity start from the background: the notification stays
-                    Log.w(TAG, "Cannot open the confirmation", e)
+                    aapsLogger.warn(LTag.WEAR, "Watch app update: cannot open the confirmation: ${e.message}")
                 }
             }
 
             PackageInstaller.STATUS_SUCCESS             -> notifier.showDone()
             else                                        -> notifier.showFailed(message ?: "status $status")
         }
-    }
-
-    companion object {
-
-        private const val TAG = "WatchAppUpdate"
     }
 }

@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.shared.impl.weardata
 
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
@@ -35,22 +31,37 @@ class WatchLogProtocolTest {
     }
 
     @Test
-    fun `a request with Wi-Fi survives the trip`() {
-        val request = Request(0, 3, WifiOffer(listOf("192.168.1.20", "10.0.0.5"), 45_123, "secret"))
+    fun `a request with Wi-Fi and its secret survives the trip`() {
+        val request = Request(0, 3, WifiOffer(listOf("192.168.1.20", "10.0.0.5"), 45_123, "token"), WatchLogCrypto.newSecret())
         assertThat(roundTrip(request)).isEqualTo(request)
+    }
+
+    @Test
+    fun `a Wi-Fi offer without a secret cannot be made`() {
+        assertThrows<IllegalArgumentException> { Request(0, 3, WifiOffer(listOf("192.168.1.20"), 45_123, "token")) }
+    }
+
+    @Test
+    fun `the secret and the token never show in the text of a request`() {
+        val secret = WatchLogCrypto.newSecret()
+        val token = "00112233445566778899aabbccddeeff"
+        val text = Request(0, 3, WifiOffer(listOf("192.168.1.20"), 45_123, token), secret).toString()
+        assertThat(text).doesNotContain(secret.key.joinToString())
+        assertThat(text).doesNotContain(WatchAppUpdateProtocol.hex(secret.key))
+        assertThat(text).doesNotContain(token)
     }
 
     @Test
     fun `every reply survives the trip`() {
         val zip = Zip(123_456, "ab".repeat(32))
-        listOf(Reply.Accepted, Reply.WifiZip(zip), Reply.WifiDone, Reply.ChannelBody(zip), Reply.Failed("No log files")).forEach {
+        listOf(Reply.Accepted, Reply.WifiZip(123_472), Reply.WifiDone, Reply.ChannelBody(zip), Reply.Failed("No log files")).forEach {
             assertThat(roundTrip(it)).isEqualTo(it)
         }
     }
 
     @Test
     fun `a watch app update header is not taken as a log request`() {
-        val bytes = ByteArrayOutputStream().also { WatchAppUpdateProtocol.writeHeader(it, WatchAppUpdateProtocol.Header("x", 10)) }.toByteArray()
+        val bytes = ByteArrayOutputStream().also { WatchAppUpdateProtocol.writeHeader(it, WatchAppUpdateProtocol.Header("x", 10, 30, "ab".repeat(32))) }.toByteArray()
         assertThrows<IOException> { WatchLogProtocol.readRequest(ByteArrayInputStream(bytes)) }
     }
 
@@ -58,14 +69,18 @@ class WatchLogProtocolTest {
     fun `an unknown version is refused`() {
         val bytes = ByteArrayOutputStream().also { DataOutputStream(it).apply { writeInt(WatchLogProtocol.MAGIC); writeInt(WatchLogProtocol.VERSION + 1) } }.toByteArray()
         val error = assertThrows<IOException> { WatchLogProtocol.readRequest(ByteArrayInputStream(bytes)) }
-        assertThat(error.message).contains("Unknown")
+        assertThat(error.message).startsWith(WatchLogProtocol.UNKNOWN_FORMAT)
     }
 
     @Test
-    fun `a zip size out of range is refused`() {
-        val bytes = ByteArrayOutputStream().also {
+    fun `a zip size over the limit is refused before the body is read`() {
+        val overChannel = ByteArrayOutputStream().also {
             DataOutputStream(it).apply { writeInt(4); writeLong(WatchLogProtocol.MAX_ZIP_SIZE + 1); writeUTF("x") }
         }.toByteArray()
-        assertThrows<IOException> { WatchLogProtocol.readReply(ByteArrayInputStream(bytes)) }
+        assertThrows<IOException> { WatchLogProtocol.readReply(ByteArrayInputStream(overChannel)) }
+        val overWifi = ByteArrayOutputStream().also {
+            DataOutputStream(it).apply { writeInt(2); writeLong(WatchLogProtocol.MAX_ZIP_SIZE + WatchLogCrypto.TAG_BYTES + 1) }
+        }.toByteArray()
+        assertThrows<IOException> { WatchLogProtocol.readReply(ByteArrayInputStream(overWifi)) }
     }
 }

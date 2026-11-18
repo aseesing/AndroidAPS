@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.wearintegration
 
 import app.aaps.core.interfaces.aps.Loop
@@ -24,7 +20,7 @@ import app.aaps.core.interfaces.utils.TrendCalculator
 import app.aaps.core.keys.StringNonKey
 import app.aaps.core.objects.runningMode.RunningModeGuard
 import app.aaps.core.objects.wizard.QuickWizard
-import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
+import app.aaps.plugins.sync.wear.daynight.WearPlaceUse // PERSONAL PATCH
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineStart
@@ -38,12 +34,14 @@ import org.mockito.Mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
+import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever // PERSONAL PATCH
 import kotlin.reflect.KClass
 
 /**
- * What the phone does with the watch's word on its faces: a night face goes to its own slot and
- * its own keys, the main face stays where it always was. The watch may answer with
+ * What the phone does with the watch's word on its faces: a night face goes to [WearNightFace],
+ * the main face stays where it always was. The watch may answer with
  * ActionGetCustomWatchface (as it always did) or with ActionUpdateCustomWatchface; both count.
  */
 class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
@@ -66,6 +64,9 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
     private val nightFace = CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "Night"), mutableMapOf())
     private val mainFace = CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "AAPS V2"), mutableMapOf())
 
+    @Mock private lateinit var wearNightFace: WearNightFace
+    @Mock private lateinit var placeUse: WearPlaceUse // PERSONAL PATCH
+
     @BeforeEach
     fun prepare() {
         // Constructed for its subscriptions on rxBus
@@ -75,8 +76,11 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
             loop, processedDeviceStatusData, receiverStatusStore, quickWizard, trendCalculator, dateUtil,
             constraintsChecker, activePlugin, commandQueue, fabricPrivacy, uiInteraction,
             persistenceLayer, importExportPrefs, decimalFormatter, pumpStatusProvider,
-            ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor
-        )
+            ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor, UnchangedToWearFilter()
+        ).also {
+            it.wearNightFace = wearNightFace
+            it.placeUse = placeUse // PERSONAL PATCH
+        }
     }
 
     /** Sends [fromWatch] and waits for the first [T] the phone sends after it. */
@@ -87,19 +91,18 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `a night face from the watch goes to the night slot and its own keys`() {
-        val event = answerTo(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(nightFace, night = true)), EventWearNightWatchface::class)
+    fun `a night face from the watch goes to the night face, not to the main face keys`() {
+        rxBus.send(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(nightFace, night = true)))
 
-        assertThat(event.customWatchfaceData).isEqualTo(nightFace)
-        verify(preferences).put(WearNightFaceKey.NightWatchfaceName, "Night")
+        verify(wearNightFace, timeout(5_000)).reportedByWatch(nightFace)
         verify(preferences, never()).put(eq(StringNonKey.WearCwfWatchfaceName), any<String>())
     }
 
     @Test
-    fun `a night face sent as ActionUpdateCustomWatchface goes to the night slot`() {
-        val event = answerTo(EventData.ActionUpdateCustomWatchface(nightFace, night = true), EventWearNightWatchface::class)
+    fun `a night face sent as ActionUpdateCustomWatchface goes to the night face`() {
+        rxBus.send(EventData.ActionUpdateCustomWatchface(nightFace, night = true))
 
-        assertThat(event.customWatchfaceData).isEqualTo(nightFace)
+        verify(wearNightFace, timeout(5_000)).reportedByWatch(nightFace)
     }
 
     @Test
@@ -108,6 +111,36 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
 
         assertThat(event.customWatchfaceData).isEqualTo(mainFace)
         assertThat(event.exportFile).isFalse()
+        verify(wearNightFace, never()).reportedByWatch(any())
+    }
+
+    @Test
+    fun `the watch saying it has no night face goes to the night face`() {
+        rxBus.send(EventData.ActionClearNightWatchface(1L))
+
+        verify(wearNightFace, timeout(5_000)).noneOnWatch()
+    }
+
+    // PERSONAL PATCH: "no night face" while the phone knew of none is the watch refusing the rule, see WearPlaceUse.ruleRefused
+
+    @Test
+    fun `no night face while the phone knew of none - the phone forgets the need of the design`() {
+        whenever(wearNightFace.isKnown()).thenReturn(false)
+
+        rxBus.send(EventData.ActionClearNightWatchface(1L))
+
+        verify(placeUse, timeout(5_000)).ruleRefused()
+        verify(wearNightFace, timeout(5_000)).noneOnWatch()
+    }
+
+    @Test
+    fun `no night face while the phone knew of one - only the night face is forgotten`() {
+        whenever(wearNightFace.isKnown()).thenReturn(true)
+
+        rxBus.send(EventData.ActionClearNightWatchface(1L))
+
+        verify(wearNightFace, timeout(5_000)).noneOnWatch()
+        verify(placeUse, never()).ruleRefused()
     }
 
     @Test
@@ -115,5 +148,6 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
         val event = answerTo(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(mainFace)), EventWearUpdateGui::class)
 
         assertThat(event.customWatchfaceData).isEqualTo(mainFace)
+        verify(wearNightFace, never()).reportedByWatch(any())
     }
 }

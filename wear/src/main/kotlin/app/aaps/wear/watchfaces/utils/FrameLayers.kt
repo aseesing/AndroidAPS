@@ -148,17 +148,17 @@ class FrameLayers(private val newBitmap: (Int, Int) -> Bitmap = { width, height 
     private val data = Kept()
     private val top = Kept()
 
-    private var backgroundContent = 0
+    private var backgroundContent: Any = 0
     private var backgroundMinute = 0L
 
     private var dataMinute = 0L
-    private var dataContent = 0
+    private var dataContent: Any = 0
     private var dataLeaveOut: Set<String>? = null
     private var dataIsWake = false
     private val dataComplications = ArrayList<Any?>()
 
     private var topPeriod = 0L
-    private var topContent = 0
+    private var topContent: Any = 0
     private var topLeaveOut: Set<String>? = null
     private var topRest = false
 
@@ -171,7 +171,7 @@ class FrameLayers(private val newBitmap: (Int, Int) -> Bitmap = { width, height 
      * Draws a normal frame at [nowMs] onto [canvas]: the kept data picture (background, resting layers,
      * data), the clock text, the kept top picture and the second hand.
      */
-    fun drawNormal(canvas: Canvas, width: Int, height: Int, nowMs: Long, content: Int, complications: List<Any?>, parts: FrameParts) {
+    fun drawNormal(canvas: Canvas, width: Int, height: Int, nowMs: Long, content: Any, complications: List<Any?>, parts: FrameParts) {
         parts.prepare()
         val minute = Math.floorDiv(nowMs, MINUTE_MS)
         if (!dataFits(width, height, minute, content, complications, NO_VIEWS, wake = false)) {
@@ -196,7 +196,7 @@ class FrameLayers(private val newBitmap: (Int, Int) -> Bitmap = { width, height 
      * pictures; [live] draws what it wants of them, and the rain and the heart, between them.
      */
     fun drawWake(
-        canvas: Canvas, width: Int, height: Int, nowMs: Long, content: Int, complications: List<Any?>,
+        canvas: Canvas, width: Int, height: Int, nowMs: Long, content: Any, complications: List<Any?>,
         parts: FrameParts, leaveOut: Set<String>, live: WakeLayers
     ) {
         parts.prepare()
@@ -238,7 +238,7 @@ class FrameLayers(private val newBitmap: (Int, Int) -> Bitmap = { width, height 
      * minute the face styles its background again, and the design can colour it by a value (the red
      * background of an old glucose value is a safety cue), without telling anyone.
      */
-    private fun background(width: Int, height: Int, minute: Long, content: Int, parts: FrameParts): Bitmap {
+    private fun background(width: Int, height: Int, minute: Long, content: Any, parts: FrameParts): Bitmap {
         if (!background.fits(width, height) || backgroundContent != content || backgroundMinute != minute) {
             parts.background(background.begin(width, height, Color.BLACK))
             background.commit()
@@ -248,11 +248,11 @@ class FrameLayers(private val newBitmap: (Int, Int) -> Bitmap = { width, height 
         return background.bitmap!!
     }
 
-    private fun dataFits(width: Int, height: Int, minute: Long, content: Int, complications: List<Any?>, leaveOut: Set<String>, wake: Boolean): Boolean =
+    private fun dataFits(width: Int, height: Int, minute: Long, content: Any, complications: List<Any?>, leaveOut: Set<String>, wake: Boolean): Boolean =
         data.fits(width, height) && dataMinute == minute && dataContent == content && dataLeaveOut === leaveOut && dataIsWake == wake &&
             sameComplications(complications)
 
-    private fun keepData(minute: Long, content: Int, complications: List<Any?>, leaveOut: Set<String>, wake: Boolean) {
+    private fun keepData(minute: Long, content: Any, complications: List<Any?>, leaveOut: Set<String>, wake: Boolean) {
         dataMinute = minute
         dataContent = content
         dataLeaveOut = leaveOut
@@ -271,7 +271,7 @@ class FrameLayers(private val newBitmap: (Int, Int) -> Bitmap = { width, height 
     }
 
     /** The top picture; with the resting layers of the front slot when [rest] (a normal frame). */
-    private fun top(width: Int, height: Int, nowMs: Long, content: Int, leaveOut: Set<String>, parts: FrameParts, rest: Boolean): Bitmap {
+    private fun top(width: Int, height: Int, nowMs: Long, content: Any, leaveOut: Set<String>, parts: FrameParts, rest: Boolean): Bitmap {
         val period = Math.floorDiv(nowMs, TOP_PERIOD_MS)
         if (!top.fits(width, height) || topPeriod != period || topContent != content || topLeaveOut !== leaveOut || topRest != rest) {
             val c = top.begin(width, height, Color.TRANSPARENT)

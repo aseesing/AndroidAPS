@@ -1,11 +1,8 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.watchlog
 
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
+import app.aaps.shared.impl.weardata.WatchLogCrypto
 import app.aaps.shared.impl.weardata.WatchLogProtocol
 import app.aaps.shared.impl.weardata.WatchLogProtocol.Reply
 import app.aaps.shared.impl.weardata.WatchLogProtocol.Request
@@ -29,6 +26,7 @@ class WatchLogSendTaskTest {
     @get:Rule val folder = TemporaryFolder()
 
     private val offer = WifiOffer(listOf("192.168.1.20"), 45_123, "token")
+    private val secret = WatchLogCrypto.newSecret()
 
     /** Makes a "zip" whose content tells how many files were asked for */
     private inner class FakeZipper : LogZipSource {
@@ -73,12 +71,12 @@ class WatchLogSendTaskTest {
     }
 
     @Test
-    fun `with a Wi-Fi offer all files go over Wi-Fi`() {
+    fun `with a Wi-Fi offer all files go over Wi-Fi, encrypted with the secret from the channel`() {
         val zipper = FakeZipper()
         val wifi = FakeWifiBody()
         val output = ByteArrayOutputStream()
 
-        val result = WatchLogSendTask(zipper, wifi = { wifi }).send(request(Request(WatchLogProtocol.ALL_FILES, 10, offer)), output)
+        val result = WatchLogSendTask(zipper, wifi = { wifi }).send(request(Request(WatchLogProtocol.ALL_FILES, 10, offer, secret)), output)
 
         assertThat(result).isEqualTo(WatchLogSendTask.Result.Sent(0, 1000, overWifi = true))
         assertThat(zipper.asked).containsExactly(WatchLogProtocol.ALL_FILES)
@@ -86,8 +84,12 @@ class WatchLogSendTaskTest {
         assertThat(WatchLogProtocol.readReply(input)).isEqualTo(Reply.Accepted)
         val started = WatchLogProtocol.readReply(input) as Reply.WifiZip
         assertThat(WatchLogProtocol.readReply(input)).isEqualTo(Reply.WifiDone)
-        assertThat(wifi.output.size().toLong()).isEqualTo(started.zip.size)
-        assertThat(WatchAppUpdateProtocol.sha256(ByteArrayInputStream(wifi.output.toByteArray()))).isEqualTo(started.zip.sha256)
+        val sent = wifi.output.toByteArray()
+        assertThat(sent.size.toLong()).isEqualTo(started.size)
+        val zip = ByteArray(1000) { it.toByte() }
+        // Over Wi-Fi only the cipher text: not the zip itself, but the zip once decrypted with the secret
+        assertThat(sent.copyOf(zip.size)).isNotEqualTo(zip)
+        assertThat(WatchLogCrypto.decrypt(sent, secret, WatchLogProtocol.MAX_ZIP_SIZE)).isEqualTo(zip)
         assertThat(wifi.closed).isTrue()
     }
 
@@ -98,7 +100,7 @@ class WatchLogSendTaskTest {
         val logged = mutableListOf<String>()
 
         val result = WatchLogSendTask(zipper, wifi = { throw IOException("No Wi-Fi network") }, log = { logged += it })
-            .send(request(Request(WatchLogProtocol.ALL_FILES, 10, offer)), output)
+            .send(request(Request(WatchLogProtocol.ALL_FILES, 10, offer, secret)), output)
 
         assertThat(result).isEqualTo(WatchLogSendTask.Result.Sent(10, 1010, overWifi = false))
         assertThat(zipper.asked).containsExactly(10)
@@ -132,7 +134,7 @@ class WatchLogSendTaskTest {
         val output = ByteArrayOutputStream()
 
         val result = WatchLogSendTask(zipper, wifi = { HangingWifiBody() }, stallTimeoutMs = 300)
-            .send(request(Request(WatchLogProtocol.ALL_FILES, 10, offer)), output)
+            .send(request(Request(WatchLogProtocol.ALL_FILES, 10, offer, secret)), output)
 
         assertThat(result).isEqualTo(WatchLogSendTask.Result.Sent(10, 1010, overWifi = false))
         assertThat(zipper.asked).containsExactly(WatchLogProtocol.ALL_FILES, 10).inOrder()
@@ -190,6 +192,37 @@ class WatchLogSendTaskTest {
         val all = WatchLogZipper({ logs }, target).zip(WatchLogProtocol.ALL_FILES)
         assertThat(all.fileCount).isEqualTo(3)
         assertThat(entries(target)).doesNotContain("other.txt")
+    }
+
+    @Test
+    fun `the zipper takes only the app's own files in the folder itself, with flat names`() {
+        val logs = folder.newFolder("logs")
+        File(logs, "AndroidAPS.log").writeText("current")
+        File(logs, "AndroidAPS.log.txt").writeText("not a log")
+        File(logs, "other.log").writeText("another app")
+        File(logs, "AndroidAPS_sub.log").mkdir()
+        File(File(logs, "AndroidAPS_sub.log"), "AndroidAPS.log").writeText("in a sub folder")
+        val target = File(folder.root, "out.zip")
+
+        WatchLogZipper({ logs }, target).zip(WatchLogProtocol.ALL_FILES)
+
+        assertThat(entries(target)).containsExactly("AndroidAPS.log")
+    }
+
+    @Test
+    fun `the newest log files are taken up to the size limit, the older ones stay on the watch`() {
+        val logs = folder.newFolder("logs")
+        fun log(name: String, size: Int, time: Long) = File(logs, name).apply { writeBytes(ByteArray(size)); setLastModified(time) }
+        log("AndroidAPS.log", 400, 4_000_000)
+        log("AndroidAPS._2026-11-17_10-00-00_.0.zip", 400, 3_000_000)
+        log("AndroidAPS._2026-11-16_10-00-00_.0.zip", 400, 2_000_000)
+        log("AndroidAPS._2026-11-15_10-00-00_.0.zip", 100, 1_000_000)
+
+        val files = WatchLogZipper.logFiles(logs, WatchLogProtocol.ALL_FILES, maxBytes = 1_000)
+
+        // 400 + 400 fit, the third does not; the small old one after it is not taken either
+        assertThat(files.map { it.name }).containsExactly("AndroidAPS.log", "AndroidAPS._2026-11-17_10-00-00_.0.zip").inOrder()
+        assertThat(WatchLogZipper.logFiles(logs, 1, maxBytes = 1_000).map { it.name }).containsExactly("AndroidAPS.log")
     }
 
     @Test(expected = IOException::class)

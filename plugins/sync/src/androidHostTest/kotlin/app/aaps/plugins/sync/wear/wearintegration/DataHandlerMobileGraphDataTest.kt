@@ -72,7 +72,7 @@ class DataHandlerMobileGraphDataTest : TestBaseWithProfile() {
             loop, processedDeviceStatusData, receiverStatusStore, quickWizard, trendCalculator, dateUtil,
             constraintsChecker, activePlugin, commandQueue, fabricPrivacy, uiInteraction,
             persistenceLayer, importExportPrefs, decimalFormatter, pumpStatusProvider,
-            ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor
+            ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor, UnchangedToWearFilter()
         )
         sut.automation = automation
         sut.cwfWatchSettings = mock<CwfWatchSettingsStore>().also { whenever(it.values).thenReturn(watchSettings) } // PERSONAL PATCH

@@ -29,9 +29,9 @@ import androidx.wear.watchface.TapEvent
 import androidx.wear.watchface.WatchFace
 import androidx.wear.watchface.WatchFaceService
 import androidx.wear.watchface.WatchFaceType
-import androidx.wear.watchface.style.WatchFaceLayer
 import androidx.wear.watchface.WatchState
 import androidx.wear.watchface.style.CurrentUserStyleRepository
+import androidx.wear.watchface.style.WatchFaceLayer
 import java.time.ZonedDateTime
 import java.util.TimeZone
 
@@ -215,17 +215,29 @@ abstract class WatchFace : WatchFaceService() {
     internal open fun complicationRender(slot: ComplicationSlot): ComplicationRender = ComplicationRender.Declared
 
     /**
-     * Counts the changes announced through [invalidate]: data, preferences, mode, taps. A subclass that
+     * Counts the changes announced through [invalidate] (data, preferences, mode, taps) and every frame
+     * that was not drawn by [drawLayeredFrame] (ambient, the editor, a wake frame). A subclass that
      * keeps drawn pictures between frames compares it to know when they are out of date. Frames the
-     * library schedules on its own, once a second or once a minute, do not count.
+     * library schedules on its own, once a second or once a minute, and drawn by [drawLayeredFrame],
+     * do not count.
      */
     protected var contentVersion = 0
         private set
 
     /**
+     * Called after every frame. A frame drawn the normal way makes kept pictures stale, so the next
+     * layered frame draws them again: what changed while the face was in ambient or in the editor
+     * cannot stay hidden behind an old picture.
+     */
+    internal fun frameDrawn(layered: Boolean) {
+        if (!layered) contentVersion++
+    }
+
+    /**
      * Lets a subclass draw a whole interactive frame its own way, from pictures it kept, instead of
      * [onDraw], the complications and [onDrawOverlay]. Asked only for a plain frame on the watch: not
-     * ambient, not the editor's highlight, not a preview with layers left out. Return false to draw the
+     * ambient, not headless (editor, preview), not the editor's highlight, not a preview with layers
+     * left out, and not while a tapped complication shows its highlight. Return false to draw the
      * normal way.
      */
     protected open fun drawLayeredFrame(canvas: Canvas, bounds: Rect, zonedDateTime: ZonedDateTime): Boolean = false
@@ -236,25 +248,23 @@ abstract class WatchFace : WatchFaceService() {
     }
 
     /**
-     * PERSONAL PATCH: what the complication slots show now. The library hands every slot a new object
-     * when its data changes, so a subclass can compare these by reference.
-     *
-     * The same list every call, filled again, so a frame makes no list: a caller that keeps the values
-     * must copy them, and must not hold the list past the next call.
+     * What the complication slots show now. The library hands every slot a new object when its data
+     * changes. A subclass compares these lists with `equals`, so new data with equal content counts as
+     * no change.
      */
-    protected fun complicationDataNow(): List<Any?> { // PERSONAL PATCH
-        slotData.clear()
-        complicationSlotsManager?.complicationSlots?.values?.forEach { slotData.add(it.complicationData.value) }
-        return slotData
-    }
-
-    private val slotData = ArrayList<Any?>() // PERSONAL PATCH
+    protected fun complicationDataNow(): List<Any?> =
+        complicationSlotsManager?.complicationSlots?.values?.map { it.complicationData.value } ?: emptyList()
 
     /** Hands the watch state (ambient, visible, headless) to a subclass that wants to follow it. */
-    protected open fun onWatchStateReady(watchState: WatchState) {}
+    protected open fun onWatchStateReady(watchState: WatchState) {} // PERSONAL PATCH: for the wake-up animation
 
-    /** PERSONAL PATCH: keeps the first frame after a wake cheap, see [FirstFrameAfterWake]. */
-    protected val wakeFrame = FirstFrameAfterWake()
+    /**
+     * Keeps the first frame after a wake cheap, see [FirstFrameAfterWake]. Each renderer (engine) has
+     * its own, because the system may make a new engine on the same service object; this is the one
+     * of the renderer that drew last. Before the first frame it is one that never wakes.
+     */
+    protected var wakeFrame = FirstFrameAfterWake()
+        private set
 
     // Renderer instance
     private var renderer: WatchFaceRenderer? = null
@@ -278,8 +288,7 @@ abstract class WatchFace : WatchFaceService() {
         currentUserStyleRepository: CurrentUserStyleRepository
     ): WatchFace {
         this.complicationSlotsManager = complicationSlotsManager
-        onWatchStateReady(watchState)
-        wakeFrame.watch(watchState) // PERSONAL PATCH
+        onWatchStateReady(watchState) // PERSONAL PATCH
 
         // Create renderer that delegates to abstract methods
         renderer = WatchFaceRenderer(
@@ -333,6 +342,9 @@ abstract class WatchFace : WatchFaceService() {
             }
         }
 
+        /** The first frame after a wake of this renderer, see [WatchFace.wakeFrame]. */
+        private val wake = FirstFrameAfterWake().also { it.watch(wState) }
+
         init {
             // Register broadcast receiver for time changes
             val filter = IntentFilter().apply {
@@ -373,7 +385,8 @@ abstract class WatchFace : WatchFaceService() {
 
             // Update watch state
             val newAmbient = renderParameters.drawMode == DrawMode.AMBIENT
-            wakeFrame.beginFrame(leftAmbient = isAmbient && !newAmbient, interactive = !newAmbient && !wState.isHeadless) // PERSONAL PATCH
+            wakeFrame = wake
+            wake.beginFrame(leftAmbient = isAmbient && !newAmbient, interactive = !newAmbient && !wState.isHeadless)
             if (isAmbient != newAmbient) {
                 isAmbient = newAmbient
                 onWatchModeChanged(currentWatchMode)
@@ -386,17 +399,21 @@ abstract class WatchFace : WatchFaceService() {
             updateTime(zonedDateTime)
 
             val plainFrame = renderParameters.drawMode == DrawMode.INTERACTIVE &&
+                !wState.isHeadless &&
                 renderParameters.highlightLayer == null &&
-                renderParameters.watchFaceLayers == WatchFaceLayer.ALL_WATCH_FACE_LAYERS
-            // PERSONAL PATCH: the wake frame is drawn the plain way, one pass over the views; the
-            // layered frame and the wake animation would first draw their kept pictures again
-            if (!plainFrame || wakeFrame.isActive || !drawLayeredFrame(canvas, bounds, zonedDateTime)) {
+                renderParameters.watchFaceLayers == WatchFaceLayer.ALL_WATCH_FACE_LAYERS &&
+                !complicationTapShown(zonedDateTime)
+            // The wake frame is drawn the plain way, one pass over the views: the layered frame would
+            // first draw its kept pictures again
+            val layered = plainFrame && !wake.isActive && drawLayeredFrame(canvas, bounds, zonedDateTime)
+            if (!layered) {
                 // Delegate to abstract onDraw method
                 onDraw(canvas)
                 drawComplications(canvas, zonedDateTime)
                 onDrawOverlay(canvas)
             }
-            wakeFrame.endFrame() // PERSONAL PATCH
+            frameDrawn(layered)
+            wake.endFrame()
 
             // Read again after every frame, not only once at construction: whether seconds are shown
             // is known only after the first draw has loaded the design, and changes with preferences.
@@ -404,6 +421,17 @@ abstract class WatchFace : WatchFaceService() {
             // the start of the next minute. Without it a face drew 60 frames a minute for a clock that
             // changes once a minute.
             interactiveDrawModeUpdateDelayMillis = getInteractiveModeUpdateRate()
+        }
+
+        /**
+         * True while a tapped complication shows its highlight. The library draws it for a short time
+         * after the tap (see `CanvasComplicationDrawable`), and a kept picture would not show it.
+         */
+        private fun complicationTapShown(zonedDateTime: ZonedDateTime): Boolean {
+            val now = zonedDateTime.toInstant().toEpochMilli()
+            return renderParameters.lastComplicationTapDownEvents.values.any { tap ->
+                now - tap.tapTime.toEpochMilli() in 0L until COMPLICATION_TAP_HIGHLIGHT_MS
+            }
         }
 
         /**
@@ -515,7 +543,7 @@ abstract class WatchFace : WatchFaceService() {
 
         override fun onDestroy() {
             super.onDestroy()
-            wakeFrame.release() // PERSONAL PATCH
+            wake.release()
             try {
                 context.unregisterReceiver(dateTimeChangedReceiver)
             } catch (_: IllegalArgumentException) {
@@ -538,5 +566,11 @@ abstract class WatchFace : WatchFaceService() {
     /** PERSONAL PATCH: asks for a frame without new content, unlike [invalidate]: the kept pictures stay. */
     protected fun requestFrame() {
         renderer?.invalidate()
+    }
+
+    private companion object {
+
+        /** How long the library highlights a tapped complication, the same as in `CanvasComplicationDrawable`. */
+        const val COMPLICATION_TAP_HIGHLIGHT_MS = 300L
     }
 }
