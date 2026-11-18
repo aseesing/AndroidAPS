@@ -17,10 +17,13 @@ import app.aaps.core.interfaces.aps.AutosensDataStore
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.rx.events.EventAutosensCalculationFinished
 import app.aaps.core.interfaces.rx.events.EventLoopUpdateGui
+import app.aaps.core.interfaces.rx.events.EventNsClientStatusUpdated
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.FAST_DELAY_MS
+import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.MAX_RETRIES
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.REASON_NEW_BG
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.RETRY_DELAY_MS
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.SETTLE_QUIET_MS
+import app.aaps.plugins.sync.wear.WearResendSchedule.Outcome
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
@@ -80,7 +83,7 @@ class WearResendTimingTest : TestBaseWithProfile() {
         val resends = mutableListOf<Pair<Long, List<String>>>()
         sut.start(backgroundScope, { testScheduler.currentTime }) { reasons ->
             resends += testScheduler.currentTime to reasons
-            true
+            Outcome.SENT
         }
         runCurrent()
         return resends
@@ -211,5 +214,40 @@ class WearResendTimingTest : TestBaseWithProfile() {
         assertThat(calls).isEqualTo(2)
         at(60_000)
         assertThat(calls).isEqualTo(2)
+    }
+
+    /** A resend that keeps throwing is tried two more times, then given up: it does not wake the watch for ever. */
+    @Test
+    fun `a resend that keeps throwing is given up`() = runTest {
+        var calls = 0
+        dataHandlerMobile.stub {
+            onBlocking { resendData(any()) } doAnswer {
+                calls++
+                throw IllegalStateException("test")
+            }
+        }
+        sut.start(backgroundScope, { testScheduler.currentTime })
+        runCurrent()
+        temporaryTargets.emit(emptyList())
+        at(10 * 60_000L)
+        assertThat(calls).isEqualTo(1 + MAX_RETRIES)
+        // A new reason gives new tries
+        carbs.emit(emptyList())
+        at(20 * 60_000L)
+        assertThat(calls).isEqualTo(2 * (1 + MAX_RETRIES))
+    }
+
+    /** AAPSCLIENT: the predictions, IOB and COB from NS count as a loop run, so after a new BG they go out within 2 s. */
+    @Test
+    fun `new predictions from NS shortly after a new BG go out within 2 s`() = runTest {
+        val resends = collectResends()
+        rxBus.send(EventAutosensCalculationFinished(triggeredByNewBG = true))
+        at(10_000)
+        rxBus.send(EventNsClientStatusUpdated())
+        at(10_000 + FAST_DELAY_MS)
+        assertThat(resends).containsExactly(
+            FAST_DELAY_MS to listOf(REASON_NEW_BG),
+            10_000 + FAST_DELAY_MS to listOf("EventNsClientStatusUpdated")
+        ).inOrder()
     }
 }

@@ -4,14 +4,17 @@
 // ============================================================================================
 package app.aaps.plugins.sync.wear
 
+import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.DATABASE_GAP_MS
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.FAST_DELAY_MS
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.FOLLOW_WINDOW_MS
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.MAX_DELAY_MS
+import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.MAX_RETRIES
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.REASON_CALCULATION
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.REASON_NEW_BG
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.RETRY_DELAY_MS
 import app.aaps.plugins.sync.wear.WearResendSchedule.Companion.SETTLE_QUIET_MS
 import app.aaps.plugins.sync.wear.WearResendSchedule.Kind
+import app.aaps.plugins.sync.wear.WearResendSchedule.Outcome
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -31,15 +34,16 @@ class WearResendScheduleTest {
 
     private lateinit var schedule: WearResendSchedule
     private val resends = mutableListOf<Resend>()
+    private val givenUp = mutableListOf<List<String>>()
 
-    /** Starts the schedule; [sent] says whether a resend goes out. */
-    private fun TestScope.start(sent: (Int) -> Boolean = { true }) {
+    /** Starts the schedule; [outcome] says what happens to the resend with this number (from 1). */
+    private fun TestScope.start(outcome: (Int) -> Outcome = { Outcome.SENT }) {
         schedule = WearResendSchedule { testScheduler.currentTime }
         backgroundScope.launch {
-            schedule.run { reasons ->
+            schedule.run({ reasons ->
                 resends += Resend(testScheduler.currentTime, reasons)
-                sent(resends.size)
-            }
+                outcome(resends.size)
+            }) { reasons -> givenUp += reasons }
         }
         runCurrent()
     }
@@ -66,7 +70,7 @@ class WearResendScheduleTest {
     @Test
     fun `a fast reason goes out 2 s after it arrived, not earlier`() = runTest {
         start()
-        request(1_000, "TempTargetChange", Kind.USER_CHANGE)
+        request(1_000, "TempTargetChange", Kind.DATABASE_CHANGE)
         at(1_000 + FAST_DELAY_MS - 1)
         assertThat(resends).isEmpty()
         at(1_000 + FAST_DELAY_MS)
@@ -133,7 +137,7 @@ class WearResendScheduleTest {
         start()
         newBg(0)
         request(10_000, "EventNsClientStatusUpdated", Kind.OTHER)
-        request(30_000, "BolusChange", Kind.USER_CHANGE)
+        request(30_000, "BolusChange", Kind.DATABASE_CHANGE)
         at(40_000)
         assertThat(resends).containsExactly(
             Resend(2_000, listOf(REASON_NEW_BG)),
@@ -158,7 +162,7 @@ class WearResendScheduleTest {
     fun `a temp target followed at once by a loop run goes out after 2 s`() = runTest {
         start()
         newBg(0)
-        request(30_000, "TempTargetChange", Kind.USER_CHANGE)
+        request(30_000, "TempTargetChange", Kind.DATABASE_CHANGE)
         request(30_500, "EventLoopUpdateGui", Kind.CALCULATION_OR_LOOP)
         request(31_000, "EventNsClientStatusUpdated", Kind.OTHER)
         at(40_000)
@@ -205,7 +209,7 @@ class WearResendScheduleTest {
     /** g: the app is not initialized yet, so the resend did not go out. Its reasons wait and go out later. */
     @Test
     fun `a resend that did not go out is tried again with its reasons`() = runTest {
-        start { number -> number > 1 }
+        start { number -> if (number > 1) Outcome.SENT else Outcome.NOT_READY }
         newBg(0)
         at(2_000 + RETRY_DELAY_MS + 60_000)
         assertThat(resends).containsExactly(
@@ -217,13 +221,119 @@ class WearResendScheduleTest {
     /** g: an exception is a resend that did not go out, and the schedule keeps running. */
     @Test
     fun `a resend that threw is tried again`() = runTest {
-        start { number -> if (number == 1) throw IllegalStateException("test") else true }
-        request(0, "CarbsChange", Kind.USER_CHANGE)
+        start { number -> if (number == 1) throw IllegalStateException("test") else Outcome.SENT }
+        request(0, "CarbsChange", Kind.DATABASE_CHANGE)
         at(2_000 + RETRY_DELAY_MS)
-        request(100_000, "TempTargetChange", Kind.USER_CHANGE)
+        request(100_000, "TempTargetChange", Kind.DATABASE_CHANGE)
         at(110_000)
         assertThat(times()).containsExactly(2_000L, 2_000L + RETRY_DELAY_MS, 102_000L).inOrder()
         assertThat(resends[1].reasons).containsExactly("CarbsChange")
+    }
+
+    /** A resend that keeps failing does not wake the watch every 5 s for ever: two more tries, then quiet. */
+    @Test
+    fun `a resend that keeps failing is given up after two more tries`() = runTest {
+        start { throw IllegalStateException("test") }
+        request(0, "CarbsChange", Kind.DATABASE_CHANGE)
+        at(10 * 60_000L)
+        assertThat(times()).containsExactly(2_000L, 2_000L + RETRY_DELAY_MS, 2_000L + 2 * RETRY_DELAY_MS).inOrder()
+        assertThat(resends).hasSize(1 + MAX_RETRIES)
+        assertThat(givenUp).containsExactly(listOf("CarbsChange"))
+    }
+
+    /** After giving up, a new reason starts a resend again, with new tries. */
+    @Test
+    fun `a new reason after giving up gives a resend with new tries`() = runTest {
+        // The first three fail and are given up, the fourth (the new reason) fails once, then it works
+        start { number -> if (number <= 1 + MAX_RETRIES + 1) throw IllegalStateException("test") else Outcome.SENT }
+        request(0, "CarbsChange", Kind.DATABASE_CHANGE)
+        at(60_000)
+        request(100_000, "TempTargetChange", Kind.DATABASE_CHANGE)
+        at(200_000)
+        assertThat(times()).containsExactly(2_000L, 7_000L, 12_000L, 102_000L, 102_000L + RETRY_DELAY_MS).inOrder()
+        assertThat(resends.last().reasons).containsExactly("TempTargetChange")
+        assertThat(givenUp).containsExactly(listOf("CarbsChange"))
+    }
+
+    /** Before the app is initialized nothing can fail: the resend waits for as long as that lasts. */
+    @Test
+    fun `a resend keeps waiting while the app is not initialized`() = runTest {
+        start { number -> if (number <= 20) Outcome.NOT_READY else Outcome.SENT }
+        newBg(0)
+        at(200_000)
+        assertThat(resends).hasSize(21)
+        assertThat(resends.last()).isEqualTo(Resend(2_000 + 20 * RETRY_DELAY_MS, listOf(REASON_NEW_BG)))
+        assertThat(givenUp).isEmpty()
+    }
+
+    /**
+     * The schedule runs on the steady clock it is given. The wall clock, here only in the BG times, is set
+     * back by an hour within 5 s of a failed resend: the try again and the next BG are not held.
+     */
+    @Test
+    fun `a wall clock set back does not hold a resend`() = runTest {
+        var wallOffset = 1_700_000_000_000L
+        val wall = { testScheduler.currentTime + wallOffset }
+        start { number -> if (number == 1) Outcome.FAILED else Outcome.SENT }
+        at(1_000)
+        schedule.calculationFinished(triggeredByNewBG = true, newestBgTime = wall())
+        at(4_000)
+        wallOffset -= 3_600_000L
+        at(10_000)
+        assertThat(times()).containsExactly(3_000L, 3_000L + RETRY_DELAY_MS).inOrder()
+        // A new BG with a time an hour before the last one still goes out within 2 s
+        at(20_000)
+        schedule.calculationFinished(triggeredByNewBG = true, newestBgTime = wall())
+        at(20_000 + FAST_DELAY_MS)
+        assertThat(times()).containsExactly(3_000L, 3_000L + RETRY_DELAY_MS, 22_000L).inOrder()
+        assertThat(resends.last().reasons).containsExactly(REASON_NEW_BG)
+    }
+
+    /**
+     * A sync writes the nsId back to 60 rows, one every second. Each write is a database change, and the
+     * calculator runs again after each one. Every 300 ms after a write the calculation ends.
+     */
+    private fun TestScope.nsIdStorm(from: Long, count: Int, newBgAt: Long? = null) {
+        for (i in 0 until count) {
+            val ms = from + i * 1_000L
+            if (newBgAt != null && newBgAt in ms - 1_000 + 1..ms) newBg(newBgAt)
+            request(ms, "nsId$i", Kind.DATABASE_CHANGE)
+            at(ms + 300)
+            schedule.calculationFinished(triggeredByNewBG = false, newestBgTime = 0)
+        }
+    }
+
+    /** A storm of database changes gives one resend every 10 s, not one every 2 s. */
+    @Test
+    fun `a storm of nsId updates is merged into one resend every 10 s`() = runTest {
+        start()
+        newBg(0, bgTime = 0)
+        nsIdStorm(from = 30_000, count = 60)
+        at(120_000)
+        // The first change of the storm goes out within 2 s, then one resend every 10 s
+        assertThat(times()).containsExactly(2_000L, 32_000L, 42_000L, 52_000L, 62_000L, 72_000L, 82_000L, 92_000L).inOrder()
+        // No change waits longer than the gap
+        for (i in 0 until 60) {
+            val resend = resends.first { "nsId$i" in it.reasons }
+            assertThat(resend.at - (30_000 + i * 1_000L)).isAtMost(DATABASE_GAP_MS)
+        }
+        // The first user change after the storm goes out within 2 s again
+        request(120_000, "BolusChange", Kind.DATABASE_CHANGE)
+        at(130_000)
+        assertThat(resends.last()).isEqualTo(Resend(122_000, listOf("BolusChange")))
+    }
+
+    /** A new BG is never held by the gap: it goes out within 2 s, and takes the changes that wait with it. */
+    @Test
+    fun `a new BG during a storm of nsId updates goes out within 2 s`() = runTest {
+        start()
+        newBg(0, bgTime = 0)
+        nsIdStorm(from = 30_000, count = 60, newBgAt = 55_500)
+        at(120_000)
+        val bgResend = resends.last { REASON_NEW_BG in it.reasons }
+        assertThat(bgResend.at).isEqualTo(55_500 + FAST_DELAY_MS)
+        assertThat(bgResend.reasons).contains("nsId25")
+        assertThat(resends.size).isAtMost(9)
     }
 
     /** h: the new COB after carbs, the new predictions and TBR after a bolus come seconds after the resend. */
@@ -231,7 +341,7 @@ class WearResendScheduleTest {
     fun `a calculation or loop run shortly after a fast resend is fast too`() = runTest {
         start()
         newBg(0)
-        request(30_000, "CarbsChange", Kind.USER_CHANGE)           // resent at 32 s
+        request(30_000, "CarbsChange", Kind.DATABASE_CHANGE)       // resent at 32 s
         request(36_000, "EventLoopUpdateGui", Kind.CALCULATION_OR_LOOP)
         at(38_000)
         schedule.calculationFinished(triggeredByNewBG = false, newestBgTime = 0) // the new COB
@@ -243,7 +353,7 @@ class WearResendScheduleTest {
     @Test
     fun `a loop run after the follow window waits while the cycle settles`() = runTest {
         start()
-        request(0, "BolusChange", Kind.USER_CHANGE)
+        request(0, "BolusChange", Kind.DATABASE_CHANGE)
         request(2_000 + FOLLOW_WINDOW_MS + 1, "EventLoopUpdateGui", Kind.CALCULATION_OR_LOOP)
         at(30_000)
         assertThat(times()).containsExactly(2_000L)
