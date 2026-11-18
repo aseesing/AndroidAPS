@@ -39,15 +39,16 @@ import java.util.concurrent.TimeUnit
 class WatchAppUpdater internal constructor(
     private val source: EmbeddedWatchAppSource,
     opener: WatchChannelOpener,
+    wifiServers: WifiBodyServerFactory,
     private val aapsLogger: AAPSLogger,
     private val scope: CoroutineScope
 ) {
 
     @Inject
-    constructor(source: EmbeddedWatchAppSource, opener: WatchChannelOpener, aapsLogger: AAPSLogger) :
-        this(source, opener, aapsLogger, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+    constructor(source: EmbeddedWatchAppSource, opener: WatchChannelOpener, wifiServers: WifiBodyServerFactory, aapsLogger: AAPSLogger) :
+        this(source, opener, wifiServers, aapsLogger, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
 
-    private val sender = WatchAppSender(source, opener)
+    private val sender = WatchAppSender(source, opener, wifiServers)
 
     private val _state = MutableStateFlow<WatchAppUpdateState>(WatchAppUpdateState.Idle)
     val state: StateFlow<WatchAppUpdateState> = _state.asStateFlow()

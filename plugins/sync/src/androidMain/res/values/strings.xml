@@ -247,10 +247,12 @@
     <string name="wear_app_update_embedded" comment="%1$s=version and file name of the watch app inside this phone app. Example: Included in this phone app: 4.0.1 (aaps-wear-4.0.1.apk)">Included in this phone app: %1$s</string>
     <string name="wear_app_update_button">Update watch app</string>
     <string name="wear_app_update_send">Send to watch</string>
-    <string name="wear_app_update_hint">Sending takes several minutes. Keep the watch close to the phone until it is done.</string>
+    <string name="wear_app_update_hint">Over Bluetooth, sending takes several minutes. It is much faster when Wi-Fi is on, on the watch and on the phone, on the same network. Keep the watch close to the phone until it is done.</string>
     <string name="wear_app_update_connecting">Connecting to the watch…</string>
     <string name="wear_app_update_sending" comment="%1$s=name of the watch, %2$d=percent sent. Example: Sending to Pixel Watch: 42%">Sending to %1$s: %2$d%%</string>
     <string name="wear_app_update_sending_time_left" comment="%1$s=name of the watch, %2$d=percent sent, %3$s=time left with its unit. Example: Sending to Pixel Watch: 42%, about 3 min left">Sending to %1$s: %2$d%%, about %3$s left</string>
+    <string name="wear_app_update_over_wifi">Over Wi-Fi</string>
+    <string name="wear_app_update_over_bluetooth">Over Bluetooth, which is slow. Next time, turn on Wi-Fi on the watch, on the same network as the phone.</string>
     <string name="wear_app_update_installing" comment="%1$s=name of the watch">%1$s is preparing the install…</string>
     <string name="wear_app_update_sent" comment="%1$s=name of the watch">%1$s handed the update to its installer. Confirm the update on the watch when it asks. The watch app then restarts by itself.</string>
     <string name="wear_app_update_check_watch">All was sent, but the watch did not say whether the install started. Look on the watch: confirm the update there when it asks.</string>

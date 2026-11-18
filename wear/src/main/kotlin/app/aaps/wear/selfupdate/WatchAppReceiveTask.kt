@@ -3,6 +3,8 @@ package app.aaps.wear.selfupdate
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.Header
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.Reply
+import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
+import java.io.Closeable
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -31,25 +33,47 @@ fun interface WatchAppInstallSessionFactory {
     fun create(apkSize: Long): WatchAppInstallSession
 }
 
+/** The body, coming from the phone over Wi-Fi. [close] ends the connection and frees the network. */
+interface WifiBody : Closeable {
+
+    val input: InputStream
+}
+
+/** Connects to the Wi-Fi server of the phone, see [WifiOffer] */
+fun interface WifiBodyFetcher {
+
+    /** @throws IOException when the watch has no Wi-Fi, or cannot reach the phone */
+    fun open(offer: WifiOffer): WifiBody
+}
+
 /**
  * The watch side of [WatchAppUpdateProtocol]: reads one update from the phone and gives the APK
  * to the package installer.
  *
- * The APK is unpacked while it arrives, so the watch never holds the compressed copy in a file.
+ * When the phone offers Wi-Fi, the body comes from there, which is much faster. When that does not
+ * work, the body comes over the channel as before. The APK is unpacked while it arrives, so the
+ * watch never holds the compressed copy in a file.
+ *
+ * @param wifi connects to the phone over Wi-Fi; null for the channel only
+ * @param log gets why Wi-Fi did not work
  */
-class WatchAppReceiveTask(private val sessionFactory: WatchAppInstallSessionFactory) {
+class WatchAppReceiveTask(
+    private val wifi: WifiBodyFetcher? = null,
+    private val log: (String) -> Unit = {},
+    private val sessionFactory: WatchAppInstallSessionFactory
+) {
 
     sealed class Result {
 
         /** The APK went to the installer. The result of the install comes later, from Android. */
-        data class Committed(val label: String) : Result()
+        data class Committed(val label: String, val overWifi: Boolean = false) : Result()
         data class Failed(val message: String) : Result()
     }
 
     /**
      * @param input from the phone
      * @param output to the phone
-     * @param onProgress percent of the update received so far
+     * @param onProgress percent of the update received so far; starts again at 0 when Wi-Fi fails
      */
     fun receive(input: InputStream, output: OutputStream, onProgress: (Int) -> Unit = {}): Result {
         val header = try {
@@ -57,15 +81,30 @@ class WatchAppReceiveTask(private val sessionFactory: WatchAppInstallSessionFact
         } catch (e: IOException) {
             return fail(output, "Wrong update: ${e.message}")
         }
-        val session = try {
+        var session = try {
             sessionFactory.create(header.apkSize)
         } catch (e: Exception) {
             return fail(output, "Cannot start the install: ${e.message ?: e.javaClass.simpleName}")
         }
         try {
+            val offer = header.wifi
+            if (offer != null && wifi != null) {
+                WatchAppUpdateProtocol.writeReply(output, Reply.WifiStarted)
+                val overWifi = try {
+                    wifi.open(offer).use { body -> unpack(body.input, header, session, onProgress) }
+                    true
+                } catch (e: Exception) {
+                    log("Wi-Fi did not work, the update comes over the channel: ${e.message ?: e.javaClass.simpleName}")
+                    runCatching { session.abandon() }
+                    session = sessionFactory.create(header.apkSize)
+                    false
+                }
+                // Outside the Wi-Fi try: a failing commit is a failure, not a reason to send again
+                if (overWifi) return commit(output, header, session, overWifi = true)
+            }
             WatchAppUpdateProtocol.writeReply(output, Reply.Ready)
             unpack(input, header, session, onProgress)
-            return commit(output, header, session)
+            return commit(output, header, session, overWifi = false)
         } catch (e: Exception) {
             runCatching { session.abandon() }
             return fail(output, e.message ?: e.javaClass.simpleName)
@@ -103,14 +142,14 @@ class WatchAppReceiveTask(private val sessionFactory: WatchAppInstallSessionFact
         if (WatchAppUpdateProtocol.hex(digest.digest()) != header.sha256) throw IOException("Update has a wrong SHA-256")
     }
 
-    private fun commit(output: OutputStream, header: Header, session: WatchAppInstallSession): Result {
+    private fun commit(output: OutputStream, header: Header, session: WatchAppInstallSession, overWifi: Boolean): Result {
         // Commit first, so the phone never hears "committed" for an install that did not start. The
         // commit only hands the APK over; Android installs it later, and then stops this app.
         session.commit()
         // From here the install is in the hands of the installer: never abandon it. The phone may be
         // gone already; it then tells the user to look on the watch.
         runCatching { WatchAppUpdateProtocol.writeReply(output, Reply.Committed) }
-        return Result.Committed(header.label)
+        return Result.Committed(header.label, overWifi)
     }
 
     private fun fail(output: OutputStream, message: String): Result.Failed {

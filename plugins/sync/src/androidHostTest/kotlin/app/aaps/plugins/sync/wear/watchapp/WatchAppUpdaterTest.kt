@@ -22,7 +22,7 @@ class WatchAppUpdaterTest {
             override fun info() = app
             override fun open(): InputStream = throw IllegalStateException("asset manager closed")
         }
-        val sut = WatchAppUpdater(broken, { null }, mock<AAPSLogger>(), CoroutineScope(SupervisorJob() + Dispatchers.IO))
+        val sut = WatchAppUpdater(broken, { null }, { null }, mock<AAPSLogger>(), CoroutineScope(SupervisorJob() + Dispatchers.IO))
 
         sut.start()
         val end = withTimeout(5_000) { sut.state.first { !it.isBusy } }
@@ -37,6 +37,6 @@ class WatchAppUpdaterTest {
             override fun open(): InputStream = throw AssertionError("must not be opened")
         }
 
-        assertThat(WatchAppUpdater(none, { null }, mock<AAPSLogger>(), CoroutineScope(Dispatchers.IO)).embedded).isNull()
+        assertThat(WatchAppUpdater(none, { null }, { null }, mock<AAPSLogger>(), CoroutineScope(Dispatchers.IO)).embedded).isNull()
     }
 }
