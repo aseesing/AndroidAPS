@@ -84,6 +84,10 @@
     <string name="pref_show_basal_rate">Show Basal Rate</string>
     <string name="pref_show_loop_status">Show Loop Status</string>
     <string name="pref_show_bg">Show BG</string>
+    <string name="cwf_setting_dark" comment="Setting of the Custom watch face: use the dark look">Dark</string>
+    <string name="cwf_setting_matching_divider" comment="Setting of the Custom watch face: the divider gets the background colour of the whole watch face">Matching divider</string>
+    <string name="cwf_setting_switch_external">Switch external data in Watchface</string>
+    <string name="cwf_setting_include_external">Include external views in template</string>
     <string name="pref_show_bgi">Show BGI</string>
     <string name="pref_show_direction_arrow">Show Direction Arrow</string>
     <string name="pref_show_ago">Show Ago</string>

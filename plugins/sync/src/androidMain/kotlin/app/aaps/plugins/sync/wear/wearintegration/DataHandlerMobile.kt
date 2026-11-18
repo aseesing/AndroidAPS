@@ -190,6 +190,9 @@ class DataHandlerMobile(
     @Inject lateinit var eatReminder: EatReminder
     @Inject lateinit var clientControlDispatcher: ClientControlActionDispatcher
 
+    /** What the watch faces have now, for the live preview on the phone. Before the collectors below, which send. */
+    private val lastWatchFaceValues = LastWatchFaceValues()
+
     // App lifetime: this is a @Singleton that subscribes in init and
     // never tears down. Dispatchers.IO because that is what the io scheduler gave these handlers, and
     // they do database and broadcast work - the Default pool would be the wrong one.
@@ -1917,8 +1920,12 @@ class DataHandlerMobile(
     }
 
     private fun sendToWear(event: EventData) {
+        lastWatchFaceValues.note(event)
         rxBus.send(EventMobileToWear(event))
     }
+
+    /** The last value of each kind that a watch face draws, as last sent to the watch. */
+    internal fun lastSentToWatchFace(): List<EventData> = lastWatchFaceValues.all()
 
     /** Stores heart rate events coming from the Wear device. */
     private suspend fun handleHeartRateBatch(events: List<EventData.ActionHeartRate>) {

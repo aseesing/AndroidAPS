@@ -192,6 +192,12 @@
     <string name="wear_load_watchface">Load Watchface</string>
     <string name="wear_infos_watchface">Infos Watchface</string>
     <string name="wear_export_watchface">Export template</string>
+    <string name="wear_cwf_settings" comment="Button on the Wear screen, and title of the screen it opens: the settings of the Custom watch face, set from the phone">Watch face settings</string>
+    <string name="wear_cwf_settings_look" comment="Header of a group of settings: how the Custom watch face looks (seconds, date, dark, ...)">Look</string>
+    <string name="wear_cwf_settings_shown_values" comment="Header of a group of settings: which values the Custom watch face shows (BG, IOB, COB, ...)">Values shown</string>
+    <string name="wear_cwf_settings_not_from_watch">The watch has not sent its settings yet. Until it does, the defaults are shown here. An older AAPS watch app does not take changes from here: update it.</string>
+    <string name="wear_cwf_settings_only_if_used">A setting has an effect only when the watch face design uses it.</string>
+    <string name="wear_cwf_settings_set_by_design" comment="Shown under a setting that the user cannot change, because the loaded watch face sets it. %1$s=name of a setting in the wear settings. Example: Set by the watch face, because of the setting Authorize custom watchfaces">Set by the watch face, because of the setting \"%1$s\"</string>
     <string name="wear_new_custom_watchface_exported">Custom watchface template exported</string>
     <string name="wear_link_to_more_cwf_doc">https://androidaps.readthedocs.io/en/latest/ExchangeSiteCustomWatchfaces/index.html</string>
     <string name="resend_all_data">Resend All Data</string>

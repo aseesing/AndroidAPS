@@ -540,6 +540,23 @@ sealed class EventData : Event() {
     @Serializable
     data class ActionUpdateCustomWatchface(val customWatchfaceData: CwfData) : EventData()
 
+    /**
+     * Phone <-> Watch: the settings of the Custom watch face that the user can change on both sides
+     * (which values to show, seconds, date, ...). Always the full set of the sender. The rule that
+     * merges two sets is [CwfSettingsMerge].
+     *
+     * An older app that does not know this message decodes it as [Error] and ignores it.
+     *
+     * @param settings stored key of the setting on the watch -> value
+     * @param isAnswer true when this is the answer to a message of the other side. An answer is never
+     *   answered, so one exchange causes two messages at most.
+     */
+    @Serializable
+    data class CwfSettingsSync(
+        val settings: Map<String, CwfSettingValue>,
+        val isAnswer: Boolean = false
+    ) : EventData()
+
     @Serializable
     data class ActionrequestCustomWatchface(val exportFile: Boolean) : EventData()
 

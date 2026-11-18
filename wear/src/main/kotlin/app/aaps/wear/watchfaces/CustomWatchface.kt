@@ -371,7 +371,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
          */
         internal const val USE_DEFAULT_TYPE_PRIORITY = "default"
 
-
+        /**
+         * The keys of every on/off preference of this watch face. The phone can set those of
+         * `CwfWatchSettings` too, see `CwfSettingNames`.
+         */
+        internal fun onOffPreferences(): List<Int> =
+            PrefMap.entries.filter { it.typeBool }.map { it.prefKey } + listOf(R.string.key_switch_external, R.string.key_include_external)
     }
 
     override fun createUserStyleSchema(): UserStyleSchema = complications.createUserStyleSchema()
