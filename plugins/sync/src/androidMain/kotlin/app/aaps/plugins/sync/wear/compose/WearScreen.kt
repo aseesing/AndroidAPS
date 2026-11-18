@@ -202,6 +202,7 @@ private enum class SubScreen { MAIN, INFOS, IMPORT_LIST }
 /**
  * @see WearMainContentPreview
  * @see WearMainContentDisconnectedPreview
+ * @see WearMainContentLoadingPreview
  */
 @Composable
 internal fun WearMainContent(
@@ -369,8 +370,9 @@ internal fun WearMainContent(
                         button2 = ButtonDef(Icons.Default.Download, stringResource(SyncStrings.wear_export_watchface), onExportTemplate)
                     )
 
-                    // Watchface preview image
-                    uiState.watchfaceImage?.let { image ->
+                    // Watchface preview image, or a loading indicator while a new face goes to the watch
+                    uiState.loadingWatchface?.let { name -> FaceLoadingIndicator(name) }
+                    uiState.watchfaceImage?.takeIf { uiState.loadingWatchface == null }?.let { image ->
                         Spacer(modifier = Modifier.height(AapsSpacing.small))
                         Image(
                             bitmap = image,

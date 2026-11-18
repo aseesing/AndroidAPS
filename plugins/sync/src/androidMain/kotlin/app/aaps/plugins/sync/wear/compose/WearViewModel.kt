@@ -75,7 +75,9 @@ data class WearUiState(
     val showImportList: Boolean = false,
     val importItems: List<CwfImportItemState> = emptyList(),
     /** True while picked designs are copied into AAPS/export: the list shows progress and the import button is off */
-    val importingDesigns: Boolean = false
+    val importingDesigns: Boolean = false,
+    /** Name of a custom watchface on its way to the watch: shown with a loading indicator instead of the old face, or null */
+    val loadingWatchface: String? = null
 )
 
 @Immutable
@@ -135,6 +137,8 @@ class WearViewModel(
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
+    private val faceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(loadingWatchface = name) } }
+
     init {
         viewModelScope.launch {
             wearPlugin.connectedDevice.collect { device ->
@@ -144,6 +148,8 @@ class WearViewModel(
                         isDeviceConnected = device != null
                     )
                 }
+                // A watch that is gone will not report the new face: stop waiting for it
+                if (device == null) faceLoading.stop()
             }
         }
         viewModelScope.launch {
@@ -328,6 +334,8 @@ class WearViewModel(
         preferences.put(StringNonKey.WearCwfAuthorVersion, metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] ?: "")
         preferences.put(StringNonKey.WearCwfFileName, metadata[CwfMetadataKey.CWF_FILENAME] ?: "")
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray))
+        // Without a watch nothing will report the face back, so there is nothing to wait for
+        if (_uiState.value.isDeviceConnected) faceLoading.start(metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedCustomWatchface)
         _uiState.update { state ->
             // Sent and stored either way; but with the complications face on the wrist nothing
             // draws it, and the wearer should hear that now rather than wonder later

@@ -206,6 +206,7 @@
     <string name="wear_design_delete_question" comment="%1$s=name of the watch face design. Example: Delete the design AAPS V2 from the AAPS export folder? The watch keeps the face it shows now.">Delete the design %1$s from the AAPS export folder? The watch keeps the face it shows now.</string>
     <string name="wear_design_delete_done" comment="%1$s=file name of the deleted design zip. Example: Deleted: AAPS_V2.zip">Deleted: %1$s</string>
     <string name="wear_design_delete_failed" comment="%1$s=file name of the design zip. Example: Could not delete AAPS_V2.zip">Could not delete %1$s</string>
+    <string name="wear_face_loading" comment="Shown with a loading indicator on the Wear screen while a new watch face is sent to the watch. %1$s=name of the watch face. Example: Loading AAPS V2 on the watch…">Loading %1$s on the watch…</string>
     <string name="wear_design_import_no_folder">Choose the AAPS directory first. The designs are copied to its export folder.</string>
     <string name="cwf_infos_pref_locked">List of prefs locked by the Watchface</string>
     <string name="cwf_infos_pref_required">List of prefs required for the Watchface</string>
