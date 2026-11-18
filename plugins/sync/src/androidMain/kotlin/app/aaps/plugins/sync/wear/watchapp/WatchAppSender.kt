@@ -158,25 +158,13 @@ class WatchAppSender(
             return WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.NO_WATCH, e.message ?: "")
         } ?: return WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.NO_WATCH)
 
-        val watchdog = Watchdog(channel, nowMs)
-        return try {
-            coroutineScope {
-                val watchdogJob = launch { watchdog.run() }
-                try {
-                    withContext(ioDispatcher) { transfer(app, header, server, channel, watchdog, onState) }
-                } finally {
-                    watchdogJob.cancel()
-                }
+        return runWithWatchdog<WatchAppUpdateState?>(channel, nowMs, ioDispatcher, onStop = { stop, e ->
+            when (stop) {
+                ChannelStop.NO_ANSWER -> WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.NO_ANSWER)
+                ChannelStop.TIMEOUT   -> WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.TIMEOUT)
+                ChannelStop.ERROR     -> WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.ERROR, e.message ?: e.javaClass.simpleName)
             }
-        } catch (e: IOException) {
-            when {
-                watchdog.fired && !watchdog.answered -> WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.NO_ANSWER)
-                watchdog.fired                       -> WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.TIMEOUT)
-                else                                 -> WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.ERROR, e.message ?: e.javaClass.simpleName)
-            }
-        } finally {
-            runCatching { channel.close() }
-        }
+        }) { watchdog -> transfer(app, header, server, channel, watchdog, onState) }
     }
 
     private suspend fun transfer(
@@ -184,7 +172,7 @@ class WatchAppSender(
         header: WatchAppUpdateProtocol.Header,
         server: WifiBodyServer?,
         channel: WatchChannel,
-        watchdog: Watchdog,
+        watchdog: ChannelWatchdog,
         onState: (WatchAppUpdateState) -> Unit
     ): WatchAppUpdateState? {
         watchdog.extend(answerTimeoutMs)
@@ -209,7 +197,7 @@ class WatchAppSender(
         // The watch turns on its Wi-Fi and connects; that can take a while
         watchdog.extend(wifiTimeoutMs)
         onState(WatchAppUpdateState.Sending(channel.watchName, 0, overWifi = true))
-        val progress = Progress(channel.watchName, app.bodySize, overWifi = true, onState)
+        val progress = sendingProgress(channel.watchName, app.bodySize, overWifi = true, onState)
         val reply = coroutineScope {
             val serving = launch {
                 try {
@@ -240,10 +228,10 @@ class WatchAppSender(
         }
     }
 
-    private fun sendOverChannel(app: EmbeddedWatchApp, channel: WatchChannel, watchdog: Watchdog, onState: (WatchAppUpdateState) -> Unit): WatchAppUpdateState {
+    private fun sendOverChannel(app: EmbeddedWatchApp, channel: WatchChannel, watchdog: ChannelWatchdog, onState: (WatchAppUpdateState) -> Unit): WatchAppUpdateState {
         watchdog.extend(stallTimeoutMs)
         onState(WatchAppUpdateState.Sending(channel.watchName, 0))
-        val progress = Progress(channel.watchName, app.bodySize, overWifi = false, onState)
+        val progress = sendingProgress(channel.watchName, app.bodySize, overWifi = false, onState)
         source.open().use { body ->
             WatchAppUpdateProtocol.copyBody(body, channel.output, app.bodySize) { copied ->
                 watchdog.extend(stallTimeoutMs)
@@ -261,25 +249,8 @@ class WatchAppSender(
     }
 
     /** Turns bytes sent into a [WatchAppUpdateState.Sending] for each new percent, with the time left */
-    private inner class Progress(
-        private val watchName: String,
-        private val size: Long,
-        private val overWifi: Boolean,
-        private val onState: (WatchAppUpdateState) -> Unit
-    ) {
-
-        private var percent = 0
-        private var start = -1L
-
-        fun report(copied: Long) {
-            // From the first block on: over Wi-Fi the watch may need a while before the first byte
-            if (start < 0) start = nowMs()
-            val now = (copied * 100 / size).toInt()
-            if (now == percent) return
-            percent = now
-            onState(WatchAppUpdateState.Sending(watchName, now, secondsLeft(copied, size, nowMs() - start), overWifi))
-        }
-    }
+    private fun sendingProgress(watchName: String, size: Long, overWifi: Boolean, onState: (WatchAppUpdateState) -> Unit) =
+        TransferProgress(size, nowMs) { percent, secondsLeft -> onState(WatchAppUpdateState.Sending(watchName, percent, secondsLeft, overWifi)) }
 
     companion object {
 
@@ -299,34 +270,7 @@ class WatchAppSender(
             return ((size - copied) * elapsedMs / copied / 1000).toInt()
         }
 
-        private fun newToken(): String = WatchAppUpdateProtocol.hex(ByteArray(TOKEN_BYTES).also { SecureRandom().nextBytes(it) })
-    }
-
-    /** Closes [channel] when the deadline passes without [extend] */
-    private class Watchdog(private val channel: WatchChannel, private val nowMs: () -> Long) {
-
-        @Volatile private var deadline = Long.MAX_VALUE
-        @Volatile var fired = false
-            private set
-
-        /** Whether the watch said it is ready; a timeout before that means it does not know the update */
-        @Volatile var answered = false
-
-        fun extend(timeoutMs: Long) {
-            deadline = now() + timeoutMs
-        }
-
-        suspend fun run() {
-            while (now() < deadline) delay(CHECK_INTERVAL_MS)
-            fired = true
-            runCatching { channel.close() }
-        }
-
-        private fun now() = nowMs()
-
-        companion object {
-
-            const val CHECK_INTERVAL_MS = 100L
-        }
+        /** A random secret for one Wi-Fi offer; also used by the watch log download */
+        internal fun newToken(): String = WatchAppUpdateProtocol.hex(ByteArray(TOKEN_BYTES).also { SecureRandom().nextBytes(it) })
     }
 }

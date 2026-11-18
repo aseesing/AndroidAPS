@@ -259,6 +259,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlinx.serialization.protobuf)
+    compileOnly(libs.org.slf4j.api) // PERSONAL PATCH: watch log download reads the log folder from logback
+    compileOnly(libs.com.github.tony19.logback.android) // PERSONAL PATCH: at run time it comes with :shared:impl
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.wear.compose.material3)

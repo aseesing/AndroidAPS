@@ -90,4 +90,24 @@ class SocketWifiBodyServerTest {
         assertThat(error.get()).isInstanceOf(IOException::class.java)
         assertThrows<IOException> { fetch("right") }
     }
+
+    /** The watch log download: the server only checks the token, then the watch writes */
+    @Test
+    fun `accept gives the socket of the watch with the right token, so the phone can read from it`() {
+        val received = AtomicReference<ByteArray?>()
+        val accepting = thread(isDaemon = true) {
+            server.accept("right").use { socket -> received.set(socket.getInputStream().readBytes()) }
+        }
+
+        assertThat(fetch("wrong")).isEmpty()
+        Socket(InetAddress.getLoopbackAddress(), server.port).use { socket ->
+            WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), "right")
+            socket.getOutputStream().write(body)
+        }
+
+        accepting.join(5_000)
+        assertThat(accepting.isAlive).isFalse()
+        assertThat(received.get()).isEqualTo(body)
+        server.close()
+    }
 }

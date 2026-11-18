@@ -30,6 +30,13 @@ interface WifiBodyServer : Closeable {
      * @param onProgress the number of bytes sent so far
      */
     fun serve(token: String, body: () -> InputStream, size: Long, onProgress: (Long) -> Unit)
+
+    /**
+     * Waits for the watch and checks its token. The caller then reads or writes on the socket and
+     * closes it. [serve] uses this to send; the watch log download uses it to receive.
+     * [close] ends a waiting call with an [IOException].
+     */
+    fun accept(token: String): Socket
 }
 
 /** Starts a [WifiBodyServer] */
@@ -56,16 +63,18 @@ class SocketWifiBodyServer(override val addresses: List<String>, bindAddress: In
     override val port: Int get() = server.localPort
 
     override fun serve(token: String, body: () -> InputStream, size: Long, onProgress: (Long) -> Unit) {
+        accept(token).use { socket ->
+            body().use { input -> WatchAppUpdateProtocol.copyBody(input, socket.getOutputStream(), size, onProgress) }
+        }
+    }
+
+    override fun accept(token: String): Socket {
         var wrongRequests = 0
         while (true) {
             val socket = server.accept()
             client = socket
-            socket.use {
-                if (isWatch(socket, token)) {
-                    body().use { input -> WatchAppUpdateProtocol.copyBody(input, socket.getOutputStream(), size, onProgress) }
-                    return
-                }
-            }
+            if (isWatch(socket, token)) return socket
+            runCatching { socket.close() }
             if (++wrongRequests >= MAX_WRONG_REQUESTS) throw IOException("Too many wrong requests on the Wi-Fi server")
         }
     }

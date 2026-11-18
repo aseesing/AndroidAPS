@@ -32,10 +32,14 @@ fun interface WatchAppInstallSessionFactory {
     fun create(): WatchAppInstallSession
 }
 
-/** The body, coming from the phone over Wi-Fi. [close] ends the connection and frees the network. */
+/**
+ * A Wi-Fi connection to the phone. The update reads the body from [input]; the watch log download
+ * writes the log to [output]. [close] ends the connection and frees the network.
+ */
 interface WifiBody : Closeable {
 
     val input: InputStream
+    val output: OutputStream
 }
 
 /** Connects to the Wi-Fi server of the phone, see [WifiOffer] */
