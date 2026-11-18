@@ -35,13 +35,17 @@ import app.aaps.plugins.sync.wear.preview.PreviewSlot
  *
  * @param hasNightWatchface whether the watch reported a night face
  * @param importForNight whether the open import list sends the chosen zip as the night face
+ * @param loadingNightWatchface the name of a night face on its way to the watch, or null. The card
+ *   shows it with a loading indicator in place of the preview, as the main face card does, see
+ *   [WearFaceLoadingTracker]
  */
 @Immutable
 data class WearNightFaceState(
     val hasNightWatchface: Boolean = false,
     val nightWatchfaceName: String = "",
     val nightWatchfaceImage: ImageBitmap? = null,
-    val importForNight: Boolean = false
+    val importForNight: Boolean = false,
+    val loadingNightWatchface: String? = null
 )
 
 /** The title of the main face card: the day face, or the only face, day and night. */
@@ -60,9 +64,7 @@ internal fun importListTitle(uiState: WearUiState, mainTitle: String): String =
 /**
  * The night face card: its name and preview, a button to load one from the same list as the main
  * face, a button to remove it, and under the preview the button for the watch face settings.
- *
- * @param loading the name of a night face on its way to the watch: shown with a loading indicator
- *   in place of the preview, see [WearFaceLoadingTracker]
+ * While a new night face loads on the watch, a loading indicator takes the place of the preview.
  *
  * @see NightWatchfaceCardPreview
  */
@@ -71,9 +73,9 @@ internal fun NightWatchfaceCard(
     state: WearNightFaceState,
     onLoadNightWatchface: () -> Unit,
     onRemoveNightWatchface: () -> Unit,
-    modifier: Modifier = Modifier,
-    loading: String? = null
+    modifier: Modifier = Modifier
 ) {
+    val loading = state.loadingNightWatchface
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)

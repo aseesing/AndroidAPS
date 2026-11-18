@@ -140,6 +140,7 @@ class WearViewModel(
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
     private val faceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(loadingWatchface = name) } }
+    private val nightFaceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(nightFace = it.nightFace.copy(loadingNightWatchface = name)) } } // PERSONAL PATCH: day and night face
 
     init {
         viewModelScope.launch {
@@ -152,6 +153,7 @@ class WearViewModel(
                 }
                 // A watch that is gone will not report the new face: stop waiting for it
                 if (device == null) faceLoading.stop()
+                if (device == null) nightFaceLoading.stop() // PERSONAL PATCH: day and night face
             }
         }
         viewModelScope.launch {
@@ -392,6 +394,8 @@ class WearViewModel(
         val metadata = cwfFile.cwfData.metadata
         nightFacePreferences.remember(metadata)
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray, night = true))
+        // As for the main face: the card shows the loading indicator until the watch reports a night face
+        if (_uiState.value.isDeviceConnected) nightFaceLoading.start(metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedNightWatchface)
         _uiState.update { state ->
             // The same note as for the main face: with the complications face on the wrist nothing draws it
             val hidden = state.watchFacePushSupported && !state.customWatchfaceSelected
@@ -410,12 +414,26 @@ class WearViewModel(
     }
 
     /**
+     * Shows the import list again for the same face after an import or a delete. A list opened for
+     * the night face stays one, so the next zip the wearer picks does not replace the main face.
+     */
+    private fun reloadImportList() = if (_uiState.value.nightFace.importForNight) loadNightWatchfaceFiles() else loadWatchfaceFiles()
+
+    // ---- PERSONAL PATCH: last import place, see CwfDesignImportPlace.kt ----
+
+    private val importPlace = CwfDesignImportPlace(preferences)
+
+    /** The link to the last picked design, so the file picker opens in its folder again. Null the first time. */
+    fun lastImportPlace(): String? = importPlace.last()
+
+    /**
      * Copies the picked zips into AAPS/export, says how it went, and shows the list again with the
      * new designs. Only one import runs at a time: two at once would race on the same file names.
      * Reading from Drive can be slow, so [WearUiState.importingDesigns] shows that it runs.
      */
     fun importDesigns(uris: List<Uri>) {
         if (uris.isEmpty() || _uiState.value.importingDesigns) return
+        importPlace.remember(uris) // PERSONAL PATCH: last import place
         _uiState.update { it.copy(importingDesigns = true) }
         viewModelScope.launch {
             val message = try {
@@ -424,7 +442,7 @@ class WearViewModel(
                 _uiState.update { it.copy(importingDesigns = false) }
             }
             _toastEvent.emit(message)
-            loadWatchfaceFiles()
+            reloadImportList() // PERSONAL PATCH: day and night face, was loadWatchfaceFiles()
         }
     }
 
@@ -432,7 +450,7 @@ class WearViewModel(
     fun deleteDesign(cwfFile: CwfFile) {
         viewModelScope.launch {
             _toastEvent.emit(designImport.deleteFrom(cwfFile))
-            loadWatchfaceFiles()
+            reloadImportList() // PERSONAL PATCH: day and night face, was loadWatchfaceFiles()
         }
     }
 }

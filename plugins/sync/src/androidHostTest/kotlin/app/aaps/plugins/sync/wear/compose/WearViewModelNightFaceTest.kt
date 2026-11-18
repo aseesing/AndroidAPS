@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.plugins.sync.wear.compose
 
+import android.net.Uri
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
@@ -20,7 +21,9 @@ import app.aaps.core.keys.PushedWatchfaceId
 import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.Preferences
+import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.keys.WearDesignImportKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +32,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -39,7 +43,9 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.atLeast
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -59,6 +65,7 @@ internal class WearViewModelNightFaceTest {
 
     private val savedNightWatchfaceFlow = MutableStateFlow<CwfData?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
+    private val connectedDeviceFlow = MutableStateFlow<String?>("Galaxy Watch 5")
 
     private lateinit var sut: WearViewModel
 
@@ -75,13 +82,14 @@ internal class WearViewModelNightFaceTest {
     fun setUp() {
         MockitoAnnotations.openMocks(this)
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        whenever(wearPlugin.connectedDevice).thenReturn(MutableStateFlow("Galaxy Watch 5"))
+        whenever(wearPlugin.connectedDevice).thenReturn(connectedDeviceFlow)
         whenever(wearPlugin.savedCustomWatchface).thenReturn(savedCustomWatchfaceFlow)
         whenever(wearPlugin.savedNightWatchface).thenReturn(savedNightWatchfaceFlow)
         whenever(wearPlugin.watchFacePushStatus).thenReturn(MutableStateFlow(null))
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(MutableSharedFlow())
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(MutableStateFlow(PushedWatchfaceId.CWF))
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")
         sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport)
     }
 
@@ -166,5 +174,113 @@ internal class WearViewModelNightFaceTest {
         sut.clearNightWatchface()
 
         verify(wearPlugin).clearNightWatchface(12345L)
+    }
+
+    @Test
+    fun `a chosen night face shows as loading until the watch reports it`() {
+        sut.loadNightWatchfaceFiles()
+        awaitImportList()
+        sut.selectWatchface(zip)
+        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isEqualTo("Night")
+        assertThat(sut.uiState.value.loadingWatchface).isNull()
+
+        // A report of the main face does not end the night load
+        savedCustomWatchfaceFlow.value = zip.cwfData.copy()
+        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isEqualTo("Night")
+
+        savedNightWatchfaceFlow.value = zip.cwfData.copy()
+        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isNull()
+    }
+
+    @Test
+    fun `a chosen main face does not show the night face as loading`() {
+        sut.loadWatchfaceFiles()
+        awaitImportList()
+        sut.selectWatchface(zip)
+
+        assertThat(sut.uiState.value.loadingWatchface).isEqualTo("Night")
+        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isNull()
+    }
+
+    @Test
+    fun `the night face loading ends when the watch disconnects`() {
+        sut.loadNightWatchfaceFiles()
+        awaitImportList()
+        sut.selectWatchface(zip)
+        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isEqualTo("Night")
+
+        connectedDeviceFlow.value = null
+
+        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isNull()
+    }
+
+    @Test
+    fun `without a watch a chosen night face does not show as loading`() {
+        sut.loadNightWatchfaceFiles()
+        awaitImportList()
+        connectedDeviceFlow.value = null
+
+        sut.selectWatchface(zip)
+
+        assertThat(sentZips().single().night).isTrue()
+        assertThat(sut.uiState.value.nightFace.loadingNightWatchface).isNull()
+    }
+
+    @Test
+    fun `after an import in the night list the next pick is still the night face`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+        sut.loadNightWatchfaceFiles()
+        awaitImportList()
+
+        sut.importDesigns(listOf(uri))
+        // The list is read again on the IO dispatcher: wait for it, as the wearer does
+        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
+        assertThat(sut.uiState.value.nightFace.importForNight).isTrue()
+        sut.selectWatchface(zip)
+
+        assertThat(sentZips().single().night).isTrue()
+        verify(preferences, never()).put(eq(StringNonKey.WearCwfWatchfaceName), any<String>())
+    }
+
+    @Test
+    fun `after a delete in the night list the next pick is still the night face`() = runTest(UnconfinedTestDispatcher()) {
+        whenever(designImport.deleteFrom(zip)).thenReturn("Deleted: Night.zip")
+        sut.loadNightWatchfaceFiles()
+        awaitImportList()
+
+        sut.deleteDesign(zip)
+        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
+        assertThat(sut.uiState.value.nightFace.importForNight).isTrue()
+        sut.selectWatchface(zip)
+
+        assertThat(sentZips().single().night).isTrue()
+    }
+
+    @Test
+    fun `after an import in the main list the next pick is still the main face`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+        sut.loadWatchfaceFiles()
+        awaitImportList()
+
+        sut.importDesigns(listOf(uri))
+        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
+        sut.selectWatchface(zip)
+
+        assertThat(sentZips().single().night).isFalse()
+    }
+
+    @Test
+    fun `an import remembers the place of the pick for the next file picker`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        whenever(uri.toString()).thenReturn("content://drive/doc1")
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+
+        sut.importDesigns(listOf(uri))
+
+        verify(preferences).put(WearDesignImportKey.LastPickedDesign, "content://drive/doc1")
+        whenever(preferences.get(WearDesignImportKey.LastPickedDesign)).thenReturn("content://drive/doc1")
+        assertThat(sut.lastImportPlace()).isEqualTo("content://drive/doc1")
     }
 }

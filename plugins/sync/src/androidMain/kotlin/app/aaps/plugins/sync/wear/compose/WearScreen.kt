@@ -165,7 +165,7 @@ internal fun WearScreen(
                     if (subScreen == SubScreen.IMPORT_LIST) {
                         // The toolbar is set up once per sub-screen, so it reads the state itself
                         val importState by viewModel.uiState.collectAsStateWithLifecycle()
-                        CwfImportAction(importing = importState.importingDesigns, onImport = { uris -> viewModel.importDesigns(uris) })
+                        CwfImportAction(importing = importState.importingDesigns, onImport = { uris -> viewModel.importDesigns(uris) }, lastPlace = viewModel::lastImportPlace) // PERSONAL PATCH: last import place
                     }
                 }
             )
