@@ -139,6 +139,7 @@ import kotlin.math.floor
 class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     @Inject lateinit var context: Context
+    @Inject lateinit var healthValues: HealthValues // PERSONAL PATCH: the heart rate of the wake-up animation
     private lateinit var binding: ActivityCustomBinding
     private var zoomFactor = 1.0
     private var lowBatColor = Color.RED
@@ -967,7 +968,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     /** Plays the optional `animation` of the design; see [WakeAnimator]. */
     private val wake = WakeAnimator(
-        heartRate = { HealthValues.of(this).heartRate() },
+        heartRate = { healthValues.heartRate() },
         chosenLengthMs = { WakeLength.parse(sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) },
         value = ::wakeValue,
         moon = ::wakeMoon // PERSONAL PATCH: the moon layers

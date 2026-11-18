@@ -471,6 +471,15 @@
     <string name="wizard_result_correction_percentage">%1$d%%</string>
     <string name="wizard_carbs_with_time" comment="%1$d=grams, %2$s=signed minute offset e.g. +20 or -5. Example: 30 g (+20 min)">%1$d g (%2$s min)</string>
     <string name="wizard_result_ecarbs" comment="%1$d=grams, %2$d=duration hours, %3$d=delay minutes. Example: 16 g / 2 h (+90 min)">%1$d g / %2$d h (+%3$d min)</string>
+
+    <!-- Heart rate and steps complications (Health Services) -->
+    <string name="health_heart_rate_label">AAPS heart rate</string>
+    <string name="health_steps_label">AAPS steps</string>
+    <string name="health_no_value" translatable="false">--</string>
+    <string name="health_allow" comment="Very short, shown in a small round complication: at most 6 characters">Allow</string>
+    <string name="health_allow_description">Tap to allow AAPS to read this value</string>
+    <string name="health_heart_rate_description" comment="%1$s=heart rate value or --. Example: Heart rate 72 per minute">Heart rate %1$s per minute</string>
+    <string name="health_steps_description" comment="%1$s=number of steps or --. Example: 6482 steps today">%1$s steps today</string>
     <!-- Direct-to-watch: the watch reads the Dexcom ONE+ / G7 itself, next to the phone -->
     <string name="watch_direct_title">Direct to watch</string>
     <string name="watch_direct_channel">Direct to watch</string>

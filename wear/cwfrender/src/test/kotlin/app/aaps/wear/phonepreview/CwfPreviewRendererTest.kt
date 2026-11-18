@@ -13,7 +13,6 @@ import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.wear.R
-import app.aaps.wear.health.HealthValues
 import app.aaps.wear.watchfaces.COB_SLOT_ID
 import app.aaps.wear.watchfaces.HEART_RATE_SLOT_ID
 import app.aaps.wear.watchfaces.IOB_SLOT_ID
@@ -244,7 +243,8 @@ class CwfPreviewRendererTest {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("slots_test_aaps_health_values", Application.MODE_PRIVATE).edit()
             .putInt("heart_rate", 72).putLong("heart_rate_at", System.currentTimeMillis()).commit()
-        val slots = PreviewSlots(PreviewHost(app, mock(), "slots_test"), HealthValues.of(PreviewHost(app, mock(), "slots_test")), mock())
+        val host = PreviewHost(app, mock(), "slots_test")
+        val slots = PreviewSlots(host, host.healthValues, mock())
         // Heart rate and steps, in the type the source sends by default
         val heart = slots.dataFor(HEART_RATE_SLOT_ID) as RangedValueComplicationData
         assertThat(heart.value).isEqualTo(72f)

@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.health
 
 import android.app.PendingIntent
@@ -16,13 +12,18 @@ import androidx.wear.watchface.complications.data.MonochromaticImage
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import androidx.wear.watchface.complications.data.TimeRange
 import app.aaps.wear.R
+import java.time.Instant
 
 /**
  * What one health complication shows: the [value] (null when there is none), whether the permission
  * is still [missingPermission], and how a gauge spans it. Pure, so it can be tested without a service.
+ *
+ * @param shownUntilMs the time after which the watch face must not draw the value any more, because it
+ *   is too old. Null when the value has no such limit.
  */
-data class HealthReading(val kind: HealthKind, val value: Long?, val missingPermission: Boolean) {
+data class HealthReading(val kind: HealthKind, val value: Long?, val missingPermission: Boolean, val shownUntilMs: Long? = null) {
 
     /** The gauge range: a heart rate between rest and effort, steps towards the daily goal. */
     val min: Float get() = if (kind == HealthKind.HEART_RATE) HEART_RATE_MIN else 0f
@@ -59,19 +60,22 @@ fun healthComplicationData(context: Context, reading: HealthReading, type: Compl
         }
     ).build()
     val image = MonochromaticImage.Builder(Icon.createWithResource(context, iconOf(reading))).build()
+    // Outside this range the watch face draws nothing in the slot, until the next request gives "--"
+    val validTimeRange = reading.shownUntilMs?.let { TimeRange.before(Instant.ofEpochMilli(it)) }
     return when (type) {
         ComplicationType.RANGED_VALUE  ->
             RangedValueComplicationData.Builder(reading.gauge, reading.min, reading.max, description)
-                .setText(text).setMonochromaticImage(image).setTapAction(tapAction).build()
+                .setText(text).setMonochromaticImage(image).setTapAction(tapAction).setValidTimeRange(validTimeRange).build()
 
         ComplicationType.GOAL_PROGRESS ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
                 GoalProgressComplicationData.Builder(reading.value?.toFloat() ?: 0f, reading.max, description)
-                    .setText(text).setMonochromaticImage(image).setTapAction(tapAction).build()
+                    .setText(text).setMonochromaticImage(image).setTapAction(tapAction).setValidTimeRange(validTimeRange).build()
             else null
 
         ComplicationType.SHORT_TEXT    ->
-            ShortTextComplicationData.Builder(text, description).setMonochromaticImage(image).setTapAction(tapAction).build()
+            ShortTextComplicationData.Builder(text, description)
+                .setMonochromaticImage(image).setTapAction(tapAction).setValidTimeRange(validTimeRange).build()
 
         else                           -> null
     }

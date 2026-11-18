@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.wear.health
 
 import app.aaps.wear.testing.mocks.SharedPreferencesMock
@@ -36,8 +32,39 @@ class HealthValuesTest {
     fun anOldHeartRateIsNotShown() {
         values.recordHeartRate(72, now - HealthValues.HEART_RATE_MAX_AGE_MS)
         assertThat(values.heartRate()).isEqualTo(72)
+        assertThat(values.heartRateShownUntil()).isEqualTo(now)
         now += 1
         assertThat(values.heartRate()).isNull()
+        assertThat(values.heartRateShownUntil()).isNull()
+    }
+
+    @Test
+    fun theHeartRateIsShownUntilItIsThirtyMinutesOld() {
+        val measured = now - 29 * 60_000L
+        values.recordHeartRate(72, measured)
+        assertThat(values.heartRateShownUntil()).isEqualTo(measured + HealthValues.HEART_RATE_MAX_AGE_MS)
+    }
+
+    @Test
+    fun valuesStoredWhileTheClockWasAheadAreNotTrusted() {
+        // The clock was 2 hours ahead when these were stored, then it was set right
+        val ahead = now + 2 * 3_600_000L
+        values.recordHeartRate(72, ahead)
+        values.recordSteps(9000, ahead)
+        assertThat(values.heartRate()).isNull()
+        assertThat(values.stepsToday()).isNull()
+        // New values are taken at once, not only after the clock passes the wrong time
+        assertThat(values.recordHeartRate(65, now - 60_000)).isTrue()
+        assertThat(values.recordSteps(1200, now - 60_000)).isTrue()
+        assertThat(values.heartRate()).isEqualTo(65)
+        assertThat(values.stepsToday()).isEqualTo(1200)
+    }
+
+    @Test
+    fun aTimeJustAheadOfTheClockIsStillTrusted() {
+        values.recordHeartRate(72, now + HealthValues.CLOCK_MARGIN_MS)
+        assertThat(values.heartRate()).isEqualTo(72)
+        assertThat(values.recordHeartRate(65, now)).isFalse()
     }
 
     @Test

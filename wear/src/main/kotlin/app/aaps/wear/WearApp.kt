@@ -16,10 +16,10 @@ import app.aaps.wear.comm.ExceptionHandlerWear
 import app.aaps.wear.complications.cwf.CwfComplicationUpdater
 import app.aaps.wear.di.WearGraph
 import app.aaps.wear.events.EventWearPreferenceChange
+import app.aaps.wear.health.PassiveHealthRegistration
 import app.aaps.wear.watchdirect.WatchDirect
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import app.aaps.wear.watchfaces.settingsync.CwfSettingsSyncWear // PERSONAL PATCH: CWF settings from the phone
-import app.aaps.wear.health.PassiveHealthRegistration
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.MembersInjector
 import dev.zacsweers.metro.createGraphFactory
@@ -47,6 +47,7 @@ class WearApp : Application(), MetroMemberInjector {
     @Inject lateinit var exceptionHandlerWear: ExceptionHandlerWear
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
     @Inject lateinit var cwfComplicationUpdater: CwfComplicationUpdater
+    @Inject lateinit var passiveHealthRegistration: PassiveHealthRegistration
     @Inject lateinit var watchDirect: WatchDirect
     @Inject lateinit var cwfSettingsSync: CwfSettingsSyncWear // PERSONAL PATCH: CWF settings from the phone
 
@@ -77,8 +78,9 @@ class WearApp : Application(), MetroMemberInjector {
         // Refreshes the Custom watch face image complications when the picture changes, rather
         // than leaving them on the system's slow periodic timer
         cwfComplicationUpdater.start()
-        // Health Services forgets passive registrations on reboot: ask again for what is shown
-        CoroutineScope(Dispatchers.Default).launch { PassiveHealthRegistration.updateQuietly(this@WearApp) }
+        // Health Services forgets passive registrations on reboot: ask again for the heart rate and
+        // steps complications that are shown. Does nothing when none is shown.
+        passiveHealthRegistration.updateInBackground()
         // Direct-to-watch: listens for the phone turning it on, and picks a set-up sensor up again after a restart
         watchDirect.start()
         cwfSettingsSync.start() // PERSONAL PATCH: CWF settings from the phone

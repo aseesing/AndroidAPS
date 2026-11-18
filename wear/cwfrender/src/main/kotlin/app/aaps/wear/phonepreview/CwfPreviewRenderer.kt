@@ -15,7 +15,6 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.toDrawable
 import app.aaps.wear.R
 import app.aaps.wear.complications.cwf.CwfFramePipeline
-import app.aaps.wear.health.HealthValues
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.WakeLength
@@ -55,7 +54,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         /** The time of the frame being drawn, for the complication slots. */
         var frameTime = System.currentTimeMillis()
 
-        private val slots = PreviewSlots(host, HealthValues.of(host), logger)
+        private val slots = PreviewSlots(host, host.healthValues, logger)
 
         val face = CustomWatchface().apply {
             prepareForRendering(host)

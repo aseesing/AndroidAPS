@@ -16,6 +16,7 @@ import app.aaps.shared.impl.rx.bus.RxBusImpl
 import app.aaps.shared.impl.sharedPreferences.SPImpl
 import app.aaps.shared.impl.utils.DateUtilImpl
 import app.aaps.wear.data.ComplicationDataRepository
+import app.aaps.wear.health.HealthValues
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.SimpleUi
@@ -58,6 +59,12 @@ class PreviewHost(
     val repository: ComplicationDataRepository by lazy { ComplicationDataRepository(this, logger, sp) }
     private val simpleUi: SimpleUi by lazy { SimpleUi(this, sp, dateUtil) }
 
+    /**
+     * The heart rate and steps store of the face, in the same file as on the watch (see `HealthModule`),
+     * here behind [name]. The watch does not send these values, so on the phone it stays empty.
+     */
+    val healthValues: HealthValues by lazy { HealthValues(getSharedPreferences(HealthValues.FILE, MODE_PRIVATE)) }
+
     override fun getApplicationContext(): Context = this
 
     override fun getFilesDir(): File = ownFilesDir
@@ -73,7 +80,10 @@ class PreviewHost(
         target.sp = sp
         target.dateUtil = dateUtil
         target.simpleUi = simpleUi
-        if (target is CustomWatchface) target.context = this
+        if (target is CustomWatchface) {
+            target.context = this
+            target.healthValues = healthValues
+        }
         return true
     }
 
