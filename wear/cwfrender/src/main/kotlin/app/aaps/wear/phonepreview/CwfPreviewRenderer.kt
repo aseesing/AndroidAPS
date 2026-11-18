@@ -35,6 +35,8 @@ import org.json.JSONObject
  *   the face into a picture. So the clock, the hands and the values are drawn as on the wrist.
  * - The wake-up animation is drawn by the watch's own [WakeAnimator], over the views of the face.
  *   It plays when a design is set, as on the watch when the face starts, and again after [wake].
+ * - The text views place their lines as on the watch, which follows older Android rules, see
+ *   [WatchLineSpacing].
  *
  * The values come in as the same [EventData] messages the phone sends to the watch, see [apply].
  *
@@ -209,7 +211,17 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
             readsValues = true
         }
         // Also when the animation plays: this sets the clock and the values in the views it draws over
-        val still = drawing.pipeline.compose(nowMs, ambient = false, width = size, height = size)
+        var still = drawing.pipeline.compose(nowMs, ambient = false, width = size, height = size)
+        // Lines placed as on the watch. When a view changed (a new design, a text that got a line
+        // more or less), its text lies somewhere else: draw the frame again
+        if (drawing.face.layoutView?.let(WatchLineSpacing::match) == true) {
+            still.recycle()
+            drawing.pipeline.invalidateAll()
+            still = drawing.pipeline.compose(nowMs, ambient = false, width = size, height = size)
+            // This draw reads the values again when the last read is more than half a second old.
+            // Count it as a read, or new values that come soon after would be skipped by the face
+            readsValues = true
+        }
         if (readsValues) {
             readsValues = false
             // The time after the frame, not before it: the face read somewhere inside it, and a slow
