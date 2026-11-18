@@ -3,8 +3,6 @@ package app.aaps.wear.selfupdate
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.Header
 import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.Reply
-import app.aaps.shared.impl.weardata.WatchAppUpdateProtocol.WifiOffer
-import java.io.Closeable
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -29,54 +27,29 @@ interface WatchAppInstallSession {
 /** Starts an install session; throws when the package installer refuses */
 fun interface WatchAppInstallSessionFactory {
 
-    fun create(): WatchAppInstallSession
-}
-
-/**
- * A Wi-Fi connection to the phone. The update reads the body from [input]; the watch log download
- * writes the log to [output]. [close] ends the connection and frees the network.
- */
-interface WifiBody : Closeable {
-
-    val input: InputStream
-    val output: OutputStream
-}
-
-/** Connects to the Wi-Fi server of the phone, see [WifiOffer] */
-fun interface WifiBodyFetcher {
-
-    /** @throws IOException when the watch has no Wi-Fi, or cannot reach the phone */
-    fun open(offer: WifiOffer): WifiBody
+    /** @param apkSize the exact size of the APK that will be written */
+    fun create(apkSize: Long): WatchAppInstallSession
 }
 
 /**
  * The watch side of [WatchAppUpdateProtocol]: reads one update from the phone and gives the APK
  * to the package installer.
  *
- * When the phone offers Wi-Fi, the body comes from there, which is much faster. When that does not
- * work, the body comes over the channel as before. The APK is unpacked while it arrives, so the
- * watch never holds the compressed copy in a file.
- *
- * @param wifi connects to the phone over Wi-Fi; null for the channel only
- * @param log gets why Wi-Fi did not work
+ * The APK is unpacked while it arrives, so the watch never holds the compressed copy in a file.
  */
-class WatchAppReceiveTask(
-    private val wifi: WifiBodyFetcher? = null,
-    private val log: (String) -> Unit = {},
-    private val sessionFactory: WatchAppInstallSessionFactory
-) {
+class WatchAppReceiveTask(private val sessionFactory: WatchAppInstallSessionFactory) {
 
     sealed class Result {
 
         /** The APK went to the installer. The result of the install comes later, from Android. */
-        data class Committed(val label: String, val overWifi: Boolean = false) : Result()
+        data class Committed(val label: String) : Result()
         data class Failed(val message: String) : Result()
     }
 
     /**
      * @param input from the phone
      * @param output to the phone
-     * @param onProgress percent of the update received so far; starts again at 0 when Wi-Fi fails
+     * @param onProgress percent of the update received so far
      */
     fun receive(input: InputStream, output: OutputStream, onProgress: (Int) -> Unit = {}): Result {
         val header = try {
@@ -84,43 +57,38 @@ class WatchAppReceiveTask(
         } catch (e: IOException) {
             return fail(output, "Wrong update: ${e.message}")
         }
-        var session = try {
-            sessionFactory.create()
+        val session = try {
+            sessionFactory.create(header.apkSize)
         } catch (e: Exception) {
             return fail(output, "Cannot start the install: ${e.message ?: e.javaClass.simpleName}")
         }
         try {
-            val offer = header.wifi
-            if (offer != null && wifi != null) {
-                WatchAppUpdateProtocol.writeReply(output, Reply.WifiStarted)
-                try {
-                    wifi.open(offer).use { body -> unpack(body.input, header, session, onProgress) }
-                    return commit(output, header, session, overWifi = true)
-                } catch (e: Exception) {
-                    log("Wi-Fi did not work, the update comes over the channel: ${e.message ?: e.javaClass.simpleName}")
-                    runCatching { session.abandon() }
-                    session = sessionFactory.create()
-                }
-            }
             WatchAppUpdateProtocol.writeReply(output, Reply.Ready)
             unpack(input, header, session, onProgress)
-            return commit(output, header, session, overWifi = false)
+            return commit(output, header, session)
         } catch (e: Exception) {
             runCatching { session.abandon() }
             return fail(output, e.message ?: e.javaClass.simpleName)
         }
     }
 
-    /** Unpacks exactly [Header.bodySize] bytes of [input] into [session], and checks them */
+    /**
+     * Unpacks exactly [Header.bodySize] bytes of [input] into [session], and checks them. Stops at
+     * once when the APK gets larger than [Header.apkSize]: the hash is only known at the end, and a
+     * broken body must not fill the storage of the watch before that.
+     */
     private fun unpack(input: InputStream, header: Header, session: WatchAppInstallSession, onProgress: (Int) -> Unit) {
         val digest = MessageDigest.getInstance("SHA-256")
         val body = CountingInputStream(DigestInputStream(WatchAppUpdateProtocol.limited(input, header.bodySize), digest))
         var percent = -1
+        var written = 0L
         val buffer = ByteArray(64 * 1024)
         GZIPInputStream(body, buffer.size).use { apk ->
             while (true) {
                 val read = apk.read(buffer)
                 if (read < 0) break
+                written += read
+                if (written > header.apkSize) throw IOException("The APK is larger than ${header.apkSize} bytes")
                 session.output.write(buffer, 0, read)
                 val now = (body.count * 100 / header.bodySize).toInt()
                 if (now != percent) {
@@ -131,15 +99,18 @@ class WatchAppReceiveTask(
         }
         // The body must be one gzip member and nothing else: a shorter body means a broken sender
         if (body.count != header.bodySize) throw IOException("Update has ${body.count} of ${header.bodySize} bytes")
-        // Empty in protocol version 1, which has no hash
-        if (header.sha256.isNotEmpty() && WatchAppUpdateProtocol.hex(digest.digest()) != header.sha256) throw IOException("Update has a wrong SHA-256")
+        if (written != header.apkSize) throw IOException("The APK has $written of ${header.apkSize} bytes")
+        if (WatchAppUpdateProtocol.hex(digest.digest()) != header.sha256) throw IOException("Update has a wrong SHA-256")
     }
 
-    private fun commit(output: OutputStream, header: Header, session: WatchAppInstallSession, overWifi: Boolean): Result {
-        // Answer before the commit: when the install replaces this app, Android stops it soon after
-        WatchAppUpdateProtocol.writeReply(output, Reply.Committed)
+    private fun commit(output: OutputStream, header: Header, session: WatchAppInstallSession): Result {
+        // Commit first, so the phone never hears "committed" for an install that did not start. The
+        // commit only hands the APK over; Android installs it later, and then stops this app.
         session.commit()
-        return Result.Committed(header.label, overWifi)
+        // From here the install is in the hands of the installer: never abandon it. The phone may be
+        // gone already; it then tells the user to look on the watch.
+        runCatching { WatchAppUpdateProtocol.writeReply(output, Reply.Committed) }
+        return Result.Committed(header.label)
     }
 
     private fun fail(output: OutputStream, message: String): Result.Failed {

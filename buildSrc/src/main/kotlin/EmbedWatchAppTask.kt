@@ -74,6 +74,7 @@ abstract class EmbedWatchAppTask @Inject constructor(private val execOperations:
         val info = Properties().apply {
             setProperty("label", "$versionName (${apk.name})")
             setProperty("size", gz.length().toString())
+            setProperty("apkSize", apk.length().toString())
         }
         File(dir, INFO_ASSET).outputStream().use { info.store(it, "Watch app embedded by EmbedWatchAppTask") }
         logger.lifecycle("Watch app ${apk.name} ($versionName) embedded, ${gz.length() / 1024} KiB compressed")
@@ -89,6 +90,14 @@ abstract class EmbedWatchAppTask @Inject constructor(private val execOperations:
         const val APK_ASSET = "wear.apk.gzip"
         const val INFO_ASSET = "watch_app.properties"
 
+        /** "36.0.0" as [36, 0, 0]; a part that is not a number counts as 0 */
+        internal fun version(name: String): List<Int> = name.split('.', '-').map { it.toIntOrNull() ?: 0 }
+
+        /** Compares versions number by number: 36.0.0 is newer than 9.0.0 */
+        internal val versionOrder = Comparator<List<Int>> { a, b ->
+            (0 until maxOf(a.size, b.size)).map { (a.getOrElse(it) { 0 }).compareTo(b.getOrElse(it) { 0 }) }.firstOrNull { it != 0 } ?: 0
+        }
+
         /** The gradle property that names the watch APK */
         const val PROPERTY = "embedWearApk"
 
@@ -98,14 +107,15 @@ abstract class EmbedWatchAppTask @Inject constructor(private val execOperations:
          */
         fun register(project: Project) {
             val apkPath = project.findProperty(PROPERTY)?.toString()?.takeIf { it.isNotBlank() } ?: return
-            val apk = project.file(apkPath)
-            if (!apk.isFile) throw GradleException("-P$PROPERTY: $apk does not exist")
+            // A relative path starts at the root project, where the build is started, not at app/
+            val apk = project.rootProject.file(apkPath)
+            if (!apk.isFile) throw GradleException("-P$PROPERTY=$apkPath: no file at ${apk.absolutePath}. A relative path starts at ${project.rootDir.absolutePath}")
             val components = project.extensions.getByType(ApplicationAndroidComponentsExtension::class.java)
             val aapt2 = components.sdkComponents.sdkDirectory.map { sdk ->
                 // The newest build tools that have aapt2
                 val buildTools = sdk.dir("build-tools").asFile.listFiles().orEmpty()
                     .filter { File(it, "aapt2").isFile || File(it, "aapt2.exe").isFile }
-                    .maxByOrNull { it.name }
+                    .maxWithOrNull(compareBy<File, List<Int>>(versionOrder) { version(it.name) })
                     ?: throw GradleException("No aapt2 in ${sdk.asFile}/build-tools")
                 sdk.file("build-tools/${buildTools.name}/" + if (File(buildTools, "aapt2").isFile) "aapt2" else "aapt2.exe")
             }

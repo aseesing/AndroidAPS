@@ -9,8 +9,10 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.aaps.wear.R
+import dev.zacsweers.metro.Inject
 
 /** The notification on the watch that shows how an update of the watch app from the phone goes */
+@Inject
 class WatchAppUpdateNotifier(private val context: Context) {
 
     fun showProgress(percent: Int) =

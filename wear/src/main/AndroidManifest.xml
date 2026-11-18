@@ -19,10 +19,6 @@
          lets Android install an update of the app itself without a dialog where the watch allows it. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
-    <!-- The update itself comes over Wi-Fi from the phone where possible, see NetworkWifiBodyFetcher -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <!-- Watch Face Push (Wear OS 6+): PUSH_WATCH_FACES gates binding to the system push service;
          SET_PUSHED_WATCH_FACE_AS_ACTIVE allows re-activating the pushed AAPS watchface after the
          one-shot activation on first install was used -->
@@ -169,16 +165,6 @@
                 <data
                     android:host="*"
                     android:path="/aaps/watch_app_update"
-                    android:scheme="wear" />
-            </intent-filter>
-
-            <!-- PERSONAL PATCH: the phone app downloads the watch log, see WatchLogProtocol.PATH -->
-            <intent-filter>
-                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
-
-                <data
-                    android:host="*"
-                    android:path="/aaps/watch_logs"
                     android:scheme="wear" />
             </intent-filter>
 

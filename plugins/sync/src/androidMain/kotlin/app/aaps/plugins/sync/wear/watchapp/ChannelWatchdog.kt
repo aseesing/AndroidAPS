@@ -1,7 +1,3 @@
-// ============================================================================================
-// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
-// Own file: keep upstream files to small hooks that call into here.
-// ============================================================================================
 package app.aaps.plugins.sync.wear.watchapp
 
 import kotlinx.coroutines.CoroutineDispatcher
@@ -16,7 +12,7 @@ import java.io.IOException
  * Closes [channel] when the deadline passes without [extend].
  *
  * Reads and writes on a Wear OS channel block and cannot be cancelled. Closing the channel ends
- * them with an `IOException`. Used by the watch app update and by the watch log download.
+ * them with an `IOException`.
  */
 internal class ChannelWatchdog(private val channel: Closeable, private val nowMs: () -> Long) {
 
