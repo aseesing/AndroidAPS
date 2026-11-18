@@ -534,14 +534,54 @@ sealed class EventData : Event() {
         ) : EventData()
     }
 
+    /**
+     * A Custom watch face design.
+     *
+     * @param night true for the night face (see [CwfNight]), false for the main face, which is also
+     *   the day face when a night face is set
+     */
     @Serializable
-    data class ActionSetCustomWatchface(val customWatchfaceData: CwfData) : EventData()
+    data class ActionSetCustomWatchface(val customWatchfaceData: CwfData, val night: Boolean = false) : EventData()
 
+    /**
+     * New metadata for a Custom watch face design, or the design the watch has now in a slot.
+     *
+     * @param night true for the night face (see [CwfNight]), false for the main face
+     */
     @Serializable
-    data class ActionUpdateCustomWatchface(val customWatchfaceData: CwfData) : EventData()
+    data class ActionUpdateCustomWatchface(val customWatchfaceData: CwfData, val night: Boolean = false) : EventData()
 
+    /**
+     * No night face (see [CwfNight]).
+     *
+     * - Phone to watch: forget the night face and its [DayNightRule], so the main face shows day and
+     *   night again. The watch answers with an [ActionUpdateCustomWatchface] of its main face and
+     *   with this message (it has no night face now).
+     * - Watch to phone: the watch has no night face (it never had one, it was removed, or it was
+     *   dropped because it failed to load). The phone forgets the night face it shows.
+     *
+     * @param timeStamp when it was sent, for the log, like [ActionPing]
+     */
     @Serializable
-    data class ActionrequestCustomWatchface(val exportFile: Boolean) : EventData()
+    data class ActionClearNightWatchface(val timeStamp: Long) : EventData()
+
+    /**
+     * Phone to watch: when it is day for the night face (see [CwfNight]). Sent only while the watch
+     * has confirmed a night face. The watch keeps the rule with its night face and drops it with it.
+     * Never part of the AAPSClient broadcast. The `toString` shows no coordinates (see [DayNightRule]).
+     */
+    @Serializable
+    data class ActionSetDayNightRule(val rule: DayNightRule) : EventData()
+
+    /**
+     * Phone to watch: send the main face back, as [ActionGetCustomWatchface].
+     *
+     * @param night true when the phone knows about a night face (see [CwfNight]): the watch then also
+     *   reports its night face, or with [ActionClearNightWatchface] that it has none. A watch that
+     *   has a night face always reports it. Defaulted, so an older phone gets the old answer.
+     */
+    @Serializable
+    data class ActionrequestCustomWatchface(val exportFile: Boolean, val night: Boolean = false) : EventData()
 
     @Serializable
     data class ActionrequestSetDefaultWatchface(val timeStamp: Long) : EventData()

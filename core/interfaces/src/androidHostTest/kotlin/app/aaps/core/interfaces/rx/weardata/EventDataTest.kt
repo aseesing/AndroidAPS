@@ -167,6 +167,30 @@ class EventDataTest {
             assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
             assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
         }
+        EventData.ActionSetDayNightRule(DayNightRule.Place(52.4, 4.9)).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionSetDayNightRule(DayNightRule.FixedTimes(dayStartMinute = 420, nightStartMinute = 1140)).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionrequestCustomWatchface(exportFile = false, night = true).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionSetCustomWatchface(CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "night"), mutableMapOf()), night = true).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionUpdateCustomWatchface(CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "night"), mutableMapOf()), night = true).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.ActionClearNightWatchface(1).let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
         EventData.WatchFacePushStatus(supported = true, installedFace = "wfs").let {
             assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
             assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
@@ -344,5 +368,22 @@ class EventDataTest {
         val old = EventData.ActionWizardPreCheck(30, 100).serialize()
         assertThat(old).doesNotContain("carbsType")
         assertThat(EventData.deserialize(old)).isEqualTo(EventData.ActionWizardPreCheck(30, 100, CarbsType.BREAD))
+    }
+
+    @Test
+    fun aDayNightRuleNeverPrintsItsPlace() {
+        // RxBus logs every event it sends with toString, on the phone and on the watch
+        val message = EventData.ActionSetDayNightRule(DayNightRule.Place(52.37, 4.89)).toString()
+        assertThat(message).doesNotContain("52")
+        assertThat(message).doesNotContain("4.89")
+        assertThat(message).contains("Place")
+        assertThat(EventData.ActionSetDayNightRule(DayNightRule.FixedTimes(420, 1140)).toString()).contains("420")
+    }
+
+    @Test
+    fun aRequestFromAnOlderPhoneDoesNotAskForTheNightFace() {
+        val old = EventData.ActionrequestCustomWatchface(false).serialize()
+        assertThat(old).doesNotContain("night")
+        assertThat((EventData.deserialize(old) as EventData.ActionrequestCustomWatchface).night).isFalse()
     }
 }

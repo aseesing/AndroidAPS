@@ -72,10 +72,12 @@ import com.google.android.gms.wearable.WearableListenerService
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
@@ -96,6 +98,24 @@ class DataHandlerWear(
     // Coroutine scope for DataStore operations
     private val dataStoreScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * The face messages, one after the other. Each one reads and writes the face slots and answers
+     * the phone; run side by side, a late "no night face" from an earlier request could reach the
+     * phone after the report of a night face that was stored later.
+     */
+    private val faceWork = Channel<suspend () -> Unit>(Channel.UNLIMITED).also { work ->
+        dataStoreScope.launch {
+            for (next in work) {
+                try {
+                    next()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    aapsLogger.error(LTag.WEAR, "Watch face message failed", e)
+                }
+            }
+        }
+    }
 
     init {
         setupBus()
@@ -312,37 +332,91 @@ class DataHandlerWear(
                 TileService.getUpdater(context).requestUpdate(RunningModeTileService::class.java)
             }
         }
-        onEvent<EventData.ActionSetCustomWatchface> {
-            dataStoreScope.launch {
+        // The face messages run one after the other, in the order they came (see inFaceOrder)
+        onEvent<EventData.ActionSetCustomWatchface>(detail = { " night=${it.night}" }) {
+            inFaceOrder {
+                // The night face has its own slot, see CwfNight
+                if (it.night) {
+                    complicationDataRepository.storeNightWatchface(it.customWatchfaceData)
+                    sendNightWatchface()
+                    return@inFaceOrder
+                }
                 complicationDataRepository.storeCustomWatchface(it.customWatchfaceData)
                 complicationDataRepository.getSimplifiedCustomWatchface()?.let { cwf ->
                     rxBus.send(EventWearDataToMobile(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(cwf), false)))
                 }
             }
         }
-        onEvent<EventData.ActionUpdateCustomWatchface> {
-            dataStoreScope.launch {
+        onEvent<EventData.ActionUpdateCustomWatchface>(detail = { " night=${it.night}" }) {
+            inFaceOrder {
+                if (it.night) {
+                    complicationDataRepository.updateNightWatchfaceMetadata(it.customWatchfaceData.metadata)
+                    sendNightWatchface()
+                    return@inFaceOrder
+                }
                 complicationDataRepository.updateCustomWatchfaceMetadata(it.customWatchfaceData.metadata)
                 complicationDataRepository.getSimplifiedCustomWatchface()?.let { cwf ->
                     rxBus.send(EventWearDataToMobile(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(cwf), false)))
                 }
             }
         }
+        // Back to one face. The answer is the main face as ActionUpdateCustomWatchface(night = false),
+        // which the phone handles like any other report of the main face, and "no night face".
+        onEvent<EventData.ActionClearNightWatchface> {
+            inFaceOrder {
+                complicationDataRepository.clearNightWatchface()
+                complicationDataRepository.getSimplifiedCustomWatchface()?.let { cwf ->
+                    rxBus.send(EventWearDataToMobile(EventData.ActionUpdateCustomWatchface(cwf, night = false)))
+                }
+                sendNightWatchface()
+            }
+        }
+        // When it is day for the night face. Kept only with a night face: without one the phone is
+        // told so, since it sends a rule only while it thinks the watch has one.
+        onEvent<EventData.ActionSetDayNightRule>(detail = { " rule=${it.rule}" }) {
+            inFaceOrder {
+                if (!complicationDataRepository.storeDayNightRule(it.rule)) sendNightWatchface()
+            }
+        }
         onEvent<EventData.ActionrequestSetDefaultWatchface> {
-            dataStoreScope.launch {
+            inFaceOrder {
                 complicationDataRepository.setDefaultWatchface()
                 complicationDataRepository.getCustomWatchface()?.let { cwf ->
                     rxBus.send(EventWearDataToMobile(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(cwf), false)))
                 }
             }
         }
-        onEvent<EventData.ActionrequestCustomWatchface>(detail = { " export=${it.exportFile}" }) {
-            dataStoreScope.launch {
+        onEvent<EventData.ActionrequestCustomWatchface>(detail = { " export=${it.exportFile} night=${it.night}" }) {
+            inFaceOrder {
                 complicationDataRepository.getSimplifiedCustomWatchface(it.exportFile)?.let { cwf ->
                     rxBus.send(EventWearDataToMobile(EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(cwf), it.exportFile)))
                 }
+                // And the night face, or that there is none. Not for an export, which is about the
+                // default design. "None" only when the phone asks: a phone that knows of no night
+                // face gets no extra message.
+                if (!it.exportFile && (it.night || complicationDataRepository.getNightWatchface() != null)) sendNightWatchface()
             }
         }
+    }
+
+    /** Runs [work] after the face messages that came before it, see [faceWork]. */
+    private fun inFaceOrder(work: suspend () -> Unit) {
+        faceWork.trySend(work)
+    }
+
+    /**
+     * Tells the phone which night face the watch has (see `CwfNight`), or with
+     * [EventData.ActionClearNightWatchface] that it has none, so the phone never shows a night face
+     * the watch no longer has.
+     */
+    private suspend fun sendNightWatchface() {
+        val cwf = complicationDataRepository.getSimplifiedNightWatchface()
+        rxBus.send(
+            EventWearDataToMobile(
+                if (cwf != null) EventData.ActionUpdateCustomWatchface(cwf, night = true)
+                else EventData.ActionClearNightWatchface(System.currentTimeMillis())
+            )
+        )
     }
 
     private fun handleBolusProgress(bolusProgress: EventData.BolusProgress) {
