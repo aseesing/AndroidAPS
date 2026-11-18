@@ -39,6 +39,7 @@ class WatchAppSelfUpdate internal constructor(
     private val aapsLogger: AAPSLogger,
     private val streams: PhoneChannelStreams,
     private val sessions: WatchAppInstallSessionFactory,
+    private val wifi: WifiBodyFetcher,
     private val notifier: WatchAppUpdateNotifier,
     private val scope: CoroutineScope,
     private val closeDelayMs: Long
@@ -49,8 +50,9 @@ class WatchAppSelfUpdate internal constructor(
         aapsLogger: AAPSLogger,
         streams: PhoneChannelStreams,
         sessions: WatchAppInstallSessionFactory,
+        wifi: WifiBodyFetcher,
         notifier: WatchAppUpdateNotifier
-    ) : this(aapsLogger, streams, sessions, notifier, CoroutineScope(SupervisorJob() + Dispatchers.IO), CLOSE_DELAY_MS)
+    ) : this(aapsLogger, streams, sessions, wifi, notifier, CoroutineScope(SupervisorJob() + Dispatchers.IO), CLOSE_DELAY_MS)
 
     private val running = AtomicBoolean(false)
 
@@ -77,10 +79,14 @@ class WatchAppSelfUpdate internal constructor(
                 val input = streams.input(channel)
                 val output = streams.output(channel)
                 notifier.showProgress(0)
-                val task = WatchAppReceiveTask(sessions)
+                val task = WatchAppReceiveTask(
+                    wifi = wifi,
+                    log = { aapsLogger.warn(LTag.WEAR, "Watch app update: $it") },
+                    sessionFactory = sessions
+                )
                 when (val result = task.receive(input, output) { notifier.showProgress(it) }) {
                     is WatchAppReceiveTask.Result.Committed -> {
-                        aapsLogger.info(LTag.WEAR, "Watch app update: ${result.label} given to the installer")
+                        aapsLogger.info(LTag.WEAR, "Watch app update: ${result.label} given to the installer, over ${if (result.overWifi) "Wi-Fi" else "the channel"}")
                         notifier.showInstalling()
                     }
 
