@@ -11,6 +11,10 @@
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="com.google.android.wearable.permission.RECEIVE_COMPLICATION_DATA" />
+    <!-- Update of this app sent from the phone app, see WatchAppSelfUpdate. Asking for no user action
+         lets Android install an update of the app itself without a dialog where the watch allows it. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Watch Face Push (Wear OS 6+): PUSH_WATCH_FACES gates binding to the system push service;
          SET_PUSHED_WATCH_FACE_AS_ACTIVE allows re-activating the pushed AAPS watchface after the
          one-shot activation on first install was used -->
@@ -139,6 +143,16 @@
 
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+            </intent-filter>
+
+            <!-- A new watch app from the phone app, see WatchAppUpdateProtocol.PATH -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+
+                <data
+                    android:host="*"
+                    android:path="/aaps/watch_app_update"
+                    android:scheme="wear" />
             </intent-filter>
 
             <intent-filter>
@@ -1099,6 +1113,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The result of an update of this app sent from the phone app -->
+        <receiver
+            android:name=".selfupdate.WatchAppInstallStatusReceiver"
+            android:exported="false" />
 
     </application>
 </manifest>
