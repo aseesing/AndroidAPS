@@ -173,6 +173,19 @@ internal class WearViewModelNightFaceTest {
     }
 
     @Test
+    fun `the day and night screen opens only with a night face and closes when it goes`() {
+        sut.showDayNight()
+        assertThat(sut.uiState.value.showDayNight).isFalse()
+
+        savedNightWatchfaceFlow.value = zip.cwfData
+        sut.showDayNight()
+        assertThat(sut.uiState.value.showDayNight).isTrue()
+
+        savedNightWatchfaceFlow.value = null
+        assertThat(sut.uiState.value.showDayNight).isFalse()
+    }
+
+    @Test
     fun `remove night face asks the watch to forget it`() {
         sut.clearNightWatchface()
 

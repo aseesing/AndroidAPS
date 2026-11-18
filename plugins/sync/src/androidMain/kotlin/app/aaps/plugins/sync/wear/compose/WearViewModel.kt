@@ -75,7 +75,9 @@ data class WearUiState(
     val showImportList: Boolean = false,
     val importItems: List<CwfImportItemState> = emptyList(),
     /** The night face of the Custom watch face, see `CwfNight` */
-    val nightFace: WearNightFaceState = WearNightFaceState()
+    val nightFace: WearNightFaceState = WearNightFaceState(),
+    /** The "Day and night" screen is open, see `WearDayNightViewModel` */
+    val showDayNight: Boolean = false
 )
 
 @Immutable
@@ -370,7 +372,9 @@ class WearViewModel(
                             hasNightWatchface = cwfData != null,
                             nightWatchfaceName = cwfData?.metadata?.get(CwfMetadataKey.CWF_NAME) ?: "",
                             nightWatchfaceImage = cwfData?.let { cwf -> decodeWatchfaceImage(cwf) }
-                        )
+                        ),
+                        // The "Day and night" screen closes when the night face goes
+                        showDayNight = it.showDayNight && cwfData != null
                     )
                 }
             }
@@ -400,5 +404,14 @@ class WearViewModel(
     /** The watch forgets its night face and shows the main face day and night. */
     fun clearNightWatchface() {
         wearNightFace.remove()
+    }
+
+    /** Opens the "Day and night" screen, only with a night face: without one there is nothing to set. */
+    fun showDayNight() {
+        _uiState.update { it.copy(showDayNight = it.nightFace.hasNightWatchface) }
+    }
+
+    fun hideDayNight() {
+        _uiState.update { it.copy(showDayNight = false) }
     }
 }
