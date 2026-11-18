@@ -177,6 +177,8 @@ class DataHandlerMobile(
     // masterActionExecutor stays on the wear path for Fill ONLY (no relay command for Fill).
     private val batchExecutor: BatchExecutor,
     private val wizardExecutor: WizardExecutor,
+    /** Reset here on an explicit resend request. The filtering itself is in `DataLayerListenerServiceMobile`. */
+    private val unchangedToWear: UnchangedToWearFilter,
 ) {
 
     @Inject lateinit var automation: Automation
@@ -257,7 +259,7 @@ class DataHandlerMobile(
             loop.acceptChangeRequest()?.let { sendError(it) }
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(Constants.NOTIFICATION_ID)
         }
-        onEvent<EventData.ActionResendData> { resendData(it.from) }
+        onEvent<EventData.ActionResendData> { handleResendRequest(it.from) }
         // The watch's word on Watch Face Push, kept by WearPlugin for the wear screen
         onEvent<EventData.WatchFacePushStatus> { rxBus.send(EventWearUpdateGui(watchFacePushStatus = it)) }
         onEvent<EventData.ActionPumpStatus> {
@@ -1245,6 +1247,15 @@ class DataHandlerMobile(
 
     private fun sendQuickWizardListToWear() =
         sendToWear(EventData.QuickWizard(ArrayList(quickWizard.list().filter { e -> e.forDevice(QuickWizardEntry.DEVICE_WATCH) }.map { e -> e.toWear() })))
+
+    /**
+     * A resend asked for explicitly (by the watch, a new connection or the wear screen): send everything,
+     * also what the watch should already have, see [UnchangedToWearFilter].
+     */
+    internal suspend fun handleResendRequest(from: String) {
+        unchangedToWear.reset()
+        resendData(from)
+    }
 
     suspend fun resendData(from: String) {
         aapsLogger.debug(LTag.WEAR, "Sending data to wear from $from")
