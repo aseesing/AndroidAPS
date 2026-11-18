@@ -64,6 +64,7 @@ internal class WatchAppReceiveTaskTest {
     private class FakeWifiBody(body: ByteArray) : WifiBody {
 
         override val input: InputStream = ByteArrayInputStream(body)
+        override val output: OutputStream = ByteArrayOutputStream()
         var closed = false
 
         override fun close() {

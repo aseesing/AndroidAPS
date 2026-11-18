@@ -12,6 +12,7 @@ import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 /**
- * Fetches the update body from the phone over Wi-Fi.
+ * Connects to the phone over Wi-Fi: to fetch the update body, or to send the watch log.
  *
  * A watch that is connected to the phone over Bluetooth keeps its Wi-Fi off. Asking for a Wi-Fi
  * network makes Wear OS turn it on, when the user allows Wi-Fi and the watch knows a network. The
@@ -56,8 +57,10 @@ class NetworkWifiBodyFetcher(private val context: Context) : WifiBodyFetcher {
                     socket.soTimeout = READ_TIMEOUT_MS
                     WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), offer.token)
                     val input = socket.getInputStream()
+                    val output = socket.getOutputStream()
                     return object : WifiBody {
                         override val input: InputStream = input
+                        override val output: OutputStream = output
 
                         override fun close() {
                             runCatching { socket.close() }
