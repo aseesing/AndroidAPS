@@ -212,7 +212,10 @@ class FormulaTest {
         "pulse" to listOf(
             "pulse(120, 60, 0.35)" to PulseCurve.value(120, 60, 0.35f).toDouble(),
             "pulse(500, 90, 0)" to PulseCurve.value(500, 90, 0f).toDouble()
-        )
+        ),
+        "window" to listOf("window(3, 2, 4)" to 0.25, "window(1, 2, 0)" to 0.0, "window(2, 2, 0)" to 1.0),
+        "pingpong" to listOf("pingpong(3, 2)" to 1.0, "pingpong(4, 2)" to 0.0, "pingpong(1, 0)" to 0.0),
+        "f32" to listOf("f32(0.5)" to 0.5, "f32(0.1)" to 0.1)
     )
 
     @Test
@@ -487,5 +490,72 @@ class FormulaTest {
         assertThat(f).isEqualTo(parse("sin(t) * 8"))
         assertThat(f.hashCode()).isEqualTo(parse("sin(t) * 8").hashCode())
         assertThat(f).isNotEqualTo(parse("sin(t) * 9"))
+    }
+
+    // ---- window and pingpong ----
+
+    @Test
+    fun windowRunsFromStartOverTheDuration() {
+        assertThat(eval("window(t, 2, 4)", t = 0.0)).isEqualTo(0.0)
+        assertThat(eval("window(t, 2, 4)", t = 2.0)).isEqualTo(0.0)
+        assertThat(eval("window(t, 2, 4)", t = 3.0)).isEqualTo(0.25)
+        assertThat(eval("window(t, 2, 4)", t = 6.0)).isEqualTo(1.0)
+        assertThat(eval("window(t, 2, 4)", t = 60.0)).isEqualTo(1.0)
+        assertThat(Formula.window(5.0, 2.0, 4.0)).isEqualTo(0.75)
+    }
+
+    @Test
+    fun aWindowWithoutLengthIsAStep() {
+        assertThat(eval("window(t, 2, 0)", t = 1.999)).isEqualTo(0.0)
+        assertThat(eval("window(t, 2, 0)", t = 2.0)).isEqualTo(1.0)
+        assertThat(eval("window(t, 2, -1)", t = 1.0)).isEqualTo(0.0)
+        assertThat(eval("window(t, 2, -1)", t = 3.0)).isEqualTo(1.0)
+        // A missing time is no number, as in every other function
+        assertThat(eval("window(nan, 2, 4)").isNaN()).isTrue()
+        assertThat(eval("window(nan, 2, 0)")).isEqualTo(0.0)
+    }
+
+    @Test
+    fun pingpongGoesUpAndDownAgain() {
+        val expected = mapOf(0.0 to 0.0, 1.0 to 1.0, 2.0 to 2.0, 3.0 to 1.0, 4.0 to 0.0, 5.0 to 1.0, -1.0 to 1.0, 9.5 to 1.5)
+        for ((x, value) in expected) assertWithMessage("pingpong($x, 2)").that(eval("pingpong(t, 2)", t = x)).isEqualTo(value)
+        assertThat(eval("pingpong(t, 0)", t = 3.0)).isEqualTo(0.0)
+        assertThat(eval("pingpong(t, -2)", t = 3.0)).isEqualTo(0.0)
+        assertThat(parse("pingpong(1, 2) + window(1, 0, 2)").isConstant).isTrue()
+    }
+
+    // ---- the variables a formula reads ----
+
+    @Test
+    fun aFormulaSaysWhichVariablesItReads() {
+        // t = 0, x = 1, y = 2, nan = 3
+        assertThat(parse("2 * pi").reads).isEqualTo(0L)
+        assertThat(parse("t").reads).isEqualTo(0b0001L)
+        assertThat(parse("sin(x) + y * 2").reads).isEqualTo(0b0110L)
+        assertThat(parse("if(t > 1, x, y)").reads).isEqualTo(0b0111L)
+        assertThat(parse("max(t, 1, 2, 3, nan)").reads).isEqualTo(0b1001L)
+        assertThat(parse("hash(x, y, t) * 0").reads).isEqualTo(0b0111L)
+        // A part with fixed numbers only is worked out once and reads nothing
+        assertThat(parse("t + sin(pi / 2)").reads).isEqualTo(0b0001L)
+    }
+
+    @Test
+    fun anIndexPastSixtyThreeReadsAsBitSixtyThree() {
+        val f = Formula.parse("far + near") { name -> if (name == "far") 100 else 2 }
+        assertThat(f.reads).isEqualTo((1L shl 63) or 0b100L)
+    }
+
+    @Test
+    fun functionsWithManyValuesWorkWithoutBoxing() {
+        // The same values as before the change to `fun interface` functions
+        assertThat(eval("min(5, 3, 4, 1, 2)")).isEqualTo(1.0)
+        assertThat(eval("max(5, 3, 4, 1, 2, 9, 0, 8)")).isEqualTo(9.0)
+        assertThat(eval("min(t, x, y)", t = 3.0, x = 2.0, y = 1.0)).isEqualTo(1.0)
+        assertThat(eval("max(t, x, y)", t = 3.0, x = 2.0, y = 1.0)).isEqualTo(3.0)
+        assertThat(eval("hash(t)", t = 1.0)).isEqualTo(Formula.hash(1.0))
+        assertThat(eval("hash(t, x)", t = 1.0, x = 2.0)).isEqualTo(Formula.hash(1.0, 2.0))
+        assertThat(eval("hash(t, x, y)", t = 1.0, x = 2.0, y = 3.0)).isEqualTo(Formula.hash(1.0, 2.0, 3.0))
+        assertThat(eval("noise(t)", t = 1.5)).isEqualTo(Formula.noise(1.5))
+        assertThat(eval("noise(t, x)", t = 1.5, x = 0.25)).isEqualTo(Formula.noise(1.5, 0.25))
     }
 }

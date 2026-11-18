@@ -236,11 +236,19 @@ abstract class WatchFace : WatchFaceService() {
     }
 
     /**
-     * What the complication slots show now. The library hands every slot a new object when its data
-     * changes, so a subclass can compare these by reference.
+     * PERSONAL PATCH: what the complication slots show now. The library hands every slot a new object
+     * when its data changes, so a subclass can compare these by reference.
+     *
+     * The same list every call, filled again, so a frame makes no list: a caller that keeps the values
+     * must copy them, and must not hold the list past the next call.
      */
-    protected fun complicationDataNow(): List<Any?> =
-        complicationSlotsManager?.complicationSlots?.values?.map { it.complicationData.value } ?: emptyList()
+    protected fun complicationDataNow(): List<Any?> { // PERSONAL PATCH
+        slotData.clear()
+        complicationSlotsManager?.complicationSlots?.values?.forEach { slotData.add(it.complicationData.value) }
+        return slotData
+    }
+
+    private val slotData = ArrayList<Any?>() // PERSONAL PATCH
 
     /** Hands the watch state (ambient, visible, headless) to a subclass that wants to follow it. */
     protected open fun onWatchStateReady(watchState: WatchState) {}
@@ -525,5 +533,10 @@ abstract class WatchFace : WatchFaceService() {
     override fun getSystemService(name: String): Any? {
         // Delegate to application context for backward compatibility
         return applicationContext.getSystemService(name) ?: super.getSystemService(name)
+    }
+
+    /** PERSONAL PATCH: asks for a frame without new content, unlike [invalidate]: the kept pictures stay. */
+    protected fun requestFrame() {
+        renderer?.invalidate()
     }
 }

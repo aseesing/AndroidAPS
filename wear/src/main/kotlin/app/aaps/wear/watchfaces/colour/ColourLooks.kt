@@ -5,7 +5,7 @@
 package app.aaps.wear.watchfaces.colour
 
 import app.aaps.wear.R
-import app.aaps.wear.watchfaces.daynight.DayOverlay
+import app.aaps.wear.watchfaces.design.Looks
 import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,7 +23,7 @@ import org.json.JSONObject
  * }
  * ```
  *
- * Each one is a look like the day look (see [DayOverlay]): it is merged into the design, key by key.
+ * Each one is a patch like those of the looks (see [Looks.merge]): it is merged into the design, key by key.
  * Before that every text [PLACEHOLDER] in it becomes the colour the wearer chose, so `@colour` becomes
  * `#00E5FF`. `#80@colour` becomes `#8000E5FF`: the same colour, half see-through.
  *
@@ -100,7 +100,7 @@ class ColourLooks {
             }
             if (chosen.isEmpty()) return design
             val result = JSONObject(design.toString())
-            chosen.forEach { (look, colour) -> DayOverlay.merge(result, filledIn(look, colour.substring(1)) as JSONObject) }
+            chosen.forEach { (look, colour) -> Looks.merge(result, filledIn(look, colour.substring(1)) as JSONObject) }
             return result
         }
 

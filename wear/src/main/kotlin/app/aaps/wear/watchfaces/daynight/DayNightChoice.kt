@@ -8,7 +8,7 @@ import app.aaps.wear.R
 import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
 
 /**
- * The two watch settings of the day look (see [DayOverlay]). Private patch. Pure functions only.
+ * The two watch settings of the day look (a look with `v_is_day`, see `Looks`). Private patch. Pure functions only.
  *
  * - "Day / night look", for the active screen: [AUTO] (from sunrise to sunset, the default), [DAY]
  *   or [NIGHT].

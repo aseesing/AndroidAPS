@@ -54,7 +54,10 @@ class LayerAnimatorTest {
         restSeconds = restSeconds
     )
 
-    private fun animator(vararg specs: AnimLayerSpec) = LayerAnimator(specs.toList(), utc)
+    private val BAND = LayerGradient(LayerGradient.Type.LINEAR, listOf(LayerGradient.Stop(0f, 0f), LayerGradient.Stop(0.5f, 1f), LayerGradient.Stop(1f, 0f)))
+    private val DOT = LayerGradient(LayerGradient.Type.RADIAL, listOf(LayerGradient.Stop(0f, 1f), LayerGradient.Stop(0.25f, 1f), LayerGradient.Stop(1f, 0f)))
+
+    private fun animator(vararg specs: AnimLayerSpec) = LayerAnimator(specs.toList(), zone = utc)
 
     /** Draws the back slot of [animator] at scale 1 on a clear 400 x 400 bitmap. */
     private fun draw(animator: LayerAnimator, elapsedMs: Long = 0, nowMs: Long = 0, slot: LayerSlot = LayerSlot.BACK): Bitmap {
@@ -170,8 +173,8 @@ class LayerAnimatorTest {
 
     @Test
     fun otherShapesDrawWhereTheySay() {
-        fun shape(kind: ShapeKind, props: Map<LayerProp, String>) =
-            animator(AnimLayerSpec(source = LayerSource.Shape(kind, listOf(Color.WHITE)), props = props, clip = noRound))
+        fun shape(kind: ShapeKind, props: Map<LayerProp, String>, gradient: LayerGradient? = null) =
+            animator(AnimLayerSpec(source = LayerSource.Shape(kind, listOf(Color.WHITE), gradient), props = props, clip = noRound))
 
         val circle = draw(shape(ShapeKind.CIRCLE, mapOf(LayerProp.X to "200", LayerProp.Y to "100", LayerProp.RADIUS to "20")))
         assertThat(pixel(circle, 200, 100)).isEqualTo(Color.WHITE)
@@ -190,13 +193,13 @@ class LayerAnimatorTest {
         assertThat(pixel(right, 50, 100)).isEqualTo(0)
 
         // A soft dot: bright in the middle, clear past its radius
-        val dot = draw(shape(ShapeKind.DOT, mapOf(LayerProp.X to "300", LayerProp.Y to "300", LayerProp.RADIUS to "20")))
+        val dot = draw(shape(ShapeKind.CIRCLE, mapOf(LayerProp.X to "300", LayerProp.Y to "300", LayerProp.RADIUS to "20"), DOT))
         assertThat(Color.alpha(pixel(dot, 300, 300))).isGreaterThan(200)
         assertThat(Color.alpha(pixel(dot, 300, 315))).isLessThan(Color.alpha(pixel(dot, 300, 300)))
         assertThat(pixel(dot, 300, 322)).isEqualTo(0)
 
         // A soft band: bright in the middle, clear at the sides, from y to y + height
-        val band = draw(shape(ShapeKind.BAND, mapOf(LayerProp.X to "200", LayerProp.Y to "100", LayerProp.WIDTH to "100", LayerProp.HEIGHT to "50")))
+        val band = draw(shape(ShapeKind.RECT, mapOf(LayerProp.X to "150", LayerProp.Y to "100", LayerProp.WIDTH to "100", LayerProp.HEIGHT to "50"), BAND))
         assertThat(Color.alpha(pixel(band, 200, 120))).isGreaterThan(240)
         assertThat(Color.alpha(pixel(band, 160, 120))).isLessThan(Color.alpha(pixel(band, 200, 120)))
         assertThat(Color.alpha(pixel(band, 151, 120))).isLessThan(20)
@@ -214,9 +217,9 @@ class LayerAnimatorTest {
     }
 
     /** Draws [kind] with every size [size] (a formula), and gives the error it throws, or null. */
-    private fun drawWithSize(kind: ShapeKind, size: String): Throwable? {
+    private fun drawWithSize(kind: ShapeKind, size: String, gradient: LayerGradient? = null): Throwable? {
         val spec = AnimLayerSpec(
-            source = LayerSource.Shape(kind, listOf(Color.WHITE)),
+            source = LayerSource.Shape(kind, listOf(Color.WHITE), gradient),
             props = mapOf(
                 LayerProp.X to "100", LayerProp.Y to "100", LayerProp.RADIUS to size, LayerProp.WIDTH to size,
                 LayerProp.HEIGHT to size, LayerProp.LENGTH to size, LayerProp.THICKNESS to size
@@ -229,21 +232,21 @@ class LayerAnimatorTest {
     }
 
     /** The shapes and sizes that throw while drawing, as "KIND size: error". */
-    private fun sizesThatThrow(kinds: List<ShapeKind>, sizes: List<String>): List<String> =
-        kinds.flatMap { kind -> sizes.mapNotNull { size -> drawWithSize(kind, size)?.let { "$kind $size: $it" } } }
+    private fun sizesThatThrow(kinds: List<ShapeKind>, sizes: List<String>, gradient: LayerGradient? = null): List<String> =
+        kinds.flatMap { kind -> sizes.mapNotNull { size -> drawWithSize(kind, size, gradient)?.let { "$kind $size: $it" } } }
 
     @Test
     fun aMissingOrZeroSizeDoesNotBreakTheDrawing() {
         // A formula that reads a value the watch does not have gives NaN for the size
-        val kinds = ShapeKind.entries - ShapeKind.BAND
-        assertThat(sizesThatThrow(kinds, listOf("v_none", "0", "-5", "1e30"))).isEmpty()
-        // A band of a real width is fine
-        assertThat(sizesThatThrow(listOf(ShapeKind.BAND), listOf("-5", "1e30"))).isEmpty()
+        assertThat(sizesThatThrow(ShapeKind.entries, listOf("v_none", "0", "-5", "1e30"))).isEmpty()
+        // With a gradient too
+        assertThat(sizesThatThrow(ShapeKind.entries, listOf("-5", "1e30"), BAND)).isEmpty()
+        assertThat(sizesThatThrow(ShapeKind.entries, listOf("-5", "1e30"), DOT)).isEmpty()
     }
 
     @Test
     fun aBandOfMissingOrZeroWidthDoesNotBreakTheDrawing() {
-        assertThat(sizesThatThrow(listOf(ShapeKind.BAND), listOf("v_none", "0"))).isEmpty()
+        assertThat(sizesThatThrow(listOf(ShapeKind.RECT), listOf("v_none", "0"), BAND)).isEmpty()
     }
 
     // ---- clips ----
@@ -476,7 +479,7 @@ class LayerAnimatorTest {
 
     /** A moon layer in [rect]; the moon of the tests is a plain red square. */
     private fun moonLayer(rect: DesignRect = DesignRect(100f, 120f, 60f, 40f), restSeconds: Float? = null, maxScale: Float = 1f) =
-        AnimLayerSpec(source = LayerSource.Moon(rect), clip = noRound, restSeconds = restSeconds, maxScale = maxScale)
+        AnimLayerSpec(source = LayerSource.Dynamic("moon", rect), clip = noRound, restSeconds = restSeconds, maxScale = maxScale)
 
     /** Gives a red square of the asked size and keeps what was asked, as (clock time, size). */
     private class TestMoon {
@@ -484,7 +487,8 @@ class LayerAnimatorTest {
         val asked = ArrayList<Pair<Long, Int>>()
         val made = ArrayList<Bitmap>()
 
-        fun picture(epochMs: Long, size: Int): Bitmap {
+        fun picture(name: String, epochMs: Long, size: Int): Bitmap {
+            check(name == "moon")
             asked += epochMs to size
             return createBitmap(size, size).apply { eraseColor(Color.RED) }.also { made += it }
         }
@@ -494,14 +498,14 @@ class LayerAnimatorTest {
     fun aMoonLayerDrawsTheMoonInTheMiddleOfItsRect() {
         val moon = TestMoon()
         val now = 1_700_000_000_000L
-        val bitmap = draw(LayerAnimator(listOf(moonLayer()), utc, moon::picture), nowMs = now)
+        val bitmap = draw(LayerAnimator(listOf(moonLayer()), zone = utc, images = moon::picture), nowMs = now)
         // The square of the shorter side (40), in the middle of the 60 wide rect
         assertThat(bounds(bitmap)).isEqualTo(Rect(110, 120, 150, 160))
         assertThat(pixel(bitmap, 130, 140)).isEqualTo(Color.RED)
         // The moon of the frame's clock time, as big as it is drawn
         assertThat(moon.asked).containsExactly(now to 40)
         // Moved by x and y, like a picture
-        val moved = draw(LayerAnimator(listOf(moonLayer().copy(props = mapOf(LayerProp.X to "30", LayerProp.Y to "-20"))), utc, moon::picture), nowMs = now)
+        val moved = draw(LayerAnimator(listOf(moonLayer().copy(props = mapOf(LayerProp.X to "30", LayerProp.Y to "-20"))), zone = utc, images = moon::picture), nowMs = now)
         assertThat(bounds(moved)).isEqualTo(Rect(140, 100, 180, 140))
     }
 
@@ -510,7 +514,7 @@ class LayerAnimatorTest {
         val moon = TestMoon()
         val below = rect(x = "100", y = "130", width = "60", height = "20", colors = listOf(Color.BLUE))
         val above = rect(x = "100", y = "150", width = "60", height = "20", colors = listOf(Color.GREEN))
-        val bitmap = draw(LayerAnimator(listOf(below, moonLayer(), above), utc, moon::picture))
+        val bitmap = draw(LayerAnimator(listOf(below, moonLayer(), above), zone = utc, images = moon::picture))
         assertThat(pixel(bitmap, 105, 140)).isEqualTo(Color.BLUE)  // only the layer below
         assertThat(pixel(bitmap, 130, 140)).isEqualTo(Color.RED)   // the moon over the layer below
         assertThat(pixel(bitmap, 130, 155)).isEqualTo(Color.GREEN) // the layer above over the moon
@@ -522,9 +526,9 @@ class LayerAnimatorTest {
         val other = rect(x = "10", y = "10")
         // No moon at all (the default), none to be had, and one that fails
         for (animator in listOf(
-            LayerAnimator(listOf(moonLayer(), other), utc),
-            LayerAnimator(listOf(moonLayer(), other), utc) { _, _ -> null },
-            LayerAnimator(listOf(moonLayer(), other), utc) { _, _ -> error("no moon") }
+            LayerAnimator(listOf(moonLayer(), other), zone = utc),
+            LayerAnimator(listOf(moonLayer(), other), zone = utc) { _, _, _ -> null },
+            LayerAnimator(listOf(moonLayer(), other), zone = utc) { _, _, _ -> error("no moon") }
         )) {
             val bitmap = draw(animator)
             assertThat(pixel(bitmap, 15, 15)).isEqualTo(Color.RED)
@@ -533,14 +537,14 @@ class LayerAnimatorTest {
             assertThat(countDrawn(draw(animator))).isEqualTo(100)
         }
         // A picture freed by its owner is not drawn either
-        val freed = LayerAnimator(listOf(moonLayer()), utc) { _, size -> createBitmap(size, size).apply { recycle() } }
+        val freed = LayerAnimator(listOf(moonLayer()), zone = utc) { _, _, size -> createBitmap(size, size).apply { recycle() } }
         assertThat(isClear(draw(freed))).isTrue()
     }
 
     @Test
     fun theMoonIsAskedForOncePerMinuteAndSize() {
         val moon = TestMoon()
-        val animator = LayerAnimator(listOf(moonLayer()), utc, moon::picture)
+        val animator = LayerAnimator(listOf(moonLayer()), zone = utc, images = moon::picture)
         val minute = 1_700_000_040_000L // a whole minute
         for (frame in 0 until 24) {
             animator.setTime(frame * 40L, 5000, 1f, minute + frame * 40L)
@@ -561,14 +565,14 @@ class LayerAnimatorTest {
     @Test
     fun theMoonSizeHasALimit() {
         val moon = TestMoon()
-        draw(LayerAnimator(listOf(moonLayer(DesignRect.FULL, maxScale = 4f)), utc, moon::picture))
+        draw(LayerAnimator(listOf(moonLayer(DesignRect.FULL, maxScale = 4f)), zone = utc, images = moon::picture))
         assertThat(moon.asked.single().second).isEqualTo(512)
     }
 
     @Test
     fun aRestMoonLayerStaysOnTheFace() {
         val moon = TestMoon()
-        val animator = LayerAnimator(listOf(moonLayer(restSeconds = 0f)), utc, moon::picture)
+        val animator = LayerAnimator(listOf(moonLayer(restSeconds = 0f)), zone = utc, images = moon::picture)
         assertThat(animator.hasRest).isTrue()
         val bitmap = createBitmap(size, size)
         val now = 1_700_000_000_000L
@@ -666,7 +670,7 @@ class LayerAnimatorTest {
     fun theTimeOfDayComesFromNowInTheZone() {
         val now = ZonedDateTime.of(2026, 1, 15, 10, 20, 30, 500_000_000, ZoneId.of("UTC")).toInstant().toEpochMilli()
         val spec = rect(x = "sec * 10", y = "min * 5", width = "hour", height = "10")
-        val box = bounds(draw(LayerAnimator(listOf(spec), utc), nowMs = now))!!
+        val box = bounds(draw(LayerAnimator(listOf(spec), zone = utc), nowMs = now))!!
         assertThat(box.left).isEqualTo(305)    // 30.5 seconds
         assertThat(box.top).isEqualTo(100)     // 20 minutes
         assertThat(box.width()).isEqualTo(10)  // 10 hours
@@ -742,7 +746,7 @@ class LayerAnimatorTest {
         val layers = List(AnimLayerSpec.MAX_TOTAL_COPIES / big) { rect(x = "0", y = "0", width = "1", height = "1", copies = LayerCopies.Count(big)) } +
             rect(x = "0", y = "0", copies = LayerCopies.Count(big)) +                      // this one is too many
             rect(x = "200", y = "200", copies = LayerCopies.Count(AnimLayerSpec.MAX_TOTAL_COPIES % big))  // this one still fits
-        val animator = LayerAnimator(layers, utc)
+        val animator = LayerAnimator(layers, zone = utc)
         val tooMany = AnimLayerSpec.MAX_TOTAL_COPIES / big
         assertThat(animator.errors).containsExactly("layer $tooMany: more than ${AnimLayerSpec.MAX_TOTAL_COPIES} copies in all")
         val bitmap = draw(animator)
@@ -762,11 +766,11 @@ class LayerAnimatorTest {
     fun noMoreThanMaxLayersAreDrawn() {
         // One 10 x 10 rect per layer, side by side; the one past the limit is not drawn
         val layers = List(AnimLayerSpec.MAX_LAYERS + 1) { k -> rect(x = "${(k % 20) * 10}", y = "${(k / 20) * 10}") }
-        val bitmap = draw(LayerAnimator(layers, utc))
+        val bitmap = draw(LayerAnimator(layers, zone = utc))
         assertThat(countDrawn(bitmap)).isEqualTo(AnimLayerSpec.MAX_LAYERS * 100)
         assertThat(pixel(bitmap, 5, 25)).isEqualTo(0)
         // and the design tests can see why
-        assertThat(LayerAnimator(layers, utc).errors).containsExactly("layer ${AnimLayerSpec.MAX_LAYERS}: more than ${AnimLayerSpec.MAX_LAYERS} layers")
+        assertThat(LayerAnimator(layers, zone = utc).errors).containsExactly("layer ${AnimLayerSpec.MAX_LAYERS}: more than ${AnimLayerSpec.MAX_LAYERS} layers")
     }
 
     @Test
@@ -789,7 +793,7 @@ class LayerAnimatorTest {
     @Test
     fun theShaderCachesStaySmall() {
         val twinkle = AnimLayerSpec(
-            source = LayerSource.Shape(ShapeKind.DOT, listOf(Color.WHITE)),
+            source = LayerSource.Shape(ShapeKind.CIRCLE, listOf(Color.WHITE), DOT),
             copies = LayerCopies.Count(50),
             props = mapOf(LayerProp.X to "r1 * 400", LayerProp.Y to "r2 * 400", LayerProp.RADIUS to "3 + noise(t * 10 + i) * 6"),
             clip = noRound
@@ -805,5 +809,66 @@ class LayerAnimatorTest {
             .filter { Map::class.java.isAssignableFrom(it.type) }
             .associate { field -> field.isAccessible = true; field.name to (field.get(animator) as Map<*, *>).size }
         for ((name, entries) in sizes) assertWithMessage(name).that(entries).isAtMost(256)
+    }
+
+    // ---- how often a formula is worked out ----
+
+    @Test
+    fun aFormulaOfTheWakeFollowsNewValuesAndANewLength() {
+        val animator = animator(rect(x = "v_a + len / 1000", y = "100"))
+        animator.setWakeValues({ 10.0 }, 60)
+        animator.setTime(0, 5000, 1f, 0)
+        assertThat(animator.propOf(0, 0, LayerProp.X)).isEqualTo(15f)
+        animator.setTime(1000, 5000, 0.5f, 0)
+        assertThat(animator.propOf(0, 0, LayerProp.X)).isEqualTo(15f)
+        animator.setTime(1000, 8000, 0.5f, 0)
+        assertThat(animator.propOf(0, 0, LayerProp.X)).isEqualTo(18f)
+        animator.setWakeValues({ 20.0 }, 60)
+        assertThat(animator.propOf(0, 0, LayerProp.X)).isEqualTo(28f)
+        animator.setWakeValues({ null }, 90)
+        assertThat(animator.propOf(0, 0, LayerProp.X)!!.isNaN()).isTrue()
+    }
+
+    @Test
+    fun aFormulaOfTheFrameFollowsTheTimeForEveryCopy() {
+        val animator = animator(rect(x = "t * 10 + env", y = "i * 20 + t", copies = LayerCopies.Count(3)))
+        animator.setTime(2000, 5000, 1f, 0)
+        for (i in 0..2) {
+            assertThat(animator.propOf(0, i, LayerProp.X)).isEqualTo(21f)
+            assertThat(animator.propOf(0, i, LayerProp.Y)).isEqualTo(i * 20f + 2f)
+        }
+        animator.setTime(3000, 5000, 0f, 0)
+        for (i in 0..2) assertThat(animator.propOf(0, i, LayerProp.X)).isEqualTo(30f)
+        // Drawn: three boxes in a column, all at the x of this frame
+        val box = bounds(draw(animator, elapsedMs = 4000))!!
+        assertThat(box.left).isEqualTo(41)
+        assertThat(box.top).isEqualTo(4)
+        assertThat(box.bottom).isEqualTo(54)
+    }
+
+    @Test
+    fun aFixedNumberIsKept() {
+        val animator = animator(rect(x = "2 * 50", y = "100"))
+        animator.setTime(0, 5000, 1f, 0)
+        assertThat(animator.propOf(0, 0, LayerProp.X)).isEqualTo(100f)
+        assertThat(animator.propOf(0, 0, LayerProp.ROTATION)).isNull()
+    }
+
+    @Test
+    fun theZoneIsReadOncePerRestFrameAndNotPerLayer() {
+        var asked = 0
+        val now = ZonedDateTime.of(2026, 1, 15, 10, 20, 30, 0, ZoneId.of("UTC")).toInstant().toEpochMilli()
+        val animator = LayerAnimator(
+            listOf(rect(x = "sec", y = "10", restSeconds = 1f), rect(x = "min", y = "30", restSeconds = 2f), rect(x = "hour", y = "50", restSeconds = 3f)),
+            zone = { asked++; ZoneId.of("UTC") }
+        )
+        val bitmap = createBitmap(size, size)
+        animator.drawRest(Canvas(bitmap), 1f, now) { null }
+        assertThat(asked).isEqualTo(1)
+        assertThat(pixel(bitmap, 35, 15)).isEqualTo(Color.RED)   // 30 seconds
+        assertThat(pixel(bitmap, 25, 35)).isEqualTo(Color.RED)   // 20 minutes
+        assertThat(pixel(bitmap, 15, 55)).isEqualTo(Color.RED)   // 10 hours
+        animator.drawRest(Canvas(bitmap), 1f, now + 60_000) { null }
+        assertThat(asked).isEqualTo(2)
     }
 }

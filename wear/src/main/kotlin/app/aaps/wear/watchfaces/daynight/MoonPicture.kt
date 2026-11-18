@@ -10,7 +10,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import androidx.core.graphics.createBitmap
-import org.json.JSONObject
+import app.aaps.wear.watchfaces.utils.DynamicImage
+import app.aaps.wear.watchfaces.utils.DynamicImages
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -19,36 +20,36 @@ import kotlin.math.sqrt
  * The moon as you see it now, drawn on the watch from one photo of the full moon: the dark part is
  * made dark, and the moon is turned the way it stands in your sky (see [MoonLight]).
  *
- * A view of a Custom watch face design asks for it with `"moonLight": true`. The photo comes with the
- * watch app (NASA's Scientific Visualization Studio, public domain), so a design does not need any
- * moon pictures, and it fits a view of any size.
+ * The dynamic picture [NAME] of a design (see [DynamicImages]): a view or a layer asks for it with
+ * `"image": "@moon"`. The photo comes with the watch app (NASA's
+ * Scientific Visualization Studio, public domain), so a design does not need any moon pictures, and
+ * it fits a view of any size. The photo is read once, for every size.
  *
- * The picture is made again every [REDRAW_MS], or when the size or the place changes. In between the
- * same picture is used, so this costs nearly nothing.
+ * A picture is right for [REDRAW_MS] and for the same place; [DynamicImages] keeps it that long, so
+ * this costs nearly nothing.
  *
  * @param loadPhoto reads the photo of the full moon, once, when it is first needed. Null if it fails.
+ * @param place where the wearer is, or null (then north is up)
  */
-class MoonPicture(private val loadPhoto: () -> Bitmap?) {
+class MoonPicture(private val loadPhoto: () -> Bitmap?, private val place: () -> GeoPoint? = { null }) : DynamicImage {
 
     private val photo: Bitmap? by lazy { runCatching { loadPhoto() }.getOrNull() }
-    private var madeFor: Triple<Long, Int, GeoPoint?>? = null
-    private var made: Bitmap? = null
 
-    /** The moon at [epochMs] seen from [place] (north up without one), [size] pixels wide; null if it cannot be made. */
-    fun bitmap(epochMs: Long, place: GeoPoint?, size: Int): Bitmap? {
+    override val refreshMs: Long get() = REDRAW_MS
+
+    override fun inputs(): Any? = place()
+
+    /** The moon at [epochMs] seen from the place now, [size] pixels wide; null if it cannot be made. */
+    override fun draw(epochMs: Long, size: Int): Bitmap? {
         if (size <= 0) return null
-        val key = Triple(epochMs / REDRAW_MS, size, place)
-        if (key != madeFor) {
-            made = photo?.let { photo -> runCatching { draw(photo, size, MoonLight.at(epochMs, place)) }.getOrNull() }
-            madeFor = key
-        }
-        return made
+        val photo = photo ?: return null
+        return draw(photo, size, MoonLight.at(epochMs, place()))
     }
 
     companion object {
 
-        /** The key of a view in the design json that shows the moon. */
-        const val JSON_KEY = "moonLight"
+        /** The name of the picture in [DynamicImages]. */
+        const val NAME = "moon"
 
         /** How often the moon is drawn again. The tilt changes the most: about 15 degrees an hour. */
         const val REDRAW_MS = 15 * 60_000L
@@ -61,9 +62,6 @@ class MoonPicture(private val loadPhoto: () -> Bitmap?) {
          * the blue shows through it, at night it is a faint grey (about [DARK] x [DARK_COVER] on black).
          */
         const val DARK_COVER = 0.45
-
-        /** True when [view] asks for the moon. */
-        fun isOn(view: JSONObject?): Boolean = view?.optBoolean(JSON_KEY) == true
 
         /**
          * The [photo] (the full moon, north up, the disc filling the square) as it looks with [look],

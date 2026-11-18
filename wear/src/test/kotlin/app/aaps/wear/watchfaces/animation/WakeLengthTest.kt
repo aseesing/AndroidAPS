@@ -13,7 +13,7 @@ class WakeLengthTest {
     private var now = 1_000_000L
     private var chosen: Long? = null
     private val timer = WakeTimer({ chosen }) { now }
-    private val spec = WakeAnimationSpec(durationMs = 6000, fps = 24, fadeMs = 600, rain = RainSpec())
+    private val spec = oneLayer(durationMs = 6000, fps = 24, fadeMs = 600)
 
     @Test
     fun theStoredValueIsALengthOffOrTheDesign() {
@@ -36,7 +36,7 @@ class WakeLengthTest {
 
     @Test
     fun withoutAChoiceTheDesignLengthPlays() {
-        timer.spec = spec
+        timer.use(spec)
         assertThat(timer.frame()).isEqualTo(0)
         assertThat(timer.lengthThisWakeMs).isEqualTo(6000)
         now += 6000
@@ -46,7 +46,7 @@ class WakeLengthTest {
     @Test
     fun aLongerChoicePlaysLongerWithEnoughFrames() {
         chosen = 20_000
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
         assertThat(timer.lengthThisWakeMs).isEqualTo(20_000)
         // one frame every 1000 / 24 ms over the whole 20 s: none is refused for the frame limit
@@ -63,7 +63,7 @@ class WakeLengthTest {
     @Test
     fun theLengthStaysInsideTheSafeLimit() {
         chosen = 600_000
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
         assertThat(timer.lengthThisWakeMs).isEqualTo(WakeAnimationSpec.MAX_DURATION_MS)
         assertThat(WakeAnimationSpec.MAX_DURATION_MS).isEqualTo(30_000)
@@ -74,7 +74,7 @@ class WakeLengthTest {
     @Test
     fun offPlaysNothingAndKeepsTheNormalRate() {
         chosen = 0
-        timer.spec = spec
+        timer.use(spec)
         assertThat(timer.wantsFrames).isFalse()
         assertThat(timer.frame()).isNull()
         assertThat(timer.wake()).isFalse()
@@ -83,7 +83,7 @@ class WakeLengthTest {
 
     @Test
     fun aChangeTakesEffectWithTheNextWake() {
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
         // changed while a wake plays: this wake keeps its length
         chosen = 15_000

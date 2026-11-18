@@ -38,8 +38,10 @@ object MoonPosition {
     }
 
     /** The moon at [epochMs] in right ascension and declination. */
-    fun equatorial(epochMs: Long): Equatorial {
-        val moon = ecliptic(epochMs)
+    fun equatorial(epochMs: Long): Equatorial = equatorial(ecliptic(epochMs))
+
+    /** The place [moon] on the ecliptic, in right ascension and declination. */
+    private fun equatorial(moon: Ecliptic): Equatorial {
         val lambda = Math.toRadians(moon.longitude)
         val beta = Math.toRadians(moon.latitude)
         // The tilt of the earth's axis, 23.44 degrees: its cosine and sine
@@ -57,8 +59,10 @@ object MoonPosition {
      * air, the size of the moon and the moon's parallax into account.
      */
     fun heightAboveRise(epochMs: Long, latitude: Double, longitude: Double): Double {
-        val moon = equatorial(epochMs)
-        val parallax = ecliptic(epochMs).parallax
+        // The place on the ecliptic once: it is most of the work
+        val ecliptic = ecliptic(epochMs)
+        val moon = equatorial(ecliptic)
+        val parallax = ecliptic.parallax
         val siderealTime = 280.46061837 + 360.98564736629 * (julianDay(epochMs) - J2000) + longitude
         val hourAngle = Math.toRadians(siderealTime - moon.rightAscension)
         val phi = Math.toRadians(latitude)

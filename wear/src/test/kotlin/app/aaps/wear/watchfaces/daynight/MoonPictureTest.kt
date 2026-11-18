@@ -9,8 +9,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import androidx.core.graphics.createBitmap
 import app.aaps.wear.R
+import app.aaps.wear.watchfaces.utils.DynamicImages
 import com.google.common.truth.Truth.assertThat
-import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -85,14 +85,53 @@ class MoonPictureTest {
     @Test
     fun thePictureIsMadeAgainOnlyAfterAWhile() {
         var loads = 0
-        val picture = MoonPicture { loads++; photo() }
+        val images = DynamicImages(mapOf(MoonPicture.NAME to MoonPicture({ loads++; photo() })))
         val now = 1_763_000_000_000L - 1_763_000_000_000L % MoonPicture.REDRAW_MS
-        val first = picture.bitmap(now, null, size)
-        assertThat(picture.bitmap(now + MoonPicture.REDRAW_MS - 1, null, size)).isSameInstanceAs(first)
-        assertThat(picture.bitmap(now + MoonPicture.REDRAW_MS, null, size)).isNotSameInstanceAs(first)
-        assertThat(picture.bitmap(now, null, size + 2)!!.width).isEqualTo(size + 2)
+        val first = images.bitmap(MoonPicture.NAME, now, size)
+        assertThat(images.bitmap(MoonPicture.NAME, now + MoonPicture.REDRAW_MS - 1, size)).isSameInstanceAs(first)
+        assertThat(images.bitmap(MoonPicture.NAME, now + MoonPicture.REDRAW_MS, size)).isNotSameInstanceAs(first)
+        assertThat(images.bitmap(MoonPicture.NAME, now, size + 2)!!.width).isEqualTo(size + 2)
+        assertThat(images.bitmap(MoonPicture.NAME, now, 0)).isNull()
+        assertThat(images.bitmap("sun", now, size)).isNull()
+        // One photo for every size and every picture
         assertThat(loads).isEqualTo(1)
-        assertThat(picture.bitmap(now, null, 0)).isNull()
+    }
+
+    @Test
+    fun twoSizesKeepTheirOwnPictureAndShareThePhoto() {
+        var loads = 0
+        val images = DynamicImages(mapOf(MoonPicture.NAME to MoonPicture({ loads++; photo() })))
+        val now = 1_763_000_000_000L - 1_763_000_000_000L % MoonPicture.REDRAW_MS
+        // A view and a layer of another size, asked in turn: neither makes the other draw again
+        val view = images.bitmap(MoonPicture.NAME, now, size)
+        val layer = images.bitmap(MoonPicture.NAME, now, size * 2)
+        for (minute in 1..10) {
+            assertThat(images.bitmap(MoonPicture.NAME, now + minute * 60_000L, size)).isSameInstanceAs(view)
+            assertThat(images.bitmap(MoonPicture.NAME, now + minute * 60_000L, size * 2)).isSameInstanceAs(layer)
+        }
+        assertThat(images.draws).isEqualTo(2)
+        assertThat(loads).isEqualTo(1)
+    }
+
+    @Test
+    fun aReplacedPictureIsNotFreedAndAnotherPlaceDrawsAgain() {
+        var place: GeoPoint? = null
+        val images = DynamicImages(mapOf(MoonPicture.NAME to MoonPicture({ photo() }, { place })))
+        val now = 1_763_000_000_000L - 1_763_000_000_000L % MoonPicture.REDRAW_MS
+        val first = images.bitmap(MoonPicture.NAME, now, size)!!
+        val second = images.bitmap(MoonPicture.NAME, now + MoonPicture.REDRAW_MS, size)!!
+        // A view may still show the first one until its next style pass, also after two replacements
+        // before that: never freed here, the garbage collector frees it
+        images.bitmap(MoonPicture.NAME, now + 2 * MoonPicture.REDRAW_MS, size)
+        assertThat(first.isRecycled).isFalse()
+        assertThat(second.isRecycled).isFalse()
+        // The wearer travels: the same time, drawn again for the new place
+        place = GeoPoint(52.0, 5.0)
+        assertThat(images.bitmap(MoonPicture.NAME, now + 2 * MoonPicture.REDRAW_MS, size)).isNotNull()
+        assertThat(images.draws).isEqualTo(4)
+        val last = images.bitmap(MoonPicture.NAME, now + 2 * MoonPicture.REDRAW_MS, size)!!
+        images.release()
+        assertThat(last.isRecycled).isTrue()
     }
 
     @Test
@@ -103,12 +142,5 @@ class MoonPictureTest {
         // The middle is moon, the corners are sky
         assertThat(brightness(photo.getPixel(photo.width / 2, photo.height / 2))).isGreaterThan(80)
         assertThat(brightness(photo.getPixel(1, 1))).isLessThan(30)
-    }
-
-    @Test
-    fun aViewAsksForTheMoon() {
-        assertThat(MoonPicture.isOn(JSONObject().put(MoonPicture.JSON_KEY, true))).isTrue()
-        assertThat(MoonPicture.isOn(JSONObject())).isFalse()
-        assertThat(MoonPicture.isOn(null)).isFalse()
     }
 }

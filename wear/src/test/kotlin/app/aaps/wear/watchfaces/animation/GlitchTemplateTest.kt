@@ -10,6 +10,7 @@ import android.graphics.Color
 import androidx.core.graphics.createBitmap
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -18,21 +19,42 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.math.hypot
 import kotlin.math.max
 
-/** The glitch preset: short bursts of bands, the same for the same seed, inside the round screen. */
+/** The built-in template `glitch`: short bursts of bands, the same for the same seed, inside the round screen. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class)
-class GlitchPresetTest {
+class GlitchTemplateTest {
 
-    private val spec = GlitchSpec().normalized()
+    /** The parameters of the template, with its defaults. */
+    private data class Glitch(
+        val periodMs: Long = 700,
+        val chance: Float = 0.6f,
+        val burstMs: Long = 160,
+        val bands: Int = 3,
+        val seed: Long = 5,
+        val minHeight: Float = 2f,
+        val maxHeight: Float = 8f,
+        val minWidth: Float = 80f,
+        val maxWidth: Float = 300f,
+        val jump: Float = 8f,
+        val color1: Int = Color.rgb(255, 0, 60),
+        val color2: Int = Color.rgb(0, 200, 216),
+        val alpha: Int = 200,
+        val region: DesignRect = DesignRect.FULL
+    ) {
+
+        fun json(): JSONObject = use(
+            "glitch", "periodMs" to periodMs, "chance" to chance.toDouble(), "burstMs" to burstMs, "bands" to bands, "seed" to seed,
+            "minHeight" to minHeight.toDouble(), "maxHeight" to maxHeight.toDouble(), "minWidth" to minWidth.toDouble(), "maxWidth" to maxWidth.toDouble(),
+            "jump" to jump.toDouble(), "color1" to colorText(color1), "color2" to colorText(color2), "alpha" to alpha, "region" to rectJson(region)
+        )
+    }
+
+    private val spec = Glitch()
 
     private data class Band(val left: Float, val top: Float, val width: Float, val height: Float, val colorIndex: Int, val alpha: Float)
 
-    private fun animator(glitch: GlitchSpec): LayerAnimator {
-        val layers = WakeAnimationSpec(glitch = glitch).normalized().allLayers()
-        assertThat(layers).hasSize(1)
-        return LayerAnimator(layers).also { assertThat(it.errors).isEmpty() }
-    }
+    private fun animator(glitch: Glitch): LayerAnimator = animatorOf(animationOf(glitch.json())).also { assertThat(it.size).isEqualTo(1) }
 
     /** The bands that show [ms] after the start, at the fade [env]. */
     private fun bands(animator: LayerAnimator, ms: Long, env: Float = 1f) = mutableListOf<Band>().apply {
@@ -94,8 +116,8 @@ class GlitchPresetTest {
                 assertThat(band.alpha).isWithin(1e-6f).of(spec.alpha / 255f)
             }
             // 40 ms later, in the same burst, a band is moved by a whole number of jumps and is the same size
-            val later = bands(animator, ms + GLITCH_JUMP_MS)
-            val samePeriod = ms / spec.periodMs == (ms + GLITCH_JUMP_MS) / spec.periodMs
+            val later = bands(animator, ms + 40L)
+            val samePeriod = ms / spec.periodMs == (ms + 40L) / spec.periodMs
             if (samePeriod && later.isNotEmpty()) for (i in now.indices) {
                 val jumps = (later[i].left - now[i].left) / spec.jump
                 assertThat(jumps).isWithin(1e-3f).of(Math.round(jumps).toFloat())
@@ -111,7 +133,7 @@ class GlitchPresetTest {
     @Test
     fun everyBandStaysInsideTheRoundScreen() {
         val wide = spec.copy(minWidth = 300f, maxWidth = 400f, maxHeight = 40f, color1 = Color.WHITE, color2 = Color.WHITE, alpha = 255)
-        assertThat(glitchLayer(wide).clip).isEqualTo(LayerClip(rect = DesignRect.FULL, round = true))
+        assertThat(readAnimation(animationOf(wide.json())).layers.single().clip).isEqualTo(LayerClip(rect = DesignRect.FULL, round = true))
         val bitmap = createBitmap(400, 400).apply { eraseColor(Color.BLACK) }
         val canvas = Canvas(bitmap)
         val animator = animator(wide)
@@ -132,8 +154,17 @@ class GlitchPresetTest {
 
     @Test
     fun noChanceNoBands() {
-        val off = WakeAnimationSpec(glitch = GlitchSpec(chance = 0f)).normalized()
-        assertThat(off.glitch).isNull()
+        val off = readAnimation(animationOf(Glitch(chance = 0f).json())).normalized()
+        assertThat(off.layers).isEmpty()
         assertThat(off.hasContent).isFalse()
+    }
+
+    @Test
+    fun theLimitsOfTheOldPresetStay() {
+        // The burst is cut to the period, the thickest band to the thinnest
+        val layer = readAnimation(animationOf(Glitch(periodMs = 200, burstMs = 900, minHeight = 30f, maxHeight = 3f).json())).layers.single()
+        val alpha = layer.props.getValue(LayerProp.ALPHA)
+        assertThat(alpha).contains("start + 200,")
+        assertThat(layer.lets.toMap().getValue("h")).contains("f32(f32(30) - f32(30))")
     }
 }

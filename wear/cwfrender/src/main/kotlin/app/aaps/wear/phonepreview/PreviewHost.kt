@@ -71,7 +71,8 @@ class PreviewHost(
         target.aapsLogger = logger
         target.rxBus = rxBus
         target.sp = sp
-        target.dateUtil = dateUtil
+        // The clock fields of the face show the instant it draws for, see RenderInstantDateUtil
+        target.dateUtil = if (target is CustomWatchface) RenderInstantDateUtil(dateUtil) { target.renderInstantOrNull() } else dateUtil
         target.simpleUi = simpleUi
         if (target is CustomWatchface) target.context = this
         return true

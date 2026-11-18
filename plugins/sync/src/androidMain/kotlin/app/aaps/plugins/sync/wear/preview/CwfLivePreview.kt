@@ -54,7 +54,8 @@ fun CwfLivePreview(
             Image(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxWidth(), contentScale = contentScale)
         else
             Image(
-                bitmap = live,
+                // One painter per frame, so every frame is drawn, also one in a bitmap shown before
+                painter = remember(live) { PreviewFramePainter(live) },
                 contentDescription = contentDescription,
                 modifier = Modifier
                     .fillMaxWidth()

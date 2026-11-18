@@ -30,14 +30,20 @@ class WakeTimer(private val chosenLengthMs: () -> Long? = { null }, private val 
      * with the next frame (a new design is shown); the same one again changes nothing, because the
      * design is read again for reasons that are not a wake.
      */
-    var spec: WakeAnimationSpec? = null
-        set(value) {
-            val same = value?.withoutImage() == field?.withoutImage()
-            field = value
-            if (same) return
-            startedAt = NOT_RUNNING
-            pending = value != null && !isOff
-        }
+    val spec: WakeAnimationSpec? get() = current
+
+    private var current: WakeAnimationSpec? = null
+
+    /**
+     * Sets [spec] to [value], when the caller already compared it: [sameValues] true when it has the
+     * same values as the one before (the pictures do not count), so it does not play from the start.
+     */
+    fun setSpec(value: WakeAnimationSpec?, sameValues: Boolean) {
+        current = value
+        if (sameValues) return
+        startedAt = NOT_RUNNING
+        pending = value != null && !isOff
+    }
 
     /** True when the user turned the animation off on the watch. */
     private val isOff: Boolean get() = chosenLengthMs() == 0L

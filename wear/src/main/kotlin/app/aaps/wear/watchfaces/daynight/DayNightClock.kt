@@ -24,56 +24,38 @@ class DayNightClock(
     private val zone: () -> ZoneId = { ZoneId.systemDefault() }
 ) {
 
-    private data class Key(val date: LocalDate, val place: GeoPoint)
-
-    private var cachedKey: Key? = null
-    private var cachedSun: SunTimes.Result? = null
+    /**
+     * The sun times of the last few local days at [cachedPlace], newest use last. A question asks for
+     * up to three days (yesterday, today, tomorrow; the next sun event also the day after), so one kept
+     * day would be worked out again on every question.
+     */
+    private val cachedSun = object : LinkedHashMap<LocalDate, SunTimes.Result>(KEPT_DAYS * 2, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<LocalDate, SunTimes.Result>?): Boolean = size > KEPT_DAYS
+    }
+    private var cachedPlace: GeoPoint? = null
 
     /** True when [epochMs] is between sunrise and sunset. */
-    fun isDay(epochMs: Long): Boolean {
-        val instant = Instant.ofEpochMilli(epochMs)
-        val day = daylightAround(instant) ?: return false
-        return instant >= day.start && instant < day.end
-    }
+    fun isDay(epochMs: Long): Boolean = isDay(epochMs, place(), zone())
 
     /**
      * How far the sun is through its day at [epochMs]: 0 at sunrise, 0.5 around noon, 1 at sunset.
      * Before sunrise it is 0 and after sunset 1. When the sun does not rise at all on that day: 0.
      */
-    fun sunProgress(epochMs: Long): Double {
-        val instant = Instant.ofEpochMilli(epochMs)
-        val day = daylightAround(instant) ?: return 0.0
-        val length = day.end.toEpochMilli() - day.start.toEpochMilli()
-        if (length <= 0) return 0.0
-        return ((epochMs - day.start.toEpochMilli()).toDouble() / length).coerceIn(0.0, 1.0)
-    }
+    fun sunProgress(epochMs: Long): Double = sunProgress(epochMs, place(), zone())
 
     /**
      * How far the night is at [epochMs]: 0 at sunset, 0.5 in the middle of the night, 1 at the next
      * sunrise. In the day it is 0. When the sun does not rise at all on that day, the night is the
      * whole local day.
      */
-    fun nightProgress(epochMs: Long): Double {
-        val instant = Instant.ofEpochMilli(epochMs)
-        val date = instant.atZone(zone()).toLocalDate()
-        val today = daylightOn(date)
-        if (today != null && instant >= today.start && instant < today.end) return 0.0
-        val (start, end) = if (today != null && instant >= today.end)
-            today.end to (daylightOn(date.plusDays(1))?.start ?: date.plusDays(2).atStartOfDay(zone()).toInstant())
-        else
-            (daylightOn(date.minusDays(1))?.end ?: date.atStartOfDay(zone()).toInstant()) to (today?.start ?: date.plusDays(1).atStartOfDay(zone()).toInstant())
-        val length = end.toEpochMilli() - start.toEpochMilli()
-        if (length <= 0) return 0.0
-        return ((epochMs - start.toEpochMilli()).toDouble() / length).coerceIn(0.0, 1.0)
-    }
+    fun nightProgress(epochMs: Long): Double = nightProgress(epochMs, place(), zone())
 
     /**
      * Where the sun is in its round at [epochMs] (see [SkyCycle]): 0 at sunrise, 0.5 at sunset, 1 at
      * the next sunrise. The day is the first half, the night the second, so a picture of the sun can go
      * over the horizon by day and under it at night.
      */
-    fun sunCycle(epochMs: Long): Double =
-        if (isDay(epochMs)) sunProgress(epochMs) / 2 else 0.5 + nightProgress(epochMs) / 2
+    fun sunCycle(epochMs: Long): Double = sunCycle(epochMs, place(), zone())
 
     private var cachedMoonMinute = Long.MIN_VALUE
     private var cachedMoonPlace: GeoPoint? = null
@@ -88,8 +70,7 @@ class DayNightClock(
      * of the moon. That is close to the real moon at a place near the equator.
      */
     fun moonCycle(epochMs: Long): Double {
-        val place = location()?.takeIf { it.isValid() }
-            ?: return sunCycle(epochMs - (MoonPhase.at(epochMs) * DAY_MS).toLong())
+        val place = place() ?: return sunCycle(epochMs - (MoonPhase.at(epochMs) * DAY_MS).toLong(), null, zone())
         val minute = epochMs / MINUTE_MS
         if (minute == cachedMoonMinute && place == cachedMoonPlace) return cachedMoon
         return SkyCycle.at(epochMs) { MoonPosition.heightAboveRise(it, place.latitude, place.longitude) }.also {
@@ -105,7 +86,7 @@ class DayNightClock(
      * when the sun does not rise or set in the next days.
      */
     fun nextSunEvent(epochMs: Long): Long? {
-        val place = location()?.takeIf { it.isValid() } ?: return null
+        val place = place() ?: return null
         val instant = Instant.ofEpochMilli(epochMs)
         val today = instant.atZone(zone()).toLocalDate()
         for (days in 0L..2L) {
@@ -115,19 +96,52 @@ class DayNightClock(
         return null
     }
 
+    // Each question reads the place and the zone once and hands them on: the place is two stored
+    // numbers, and the zone is looked up again on every read.
+
+    /** The stored place, or null when there is none or it is not a place on earth. */
+    private fun place(): GeoPoint? = location()?.takeIf { it.isValid() }
+
+    private fun isDay(epochMs: Long, place: GeoPoint?, zone: ZoneId): Boolean {
+        val instant = Instant.ofEpochMilli(epochMs)
+        val day = daylightOn(instant.atZone(zone).toLocalDate(), place, zone) ?: return false
+        return instant >= day.start && instant < day.end
+    }
+
+    private fun sunProgress(epochMs: Long, place: GeoPoint?, zone: ZoneId): Double {
+        val instant = Instant.ofEpochMilli(epochMs)
+        val day = daylightOn(instant.atZone(zone).toLocalDate(), place, zone) ?: return 0.0
+        val length = day.end.toEpochMilli() - day.start.toEpochMilli()
+        if (length <= 0) return 0.0
+        return ((epochMs - day.start.toEpochMilli()).toDouble() / length).coerceIn(0.0, 1.0)
+    }
+
+    private fun nightProgress(epochMs: Long, place: GeoPoint?, zone: ZoneId): Double {
+        val instant = Instant.ofEpochMilli(epochMs)
+        val date = instant.atZone(zone).toLocalDate()
+        val today = daylightOn(date, place, zone)
+        if (today != null && instant >= today.start && instant < today.end) return 0.0
+        val (start, end) = if (today != null && instant >= today.end)
+            today.end to (daylightOn(date.plusDays(1), place, zone)?.start ?: date.plusDays(2).atStartOfDay(zone).toInstant())
+        else
+            (daylightOn(date.minusDays(1), place, zone)?.end ?: date.atStartOfDay(zone).toInstant()) to (today?.start ?: date.plusDays(1).atStartOfDay(zone).toInstant())
+        val length = end.toEpochMilli() - start.toEpochMilli()
+        if (length <= 0) return 0.0
+        return ((epochMs - start.toEpochMilli()).toDouble() / length).coerceIn(0.0, 1.0)
+    }
+
+    private fun sunCycle(epochMs: Long, place: GeoPoint?, zone: ZoneId): Double =
+        if (isDay(epochMs, place, zone)) sunProgress(epochMs, place, zone) / 2 else 0.5 + nightProgress(epochMs, place, zone) / 2
+
     /** From when to when the sun is up. */
     private data class Daylight(val start: Instant, val end: Instant)
 
-    private fun daylightAround(instant: Instant): Daylight? = daylightOn(instant.atZone(zone()).toLocalDate())
-
     /**
-     * The daylight of the local day [date]: from sunrise to sunset at the stored place, the whole
-     * day when the sun does not set, null when it does not rise. Without a place: the fixed hours.
+     * The daylight of the local day [date]: from sunrise to sunset at [place], the whole day when the
+     * sun does not set, null when it does not rise. Without a place: the fixed hours.
      */
-    private fun daylightOn(date: LocalDate): Daylight? {
-        val zone = zone()
-        val place = location()?.takeIf { it.isValid() }
-            ?: return Daylight(date.atTime(FALLBACK_DAY_START).atZone(zone).toInstant(), date.atTime(FALLBACK_DAY_END).atZone(zone).toInstant())
+    private fun daylightOn(date: LocalDate, place: GeoPoint?, zone: ZoneId): Daylight? {
+        place ?: return Daylight(date.atTime(FALLBACK_DAY_START).atZone(zone).toInstant(), date.atTime(FALLBACK_DAY_END).atZone(zone).toInstant())
         return when (val sun = sunOn(date, place)) {
             is SunTimes.Result.RiseAndSet -> Daylight(sun.rise, sun.set)
             SunTimes.Result.AlwaysUp      -> Daylight(date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
@@ -137,12 +151,11 @@ class DayNightClock(
 
     /** The sun times of [date] at [place], computed once per day and place. */
     private fun sunOn(date: LocalDate, place: GeoPoint): SunTimes.Result {
-        val key = Key(date, place)
-        cachedSun?.let { if (key == cachedKey) return it }
-        return SunTimes.of(date, place.latitude, place.longitude).also {
-            cachedKey = key
-            cachedSun = it
+        if (place != cachedPlace) {
+            cachedSun.clear()
+            cachedPlace = place
         }
+        return cachedSun.getOrPut(date) { SunTimes.of(date, place.latitude, place.longitude) }
     }
 
     private fun GeoPoint.isValid() = latitude in -90.0..90.0 && longitude in -180.0..180.0
@@ -152,10 +165,16 @@ class DayNightClock(
         /** The value of [nextSunEvent] for a design (`dynData`): a time, shown with `@time` (see `DesignTimeText`). */
         const val NEXT_SUN_EVENT_KEY = "sun_next_time"
 
+        /** A time later than any [nextSunEvent], in epoch ms (1 January 2100): the end of its value range. */
+        const val LAST_SUN_EVENT_MS = 4_102_444_800_000.0
+
         val FALLBACK_DAY_START: LocalTime = LocalTime.of(7, 0)
         val FALLBACK_DAY_END: LocalTime = LocalTime.of(19, 0)
 
         private const val MINUTE_MS = 60_000L
         private const val DAY_MS = 24 * 60 * MINUTE_MS
+
+        /** The days of sun times kept: yesterday up to the day after tomorrow. */
+        private const val KEPT_DAYS = 4
     }
 }

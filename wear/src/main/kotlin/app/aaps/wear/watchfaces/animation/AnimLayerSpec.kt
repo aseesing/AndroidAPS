@@ -8,10 +8,10 @@ import android.graphics.Color
 import android.graphics.drawable.Drawable
 
 /**
- * One animated layer of a design: a picture, a simple shape, the moon or a view of the face, drawn once or many
- * times, where every property can be a [Formula] of the time and of the copy. All the effects of the
- * wake-up animation are made of these (see [allLayers]); a design can also give its own in the
- * `layers` list of its `animation`.
+ * One animated layer of a design: a picture, a picture the app draws (like the moon), a simple shape
+ * or a view of the face, drawn once or many times, where every property can be a [Formula] of the
+ * time and of the copy. A design gives them in the `layers` list of its `animation`, directly or as
+ * templates (`{"use": "rain", ...}`, see [Templates]).
  *
  * Plain values only: the formulas are kept as text and read by [LayerAnimator]. Positions and sizes
  * are in the 400 x 400 design space.
@@ -21,12 +21,14 @@ import android.graphics.drawable.Drawable
  * @param blend how it is laid over what is below
  * @param copies how many times it is drawn, and how the copies differ
  * @param props the formulas of the properties; a missing one has its default (see [LayerProp])
+ * @param lets named formulas of this layer, in order, worked out once per copy before the properties
+ *   (the `let` of the layer); each may use the ones before it
  * @param clip where it may show
  * @param glow a soft glow round a picture, as strong as [LayerProp.GLOW]
  * @param maxScale the largest scale the picture is drawn at; it is made sharp for that size
  * @param restSeconds when set, the layer is also drawn while no animation plays, as it is this many
- *   seconds into a wake. Only for the back slot: so an aurora or lights stay on the face after the wake.
- *   Such a layer is still: while seconds are shown the face keeps its background picture for a whole
+ *   seconds into a wake (with `env` 0). A view layer with a rest also places its view in every normal
+ *   frame. Such a layer is still: while seconds are shown the face keeps its pictures for a whole
  *   minute, so a rest layer that changes with the time (`sec`, `min`) only moves once a minute.
  */
 data class AnimLayerSpec(
@@ -35,6 +37,7 @@ data class AnimLayerSpec(
     val blend: LayerBlend = LayerBlend.NORMAL,
     val copies: LayerCopies = LayerCopies.One,
     val props: Map<LayerProp, String> = emptyMap(),
+    val lets: List<Pair<String, String>> = emptyList(),
     val clip: LayerClip = LayerClip(),
     val glow: LayerGlow? = null,
     val maxScale: Float = 1f,
@@ -47,13 +50,14 @@ data class AnimLayerSpec(
         if (clip.mask != null && clip.mask.drawable == null) return null       // not in the zip: never drawn without its mask
         if (source is LayerSource.View && source.key.isEmpty()) return null
         if (source is LayerSource.Shape && source.colors.isEmpty()) return null
-        if (source is LayerSource.Moon && !(source.rect.width > 0f && source.rect.height > 0f)) return null
-        if (props.values.any { it.length > Formula.MAX_LENGTH }) return null
+        if (source is LayerSource.Dynamic && !(source.rect.width > 0f && source.rect.height > 0f)) return null
+        if (props.values.any { it.length > Formula.MAX_LENGTH } || lets.any { it.second.length > Formula.MAX_LENGTH }) return null
         return copy(
             copies = copies.normalized(),
+            lets = lets.take(MAX_LETS),
             maxScale = maxScale.coerceIn(0.1f, MAX_SCALE),
             glow = glow?.let { it.copy(radius = it.radius.coerceIn(0f, 40f)) }?.takeIf { it.radius > 0f },
-            restSeconds = restSeconds?.takeIf { slot == LayerSlot.BACK && source !is LayerSource.View }?.coerceIn(0f, WakeAnimationSpec.MAX_DURATION_MS / 1000f),
+            restSeconds = restSeconds?.coerceIn(0f, WakeAnimationSpec.MAX_DURATION_MS / 1000f),
             slot = if (source is LayerSource.View) LayerSlot.VIEWS else slot
         )
     }
@@ -75,6 +79,9 @@ data class AnimLayerSpec(
         /** The most copies of all layers together, so a frame stays cheap. */
         const val MAX_TOTAL_COPIES = 1500
 
+        /** The most named formulas of one layer, and of the animation. */
+        const val MAX_LETS = 16
+
         const val MAX_SCALE = 4f
     }
 }
@@ -89,43 +96,58 @@ sealed interface LayerSource {
      */
     data class Image(val key: String, val drawable: Drawable?, val rect: DesignRect) : LayerSource
 
-    /** A simple shape in one of [colors]; the `colorIndex` property picks which (0 = the first). */
-    data class Shape(val kind: ShapeKind, val colors: List<Int> = listOf(Color.WHITE)) : LayerSource
-
     /**
-     * A view of the face, for example `chart`: it can be turned (`rotation`, added to its own), moved
-     * right (`x`), hidden (`alpha` 0) and cut at the right (`clipRight`). Its own turn and move are the
-     * variables `rot0` and `dx0`.
+     * A picture the app draws itself, asked for by its [name] (`"image": "@moon"` in the design): the
+     * moon as it is in the sky now (see `MoonPicture`). Drawn in the middle of [rect] as a square of its
+     * shorter side, and moved by `x` and `y` like a picture. Has no glow.
      */
-    data class View(val key: String) : LayerSource
+    data class Dynamic(val name: String, val rect: DesignRect) : LayerSource {
 
-    /**
-     * The moon as it is in the sky now, the same picture as a view with `"moonLight": true` (see
-     * `MoonPicture`): today's phase, turned as it stands in the sky of the stored place. Drawn in the
-     * middle of [rect] as a square of its shorter side, and moved by `x` and `y` like a picture. So a
-     * design can draw the moon below other layers, for example below an aurora, which is light in our
-     * own air and so in front of the moon. Has no glow: a design that wants one gives its own layer.
-     */
-    data class Moon(val rect: DesignRect) : LayerSource {
-
-        /** The square the moon is drawn in. */
+        /** The square the picture is drawn in. */
         val square: DesignRect
             get() {
                 val side = minOf(rect.width, rect.height)
                 return DesignRect(rect.left + (rect.width - side) / 2, rect.top + (rect.height - side) / 2, side, side)
             }
     }
+
+    /**
+     * A simple shape in one of [colors]; the `colorIndex` property picks which (0 = the first). A
+     * [gradient] makes the colour fade over the shape.
+     */
+    data class Shape(val kind: ShapeKind, val colors: List<Int> = listOf(Color.WHITE), val gradient: LayerGradient? = null) : LayerSource
+
+    /**
+     * A view of the face, for example `chart`. `x` and `y` move it, `rotation` turns it more than it is,
+     * `scaleX`, `scaleY` and `alpha` multiply its own, and `clipLeft`, `clipTop`, `clipRight` and
+     * `clipBottom` cut it. Its own turn, move and middle are the variables `rot0`, `dx0`, `cx0` and `cy0`.
+     */
+    data class View(val key: String) : LayerSource
 }
 
 /**
  * The shapes a layer can draw:
  * - [LINE]: from `x`,`y` over `length`, at `angle` degrees from straight down (positive leans right), `thickness` wide, round ends
  * - [RECT]: `x`,`y` is the top left corner, `width` x `height`
- * - [BAND]: a soft band, `width` wide and `height` high, its middle at `x`, its top at `y`, bright in the middle and clear at the sides
- * - [DOT]: a soft round light at `x`,`y`, `radius` big, bright in the middle and clear at the edge
- * - [CIRCLE]: a filled circle at `x`,`y`, `radius` big
+ * - [CIRCLE]: a filled circle round `x`,`y`, `radius` big
  */
-enum class ShapeKind { LINE, RECT, BAND, DOT, CIRCLE }
+enum class ShapeKind { LINE, RECT, CIRCLE }
+
+/**
+ * A colour that fades over a shape: the alpha of the layer colour is multiplied by the [stops], from
+ * one to the next. [LINEAR] runs along the width of a rectangle, from its left to its right edge;
+ * [RADIAL] from the middle of a circle to its edge. A line has no gradient.
+ *
+ * A soft band is a rectangle with the stops `[[0, 0], [0.5, 1], [1, 0]]`, a soft round light a circle
+ * with the radial stops `[[0, 1], [0.25, 1], [1, 0]]`.
+ */
+data class LayerGradient(val type: Type, val stops: List<Stop>) {
+
+    enum class Type { LINEAR, RADIAL }
+
+    /** At [position] (0 to 1) the alpha of the colour is multiplied by [alpha] (0 to 1). */
+    data class Stop(val position: Float, val alpha: Float)
+}
 
 /**
  * Where a layer is drawn, between the parts of the face:
@@ -177,7 +199,10 @@ sealed interface LayerCopies {
         }
     }
 
-    /** One copy at each of [points], with the variables `px` and `py`; for example the bulbs of a string of lights. */
+    /**
+     * One copy at each of [points], with the variables `px` and `py`, and `p0`, `p1`, ... for the extra
+     * numbers of the point; for example the bulbs of a string of lights, each with its own phase.
+     */
     data class Points(val points: List<DesignPoint>) : LayerCopies {
 
         override val size: Int get() = points.size
@@ -185,13 +210,16 @@ sealed interface LayerCopies {
     }
 }
 
-/** A point in the 400 x 400 design space. */
-data class DesignPoint(val x: Float, val y: Float)
+/** A point in the 400 x 400 design space, with up to [LayerVariables.EXTRAS] [extras] (`p0`, `p1`, ...). */
+data class DesignPoint(val x: Float, val y: Float, val extras: List<Double> = emptyList())
 
 /**
  * Where a layer may show: inside [rect] when set, inside the round screen when [round], inside the
- * [rings] and [boxes] when there are any (corners of the boxes rounded by [cornerRadius]), and where the
- * picture of [mask] is not clear when there is one.
+ * [rings] and [boxes] when [hasShapes] (corners of the boxes rounded by [cornerRadius]), and where the
+ * picture of [mask] is not clear when there is one. The props `clipLeft` to `clipBottom` cut it more.
+ *
+ * @param hasShapes true when the design gives `rings` or `boxes`, also as empty lists: then the layer
+ *   shows only inside them, and nowhere when there are none
  */
 data class LayerClip(
     val rect: DesignRect? = null,
@@ -199,11 +227,32 @@ data class LayerClip(
     val rings: List<DesignRing> = emptyList(),
     val boxes: List<DesignRect> = emptyList(),
     val cornerRadius: Float = 0f,
-    val mask: LayerMask? = null
+    val mask: LayerMask? = null,
+    val hasShapes: Boolean = rings.isNotEmpty() || boxes.isNotEmpty()
 ) {
 
-    val hasShapes: Boolean get() = rings.isNotEmpty() || boxes.isNotEmpty()
+    /** True when the shapes leave no room at all: the layer never shows. */
+    val isEmpty: Boolean get() = hasShapes && rings.isEmpty() && boxes.isEmpty()
 }
+
+/** A ring in the 400 x 400 design space: the room between two circles round ([cx], [cy]). */
+data class DesignRing(val cx: Float, val cy: Float, val inner: Float, val outer: Float)
+
+/** A rectangle in the 400 x 400 design space. */
+data class DesignRect(val left: Float, val top: Float, val width: Float, val height: Float) {
+
+    val right: Float get() = left + width
+    val bottom: Float get() = top + height
+
+    companion object {
+
+        /** The whole face. */
+        val FULL = DesignRect(0f, 0f, DESIGN_SIZE, DESIGN_SIZE)
+    }
+}
+
+/** The size of the design space every design is drawn in, scaled to the screen. */
+const val DESIGN_SIZE = 400f
 
 /**
  * A picture of the design zip that says where a layer shows: as much as the picture is not clear (its
@@ -245,8 +294,14 @@ enum class LayerProp(val key: String, val default: Double?) {
     THICKNESS("thickness", 2.0),
     RADIUS("radius", 4.0),
 
-    /** A view is cut off right of this x (design pixels). */
+    /** The layer is cut off left of, above, right of and below these (design pixels). */
+    CLIP_LEFT("clipLeft", null),
+    CLIP_TOP("clipTop", null),
     CLIP_RIGHT("clipRight", null),
+    CLIP_BOTTOM("clipBottom", null),
+
+    /** The layer (or the copy) is drawn only where this is true (not 0): checked before anything is drawn. */
+    VISIBLE("visible", 1.0),
 
     /** How strong the glow of a picture is, 0 to 1. */
     GLOW("glowAlpha", 0.0),
@@ -257,69 +312,8 @@ enum class LayerProp(val key: String, val default: Double?) {
     companion object {
 
         fun of(key: String): LayerProp? = entries.firstOrNull { it.key == key }
-    }
-}
 
-/**
- * The names a formula of a layer may use, and where their values are kept. One table per animation:
- * the `v_` names are added as the formulas use them.
- *
- * - `t` seconds since the wake started, `ms` the same in milliseconds, `len` the length of this wake in ms
- * - `env` 0 to 1: rises at the start of a wake and falls at its end (see [WakeAnimationSpec.fadeMs])
- * - `i`, `n`, `u` the copy (see [LayerCopies]); `px`, `py` its point; `r1` to `r8` its random numbers
- * - `bpm` the heart rate, `sec`, `min`, `hour` the time of day
- * - `rot0`, `dx0` the own turn and move of a view (see [LayerSource.View])
- * - `v_<key>` the value of a value key, for example `v_watch_battery`; NaN when there is none.
- *   Read once at the start of a wake.
- */
-class LayerVariables {
-
-    private val names = LinkedHashMap<String, Int>().apply { FIXED.forEachIndexed { index, name -> put(name, index) } }
-
-    /** The value keys used, in the order of their index. */
-    val valueKeys = ArrayList<String>()
-
-    /** The index of [name], or null when a formula may not use it. */
-    fun index(name: String): Int? = names[name] ?: if (name.startsWith(VALUE_PREFIX) && name.length > VALUE_PREFIX.length && valueKeys.size < MAX_VALUES) {
-        val index = names.size
-        names[name] = index
-        valueKeys += name.removePrefix(VALUE_PREFIX)
-        index
-    } else null
-
-    /**
-     * Forgets the value keys added after the first [count], for a layer that could not be read. Safe
-     * because value keys always come last: no kept formula uses their indices.
-     */
-    fun forgetValueKeysFrom(count: Int) {
-        while (valueKeys.size > count) names.remove(VALUE_PREFIX + valueKeys.removeAt(valueKeys.size - 1))
-    }
-
-    /** Room for every variable known now. */
-    val size: Int get() = names.size
-
-    companion object {
-
-        const val VALUE_PREFIX = "v_"
-        const val MAX_VALUES = 16
-
-        val FIXED = listOf("t", "ms", "len", "env", "i", "n", "u", "px", "py", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "bpm", "sec", "min", "hour", "rot0", "dx0")
-        const val T = 0
-        const val MS = 1
-        const val LEN = 2
-        const val ENV = 3
-        const val I = 4
-        const val N = 5
-        const val U = 6
-        const val PX = 7
-        const val PY = 8
-        const val R1 = 9
-        const val RANDOMS = 8
-        const val BPM = 17
-        const val SEC = 18
-        const val MIN = 19
-        const val HOUR = 20
-        const val ROT0 = 21
-        const val DX0 = 22
+        /** The props that cut a layer. */
+        val CLIPS = listOf(CLIP_LEFT, CLIP_TOP, CLIP_RIGHT, CLIP_BOTTOM)
     }
 }
