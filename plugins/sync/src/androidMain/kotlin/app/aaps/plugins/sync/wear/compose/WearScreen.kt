@@ -184,6 +184,7 @@ internal fun WearScreen(
                     items = uiState.importItems,
                     importing = uiState.importingDesigns,
                     onItemClick = { item -> viewModel.selectWatchface(item.cwfFile) },
+                    onItemDelete = { item -> viewModel.deleteDesign(item.cwfFile) },
                     modifier = modifier
                 )
             }

@@ -17,7 +17,8 @@ internal fun CwfImportContentPreview() {
                 previewImportItem("Steampunk", "steampunk", true, 2, false)
             ),
             importing = false,
-            onItemClick = {}
+            onItemClick = {},
+            onItemDelete = {}
         )
     }
 }

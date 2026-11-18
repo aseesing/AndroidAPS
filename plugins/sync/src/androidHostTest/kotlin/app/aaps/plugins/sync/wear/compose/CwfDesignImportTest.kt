@@ -4,6 +4,9 @@ import android.content.Context
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.rx.weardata.CwfData
+import app.aaps.core.interfaces.rx.weardata.CwfFile
+import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.plugins.sync.SyncStrings
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
@@ -33,6 +36,11 @@ internal class CwfDesignImportTest {
             if (fileName in broken) return false
             files[fileName] = bytes
             return true
+        }
+
+        override fun delete(fileName: String): Boolean {
+            if (fileName in broken) return false
+            return files.remove(fileName) != null
         }
     }
 
@@ -256,6 +264,55 @@ internal class CwfDesignImportTest {
         assertThat(SafeReplaceFolder(files).write("Design.zip", new)).isTrue()
 
         assertThat(files.files).containsExactly("Design.zip", new)
+    }
+
+    @Test
+    fun `deletes the zip of a design and leaves the others`() {
+        val folder = FakeFolder(mutableMapOf("Design_One.zip" to design("One"), "Mine.zip" to design("Mine")))
+        whenever(rh.gs(SyncStrings.wear_design_delete_done, "Design_One.zip")).thenReturn("Deleted: Design_One.zip")
+
+        val message = sut.delete(listed(fileName = "Design_One", name = "One"), folder)
+
+        assertThat(message).isEqualTo("Deleted: Design_One.zip")
+        assertThat(folder.files.keys).containsExactly("Mine.zip")
+    }
+
+    @Test
+    fun `says so when the zip is gone or cannot be deleted`() {
+        val folder = FakeFolder(mutableMapOf("Locked.zip" to design("Locked")), broken = setOf("Locked.zip"))
+        whenever(rh.gs(SyncStrings.wear_design_delete_failed, "Gone.zip")).thenReturn("Could not delete Gone.zip")
+        whenever(rh.gs(SyncStrings.wear_design_delete_failed, "Locked.zip")).thenReturn("Could not delete Locked.zip")
+
+        assertThat(sut.delete(listed(fileName = "Gone", name = "Gone"), folder)).isEqualTo("Could not delete Gone.zip")
+        assertThat(sut.delete(listed(fileName = "Locked", name = "Locked"), folder)).isEqualTo("Could not delete Locked.zip")
+        assertThat(folder.files.keys).containsExactly("Locked.zip")
+    }
+
+    @Test
+    fun `a design without a file name is not deleted and is named by its title`() {
+        val folder = FakeFolder(mutableMapOf("Mine.zip" to design("Mine")))
+        whenever(rh.gs(SyncStrings.wear_design_delete_failed, "Nameless")).thenReturn("Could not delete Nameless")
+
+        assertThat(sut.delete(listed(fileName = null, name = "Nameless"), folder)).isEqualTo("Could not delete Nameless")
+        assertThat(folder.files.keys).containsExactly("Mine.zip")
+    }
+
+    @Test
+    fun `a safe delete removes only the named file`() {
+        val mine = design("Mine")
+        val files = FakeFiles(mutableMapOf("Design.zip" to design("Old"), "Mine.zip" to mine))
+
+        assertThat(SafeReplaceFolder(files).delete("Design.zip")).isTrue()
+        assertThat(SafeReplaceFolder(files).delete("Gone.zip")).isFalse()
+
+        assertThat(files.files).containsExactly("Mine.zip", mine)
+    }
+
+    /** A design as the list holds it: [fileName] is the zip name without ".zip", as AAPS stores it. */
+    private fun listed(fileName: String?, name: String): CwfFile {
+        val metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to name)
+        if (fileName != null) metadata[CwfMetadataKey.CWF_FILENAME] = fileName
+        return CwfFile(CwfData("{}", metadata, mutableMapOf()), ByteArray(0))
     }
 
     private fun json(name: String) = "{\"metadata\":{\"name\":\"$name\"}}"
