@@ -182,7 +182,7 @@ class CwfSettingsSyncWearTest {
     @Test
     fun theLookSettingsAreTheRowsOfTheWatchMenu() {
         val app = RuntimeEnvironment.getApplication()
-        val menu = CustomWatchface.settingRows(null, systemEditor = false)
+        val menu = CustomWatchface.settingRows(null, systemEditor = false, hasNightFace = false)
             .filterIsInstance<WatchFaceSettingRow.Toggle>()
             .map { app.getString(it.key) to it.defaultValue }
         assertThat(CwfWatchSettings.look.map { it.key to it.default }).containsExactlyElementsIn(menu).inOrder()
