@@ -95,7 +95,7 @@ internal fun WearScreen(
 
     // Only title needs pre-resolving (plain String used in LaunchedEffect suspend block)
     val wearTitle = stringResource(CoreUiStrings.wear)
-    val importTitle = stringResource(SyncStrings.wear_import_custom_watchface_title)
+    val importTitle = importListTitle(uiState, stringResource(SyncStrings.wear_import_custom_watchface_title))
 
     // Determine current sub-screen
     val subScreen = when {
@@ -183,6 +183,8 @@ internal fun WearScreen(
                     },
                     onSelectPushedWatchface = { viewModel.selectPushedWatchface(it) },
                     onDismissCustomWatchfaceNotShown = { viewModel.dismissCustomWatchfaceNotShown() },
+                    onLoadNightWatchface = { viewModel.loadNightWatchfaceFiles() },
+                    onRemoveNightWatchface = { viewModel.clearNightWatchface() },
                     modifier = modifier
                 )
             }
@@ -207,6 +209,8 @@ internal fun WearMainContent(
     onMoreWatchfaces: () -> Unit,
     onSelectPushedWatchface: (String) -> Unit,
     onDismissCustomWatchfaceNotShown: () -> Unit,
+    onLoadNightWatchface: () -> Unit,
+    onRemoveNightWatchface: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // The face the wearer tapped, waiting for their confirmation; null while no dialog is open.
@@ -343,7 +347,7 @@ internal fun WearMainContent(
                     verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
                 ) {
                     Text(
-                        text = stringResource(SyncStrings.wear_custom_watchface, uiState.watchfaceName),
+                        text = dayWatchfaceTitle(uiState),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(horizontal = AapsSpacing.small)
                     )
@@ -376,6 +380,7 @@ internal fun WearMainContent(
                     }
                 }
             }
+            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface)
         }
     }
 }
@@ -417,10 +422,10 @@ private fun WatchfaceChoiceRow(
     }
 }
 
-private data class ButtonDef(val icon: ImageVector, val text: String, val onClick: () -> Unit)
+internal data class ButtonDef(val icon: ImageVector, val text: String, val onClick: () -> Unit)
 
 @Composable
-private fun ButtonRow(
+internal fun ButtonRow(
     button1: ButtonDef,
     button2: ButtonDef?,
     modifier: Modifier = Modifier

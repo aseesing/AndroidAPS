@@ -27,7 +27,9 @@ internal fun WearMainContentPreview() {
             onExportTemplate = {},
             onMoreWatchfaces = {},
             onSelectPushedWatchface = {},
-            onDismissCustomWatchfaceNotShown = {}
+            onDismissCustomWatchfaceNotShown = {},
+            onLoadNightWatchface = {},
+            onRemoveNightWatchface = {}
         )
     }
 }
@@ -56,7 +58,9 @@ internal fun WearMainContentComplicationsFacePreview() {
             onExportTemplate = {},
             onMoreWatchfaces = {},
             onSelectPushedWatchface = {},
-            onDismissCustomWatchfaceNotShown = {}
+            onDismissCustomWatchfaceNotShown = {},
+            onLoadNightWatchface = {},
+            onRemoveNightWatchface = {}
         )
     }
 }
@@ -77,7 +81,9 @@ internal fun WearMainContentDisconnectedPreview() {
             onExportTemplate = {},
             onMoreWatchfaces = {},
             onSelectPushedWatchface = {},
-            onDismissCustomWatchfaceNotShown = {}
+            onDismissCustomWatchfaceNotShown = {},
+            onLoadNightWatchface = {},
+            onRemoveNightWatchface = {}
         )
     }
 }

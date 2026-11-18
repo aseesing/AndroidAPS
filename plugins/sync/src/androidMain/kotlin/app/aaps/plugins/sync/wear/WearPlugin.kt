@@ -45,9 +45,12 @@ import app.aaps.core.utils.DeferredForegroundStart
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin.Companion.RESEND_DEBOUNCE
 import app.aaps.plugins.sync.wear.compose.WearComposeContent
+import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
+import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
 import app.aaps.plugins.sync.wear.receivers.WearDataReceiver
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
 import app.aaps.plugins.sync.wear.wearintegration.DataLayerListenerServiceMobileHelper
+import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import app.aaps.shared.impl.extensions.safeQueryBroadcastReceivers
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
@@ -92,6 +95,7 @@ class WearPlugin(
     private val scenes: SceneAutomationApi,
     private val eatReminder: EatReminder,
     notificationManager: NotificationManager,
+    private val wearNightFace: WearNightFace,
 ) : PluginBaseWithPreferences(
     pluginDescription = PluginDescription()
         .mainType(PluginType.SYNC)
@@ -99,6 +103,7 @@ class WearPlugin(
         .pluginName(CoreUiStrings.wear)
         .description(SyncStrings.description_wear)
         .composeContent { WearComposeContent() },
+    ownPreferences = WearNightFaceKey.entries + WearNightFaceBooleanKey.entries,
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
 
@@ -174,6 +179,7 @@ class WearPlugin(
         ).collectResilient(newScope, aapsLogger, LTag.WEAR) {
             dataHandlerMobile.resendData("PreferenceChange")
             checkCustomWatchfacePreferences()
+            wearNightFace.checkMetadata()
         }
         resendRequests(newScope)
             .collectResilient(newScope, aapsLogger, LTag.WEAR) { reason -> dataHandlerMobile.resendData(reason) }

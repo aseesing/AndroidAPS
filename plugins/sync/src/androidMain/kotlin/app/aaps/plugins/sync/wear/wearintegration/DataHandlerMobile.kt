@@ -187,6 +187,7 @@ class DataHandlerMobile(
     @Inject lateinit var sensitivityOverview: SensitivityOverview
     @Inject lateinit var eatReminder: EatReminder
     @Inject lateinit var clientControlDispatcher: ClientControlActionDispatcher
+    @Inject lateinit var wearNightFace: WearNightFace
 
     // App lifetime: this is a @Singleton that subscribes in init and
     // never tears down. Dispatchers.IO because that is what the io scheduler gave these handlers, and
@@ -420,6 +421,8 @@ class DataHandlerMobile(
             .chunkedOnQuietPeriod(HEALTH_EVENT_QUIET_PERIOD_MS)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { handleStepsCountBatch(it) }
         onEventSync<EventData.ActionGetCustomWatchface>(detail = { " watchface=${it.customWatchface}" }) { handleGetCustomWatchface(it) }
+        onEventSync<EventData.ActionUpdateCustomWatchface>(detail = { " night=${it.night}" }) { handleUpdateCustomWatchfaceFromWatch(it) }
+        onEventSync<EventData.ActionClearNightWatchface> { handleNoNightWatchface(it) }
     }
 
     private fun maxOfNullable(vararg values: Long?): Long? {
@@ -1274,6 +1277,8 @@ class DataHandlerMobile(
                 alertOverrideDnd = preferences.get(BooleanKey.AlertOverrideDoNotDisturb)
             )
         )
+        // The night face of the Custom watch face; nothing without one
+        wearNightFace.resendMessages().forEach { sendToWear(it) }
         // QuickWizard
         sendQuickWizardListToWear()
         //UserAction
@@ -1942,6 +1947,7 @@ class DataHandlerMobile(
     }
 
     private fun handleGetCustomWatchface(command: EventData.ActionGetCustomWatchface) {
+        if (command.customWatchface.night) return handleGetNightWatchface(command)
         val customWatchface = command.customWatchface
         aapsLogger.debug(LTag.WEAR, "Custom Watchface received from ${command.sourceNodeId}")
         val cwfData = customWatchface.customWatchfaceData
@@ -1958,6 +1964,29 @@ class DataHandlerMobile(
             importExportPrefs.exportCustomWatchface(cwfData, command.withDate)
     }
 
+    // The night face of the Custom watch face, see CwfNight and WearNightFace
+
+    /** The watch's night face: kept apart from the main face and its keys. The watch never exports it. */
+    private fun handleGetNightWatchface(command: EventData.ActionGetCustomWatchface) {
+        aapsLogger.debug(LTag.WEAR, "Night watchface received from ${command.sourceNodeId}")
+        wearNightFace.reportedByWatch(command.customWatchface.customWatchfaceData)
+    }
+
+    /**
+     * The watch answers with ActionUpdateCustomWatchface when it tells which design it now has in a
+     * slot: the night face, or the main face after the night face was removed.
+     */
+    private fun handleUpdateCustomWatchfaceFromWatch(update: EventData.ActionUpdateCustomWatchface) =
+        handleGetCustomWatchface(
+            EventData.ActionGetCustomWatchface(EventData.ActionSetCustomWatchface(update.customWatchfaceData, update.night))
+                .also { it.sourceNodeId = update.sourceNodeId }
+        )
+
+    /** The watch has no night face (any more). */
+    private fun handleNoNightWatchface(command: EventData.ActionClearNightWatchface) {
+        aapsLogger.debug(LTag.WEAR, "No night watchface on ${command.sourceNodeId}")
+        wearNightFace.noneOnWatch()
+    }
 }
 
 /**
