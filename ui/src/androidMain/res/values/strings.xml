@@ -384,6 +384,12 @@
     <string name="cal_precheck_mark_sensor_change">Mark sensor change</string>
     <string name="graph_therapy_event_bg_with_note" comment="Shown when the user taps a BG check in the overview graph. %1$s = glucose with its unit, %2$s = the note the user wrote. Example: 6.1 mmol/L, before lunch">%1$s, %2$s</string>
 
+    <!-- Maintenance: save logs to Downloads -->
+    <string name="save_logs">Save logs to Downloads</string>
+    <string name="maintenance_save_logs_desc">Save log files as a zip file in the Downloads folder of this phone</string>
+    <string name="logs_saved_to_downloads" comment="%1$s=name of the saved zip file. Example: Logs saved in Downloads: AndroidAPS_LOG_1794424813623.log.zip">Logs saved in Downloads: %1$s</string>
+    <string name="logs_save_failed">Failed to save logs</string>
+
     <!-- CGM warm-up and second sensor rows in the Overview status card -->
     <string name="overview_cgm_warmup_label">Warm-up</string>
     <string name="overview_cgm_warmup_waiting" comment="Shown in the warm-up row when the time left is not known yet">Waiting</string>
