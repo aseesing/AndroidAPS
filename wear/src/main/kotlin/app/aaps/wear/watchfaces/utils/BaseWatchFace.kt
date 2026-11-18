@@ -385,6 +385,16 @@ abstract class BaseWatchFace : WatchFace() {
      */
     protected open fun deferMainLayoutDraw(): Boolean = false
 
+    /** True once the first frame has inflated the layout and filled it, see [onDraw]. */
+    protected val isLayoutReady: Boolean get() = ::binding.isInitialized && layoutSet
+
+    /** Measures and lays out mainLayout for the surface, as every frame of [onDraw] does before drawing. */
+    protected fun layoutMainLayout() {
+        binding.mainLayout.measure(specW, specH)
+        val y = if (forceSquareCanvas) displayWidth else displayHeight // Square Steampunk
+        binding.mainLayout.layout(0, 0, displayWidth, y)
+    }
+
     /** Performs the mainLayout draw that [onDraw] skipped because [deferMainLayoutDraw] is true. */
     protected fun drawMainLayout(canvas: Canvas) {
         if (::binding.isInitialized && layoutSet && !simpleUi.isEnabled(currentWatchMode)) {
@@ -419,9 +429,7 @@ abstract class BaseWatchFace : WatchFace() {
             simpleUi.onDraw(canvas, singleBg[0])
         } else {
             if (layoutSet) {
-                binding.mainLayout.measure(specW, specH)
-                val y = if (forceSquareCanvas) displayWidth else displayHeight // Square Steampunk
-                binding.mainLayout.layout(0, 0, displayWidth, y)
+                layoutMainLayout()
                 if (!deferMainLayoutDraw()) binding.mainLayout.draw(canvas)
             }
         }
@@ -560,7 +568,7 @@ abstract class BaseWatchFace : WatchFace() {
         if (layoutSet && (newTime.hasHourChanged(oldTime) || newTime.hasMinuteChanged(oldTime))) {
             missedReadingAlert()
             checkVibrateHourly(oldTime, newTime)
-            if (!simpleUi.isEnabled(currentWatchMode)) setDataFields()
+            if (!simpleUi.isEnabled(currentWatchMode)) setDataFieldsAfterWakeFrame()
         } else if (layoutSet && !simpleUi.isEnabled(currentWatchMode) && showSecond && newTime.hasSecondChanged(oldTime)) {
             setSecond()
         }
@@ -752,6 +760,7 @@ abstract class BaseWatchFace : WatchFace() {
         //************************************************************************
         strikeThroughSgvIfNeeded()
         setColor()
+        shownFreshness = freshness()
     }
 
     override fun on24HourFormatChanged(is24HourFormat: Boolean) {
@@ -829,7 +838,7 @@ abstract class BaseWatchFace : WatchFace() {
         lowResMode = isLowRes(watchMode)
         if (simpleUi.isEnabled(currentWatchMode)) simpleUi.setAntiAlias(currentWatchMode)
         else
-            setDataFields()
+            setDataFieldsAfterWakeFrame()
         invalidate()
     }
 
@@ -918,4 +927,56 @@ abstract class BaseWatchFace : WatchFace() {
         return true
     }
 
+    /**
+     * [setDataFields], except in the first frame after a wake (see [FirstFrameAfterWake]): then only
+     * the date, the time and the ages of the reading and of the loop now, so the frame is ready fast,
+     * and the full [setDataFields] (values, colours, design, chart) right after that frame is on the
+     * screen. The next frame shows it.
+     *
+     * When a reading or the loop has become old (or fresh again) since the last full refresh, the
+     * full refresh runs at once: the stale marks and colours must never claim fresh data, not even for
+     * one frame.
+     */
+    private fun setDataFieldsAfterWakeFrame() {
+        wakeFrame.refresh(
+            quickIsEnough = { freshness() == shownFreshness },
+            full = ::setDataFields,
+            quick = ::setDateTimeAndAges,
+            later = {
+                if (::binding.isInitialized && layoutSet && !simpleUi.isEnabled(currentWatchMode)) setDataFields()
+                invalidate()
+            }
+        )
+    }
+
+    /** What [freshness] was at the last full [setDataFields], so what the stale marks and colours show. */
+    private var shownFreshness: List<Int>? = null
+
+    /**
+     * Per dataset, the age class of the reading ([ageLevel]) and of the loop ([loopLevelNow]). The
+     * stale marks and colours of [setDataFields] change only when one of these changes.
+     */
+    private fun freshness(): List<Int> = (0..2).flatMap { listOf(ageLevel(it), loopLevelNow(it)) }
+
+    /** The loop level [setDataFields] shows for dataset [id]: -1 never ran, 0 older than 14 minutes, 1 fresh. */
+    private fun loopLevelNow(id: Int): Int = loopMinutes(id)?.let { if (it > 14) 0 else 1 } ?: -1
+
+    /** Minutes since the loop of dataset [id] last ran, or null when it never ran. */
+    private fun loopMinutes(id: Int): Int? =
+        status[id].openApsStatus.takeIf { it != -1L }?.let { ((System.currentTimeMillis() - it) / 1000 / 60).toInt() }
+
+    /** The cheap part of [setDataFields]: date, time, and the minutes since the reading and the loop. */
+    private fun setDateTimeAndAges() {
+        setDateAndTime()
+        binding.timestamp.text = readingAge()
+        binding.loop?.text = loopMinutes(0)?.let { "$it'" } ?: "-"
+        if (enableExt1) {
+            binding.timestampExt1?.text = readingAge(id = 1)
+            binding.loopExt1?.text = loopMinutes(1)?.let { "$it'" } ?: "-"
+        }
+        if (enableExt2) {
+            binding.timestampExt2?.text = readingAge(id = 2)
+            binding.loopExt2?.text = loopMinutes(2)?.let { "$it'" } ?: "-"
+        }
+    }
 }

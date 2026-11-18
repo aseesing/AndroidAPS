@@ -31,6 +31,7 @@ import androidx.wear.watchface.WatchFaceService
 import androidx.wear.watchface.WatchFaceType
 import androidx.wear.watchface.WatchState
 import androidx.wear.watchface.style.CurrentUserStyleRepository
+import androidx.wear.watchface.style.WatchFaceLayer
 import java.time.ZonedDateTime
 import java.util.TimeZone
 
@@ -213,6 +214,55 @@ abstract class WatchFace : WatchFaceService() {
      */
     internal open fun complicationRender(slot: ComplicationSlot): ComplicationRender = ComplicationRender.Declared
 
+    /**
+     * Counts the changes announced through [invalidate] (data, preferences, mode, taps) and every frame
+     * that was not drawn by [drawLayeredFrame] (ambient, the editor, a wake frame). A subclass that
+     * keeps drawn pictures between frames compares it to know when they are out of date. Frames the
+     * library schedules on its own, once a second or once a minute, and drawn by [drawLayeredFrame],
+     * do not count.
+     */
+    protected var contentVersion = 0
+        private set
+
+    /**
+     * Called after every frame. A frame drawn the normal way makes kept pictures stale, so the next
+     * layered frame draws them again: what changed while the face was in ambient or in the editor
+     * cannot stay hidden behind an old picture.
+     */
+    internal fun frameDrawn(layered: Boolean) {
+        if (!layered) contentVersion++
+    }
+
+    /**
+     * Lets a subclass draw a whole interactive frame its own way, from pictures it kept, instead of
+     * [onDraw], the complications and [onDrawOverlay]. Asked only for a plain frame on the watch: not
+     * ambient, not headless (editor, preview), not the editor's highlight, not a preview with layers
+     * left out, and not while a tapped complication shows its highlight. Return false to draw the
+     * normal way.
+     */
+    protected open fun drawLayeredFrame(canvas: Canvas, bounds: Rect, zonedDateTime: ZonedDateTime): Boolean = false
+
+    /** Paints every complication slot as the normal frame does, for a subclass that draws a frame its own way. */
+    protected fun drawComplicationSlots(canvas: Canvas, zonedDateTime: ZonedDateTime) {
+        renderer?.drawComplications(canvas, zonedDateTime)
+    }
+
+    /**
+     * What the complication slots show now. The library hands every slot a new object when its data
+     * changes. A subclass compares these lists with `equals`, so new data with equal content counts as
+     * no change.
+     */
+    protected fun complicationDataNow(): List<Any?> =
+        complicationSlotsManager?.complicationSlots?.values?.map { it.complicationData.value } ?: emptyList()
+
+    /**
+     * Keeps the first frame after a wake cheap, see [FirstFrameAfterWake]. Each renderer (engine) has
+     * its own, because the system may make a new engine on the same service object; this is the one
+     * of the renderer that drew last. Before the first frame it is one that never wakes.
+     */
+    protected var wakeFrame = FirstFrameAfterWake()
+        private set
+
     // Renderer instance
     private var renderer: WatchFaceRenderer? = null
 
@@ -288,6 +338,9 @@ abstract class WatchFace : WatchFaceService() {
             }
         }
 
+        /** The first frame after a wake of this renderer, see [WatchFace.wakeFrame]. */
+        private val wake = FirstFrameAfterWake().also { it.watch(wState) }
+
         init {
             // Register broadcast receiver for time changes
             val filter = IntentFilter().apply {
@@ -328,6 +381,8 @@ abstract class WatchFace : WatchFaceService() {
 
             // Update watch state
             val newAmbient = renderParameters.drawMode == DrawMode.AMBIENT
+            wakeFrame = wake
+            wake.beginFrame(leftAmbient = isAmbient && !newAmbient, interactive = !newAmbient && !wState.isHeadless)
             if (isAmbient != newAmbient) {
                 isAmbient = newAmbient
                 onWatchModeChanged(currentWatchMode)
@@ -339,12 +394,48 @@ abstract class WatchFace : WatchFaceService() {
             // Update time from ZonedDateTime
             updateTime(zonedDateTime)
 
-            // Delegate to abstract onDraw method
-            onDraw(canvas)
+            val plainFrame = renderParameters.drawMode == DrawMode.INTERACTIVE &&
+                !wState.isHeadless &&
+                renderParameters.highlightLayer == null &&
+                renderParameters.watchFaceLayers == WatchFaceLayer.ALL_WATCH_FACE_LAYERS &&
+                !complicationTapShown(zonedDateTime)
+            // The wake frame is drawn the plain way, one pass over the views: the layered frame would
+            // first draw its kept pictures again
+            val layered = plainFrame && !wake.isActive && drawLayeredFrame(canvas, bounds, zonedDateTime)
+            if (!layered) {
+                // Delegate to abstract onDraw method
+                onDraw(canvas)
+                drawComplications(canvas, zonedDateTime)
+                onDrawOverlay(canvas)
+            }
+            frameDrawn(layered)
+            wake.endFrame()
 
-            // Generic render pass for whatever complication slots exist. Empty/no-op for every
-            // watch face that doesn't declare any (the default). What each slot's bounds are - and
-            // whether it is painted at all - is the subclass's call, see [complicationRender].
+            // Read again after every frame, not only once at construction: whether seconds are shown
+            // is known only after the first draw has loaded the design, and changes with preferences.
+            // The library reads this before it schedules the next frame, and rounds a long delay to
+            // the start of the next minute. Without it a face drew 60 frames a minute for a clock that
+            // changes once a minute.
+            interactiveDrawModeUpdateDelayMillis = getInteractiveModeUpdateRate()
+        }
+
+        /**
+         * True while a tapped complication shows its highlight. The library draws it for a short time
+         * after the tap (see `CanvasComplicationDrawable`), and a kept picture would not show it.
+         */
+        private fun complicationTapShown(zonedDateTime: ZonedDateTime): Boolean {
+            val now = zonedDateTime.toInstant().toEpochMilli()
+            return renderParameters.lastComplicationTapDownEvents.values.any { tap ->
+                now - tap.tapTime.toEpochMilli() in 0L until COMPLICATION_TAP_HIGHLIGHT_MS
+            }
+        }
+
+        /**
+         * Generic render pass for whatever complication slots exist. Empty/no-op for every watch face
+         * that doesn't declare any (the default). What each slot's bounds are - and whether it is
+         * painted at all - is the subclass's call, see [complicationRender].
+         */
+        fun drawComplications(canvas: Canvas, zonedDateTime: ZonedDateTime) {
             complicationSlotsManager?.complicationSlots?.values?.forEach { slot ->
                 if (!slot.enabled) return@forEach
                 when (val render = complicationRender(slot)) {
@@ -355,8 +446,6 @@ abstract class WatchFace : WatchFaceService() {
                     }
                 }
             }
-
-            onDrawOverlay(canvas)
         }
 
         override fun renderHighlightLayer(
@@ -450,6 +539,7 @@ abstract class WatchFace : WatchFaceService() {
 
         override fun onDestroy() {
             super.onDestroy()
+            wake.release()
             try {
                 context.unregisterReceiver(dateTimeChangedReceiver)
             } catch (_: IllegalArgumentException) {
@@ -460,11 +550,18 @@ abstract class WatchFace : WatchFaceService() {
 
     // Helper method for subclasses to trigger invalidation
     fun invalidate() {
+        contentVersion++
         renderer?.invalidate()
     }
 
     override fun getSystemService(name: String): Any? {
         // Delegate to application context for backward compatibility
         return applicationContext.getSystemService(name) ?: super.getSystemService(name)
+    }
+
+    private companion object {
+
+        /** How long the library highlights a tapped complication, the same as in `CanvasComplicationDrawable`. */
+        const val COMPLICATION_TAP_HIGHLIGHT_MS = 300L
     }
 }
