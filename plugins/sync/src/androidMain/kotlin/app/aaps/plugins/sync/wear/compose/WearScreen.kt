@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,6 +72,7 @@ import app.aaps.core.ui.compose.dialogs.OkDialog
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.R
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.plugins.sync.wear.cwfsettings.CwfSettingsDialog
 
 @Composable
 internal fun WearScreen(
@@ -143,6 +146,10 @@ internal fun WearScreen(
 
     val moreWatchfacesUrl = stringResource(SyncStrings.wear_link_to_more_cwf_doc)
 
+    // The settings of the Custom watch face, set from the phone
+    var cwfSettingsOpen by rememberSaveable { mutableStateOf(false) }
+    if (cwfSettingsOpen) CwfSettingsDialog(uiState.watchfaceImage, uiState.watchfaceName, onClose = { cwfSettingsOpen = false })
+
     AnimatedContent(
         targetState = subScreen,
         label = "wear_screen"
@@ -183,6 +190,7 @@ internal fun WearScreen(
                     },
                     onSelectPushedWatchface = { viewModel.selectPushedWatchface(it) },
                     onDismissCustomWatchfaceNotShown = { viewModel.dismissCustomWatchfaceNotShown() },
+                    onCwfSettings = { cwfSettingsOpen = true },
                     modifier = modifier
                 )
             }
@@ -207,6 +215,7 @@ internal fun WearMainContent(
     onMoreWatchfaces: () -> Unit,
     onSelectPushedWatchface: (String) -> Unit,
     onDismissCustomWatchfaceNotShown: () -> Unit,
+    onCwfSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // The face the wearer tapped, waiting for their confirmation; null while no dialog is open.
@@ -361,6 +370,9 @@ internal fun WearMainContent(
                         button1 = ButtonDef(Icons.Default.Public, stringResource(InterfacesStrings.wear_more_watchfaces), onMoreWatchfaces),
                         button2 = ButtonDef(Icons.Default.Download, stringResource(SyncStrings.wear_export_watchface), onExportTemplate)
                     )
+
+                    // Row 3: the watch face settings, set from the phone
+                    ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings), onCwfSettings), button2 = null)
 
                     // Watchface preview image
                     uiState.watchfaceImage?.let { image ->

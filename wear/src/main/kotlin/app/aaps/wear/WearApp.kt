@@ -17,6 +17,7 @@ import app.aaps.wear.complications.cwf.CwfComplicationUpdater
 import app.aaps.wear.di.WearGraph
 import app.aaps.wear.events.EventWearPreferenceChange
 import app.aaps.wear.watchfaces.WatchFacePushHelper
+import app.aaps.wear.watchfaces.settingsync.CwfSettingsSyncWear
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.MembersInjector
 import dev.zacsweers.metro.createGraphFactory
@@ -44,6 +45,7 @@ class WearApp : Application(), MetroMemberInjector {
     @Inject lateinit var exceptionHandlerWear: ExceptionHandlerWear
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
     @Inject lateinit var cwfComplicationUpdater: CwfComplicationUpdater
+    @Inject lateinit var cwfSettingsSync: CwfSettingsSyncWear
 
     /**
      * Held in a field on purpose: `SharedPreferences` keeps its change listeners in a
@@ -71,6 +73,8 @@ class WearApp : Application(), MetroMemberInjector {
         // Refreshes the Custom watch face image complications when the picture changes, rather
         // than leaving them on the system's slow periodic timer
         cwfComplicationUpdater.start()
+        // The Custom watch face settings that the phone can set too: both ways, the newer change wins
+        cwfSettingsSync.start()
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(preferenceChangeListener)
         startForegroundService(Intent(this, DataLayerListenerServiceWear::class.java))
     }
