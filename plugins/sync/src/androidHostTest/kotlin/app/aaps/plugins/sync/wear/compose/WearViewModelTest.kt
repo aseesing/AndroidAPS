@@ -203,6 +203,45 @@ internal class WearViewModelTest {
     }
 
     @Test
+    fun `a chosen face shows as loading until the watch reports it`() {
+        connectedDeviceFlow.value = "Galaxy Watch 5"
+
+        sut.selectWatchface(analogZip())
+        assertThat(sut.uiState.value.loadingWatchface).isEqualTo("Analog G-Watch")
+
+        // The watch reports the face back as a new object
+        savedCustomWatchfaceFlow.value = analogZip().cwfData
+
+        assertThat(sut.uiState.value.loadingWatchface).isNull()
+        assertThat(sut.uiState.value.watchfaceName).isEqualTo("Analog G-Watch")
+    }
+
+    @Test
+    fun `without a watch a chosen face does not show as loading`() {
+        connectedDeviceFlow.value = null
+
+        sut.selectWatchface(analogZip())
+
+        assertThat(sut.uiState.value.loadingWatchface).isNull()
+    }
+
+    @Test
+    fun `the loading ends when the watch disconnects`() {
+        connectedDeviceFlow.value = "Galaxy Watch 5"
+        sut.selectWatchface(analogZip())
+        assertThat(sut.uiState.value.loadingWatchface).isEqualTo("Analog G-Watch")
+
+        connectedDeviceFlow.value = null
+
+        assertThat(sut.uiState.value.loadingWatchface).isNull()
+    }
+
+    private fun analogZip() = CwfFile(
+        cwfData = CwfData(json = "{}", metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Analog G-Watch"), resData = mutableMapOf()),
+        zipByteArray = ByteArray(0)
+    )
+
+    @Test
     fun `selectPushedWatchface stores the choice for the plugin to resend`() {
         sut.selectPushedWatchface(PushedWatchfaceId.WFS)
         verify(preferences).put(StringKey.WearPushedWatchface, PushedWatchfaceId.WFS)

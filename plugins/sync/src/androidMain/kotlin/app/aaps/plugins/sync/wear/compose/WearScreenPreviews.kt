@@ -85,6 +85,32 @@ internal fun WearMainContentDisconnectedPreview() {
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
+internal fun WearMainContentLoadingPreview() {
+    MaterialTheme {
+        WearMainContent(
+            // A new face was just sent: the card shows the loading indicator instead of the old face
+            uiState = WearUiState(
+                connectedDevice = "Galaxy Watch 5 (a1b2)",
+                isDeviceConnected = true,
+                hasCustomWatchface = true,
+                watchfaceName = "AAPS V2",
+                loadingWatchface = "Analog G-Watch"
+            ),
+            onResendData = {},
+            onOpenSettings = {},
+            onLoadWatchface = {},
+            onInfosWatchface = {},
+            onExportTemplate = {},
+            onMoreWatchfaces = {},
+            onSelectPushedWatchface = {},
+            onDismissCustomWatchfaceNotShown = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
 internal fun CwfInfosContentPreview() {
     MaterialTheme {
         CwfInfosContent(
