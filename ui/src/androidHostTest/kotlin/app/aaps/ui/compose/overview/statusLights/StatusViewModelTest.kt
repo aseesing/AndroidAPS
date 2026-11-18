@@ -101,6 +101,7 @@ internal class StatusViewModelTest {
         whenever(persistenceLayer.observeChanges(TE::class)).thenReturn(teChanges)
         whenever(persistenceLayer.databaseClearedFlow).thenReturn(emptyFlow())
         whenever(preferences.observe(BooleanKey.OverviewStatusLightsCountdown)).thenReturn(countdownSwitch)
+        whenever(preferences.observe(IntKey.OverviewStatusLightsSensorLife)).thenReturn(sensorLifeSetting)
     }
 
     @AfterEach
@@ -108,6 +109,9 @@ internal class StatusViewModelTest {
 
     /** The countdown switch, as the preference store publishes it. */
     private val countdownSwitch = MutableStateFlow(false)
+
+    /** The sensor life the user set, in hours, as the preference store publishes it. 0 = not set. */
+    private val sensorLifeSetting = MutableStateFlow(0)
 
     private fun newViewModel(textResolver: TextResolver = rh) = StatusViewModel(
         textResolver, activePlugin, profileFunction, config, persistenceLayer, dateUtil, rxBus, preferences,
@@ -267,11 +271,14 @@ internal class StatusViewModelTest {
         assertThat(state.insulinStatus?.ageStatus).isEqualTo(StatusLevel.WARNING)
     }
 
-    /** A 10 day and a 15 day G7 send the same label, so a G7 shows its age and never a wrong countdown. */
+    /**
+     * A 10 day and a 15 day G7 send the same label, so a G7 shows its age and never a wrong countdown,
+     * as long as the user has not set the sensor life (0).
+     */
     @Test
-    fun `with the countdown on, a G7 shows its age`() = runBlocking<Unit> {
+    fun `with the countdown on and no sensor life set, a G7 shows its age`() = runBlocking<Unit> {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G7)
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G7, sensorLife = 0)
 
         val state = refreshed(newViewModel(texts()))
 
@@ -330,6 +337,88 @@ internal class StatusViewModelTest {
         assertThat(state.insulinStatus?.age).isEqualTo("2d12h")
     }
 
+    /** A sensor whose life AAPS does not know counts down to the life the user set. */
+    @Test
+    fun `with the countdown on, a G7 counts down to the sensor life the user set`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G7, sensorLife = 240)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("8d0h left")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+        assertThat(state.sensorStatus?.agePercent).isWithin(0.001f).of(48f / 240f)
+    }
+
+    @Test
+    fun `a sensor life the user set is yellow when less than one day is left`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G7, sensorLife = 240, sensorAge = 9 * DAY + 2 * HOUR)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("22h left")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.WARNING)
+    }
+
+    /** A sensor life the user set has no grace period: after it the row is red, with a minus. */
+    @Test
+    fun `a sensor life the user set is red with a minus after its end`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G7, sensorLife = 240, sensorAge = 10 * DAY + 3 * HOUR)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("-3h00m")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.CRITICAL)
+        assertThat(state.sensorStatus?.agePercent).isEqualTo(1f)
+    }
+
+    /** The life AAPS knows for a sensor comes first: a G6 keeps its 10 days whatever the user set. */
+    @Test
+    fun `a G6 keeps its own life whatever sensor life the user set`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G6, sensorLife = 100)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("8d0h left")
+        assertThat(state.sensorStatus?.agePercent).isWithin(0.001f).of(48f / 240f)
+    }
+
+    /** The sensor life is only used for the countdown. With the switch off the row is as before. */
+    @Test
+    fun `with the countdown off, a sensor life the user set changes nothing`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = false, sensor = SourceSensor.DEXCOM_G7, sensorLife = 240)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("2d0h")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+        assertThat(state.sensorStatus?.agePercent).isWithin(0.001f).of(48f / 240f)
+        verify(persistenceLayer, never()).getLastGlucoseValue()
+    }
+
+    /** The rows follow a new sensor life at once, not only at the next minute tick. */
+    @Test
+    fun `a new sensor life refreshes the rows`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G7, sensorLife = 0)
+        val viewModel = newViewModel(texts())
+        val screen = show(viewModel)
+        awaitValue(finished, 1)
+        assertThat(viewModel.uiState.value.sensorStatus?.age).isEqualTo("2d0h")
+
+        whenever(preferences.get(IntKey.OverviewStatusLightsSensorLife)).thenReturn(240)
+        sensorLifeSetting.value = 240
+        assertThat(awaitValue(finished, 2)).isEqualTo(2)
+        delay(QUIET_MS)
+
+        assertThat(viewModel.uiState.value.sensorStatus?.age).isEqualTo("8d0h left")
+        screen.cancelAndJoin()
+    }
+
     /** The real texts of this module and of core/ui, so the tests see what the user sees. */
     private fun texts(): TextResolver = generatedTextResolver("ui" to UiStringsValues::textOf)
 
@@ -343,10 +432,17 @@ internal class StatusViewModelTest {
     }
 
     /**
-     * A sensor changed 2 days ago and a cannula (or pod) and insulin changed 60 hours ago, with the
-     * default thresholds. The newest BG reading comes from [sensor], the active pump is [pumpType].
+     * A sensor changed [sensorAge] ago (2 days by default) and a cannula (or pod) and insulin changed 60
+     * hours ago, with the default thresholds. The newest BG reading comes from [sensor], the active pump
+     * is [pumpType], and the user set [sensorLife] hours as the sensor life (0 = not set).
      */
-    private suspend fun givenDevices(countdown: Boolean, sensor: SourceSensor = SourceSensor.DEXCOM_G6, pumpType: PumpType = PumpType.OMNIPOD_DASH) {
+    private suspend fun givenDevices(
+        countdown: Boolean,
+        sensor: SourceSensor = SourceSensor.DEXCOM_G6,
+        pumpType: PumpType = PumpType.OMNIPOD_DASH,
+        sensorLife: Int = 0,
+        sensorAge: Long = 2 * DAY
+    ) {
         givenStatusData()
         whenever(dateUtil.now()).thenReturn(NOW)
         whenever(dateUtil.computeDiff(any(), any())).thenAnswer {
@@ -354,6 +450,7 @@ internal class StatusViewModelTest {
             TimeDiff(diff / DAY, diff % DAY / HOUR, 0, 0, 0, 0, 0)
         }
         whenever(preferences.get(BooleanKey.OverviewStatusLightsCountdown)).thenReturn(countdown)
+        whenever(preferences.get(IntKey.OverviewStatusLightsSensorLife)).thenReturn(sensorLife)
         whenever(preferences.get(IntKey.OverviewSageWarning)).thenReturn(216)
         whenever(preferences.get(IntKey.OverviewSageCritical)).thenReturn(240)
         whenever(preferences.get(IntKey.OverviewCageWarning)).thenReturn(48)
@@ -361,7 +458,7 @@ internal class StatusViewModelTest {
         whenever(preferences.get(IntKey.OverviewIageWarning)).thenReturn(72)
         whenever(preferences.get(IntKey.OverviewIageCritical)).thenReturn(144)
         whenever(activePlugin.activePump.model()).thenReturn(pumpType)
-        val sensorChange = TE(timestamp = NOW - 2 * DAY, type = TE.Type.SENSOR_CHANGE, glucoseUnit = GlucoseUnit.MGDL)
+        val sensorChange = TE(timestamp = NOW - sensorAge, type = TE.Type.SENSOR_CHANGE, glucoseUnit = GlucoseUnit.MGDL)
         val insulinChange = TE(timestamp = NOW - 60 * HOUR, type = TE.Type.INSULIN_CHANGE, glucoseUnit = GlucoseUnit.MGDL)
         val cannulaChange = TE(timestamp = NOW - 60 * HOUR, type = TE.Type.CANNULA_CHANGE, glucoseUnit = GlucoseUnit.MGDL)
         whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(sensorChange)

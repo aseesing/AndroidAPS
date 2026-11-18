@@ -105,7 +105,9 @@ class StatusViewModel(
         pumpLevelChanges(),
         // Age or time left: the rows change at once when the user flips the switch.
         // drop(1): a StateFlow sends its current value first, which is not a change
-        preferences.observe(BooleanKey.OverviewStatusLightsCountdown).drop(1).map { }
+        preferences.observe(BooleanKey.OverviewStatusLightsCountdown).drop(1).map { },
+        // The same when the user changes the sensor life
+        preferences.observe(IntKey.OverviewStatusLightsSensorLife).drop(1).map { }
     )
 
     /**
@@ -190,9 +192,13 @@ class StatusViewModel(
         val hasBattery = !config.AAPSCLIENT && bgSource.sensorBatteryLevel != -1
         val level = if (hasBattery) rh.gs(CoreUiStrings.units_format_percent, bgSource.sensorBatteryLevel) else null
         val levelPercent = if (hasBattery) bgSource.sensorBatteryLevel / 100f else -1f
-        // The newest reading names the sensor model, and with it the lifetime the maker gives it
+        // The newest reading names the sensor model, and with it the lifetime the maker gives it.
+        // For a model with no known lifetime, the life the user set is used.
         val lifetime = if (countdown && event != null) {
-            DeviceLifetime.of(withContext(aapsIoDispatcher) { persistenceLayer.getLastGlucoseValue() }?.sourceSensor)
+            DeviceLifetime.forSensor(
+                sensor = withContext(aapsIoDispatcher) { persistenceLayer.getLastGlucoseValue() }?.sourceSensor,
+                userLifetimeHours = preferences.get(IntKey.OverviewStatusLightsSensorLife)
+            )
         } else null
         val age = ageDisplay(event, lifetime, IntKey.OverviewSageWarning, IntKey.OverviewSageCritical)
 
