@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -57,7 +58,7 @@ internal fun importListTitle(uiState: WearUiState, mainTitle: String): String =
 
 /**
  * The night face card: its name and preview, a button to load one from the same list as the main
- * face, and a button to remove it.
+ * face, and with a night face a button to remove it and a button to the "Day and night" screen.
  *
  * @see NightWatchfaceCardPreview
  */
@@ -66,6 +67,7 @@ internal fun NightWatchfaceCard(
     state: WearNightFaceState,
     onLoadNightWatchface: () -> Unit,
     onRemoveNightWatchface: () -> Unit,
+    onDayNightSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -91,6 +93,9 @@ internal fun NightWatchfaceCard(
                     ButtonDef(Icons.Default.Delete, stringResource(SyncStrings.wear_day_night_remove_night_face), onRemoveNightWatchface)
                 else null
             )
+            // When the watch shows the night face. Only with a night face: without one there is nothing to set.
+            if (state.hasNightWatchface)
+                ButtonRow(button1 = ButtonDef(Icons.Default.Schedule, stringResource(SyncStrings.wear_day_night_settings), onDayNightSettings), button2 = null)
 
             state.nightWatchfaceImage?.let { image ->
                 Spacer(modifier = Modifier.height(AapsSpacing.small))
@@ -116,12 +121,14 @@ internal fun NightWatchfaceCardPreview() {
             NightWatchfaceCard(
                 state = WearNightFaceState(hasNightWatchface = true, nightWatchfaceName = "Night"),
                 onLoadNightWatchface = {},
-                onRemoveNightWatchface = {}
+                onRemoveNightWatchface = {},
+                onDayNightSettings = {}
             )
             NightWatchfaceCard(
                 state = WearNightFaceState(),
                 onLoadNightWatchface = {},
-                onRemoveNightWatchface = {}
+                onRemoveNightWatchface = {},
+                onDayNightSettings = {}
             )
         }
     }

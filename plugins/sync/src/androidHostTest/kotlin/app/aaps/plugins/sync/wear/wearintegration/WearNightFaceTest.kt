@@ -7,23 +7,33 @@ import app.aaps.core.interfaces.rx.events.EventMobileToWear
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.CwfNight
+import app.aaps.core.interfaces.rx.weardata.DayNightRule
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.keys.BooleanKey
 import app.aaps.plugins.sync.wear.PreferencesInMemory
+import app.aaps.plugins.sync.wear.daynight.PhoneRoughLocation
+import app.aaps.plugins.sync.wear.daynight.TimeZoneCities
+import app.aaps.plugins.sync.wear.daynight.WearDayNightSettings
+import app.aaps.plugins.sync.wear.keys.WearDayNightBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.clearInvocations
 import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 
 class WearNightFaceTest {
 
     private lateinit var store: PreferencesInMemory
+    private lateinit var location: PhoneRoughLocation
     private lateinit var sut: WearNightFace
 
     /** What the phone sent to the watch */
@@ -36,7 +46,10 @@ class WearNightFaceTest {
         doAnswer { (it.arguments[0] as? EventMobileToWear)?.let { event -> sent.add(event.payload) }; Unit }.whenever(rxBus).send(any<Event>())
         val dateUtil = mock<DateUtil>()
         whenever(dateUtil.now()).thenReturn(NOW)
-        sut = WearNightFace(store.preferences, rxBus, dateUtil, mock<AAPSLogger>())
+        location = mock()
+        whenever(location.hasPermission()).thenReturn(true)
+        whenever(location.read()).thenReturn(DayNightRule.Place(52.4, 4.9))
+        sut = WearNightFace(store.preferences, rxBus, dateUtil, mock<AAPSLogger>(), WearDayNightSettings(store.preferences, location, TimeZoneCities()))
     }
 
     private fun face(name: String, version: String = "1", fileName: String = name, authorization: Boolean? = null) =
@@ -59,7 +72,9 @@ class WearNightFaceTest {
     }
 
     @Test
-    fun `without a night face nothing is known, sent or written`() {
+    fun `without a night face nothing is known, sent, written or read`() {
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = true
+
         assertThat(sut.isKnown()).isFalse()
         assertThat(sut.isOnWatch()).isFalse()
         assertThat(sut.resendMessages()).isEmpty()
@@ -69,6 +84,62 @@ class WearNightFaceTest {
 
         assertThat(store.writes).isEqualTo(0)
         assertThat(sent).isEmpty()
+        verifyNoInteractions(location)
+    }
+
+    @Test
+    fun `a night face that is only chosen gets no rule and the location is not read`() {
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = true
+
+        sut.chosen(face("Night").metadata)
+
+        assertThat(sut.resendMessages()).isEmpty()
+        assertThat(sent).isEmpty()
+        verifyNoInteractions(location)
+    }
+
+    @Test
+    fun `once the watch confirms its night face it gets the rule`() {
+        sut.reportedByWatch(face("Night"))
+
+        assertThat(sent).contains(EventData.ActionSetDayNightRule(DayNightRule.FixedTimes(7 * 60, 19 * 60)))
+        assertThat(sut.resendMessages()).containsExactly(EventData.ActionSetDayNightRule(DayNightRule.FixedTimes(7 * 60, 19 * 60)))
+    }
+
+    @Test
+    fun `with the switch off the location is not read, also with a night face`() {
+        sut.reportedByWatch(face("Night"))
+        sut.resendMessages()
+
+        verify(location, never()).read()
+    }
+
+    @Test
+    fun `with the switch on the confirmed night face gets the rough place`() {
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = true
+
+        sut.reportedByWatch(face("Night"))
+
+        assertThat(sent).contains(EventData.ActionSetDayNightRule(DayNightRule.Place(52.4, 4.9)))
+        assertThat(sut.resendMessages()).containsExactly(EventData.ActionSetDayNightRule(DayNightRule.Place(52.4, 4.9)))
+    }
+
+    @Test
+    fun `while a removal waits no rule goes and the location is not read`() {
+        store.values[WearDayNightBooleanKey.UsePhoneLocation] = true
+        sut.reportedByWatch(face("Night"))
+        sut.remove()
+        clearInvocations(location)
+
+        assertThat(sut.resendMessages()).containsExactly(EventData.ActionClearNightWatchface(NOW))
+        verify(location, never()).read()
+    }
+
+    @Test
+    fun `the rule is only for the own watch, never for the AAPSClient broadcast`() {
+        assertThat(isForOwnWatchOnly(EventData.ActionSetDayNightRule(DayNightRule.Place(52.4, 4.9)))).isTrue()
+        assertThat(isForOwnWatchOnly(EventData.ActionSetDayNightRule(DayNightRule.FixedTimes(420, 1140)))).isTrue()
+        assertThat(isForOwnWatchOnly(EventData.ActionPing(1L))).isFalse()
     }
 
     @Test
@@ -127,6 +198,7 @@ class WearNightFaceTest {
         // The watch was away and reports the night face it still has
         sut.reportedByWatch(face("Night"))
 
+        // Only the remove message: no rule for a night face that is being removed
         assertThat(sent).containsExactly(EventData.ActionClearNightWatchface(NOW))
         assertThat(sut.isOnWatch()).isFalse()
         assertThat(sut.saved.value).isNull()

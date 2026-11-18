@@ -74,12 +74,14 @@ import app.aaps.plugins.sync.SyncStrings
 @Composable
 internal fun WearScreen(
     viewModel: WearViewModel,
+    dayNightViewModel: WearDayNightViewModel,
     setToolbarConfig: (ToolbarConfig) -> Unit,
     onNavigateBack: () -> Unit,
     onSettings: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val dayNightState by dayNightViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
 
@@ -92,25 +94,31 @@ internal fun WearScreen(
     // Back handler for sub-screens
     BackHandler(enabled = uiState.showInfos) { viewModel.hideCwfInfos() }
     BackHandler(enabled = uiState.showImportList) { viewModel.hideImportList() }
+    // In the "Day and night" screen back goes one step of choosing a city first
+    val dayNightBack = { if (dayNightState.picker != null) dayNightViewModel.backInPicker() else viewModel.hideDayNight() }
+    BackHandler(enabled = uiState.showDayNight) { dayNightBack() }
 
     // Only title needs pre-resolving (plain String used in LaunchedEffect suspend block)
     val wearTitle = stringResource(CoreUiStrings.wear)
     val importTitle = importListTitle(uiState, stringResource(SyncStrings.wear_import_custom_watchface_title))
+    val dayNightTitle = wearDayNightTitle(dayNightState.picker)
 
     // Determine current sub-screen
     val subScreen = when {
         uiState.showImportList -> SubScreen.IMPORT_LIST
         uiState.showInfos      -> SubScreen.INFOS
+        uiState.showDayNight   -> SubScreen.DAY_NIGHT
         else                   -> SubScreen.MAIN
     }
 
     // Toolbar config
-    LaunchedEffect(subScreen, uiState.cwfInfosState?.title) {
+    LaunchedEffect(subScreen, uiState.cwfInfosState?.title, dayNightTitle) {
         setToolbarConfig(
             ToolbarConfig(
                 title = when (subScreen) {
                     SubScreen.IMPORT_LIST -> importTitle
                     SubScreen.INFOS       -> uiState.cwfInfosState?.title ?: ""
+                    SubScreen.DAY_NIGHT   -> dayNightTitle
                     SubScreen.MAIN        -> wearTitle
                 },
                 navigationIcon = {
@@ -118,6 +126,7 @@ internal fun WearScreen(
                         when (subScreen) {
                             SubScreen.IMPORT_LIST -> viewModel.hideImportList()
                             SubScreen.INFOS       -> viewModel.hideCwfInfos()
+                            SubScreen.DAY_NIGHT   -> dayNightBack()
                             SubScreen.MAIN        -> onNavigateBack()
                         }
                     }) {
@@ -166,6 +175,8 @@ internal fun WearScreen(
                 }
             }
 
+            SubScreen.DAY_NIGHT   -> WearDayNightScreen(viewModel = dayNightViewModel, modifier = modifier)
+
             SubScreen.MAIN        -> {
                 WearMainContent(
                     uiState = uiState,
@@ -185,6 +196,7 @@ internal fun WearScreen(
                     onDismissCustomWatchfaceNotShown = { viewModel.dismissCustomWatchfaceNotShown() },
                     onLoadNightWatchface = { viewModel.loadNightWatchfaceFiles() },
                     onRemoveNightWatchface = { viewModel.clearNightWatchface() },
+                    onDayNightSettings = { viewModel.showDayNight() },
                     modifier = modifier
                 )
             }
@@ -192,7 +204,7 @@ internal fun WearScreen(
     }
 }
 
-private enum class SubScreen { MAIN, INFOS, IMPORT_LIST }
+private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, DAY_NIGHT }
 
 /**
  * @see WearMainContentPreview
@@ -211,6 +223,7 @@ internal fun WearMainContent(
     onDismissCustomWatchfaceNotShown: () -> Unit,
     onLoadNightWatchface: () -> Unit,
     onRemoveNightWatchface: () -> Unit,
+    onDayNightSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // The face the wearer tapped, waiting for their confirmation; null while no dialog is open.
@@ -380,7 +393,7 @@ internal fun WearMainContent(
                     }
                 }
             }
-            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface)
+            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface, onDayNightSettings)
         }
     }
 }

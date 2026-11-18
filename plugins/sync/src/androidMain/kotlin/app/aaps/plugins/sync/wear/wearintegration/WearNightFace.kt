@@ -12,6 +12,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.interfaces.Preferences
+import app.aaps.plugins.sync.wear.daynight.WearDayNightSettings
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
 import dev.zacsweers.metro.AppScope
@@ -26,6 +27,12 @@ fun watchfacePath(dataPath: String, night: Boolean): String =
     if (night) dataPath + CwfNight.PATH_SUFFIX else dataPath
 
 /**
+ * True for a message only for the phone's own watch, which never goes into the AAPSClient broadcast
+ * to another AAPS app: the rule for when it is day can hold the phone's place.
+ */
+fun isForOwnWatchOnly(payload: EventData): Boolean = payload is EventData.ActionSetDayNightRule
+
+/**
  * The phone side of the night face of the Custom watch face, see [CwfNight].
  *
  * The phone sends a night zip on its own message path and keeps what the watch says about its night
@@ -33,6 +40,9 @@ fun watchfacePath(dataPath: String, night: Boolean): String =
  * confirmed it ([isOnWatch]). A removal waits for the watch too: until the watch says it has no
  * night face, a night face the watch reports is answered with the remove message again, so a watch
  * that was away when the user removed it can not bring it back.
+ *
+ * Only while the watch has confirmed a night face, it gets the rule for when it is day (see
+ * [WearDayNightSettings]); only then can the phone's location be read for it.
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -40,7 +50,8 @@ class WearNightFace(
     private val preferences: Preferences,
     private val rxBus: RxBus,
     private val dateUtil: DateUtil,
-    private val aapsLogger: AAPSLogger
+    private val aapsLogger: AAPSLogger,
+    private val dayNightSettings: WearDayNightSettings
 ) {
 
     private val _saved = MutableStateFlow<CwfData?>(null)
@@ -86,6 +97,8 @@ class WearNightFace(
         if (!preferences.get(WearNightFaceBooleanKey.OnWatch)) preferences.put(WearNightFaceBooleanKey.OnWatch, true)
         _saved.value = cwf
         checkMetadata()
+        // Now the watch has a night face, it gets the rule for when it is day
+        ruleMessage()?.let { rxBus.send(EventMobileToWear(it)) }
     }
 
     /** The watch has no night face (any more). Forgets it, but writes only when there is something to forget. */
@@ -107,11 +120,20 @@ class WearNightFace(
 
     /**
      * What goes to the watch with every resend of the data. Empty without a night face. While a
-     * removal waits, the remove message, so a watch that was away gets it when it is back.
+     * removal waits, the remove message, so a watch that was away gets it when it is back. While the
+     * watch has a night face, the rule for when it is day, so a change of the settings or of the
+     * phone's place reaches the watch.
      */
     fun resendMessages(): List<EventData> =
         if (preferences.get(WearNightFaceBooleanKey.RemovalPending)) listOf(EventData.ActionClearNightWatchface(dateUtil.now()))
-        else emptyList()
+        else listOfNotNull(ruleMessage())
+
+    /**
+     * The rule for when it is day, only while the watch has confirmed a night face. Without one,
+     * null, and the settings are not read, so the phone's location is not read either.
+     */
+    internal fun ruleMessage(): EventData.ActionSetDayNightRule? =
+        if (isOnWatch()) EventData.ActionSetDayNightRule(dayNightSettings.rule()) else null
 
     /** Sends new metadata for the night face when the phone settings ask for it, see [metadataUpdate]. */
     fun checkMetadata() {

@@ -190,6 +190,27 @@
     <string name="wear_day_night_load_night_face" comment="Button: choose a watch face file and send it to the watch as the night face">Load night face</string>
     <string name="wear_day_night_remove_night_face" comment="Button: the watch forgets its night face and shows the day face day and night">Remove night face</string>
     <string name="wear_day_night_select_night_face" comment="Title of the list of watch face files when loading a night face">Select night face</string>
+    <string name="wear_day_night_settings" comment="Title of the screen, and its button on the night face card: when the watch shows the night face">Day and night</string>
+    <string name="wear_day_night_use_phone_location">Use the phone\'s location</string>
+    <string name="wear_day_night_use_phone_location_summary">The phone\'s rough place (rounded to 0.1 degree, about 10 km) is sent to the watch, which works out sunrise and sunset from it.</string>
+    <string name="wear_day_night_no_permission">No location permission, so the phone\'s location is not used. The choice below is used.</string>
+    <string name="wear_day_night_no_place">The phone knows no place from the last day, so the choice below is used.</string>
+    <string name="wear_day_night_fallback">Used when the phone knows no place from the last day.</string>
+    <string name="wear_day_night_by" comment="Heading of a choice: what decides when it is day and when it is night for the watch">Day and night by</string>
+    <string name="wear_day_night_fixed_times" comment="Choice: day and night start at times the user sets">Fixed times</string>
+    <string name="wear_day_night_chosen_place" comment="Choice: day from sunrise to sunset in a city the user chooses">A place I choose</string>
+    <string name="wear_day_night_day_starts">Day starts at</string>
+    <string name="wear_day_night_night_starts">Night starts at</string>
+    <string name="wear_day_night_equal_times">Both times are the same, so the watch shows the day face all the time.</string>
+    <string name="wear_day_night_city_in_country" comment="A city and its country. %1$s=city, %2$s=country. Example: Amsterdam, Netherlands">%1$s, %2$s</string>
+    <string name="wear_day_night_no_city">No city chosen. The fixed times are used.</string>
+    <string name="wear_day_night_choose_city" comment="Button, and title of the list of cities">Choose a city</string>
+    <string name="wear_day_night_choose_country" comment="Title of the list of countries, the first step of choosing a city">Choose a country</string>
+    <string name="wear_day_night_suggested" comment="Heading above the city of the phone\'s time zone, offered first">The phone\'s time zone</string>
+    <string name="wear_day_night_search">Search</string>
+    <string name="wear_day_night_sends_times">Leaves the phone: only the two times. Nothing private.</string>
+    <string name="wear_day_night_sends_city">Leaves the phone: only the place of the chosen city, which is public data. Nothing private.</string>
+    <string name="wear_day_night_sends_place">Leaves the phone: its rough place, rounded to 0.1 degree (about 10 km), each time the data goes to the watch. Only while the watch has a night face.</string>
     <string name="wear_pushed_watchface_installing" comment="Short note after the selected watchface while the watch is still replacing its face">Installing…</string>
     <string name="wear_custom_watchface_not_shown" comment="Dialog after a custom watchface was sent while the complications watchface is selected. %1$s=name of the sent custom watchface">The watch shows the Complications watchface. Select Custom watchface to see %1$s on the watch.</string>
     <string name="wear_pushed_watchface_confirm_title">Change the watchface on the watch?</string>

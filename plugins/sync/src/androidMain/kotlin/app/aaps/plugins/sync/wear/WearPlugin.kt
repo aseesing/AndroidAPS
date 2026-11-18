@@ -45,12 +45,16 @@ import app.aaps.core.utils.DeferredForegroundStart
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin.Companion.RESEND_DEBOUNCE
 import app.aaps.plugins.sync.wear.compose.WearComposeContent
+import app.aaps.plugins.sync.wear.keys.WearDayNightBooleanKey
+import app.aaps.plugins.sync.wear.keys.WearDayNightIntKey
+import app.aaps.plugins.sync.wear.keys.WearDayNightStringKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
 import app.aaps.plugins.sync.wear.receivers.WearDataReceiver
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
 import app.aaps.plugins.sync.wear.wearintegration.DataLayerListenerServiceMobileHelper
 import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
+import app.aaps.plugins.sync.wear.wearintegration.isForOwnWatchOnly
 import app.aaps.shared.impl.extensions.safeQueryBroadcastReceivers
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
@@ -103,7 +107,8 @@ class WearPlugin(
         .pluginName(CoreUiStrings.wear)
         .description(SyncStrings.description_wear)
         .composeContent { WearComposeContent() },
-    ownPreferences = WearNightFaceKey.entries + WearNightFaceBooleanKey.entries,
+    ownPreferences = WearNightFaceKey.entries + WearNightFaceBooleanKey.entries +
+        WearDayNightBooleanKey.entries + WearDayNightIntKey.entries + WearDayNightStringKey.entries,
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
 
@@ -176,6 +181,12 @@ class WearPlugin(
             preferences.observe(StringNonKey.WearCwfFileName).drop(1).map {},
             // Which Watch Face Format face the watch installs; the watch swaps its slot on arrival
             preferences.observe(StringKey.WearPushedWatchface).drop(1).map {},
+            // Day and night for the night face; sent only while the watch has one
+            preferences.observe(WearDayNightBooleanKey.UsePhoneLocation).drop(1).map {},
+            preferences.observe(WearDayNightStringKey.Mode).drop(1).map {},
+            preferences.observe(WearDayNightStringKey.City).drop(1).map {},
+            preferences.observe(WearDayNightIntKey.DayStart).drop(1).map {},
+            preferences.observe(WearDayNightIntKey.NightStart).drop(1).map {},
         ).collectResilient(newScope, aapsLogger, LTag.WEAR) {
             dataHandlerMobile.resendData("PreferenceChange")
             checkCustomWatchfacePreferences()
@@ -217,7 +228,8 @@ class WearPlugin(
                 //  AAPSClient want pass data to AAPS
                 //  AAPSClient2 want pass data to AAPS or AAPSClient 1
                 // ) do it here as the data is prepared
-                if (config.AAPSCLIENT && preferences.get(BooleanKey.WearBroadcastData)) broadcastData(it.payload)
+                // Never what is only for this phone's own watch (see isForOwnWatchOnly)
+                if (config.AAPSCLIENT && preferences.get(BooleanKey.WearBroadcastData) && !isForOwnWatchOnly(it.payload)) broadcastData(it.payload)
             }
     }
 
