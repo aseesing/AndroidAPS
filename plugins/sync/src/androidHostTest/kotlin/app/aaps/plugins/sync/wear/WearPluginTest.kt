@@ -51,7 +51,7 @@ class WearPluginTest : TestBaseWithProfile() {
     @BeforeEach fun prepare() {
         rateLimit = RateLimit(dateUtil)
         whenever(eatReminder.state).thenReturn(eatReminderState)
-        wearPlugin = WearPlugin(aapsLogger, rh, preferences, rxBus, context, dataHandlerMobile, dataLayerListenerServiceMobileHelper, config, BolusProgressData(ch, CoroutineScope(Dispatchers.Unconfined)), persistenceLayer, scenes, eatReminder, mock())
+        wearPlugin = WearPlugin(aapsLogger, rh, preferences, rxBus, context, dataHandlerMobile, dataLayerListenerServiceMobileHelper, config, BolusProgressData(ch, CoroutineScope(Dispatchers.Unconfined)), persistenceLayer, scenes, eatReminder, mock(), mock())
         whenever(persistenceLayer.observeChanges(TT::class)).thenReturn(temporaryTargets)
         whenever(persistenceLayer.observeChanges(RM::class)).thenReturn(runningModes)
     }

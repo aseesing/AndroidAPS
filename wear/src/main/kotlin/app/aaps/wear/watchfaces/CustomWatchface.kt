@@ -41,6 +41,7 @@ import androidx.wear.watchface.style.UserStyleSchema
 import app.aaps.core.interfaces.InterfacesStringIds
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.events.EventUpdateSelectedWatchface
+import app.aaps.core.interfaces.rx.events.EventWearToMobile
 import app.aaps.core.interfaces.rx.weardata.CUSTOM_VERSION
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
@@ -65,6 +66,9 @@ import app.aaps.wear.utils.toVisibility
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.PROVISIONAL_RING_WIDTH
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.TEMPLE_RESOLUTION
 import app.aaps.wear.watchfaces.CustomWatchface.Companion.complicationSlots
+import app.aaps.wear.watchfaces.daynight.DayNightChoice
+import app.aaps.wear.watchfaces.daynight.DayNightClock
+import app.aaps.wear.watchfaces.daynight.NightFace
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
 import app.aaps.wear.watchfaces.utils.ComplicationImageFit
 import app.aaps.wear.watchfaces.utils.ComplicationRender
@@ -121,6 +125,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private var json = JSONObject()
     private var jsonString = ""
     private val parsedJson = ParsedJsonCache()
+
+    /** Day or night, for the choice between the main face and the night face (see `CwfNight`). */
+    private val dayNight = DayNightClock()
+
+    /** True while the views carry the night face. Always false without a night face. */
+    private var styleShowsNightFace = false
+
     /**
      * A real [ImageView] for background, deliberately not part of `activity_custom.xml`: background
      * must paint before complications and everything in that layout paints after them (see
@@ -212,7 +223,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
          * Which rows are relevant depends on the loaded CWF, and deciding that is this class's job -
          * only this class may read the CWF json.
          */
-        override fun settingRows(storedConfiguration: String?, systemEditor: Boolean): List<WatchFaceSettingRow> {
+        override fun settingRows(storedConfiguration: String?, systemEditor: Boolean, hasNightFace: Boolean): List<WatchFaceSettingRow> {
             val json = storedConfiguration?.let {
                 try {
                     JSONObject(it)
@@ -258,6 +269,11 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     )
                 }
                 add(WatchFaceSettingRow.Toggle(R.string.key_include_external, R.string.pref_include_external, false))
+                // Day face and night face: only when there is a night face to choose
+                if (hasNightFace) {
+                    add(DayNightChoice.activeRow())
+                    add(DayNightChoice.alwaysOnRow())
+                }
             }
         }
 
@@ -1019,10 +1035,27 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             runBlocking { complicationDataRepository.setDefaultWatchface() }
             customWatchfaceData = runBlocking { complicationDataRepository.getCustomWatchface(true) }
         }
-        customWatchfaceData?.let {
-            updatePref(it.metadata)
+        // The night face, when one is stored, shows instead of the main face at night (see CwfNight)
+        val night = runBlocking { complicationDataRepository.getNightWatchfaceData() }
+        var showsNightFace = false
+        customWatchfaceData?.let { main ->
+            updatePref(main.metadata)
             try {
-                json = parsedJson.parse(it.json)
+                // Day or night as the wearer chose, separately for the active and the always-on
+                // screen. Only worked out when there is a night face.
+                val face = NightFace.choose(main, night.customWatchfaceNight) {
+                    DayNightChoice.showDay(
+                        active = sp.getString(R.string.key_day_night_look, DayNightChoice.AUTO),
+                        alwaysOn = sp.getString(R.string.key_day_night_always_on, DayNightChoice.AS_ACTIVE),
+                        ambient = isAmbient,
+                        isDayNow = { dayNight.isDay(renderNow(), night.dayNightRule) }
+                    )
+                }
+                showsNightFace = face !== main
+                // A swap between the day face and the night face is not a new zip
+                val daySwap = showsNightFace != styleShowsNightFace
+                styleShowsNightFace = showsNightFace
+                json = parsedJson.parse(face.json)
                 // ViewMap, FontMap, TrendArrowMap and DynProvider keep their state on enum entries,
                 // which are process-wide, while several CustomWatchface instances can exist at once -
                 // the live watch face, the editor's headless instance, and the one a complication
@@ -1038,9 +1071,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     jsonString = ""
                     styleOwner = this
                 }
-                if (!resDataMap.isEquals(it.resData) || jsonString != it.json) {
-                    resDataMap = it.resData
-                    jsonString = it.json
+                if (!resDataMap.isEquals(face.resData) || jsonString != face.json) {
+                    resDataMap = face.resData
+                    jsonString = face.json
                     // The views now carry a different design. Anything holding pictures drawn from
                     // the previous one can tell by comparing this, without having to be told - see
                     // [styleId].
@@ -1056,7 +1089,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     // A different zip means the dial looks like something else, which the style
                     // schema the system caches its preview from does not say. Asked for inside this
                     // block, which only runs on a real change, since the system rate limits requests.
-                    requestPreviewImageUpdate()
+                    // Not for a swap between the day face and the night face: the preview shows the
+                    // main face, and a swap happens at sunrise, at sunset and with the always-on look.
+                    if (!daySwap) requestPreviewImageUpdate()
                 }
                 if (checkPref()) {
                     DynProvider.init(this, json)
@@ -1108,7 +1143,11 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             } catch (_: Exception) {
                 aapsLogger.debug(LTag.WEAR, "Crash during Custom watch load")
                 runBlocking {
-                    complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false)
+                    // A broken night face is dropped, the main face stays, and the phone is told
+                    if (showsNightFace) {
+                        complicationDataRepository.clearNightWatchface()
+                        rxBus.send(EventWearToMobile(EventData.ActionClearNightWatchface(System.currentTimeMillis())))
+                    } else complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false)
                 } // reload correct values to avoid crash of watchface
             }
         }

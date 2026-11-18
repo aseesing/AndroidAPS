@@ -180,6 +180,12 @@
     <string name="cwf_complication_layout_description">Position and size of the complications, taken from the loaded custom watch face.</string>
     <string name="pref_include_external">Include external views in template</string>
     <string name="pref_switch_external">Switch external data in Watchface</string>
+    <string name="pref_day_night_look" comment="Setting of the Custom watch face with a night face: when the watch shows the day face and when the night face">Day / night look</string>
+    <string name="pref_day_night_always_on" comment="Setting of the Custom watch face with a night face: which face the dim always-on screen shows">Always-on look</string>
+    <string name="day_night_auto" comment="Choice of the setting Day / night look: day face in the day and night face at night, as set in the AAPS app on the phone">Automatic</string>
+    <string name="day_night_day" comment="Choice of the settings Day / night look and Always-on look: always the day face">Day face</string>
+    <string name="day_night_night" comment="Choice of the settings Day / night look and Always-on look: always the night face">Night face</string>
+    <string name="day_night_as_active" comment="Choice of the setting Always-on look: the always-on screen shows the same face as the active screen">Same as active screen</string>
     <string name="custom_pref_show_seconds">Show seconds</string>
     <string name="digitalstyle_pref_your_style">Your style</string>
     <string name="digitalstyle_style_none">no style</string>
@@ -276,6 +282,8 @@
     <string name="key_show_complication_5" translatable="false">show_complication_5</string>
     <string name="key_include_external" translatable="false">include_external</string>
     <string name="key_switch_external" translatable="false">switch_external</string>
+    <string name="key_day_night_look" translatable="false">day_night_look</string>
+    <string name="key_day_night_always_on" translatable="false">day_night_always_on</string>
     <string name="key_last_selected_watchface" translatable="false">last_selected_watchface</string>
     <string name="key_complication_1" translatable="false">complication_1</string>
     <string name="key_complication_2" translatable="false">complication_2</string>

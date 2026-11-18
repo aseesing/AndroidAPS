@@ -80,8 +80,11 @@ internal interface WatchFaceSettings {
      * [systemEditor] is true when the screen being built is the system's watch face editor rather
      * than the AAPS settings menu. Some rows can only be acted on there - assigning a complication
      * slot needs an `EditorSession` - so a watch face may leave those out of the menu.
+     *
+     * [hasNightFace] is true when a night face is stored besides the main one (see `CwfNight`). Then
+     * the rows that choose between the day face and the night face are shown.
      */
-    fun settingRows(storedConfiguration: String?, systemEditor: Boolean): List<WatchFaceSettingRow>
+    fun settingRows(storedConfiguration: String?, systemEditor: Boolean, hasNightFace: Boolean): List<WatchFaceSettingRow>
 
     /**
      * The rows behind the [WatchFaceSettingRow.SubScreen] with key [subScreenKey], or empty if this

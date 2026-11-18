@@ -20,6 +20,7 @@ import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +61,7 @@ internal class WearViewModelTest {
     @Mock private lateinit var fileListProvider: FileListProvider
     @Mock private lateinit var aapsLogger: AAPSLogger
     @Mock private lateinit var designImport: CwfDesignImport
+    @Mock private lateinit var wearNightFace: WearNightFace
 
     private val connectedDeviceFlow = MutableStateFlow<String?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
@@ -76,10 +78,11 @@ internal class WearViewModelTest {
         whenever(wearPlugin.connectedDevice).thenReturn(connectedDeviceFlow)
         whenever(wearPlugin.savedCustomWatchface).thenReturn(savedCustomWatchfaceFlow)
         whenever(wearPlugin.watchFacePushStatus).thenReturn(watchFacePushStatusFlow)
+        whenever(wearNightFace.saved).thenReturn(MutableStateFlow(null))
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(eventWearUpdateGuiFlow)
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(pushedWatchfaceFlow)
         whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace)
     }
 
     @AfterEach
