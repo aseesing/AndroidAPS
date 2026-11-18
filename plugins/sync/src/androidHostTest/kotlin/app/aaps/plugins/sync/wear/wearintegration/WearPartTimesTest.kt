@@ -12,9 +12,13 @@ import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.pump.PumpWithConcentration
+import app.aaps.core.interfaces.source.BgSource
+import app.aaps.core.interfaces.source.CgmSensorLifecycle
+import app.aaps.core.interfaces.source.CgmSensorStatusProvider
 import app.aaps.core.keys.IntKey
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -72,4 +76,64 @@ class WearPartTimesTest : TestBaseWithProfile() {
         assertThat(sut.sensorEnd()).isNull()
         assertThat(sut.pumpEnd()).isNull()
     }
+
+    // ---- the session the glucose source read from its own sensor ----
+
+    /** The phone status lights count to the same end: the session the sensor reported, grace included. */
+    @Test
+    fun aReportedSessionEndsWhereTheSensorSaid() = runBlocking {
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(change(TE.Type.SENSOR_CHANGE))
+        whenever(persistenceLayer.getLastGlucoseValue()).thenReturn(reading(SourceSensor.DEXCOM_ONEPLUS_NATIVE))
+        givenReportedSession(startedAt = changed, lengthHours = 372)
+        // A 15 day sensor: 15 days and 12 hours, not the critical threshold
+        assertThat(sut.sensorEnd()).isEqualTo(changed + 372 * hour)
+    }
+
+    @Test
+    fun aReportedSessionComesBeforeTheTable() = runBlocking {
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(change(TE.Type.SENSOR_CHANGE))
+        whenever(persistenceLayer.getLastGlucoseValue()).thenReturn(reading(SourceSensor.DEXCOM_G7))
+        givenReportedSession(startedAt = changed, lengthHours = 372)
+        assertThat(sut.sensorEnd()).isEqualTo(changed + 372 * hour)
+    }
+
+    @Test
+    fun aConfirmedStartIsCountedFromWithoutASensorChange() = runBlocking {
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(null)
+        givenReportedSession(startedAt = changed, lengthHours = 252, confirmed = true)
+        assertThat(sut.sensorEnd()).isEqualTo(changed + 252 * hour)
+    }
+
+    @Test
+    fun aSourceThatReportsNoLengthChangesNothing() = runBlocking {
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(change(TE.Type.SENSOR_CHANGE))
+        whenever(persistenceLayer.getLastGlucoseValue()).thenReturn(reading(SourceSensor.DEXCOM_ONEPLUS_NATIVE))
+        givenReportedSession(startedAt = changed, lengthHours = null)
+        assertThat(sut.sensorEnd()).isEqualTo(changed + 216 * hour)
+    }
+
+    @Test
+    fun aSensorChangeAfterTheReportedSessionIgnoresTheReport() = runBlocking {
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(change(TE.Type.SENSOR_CHANGE))
+        whenever(persistenceLayer.getLastGlucoseValue()).thenReturn(reading(SourceSensor.DEXCOM_ONEPLUS_NATIVE))
+        givenReportedSession(startedAt = changed - 5 * 24 * hour, lengthHours = 252, confirmed = true)
+        assertThat(sut.sensorEnd()).isEqualTo(changed + 216 * hour)
+    }
+
+    /** The active source reports [lengthHours] hours (null = not reported), 12 of them grace, from [startedAt]. */
+    private fun givenReportedSession(startedAt: Long, lengthHours: Long?, confirmed: Boolean = false) {
+        val lifecycle = CgmSensorLifecycle(
+            startedAtEpochMs = startedAt,
+            ageMs = 0L,
+            endOfLife = false,
+            sessionLengthMs = lengthHours?.let { it * hour },
+            gracePeriodMs = lengthHours?.let { 12 * hour },
+            confirmedStartEpochMs = startedAt.takeIf { confirmed },
+        )
+        val source = mock<ReportingSource>()
+        whenever(source.lifecycle).thenReturn(MutableStateFlow(lifecycle))
+        whenever(activePlugin.activeBgSource).thenReturn(source)
+    }
+
+    private interface ReportingSource : BgSource, CgmSensorStatusProvider
 }

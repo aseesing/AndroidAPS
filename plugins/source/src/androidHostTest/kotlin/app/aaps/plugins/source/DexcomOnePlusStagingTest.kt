@@ -51,6 +51,30 @@ class DexcomOnePlusStagingTest {
         assertThat(lc.endOfLife).isTrue()
     }
 
+    // PERSONAL PATCH: the reported session in the lifecycle, for the countdown on the overview and the watch.
+
+    @Test
+    fun `the lifecycle carries the length the sensor reported and its grace period`() {
+        val fifteenDays = 15L * 24L * hour + 12L * hour
+        val lc = DexcomOnePlusStaging.computeLifecycle(now - hour, now, fifteenDays)!!
+        assertThat(lc.sessionLengthMs).isEqualTo(fifteenDays)
+        assertThat(lc.gracePeriodMs).isEqualTo(DexcomOnePlusStaging.SENSOR_GRACE_MS)
+    }
+
+    @Test
+    fun `the lifecycle carries no length when the sensor did not report one`() {
+        val lc = DexcomOnePlusStaging.computeLifecycle(now - hour, now, null)!!
+        assertThat(lc.sessionLengthMs).isNull()
+        assertThat(lc.gracePeriodMs).isNull()
+    }
+
+    @Test
+    fun `the start is confirmed only when the store says it is settled`() {
+        val start = now - hour
+        assertThat(DexcomOnePlusStaging.computeLifecycle(start, now, startConfirmed = true)!!.confirmedStartEpochMs).isEqualTo(start)
+        assertThat(DexcomOnePlusStaging.computeLifecycle(start, now)!!.confirmedStartEpochMs).isNull()
+    }
+
     // ---- computeStagingState ----
 
     @Test

@@ -20,6 +20,10 @@ import app.aaps.core.data.pump.defs.PumpType
  * always did, while the upstream one leaves the G7 out (a 15 day G7 sends the same label) and uses the
  * "Sensor life" setting instead. The G6 and pod entries are the same in both: change them together.
  *
+ * Both come after the session a glucose source read from its own sensor (the Dexcom ONE+ / G7
+ * driver), `CgmReportedSession` in `:core:interfaces`: when there is one, the phone and the watch
+ * count to that same end, and this table is not used for the sensor.
+ *
  * This is a personal addition, not in upstream AAPS. The table lives here, in its own file, and not
  * in the [SourceSensor] and [PumpType] enums, so that a new AAPS release merges without conflicts.
  */

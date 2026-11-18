@@ -227,7 +227,7 @@ class StatusViewModel(
                 userLifetimeHours = preferences.get(IntKey.OverviewStatusLightsSensorLife)
             )
         } else null
-        val age = ageDisplay(event, lifetime, IntKey.OverviewSageWarning, IntKey.OverviewSageCritical)
+        val age = reportedSensorLife(bgSource, event?.timestamp, countdown)?.let { statusTimeLeft.of(it.startMs, it.lifetime) } ?: ageDisplay(event, lifetime, IntKey.OverviewSageWarning, IntKey.OverviewSageCritical) // PERSONAL PATCH
 
         return StatusItem(
             label = rh.gs(CoreUiStrings.sensor_label),

@@ -1467,7 +1467,10 @@ class DexcomOnePlusPlugin @Inject constructor(
     private fun refreshProductionLifecycle() {
         val startMs = sensorStore.loadSessionStart()
         _lifecycle.value =
-            DexcomOnePlusStaging.computeLifecycle(startMs, nowMs(), sensorSessionLengthMs(sensorStore))
+            DexcomOnePlusStaging.computeLifecycle(
+                startMs, nowMs(), sensorSessionLengthMs(sensorStore),
+                startConfirmed = runCatching { sensorStore.isSessionStartSettled() }.getOrDefault(false), // PERSONAL PATCH
+            )
         if (startMs > 0L) ioScope()?.launch { healMissingSensorChange(startMs) }
     }
 

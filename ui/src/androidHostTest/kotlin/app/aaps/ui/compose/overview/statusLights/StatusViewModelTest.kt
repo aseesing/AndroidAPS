@@ -434,6 +434,149 @@ internal class StatusViewModelTest {
         screen.cancelAndJoin()
     }
 
+    // ---- PERSONAL PATCH: the session the glucose source read from its own sensor ----
+
+    /** The Dexcom ONE+ / G7 driver reported 10.5 days, 12 hours of it grace: the end is 10 days and 12 hours after the start. */
+    @Test
+    fun `a session the source reports counts down to its end, grace included`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_ONEPLUS_NATIVE)
+        givenReportedSession(startedAt = NOW - 2 * DAY)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("8d12h left")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+        assertThat(state.sensorStatus?.agePercent).isWithin(0.001f).of(48f / 252f)
+    }
+
+    @Test
+    fun `a reported session is yellow when less than one day is left`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_ONEPLUS_NATIVE, sensorAge = 9 * DAY + 14 * HOUR)
+        givenReportedSession(startedAt = NOW - (9 * DAY + 14 * HOUR))
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("22h left")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.WARNING)
+    }
+
+    @Test
+    fun `a reported session is red in its grace period`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_ONEPLUS_NATIVE, sensorAge = 10 * DAY + 3 * HOUR)
+        givenReportedSession(startedAt = NOW - (10 * DAY + 3 * HOUR))
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("9h00m left")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.CRITICAL)
+    }
+
+    @Test
+    fun `a reported session is red with a minus after its end`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_ONEPLUS_NATIVE, sensorAge = 10 * DAY + 15 * HOUR)
+        givenReportedSession(startedAt = NOW - (10 * DAY + 15 * HOUR))
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("-3h00m")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.CRITICAL)
+        assertThat(state.sensorStatus?.agePercent).isEqualTo(1f)
+    }
+
+    /** The sensor knows its own end best: a 15 day sensor wins over the table and over the life the user set. */
+    @Test
+    fun `a reported session comes before the table and the sensor life the user set`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G6, sensorLife = 100)
+        givenReportedSession(startedAt = NOW - 2 * DAY, lengthHours = 372)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("13d12h left")
+    }
+
+    /** The sensor change is of the sensor before: the start the sensor reported is counted from. */
+    @Test
+    fun `a confirmed start is counted from, not an older sensor change`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_ONEPLUS_NATIVE, sensorAge = 12 * DAY)
+        givenReportedSession(startedAt = NOW - 2 * DAY, confirmed = true)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("8d12h left")
+    }
+
+    @Test
+    fun `a confirmed start is counted from also when there is no sensor change`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_ONEPLUS_NATIVE)
+        whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.SENSOR_CHANGE)).thenReturn(null)
+        givenReportedSession(startedAt = NOW - 2 * DAY, confirmed = true)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("8d12h left")
+    }
+
+    /** A sensor change after the start of the source's sensor is a newer sensor: the row is as without the report. */
+    @Test
+    fun `a sensor change after the reported session ignores the report`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_G6)
+        givenReportedSession(startedAt = NOW - 5 * DAY, confirmed = true)
+
+        val state = refreshed(newViewModel(texts()))
+
+        // The G6 table, from the sensor change 2 days ago
+        assertThat(state.sensorStatus?.age).isEqualTo("8d0h left")
+    }
+
+    /** No length from the sensor: nothing is assumed, the life the user set is used as before. */
+    @Test
+    fun `a source that reports no session length changes nothing`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = true, sensor = SourceSensor.DEXCOM_ONEPLUS_NATIVE, sensorLife = 240)
+        givenReportedSession(startedAt = NOW - 2 * DAY, lengthHours = null)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("8d0h left")
+    }
+
+    @Test
+    fun `with the countdown off, a reported session changes nothing`() = runBlocking<Unit> {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        givenDevices(countdown = false, sensor = SourceSensor.DEXCOM_ONEPLUS_NATIVE)
+        givenReportedSession(startedAt = NOW - 2 * DAY, confirmed = true)
+
+        val state = refreshed(newViewModel(texts()))
+
+        assertThat(state.sensorStatus?.age).isEqualTo("2d0h")
+        assertThat(state.sensorStatus?.ageStatus).isEqualTo(StatusLevel.NORMAL)
+    }
+
+    /**
+     * The active source reports a session of [lengthHours] hours (null = not reported), 12 of them
+     * grace, for a sensor started at [startedAt]. [confirmed]: the sensor or the user gave that start.
+     */
+    private fun givenReportedSession(startedAt: Long, lengthHours: Long? = 252, confirmed: Boolean = false) {
+        val source = FakeStagingBgSource()
+        source.lifecycle.value = CgmSensorLifecycle(
+            startedAtEpochMs = startedAt,
+            ageMs = NOW - startedAt,
+            endOfLife = false,
+            sessionLengthMs = lengthHours?.let { it * HOUR },
+            gracePeriodMs = lengthHours?.let { 12 * HOUR },
+            confirmedStartEpochMs = startedAt.takeIf { confirmed },
+        )
+        whenever(activePlugin.activeBgSource).thenReturn(source)
+    }
+
     /** The real texts of this module and of core/ui, so the tests see what the user sees. */
     private fun texts(): TextResolver = generatedTextResolver("ui" to UiStringsValues::textOf)
 
