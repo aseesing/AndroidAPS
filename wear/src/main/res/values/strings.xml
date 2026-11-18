@@ -307,6 +307,12 @@
     <string name="iob_0_00u">0,00U</string>
     <string name="snooze_alert">AAPS Snooze Alert</string>
     <string name="sending_snooze">Sending Snooze to AAPS</string>
+    <string name="watch_app_update_title">AAPS watch app update</string>
+    <string name="watch_app_update_receiving">Receiving the new watch app from the phone</string>
+    <string name="watch_app_update_installing">Installing. The watch app restarts by itself.</string>
+    <string name="watch_app_update_confirm">Tap to confirm the update</string>
+    <string name="watch_app_update_done">The watch app is updated</string>
+    <string name="watch_app_update_failed" comment="%1$s=reason from Android or from the update, in English. Example: Update failed: INSTALL_FAILED_UPDATE_INCOMPATIBLE">Update failed: %1$s</string>
     <string name="week_short">w</string>
     <string name="day_short">d</string>
     <string name="hour_short">h</string>

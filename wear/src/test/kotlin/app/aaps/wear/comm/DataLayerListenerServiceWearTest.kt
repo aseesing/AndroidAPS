@@ -6,6 +6,9 @@ import app.aaps.core.interfaces.rx.events.Event
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.AAPSLoggerTest
+import app.aaps.wear.selfupdate.WatchAppSelfUpdate
+import app.aaps.wear.watchlog.WatchLogUpload
+import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
@@ -25,6 +28,8 @@ import org.robolectric.annotation.Config
 internal class DataLayerListenerServiceWearTest {
 
     private val rxBus: RxBus = mock()
+    private val watchAppSelfUpdate: WatchAppSelfUpdate = mock()
+    private val watchLogUpload: WatchLogUpload = mock()
 
     private fun service(): DataLayerListenerServiceWear =
         Robolectric.buildService(DataLayerListenerServiceWear::class.java).get().also {
@@ -32,6 +37,8 @@ internal class DataLayerListenerServiceWearTest {
             it.aapsLogger = AAPSLoggerTest()
             it.sp = mock<SP>()
             it.aapsSchedulers = mock<AapsSchedulers>()
+            it.watchAppSelfUpdate = watchAppSelfUpdate
+            it.watchLogUpload = watchLogUpload
         }
 
     @Test
@@ -66,5 +73,16 @@ internal class DataLayerListenerServiceWearTest {
         sut.onMessageReceived(message)
 
         verify(rxBus, never()).send(any())
+    }
+
+    @Test
+    fun `a channel from the phone goes to the watch app update and to the watch log`() {
+        val sut = service()
+        val channel = mock<ChannelClient.Channel>()
+
+        sut.onChannelOpened(channel)
+
+        verify(watchAppSelfUpdate).onChannelOpened(channel)
+        verify(watchLogUpload).onChannelOpened(channel)
     }
 }

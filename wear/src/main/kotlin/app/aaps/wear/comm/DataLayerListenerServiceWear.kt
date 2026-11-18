@@ -24,11 +24,14 @@ import app.aaps.wear.R
 import app.aaps.wear.events.EventWearPreferenceChange
 import app.aaps.wear.heartrate.HeartRateListener
 import app.aaps.wear.interaction.ConfigurationActivity
+import app.aaps.wear.selfupdate.WatchAppSelfUpdate
+import app.aaps.wear.watchlog.WatchLogUpload
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import app.aaps.wear.wearStepCount.StepCountListener
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.CapabilityInfo
+import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Node
@@ -56,6 +59,8 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     @Inject lateinit var rxBus: RxBus
     @Inject lateinit var aapsSchedulers: AapsSchedulers
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
+    @Inject lateinit var watchAppSelfUpdate: WatchAppSelfUpdate
+    @Inject lateinit var watchLogUpload: WatchLogUpload
 
     private val dataClient by lazy { Wearable.getDataClient(this) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
@@ -151,6 +156,13 @@ class DataLayerListenerServiceWear : WearableListenerService() {
                 aapsLogger.debug(LTag.WEAR, "Updated node: $transcriptionNodeId")
             }
         }
+    }
+
+    // A channel from the phone app: a new watch app, or a request for the watch log
+    override fun onChannelOpened(channel: ChannelClient.Channel) {
+        super.onChannelOpened(channel)
+        watchAppSelfUpdate.onChannelOpened(channel)
+        watchLogUpload.onChannelOpened(channel)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

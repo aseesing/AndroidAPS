@@ -69,11 +69,18 @@ import app.aaps.core.ui.compose.LocalSnackbarHostState
 import app.aaps.core.ui.compose.ToolbarConfig
 import app.aaps.core.ui.compose.dialogs.OkCancelDialog
 import app.aaps.core.ui.compose.dialogs.OkDialog
+import app.aaps.core.ui.compose.metroViewModel
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.R
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.cwfsettings.CwfSettingsDialog
 import app.aaps.plugins.sync.wear.preview.CwfLivePreview
+import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateButton
+import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateContent
+import app.aaps.plugins.sync.wear.watchapp.WatchAppUpdateViewModel
+import app.aaps.plugins.sync.wear.watchlog.WatchLogButton
+import app.aaps.plugins.sync.wear.watchlog.WatchLogContent
+import app.aaps.plugins.sync.wear.watchlog.WatchLogViewModel
 
 @Composable
 internal fun WearScreen(
@@ -95,7 +102,16 @@ internal fun WearScreen(
         }
     }
 
+    // The watch app update page; its button shows only in a phone app built with the watch app inside
+    val watchAppUpdateViewModel: WatchAppUpdateViewModel = metroViewModel()
+    var showWatchAppUpdate by rememberSaveable { mutableStateOf(false) }
+    // The watch log page; it needs no watch app inside this phone app
+    val watchLogViewModel: WatchLogViewModel = metroViewModel()
+    var showWatchLog by rememberSaveable { mutableStateOf(false) }
+
     // Back handler for sub-screens
+    BackHandler(enabled = showWatchAppUpdate) { showWatchAppUpdate = false }
+    BackHandler(enabled = showWatchLog) { showWatchLog = false }
     BackHandler(enabled = uiState.showInfos) { viewModel.hideCwfInfos() }
     BackHandler(enabled = uiState.showImportList) { viewModel.hideImportList() }
     // In the "Day and night" screen back goes one step of choosing a city first
@@ -106,9 +122,13 @@ internal fun WearScreen(
     val wearTitle = stringResource(CoreUiStrings.wear)
     val importTitle = importListTitle(uiState, stringResource(SyncStrings.wear_import_custom_watchface_title))
     val dayNightTitle = wearDayNightTitle(dayNightState.picker)
+    val watchAppUpdateTitle = stringResource(SyncStrings.wear_app_update_button)
+    val watchLogTitle = stringResource(SyncStrings.wear_log_button)
 
     // Determine current sub-screen
     val subScreen = when {
+        showWatchAppUpdate     -> SubScreen.WATCH_APP_UPDATE
+        showWatchLog           -> SubScreen.WATCH_LOG
         uiState.showImportList -> SubScreen.IMPORT_LIST
         uiState.showInfos      -> SubScreen.INFOS
         uiState.showDayNight   -> SubScreen.DAY_NIGHT
@@ -120,18 +140,22 @@ internal fun WearScreen(
         setToolbarConfig(
             ToolbarConfig(
                 title = when (subScreen) {
-                    SubScreen.IMPORT_LIST -> importTitle
-                    SubScreen.INFOS       -> uiState.cwfInfosState?.title ?: ""
-                    SubScreen.DAY_NIGHT   -> dayNightTitle
-                    SubScreen.MAIN        -> wearTitle
+                    SubScreen.IMPORT_LIST      -> importTitle
+                    SubScreen.INFOS            -> uiState.cwfInfosState?.title ?: ""
+                    SubScreen.DAY_NIGHT        -> dayNightTitle
+                    SubScreen.WATCH_APP_UPDATE -> watchAppUpdateTitle
+                    SubScreen.WATCH_LOG        -> watchLogTitle
+                    SubScreen.MAIN             -> wearTitle
                 },
                 navigationIcon = {
                     IconButton(onClick = {
                         when (subScreen) {
-                            SubScreen.IMPORT_LIST -> viewModel.hideImportList()
-                            SubScreen.INFOS       -> viewModel.hideCwfInfos()
-                            SubScreen.DAY_NIGHT   -> dayNightBack()
-                            SubScreen.MAIN        -> onNavigateBack()
+                            SubScreen.IMPORT_LIST      -> viewModel.hideImportList()
+                            SubScreen.INFOS            -> viewModel.hideCwfInfos()
+                            SubScreen.DAY_NIGHT        -> dayNightBack()
+                            SubScreen.WATCH_APP_UPDATE -> showWatchAppUpdate = false
+                            SubScreen.WATCH_LOG        -> showWatchLog = false
+                            SubScreen.MAIN             -> onNavigateBack()
                         }
                     }) {
                         Icon(
@@ -170,7 +194,7 @@ internal fun WearScreen(
         label = "wear_screen"
     ) { screen ->
         when (screen) {
-            SubScreen.IMPORT_LIST -> {
+            SubScreen.IMPORT_LIST      -> {
                 CwfImportContent(
                     items = uiState.importItems,
                     importing = uiState.importingDesigns,
@@ -180,7 +204,7 @@ internal fun WearScreen(
                 )
             }
 
-            SubScreen.INFOS       -> {
+            SubScreen.INFOS            -> {
                 val infosState = uiState.cwfInfosState
                 if (infosState != null) {
                     CwfInfosContent(
@@ -190,11 +214,16 @@ internal fun WearScreen(
                 }
             }
 
-            SubScreen.DAY_NIGHT   -> WearDayNightScreen(viewModel = dayNightViewModel, modifier = modifier)
+            SubScreen.DAY_NIGHT        -> WearDayNightScreen(viewModel = dayNightViewModel, modifier = modifier)
 
-            SubScreen.MAIN        -> {
+            SubScreen.WATCH_APP_UPDATE -> WatchAppUpdateContent(viewModel = watchAppUpdateViewModel, modifier = modifier)
+            SubScreen.WATCH_LOG        -> WatchLogContent(viewModel = watchLogViewModel, modifier = modifier)
+
+            SubScreen.MAIN             -> {
                 WearMainContent(
                     uiState = uiState,
+                    onWatchAppUpdate = if (watchAppUpdateViewModel.embedded != null) ({ showWatchAppUpdate = true }) else null,
+                    onWatchLog = { showWatchLog = true },
                     onResendData = { viewModel.resendData() },
                     onOpenSettings = { viewModel.openSettingsOnWear() },
                     onLoadWatchface = { viewModel.loadWatchfaceFiles() },
@@ -222,7 +251,7 @@ internal fun WearScreen(
     }
 }
 
-private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, DAY_NIGHT }
+private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, DAY_NIGHT, WATCH_APP_UPDATE, WATCH_LOG }
 
 /**
  * @see WearMainContentPreview
@@ -232,6 +261,8 @@ private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, DAY_NIGHT }
 @Composable
 internal fun WearMainContent(
     uiState: WearUiState,
+    onWatchAppUpdate: (() -> Unit)? = null,
+    onWatchLog: (() -> Unit)? = null,
     onResendData: () -> Unit,
     onOpenSettings: () -> Unit,
     onLoadWatchface: () -> Unit,
@@ -308,6 +339,8 @@ internal fun WearMainContent(
                     button1 = ButtonDef(Icons.Default.Refresh, stringResource(SyncStrings.resend_all_data), onResendData),
                     button2 = ButtonDef(Icons.Default.Settings, stringResource(SyncStrings.open_settings_on_wear), onOpenSettings)
                 )
+                onWatchAppUpdate?.let { WatchAppUpdateButton(it) }
+                onWatchLog?.let { WatchLogButton(it) }
             }
         }
 
