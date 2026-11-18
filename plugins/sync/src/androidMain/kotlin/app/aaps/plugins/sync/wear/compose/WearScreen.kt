@@ -85,12 +85,14 @@ import app.aaps.plugins.sync.wear.watchlog.WatchLogViewModel
 @Composable
 internal fun WearScreen(
     viewModel: WearViewModel,
+    dayNightViewModel: WearDayNightViewModel,
     setToolbarConfig: (ToolbarConfig) -> Unit,
     onNavigateBack: () -> Unit,
     onSettings: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val dayNightState by dayNightViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
 
@@ -112,11 +114,14 @@ internal fun WearScreen(
     BackHandler(enabled = showWatchLog) { showWatchLog = false }
     BackHandler(enabled = uiState.showInfos) { viewModel.hideCwfInfos() }
     BackHandler(enabled = uiState.showImportList) { viewModel.hideImportList() }
+    // In the "Day and night" screen back goes one step of choosing a city first
+    val dayNightBack = { if (dayNightState.picker != null) dayNightViewModel.backInPicker() else viewModel.hideDayNight() }
+    BackHandler(enabled = uiState.showDayNight) { dayNightBack() }
 
     // Only title needs pre-resolving (plain String used in LaunchedEffect suspend block)
     val wearTitle = stringResource(CoreUiStrings.wear)
-    val importTitle = stringResource(SyncStrings.wear_import_custom_watchface_title)
-        .let { importListTitle(uiState, it) } // PERSONAL PATCH: day and night face
+    val importTitle = importListTitle(uiState, stringResource(SyncStrings.wear_import_custom_watchface_title))
+    val dayNightTitle = wearDayNightTitle(dayNightState.picker)
     val watchAppUpdateTitle = stringResource(SyncStrings.wear_app_update_button)
     val watchLogTitle = stringResource(SyncStrings.wear_log_button)
 
@@ -126,16 +131,18 @@ internal fun WearScreen(
         showWatchLog           -> SubScreen.WATCH_LOG
         uiState.showImportList -> SubScreen.IMPORT_LIST
         uiState.showInfos      -> SubScreen.INFOS
+        uiState.showDayNight   -> SubScreen.DAY_NIGHT
         else                   -> SubScreen.MAIN
     }
 
     // Toolbar config
-    LaunchedEffect(subScreen, uiState.cwfInfosState?.title) {
+    LaunchedEffect(subScreen, uiState.cwfInfosState?.title, dayNightTitle) {
         setToolbarConfig(
             ToolbarConfig(
                 title = when (subScreen) {
                     SubScreen.IMPORT_LIST      -> importTitle
                     SubScreen.INFOS            -> uiState.cwfInfosState?.title ?: ""
+                    SubScreen.DAY_NIGHT        -> dayNightTitle
                     SubScreen.WATCH_APP_UPDATE -> watchAppUpdateTitle
                     SubScreen.WATCH_LOG        -> watchLogTitle
                     SubScreen.MAIN             -> wearTitle
@@ -145,6 +152,7 @@ internal fun WearScreen(
                         when (subScreen) {
                             SubScreen.IMPORT_LIST      -> viewModel.hideImportList()
                             SubScreen.INFOS            -> viewModel.hideCwfInfos()
+                            SubScreen.DAY_NIGHT        -> dayNightBack()
                             SubScreen.WATCH_APP_UPDATE -> showWatchAppUpdate = false
                             SubScreen.WATCH_LOG        -> showWatchLog = false
                             SubScreen.MAIN             -> onNavigateBack()
@@ -186,7 +194,7 @@ internal fun WearScreen(
         label = "wear_screen"
     ) { screen ->
         when (screen) {
-            SubScreen.IMPORT_LIST -> {
+            SubScreen.IMPORT_LIST      -> {
                 CwfImportContent(
                     items = uiState.importItems,
                     importing = uiState.importingDesigns,
@@ -196,7 +204,7 @@ internal fun WearScreen(
                 )
             }
 
-            SubScreen.INFOS       -> {
+            SubScreen.INFOS            -> {
                 val infosState = uiState.cwfInfosState
                 if (infosState != null) {
                     CwfInfosContent(
@@ -206,10 +214,12 @@ internal fun WearScreen(
                 }
             }
 
+            SubScreen.DAY_NIGHT        -> WearDayNightScreen(viewModel = dayNightViewModel, modifier = modifier)
+
             SubScreen.WATCH_APP_UPDATE -> WatchAppUpdateContent(viewModel = watchAppUpdateViewModel, modifier = modifier)
             SubScreen.WATCH_LOG        -> WatchLogContent(viewModel = watchLogViewModel, modifier = modifier)
 
-            SubScreen.MAIN        -> {
+            SubScreen.MAIN             -> {
                 WearMainContent(
                     uiState = uiState,
                     onWatchAppUpdate = if (watchAppUpdateViewModel.embedded != null) ({ showWatchAppUpdate = true }) else null,
@@ -229,10 +239,11 @@ internal fun WearScreen(
                     onSelectPushedWatchface = { viewModel.selectPushedWatchface(it) },
                     onDismissCustomWatchfaceNotShown = { viewModel.dismissCustomWatchfaceNotShown() },
                     onCwfSettings = { cwfSettingsOpen = true },
+                    onLoadNightWatchface = { viewModel.loadNightWatchfaceFiles() },
+                    onRemoveNightWatchface = { viewModel.clearNightWatchface() },
+                    onDayNightSettings = { viewModel.showDayNight() },
                     // One live preview at a time: while the settings are open it is drawn there
                     livePreview = !cwfSettingsOpen,
-                    onLoadNightWatchface = { viewModel.loadNightWatchfaceFiles() }, // PERSONAL PATCH: day and night face
-                    onRemoveNightWatchface = { viewModel.clearNightWatchface() }, // PERSONAL PATCH: day and night face
                     modifier = modifier
                 )
             }
@@ -240,7 +251,7 @@ internal fun WearScreen(
     }
 }
 
-private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, WATCH_APP_UPDATE, WATCH_LOG }
+private enum class SubScreen { MAIN, INFOS, IMPORT_LIST, DAY_NIGHT, WATCH_APP_UPDATE, WATCH_LOG }
 
 /**
  * @see WearMainContentPreview
@@ -261,8 +272,9 @@ internal fun WearMainContent(
     onSelectPushedWatchface: (String) -> Unit,
     onDismissCustomWatchfaceNotShown: () -> Unit,
     onCwfSettings: () -> Unit,
-    onLoadNightWatchface: () -> Unit = {}, // PERSONAL PATCH: day and night face
-    onRemoveNightWatchface: () -> Unit = {}, // PERSONAL PATCH: day and night face
+    onLoadNightWatchface: () -> Unit,
+    onRemoveNightWatchface: () -> Unit,
+    onDayNightSettings: () -> Unit,
     modifier: Modifier = Modifier,
     livePreview: Boolean = true
 ) {
@@ -402,7 +414,7 @@ internal fun WearMainContent(
                     verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
                 ) {
                     Text(
-                        text = dayWatchfaceTitle(uiState), // PERSONAL PATCH: day and night face
+                        text = dayWatchfaceTitle(uiState),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(horizontal = AapsSpacing.small)
                     )
@@ -439,7 +451,7 @@ internal fun WearMainContent(
                     }
                 }
             }
-            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface) // PERSONAL PATCH: day and night face
+            NightWatchfaceCard(uiState.nightFace, onLoadNightWatchface, onRemoveNightWatchface, onDayNightSettings)
         }
     }
 }
@@ -481,10 +493,10 @@ private fun WatchfaceChoiceRow(
     }
 }
 
-internal data class ButtonDef(val icon: ImageVector, val text: String, val onClick: () -> Unit) // PERSONAL PATCH: internal, used by the night face card
+internal data class ButtonDef(val icon: ImageVector, val text: String, val onClick: () -> Unit)
 
 @Composable
-internal fun ButtonRow( // PERSONAL PATCH: internal, used by the night face card
+internal fun ButtonRow(
     button1: ButtonDef,
     button2: ButtonDef?,
     modifier: Modifier = Modifier
