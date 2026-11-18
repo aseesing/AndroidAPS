@@ -132,8 +132,6 @@ class WatchAppSender(
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 }
 ) {
 
-    private val v2Bridge = WatchAppV2Bridge(source, opener, wifiServers, ioDispatcher, answerTimeoutMs, stallTimeoutMs, installTimeoutMs, wifiTimeoutMs, nowMs) // PERSONAL PATCH: see WatchAppV2Bridge.kt
-
     /**
      * @param onState gets every step, the last one is also returned
      * @return [WatchAppUpdateState.Sent] or [WatchAppUpdateState.Failed]
@@ -152,7 +150,7 @@ class WatchAppSender(
         val server = withContext(ioDispatcher) { runCatching { wifiServers?.start() }.getOrNull() }
         try {
             val offer = server?.let { WatchAppUpdateProtocol.WifiOffer(it.addresses, it.port, newToken()) }
-            return finish(v2Bridge.orRetry(attempt(app, WatchAppUpdateProtocol.Header(app.label, app.bodySize, app.apkSize, sha256, offer), server, onState), { runCatching { server?.close() } }, onState)) // PERSONAL PATCH: the watch app installed now knows only version 2, see WatchAppV2Bridge.kt; was finish(attempt(...))
+            return finish(attempt(app, WatchAppUpdateProtocol.Header(app.label, app.bodySize, app.apkSize, sha256, offer), server, onState))
         } finally {
             runCatching { server?.close() }
         }
