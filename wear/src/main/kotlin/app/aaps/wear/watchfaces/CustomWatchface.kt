@@ -56,6 +56,7 @@ import app.aaps.core.interfaces.rx.weardata.ResData
 import app.aaps.core.interfaces.rx.weardata.ResFormat
 import app.aaps.core.interfaces.rx.weardata.isEquals
 import app.aaps.core.keys.interfaces.TextRef
+import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import app.aaps.shared.impl.weardata.JsonKeyValues
 import app.aaps.shared.impl.weardata.JsonKeys
 import app.aaps.shared.impl.weardata.ResFileMap
@@ -2240,7 +2241,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         NEXT_SUN_EVENT(DayNightClock.NEXT_SUN_EVENT_KEY, 0.0, SkyTimes.LAST_SUN_EVENT_MS), // PERSONAL PATCH: a time (epoch ms), for "@time"; the range holds every time, so `dynValue` never cuts it
         SENSOR_LEFT(PartTimeLeft.SENSOR_KEY, 0.0, 72.0), // PERSONAL PATCH: hours
         PUMP_LEFT(PartTimeLeft.PUMP_KEY, 0.0, 72.0), // PERSONAL PATCH: hours
-        IS_DAY("is_day", 0.0, 1.0), // PERSONAL PATCH: 1 while the face shows the day (DayNightChoice)
+        IS_DAY(CwfPlaceNeeds.IS_DAY, 0.0, 1.0), // PERSONAL PATCH: 1 while the face shows the day (DayNightChoice)
         WEATHER_KIND(StoredWeather.KIND_VALUE_KEY, 0.0, 3.0); // PERSONAL PATCH: 0 clear, 1 partly, 2 cloudy, 3 rain
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {

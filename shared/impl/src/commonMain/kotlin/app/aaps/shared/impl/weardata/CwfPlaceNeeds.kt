@@ -37,8 +37,12 @@ enum class CwfPlaceUse {
  *   - a view with `"moonLight": true` (the moon drawn the way it stands in the sky there),
  *   - a layer with `"moon": true` inside an `animation`,
  *   - a `dayLook`, laid over the design from sunrise to sunset,
- *   - `weatherLooks`: their names say day or night (`day_rain`), so they follow sunrise and sunset;
- * - [CwfPlaceUse.WEATHER]: `weatherLooks`, or a `valueKey` that is [WEATHER_TEMPERATURE];
+ *   - `weatherLooks`: their names say day or night (`day_rain`), so they follow sunrise and sunset,
+ *   - a picture `"image": "@moon"` ([MOON_IMAGE]) of a view or of a layer,
+ *   - a formula (any text of the json: of a layer, of a `let`, the `when` of a look) that reads one of
+ *     the values above as `v_<name>`, or `v_is_day`;
+ * - [CwfPlaceUse.WEATHER]: `weatherLooks`, a `valueKey` that is [WEATHER_TEMPERATURE], or a formula
+ *   that reads `v_weather_kind` or `v_weather_temperature`;
  * - [CwfPlaceUse.ASKED]: `"needsPlace": true` at the top of the json, for a design that wants the
  *   place for another reason. Older code does not know the key and leaves it alone.
  *
@@ -82,12 +86,30 @@ object CwfPlaceNeeds {
     /** The value of the temperature of the weather (`StoredWeather` on the watch). */
     const val WEATHER_TEMPERATURE = "weather_temperature"
 
+    /** The value of the kind of weather, a number (`StoredWeather` on the watch). */
+    const val WEATHER_KIND = "weather_kind"
+
+    /** The value that is 1 while the face shows the day (`DayNightChoice` on the watch). */
+    const val IS_DAY = "is_day"
+
+    /** The picture of the moon as it stands in the sky, the `image` of a view or of a layer (`MoonPicture` on the watch). */
+    const val MOON_IMAGE = "@moon"
+
+    private const val IMAGE = "image"
+
     private const val VALUE_KEY = "valueKey"
 
     /** The values that come from the sun and the moon of the place. */
     private val SKY_VALUES = setOf(
         JsonKeyValues.SUN_PROGRESS.key, JsonKeyValues.NIGHT_PROGRESS.key, JsonKeyValues.SUN_CYCLE.key, JsonKeyValues.MOON_CYCLE.key, SUN_NEXT_TIME
     )
+
+    /** The values as a formula names them (`v_sun_cycle`), with what each needs the place for. */
+    private val FORMULA_VALUES: Map<String, CwfPlaceUse> =
+        (SKY_VALUES + IS_DAY).associate { "v_$it" to CwfPlaceUse.SUN_AND_MOON } + listOf(WEATHER_KIND, WEATHER_TEMPERATURE).associate { "v_$it" to CwfPlaceUse.WEATHER }
+
+    /** A whole name in a formula, so `v_is_day` is not found inside a longer name. */
+    private val FORMULA_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
     @OptIn(ExperimentalSerializationApi::class)
     private val json = Json {
@@ -143,6 +165,7 @@ object CwfPlaceNeeds {
                         key == VALUE_KEY && value.text() in SKY_VALUES           -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == VALUE_KEY && value.text() == WEATHER_TEMPERATURE  -> uses += CwfPlaceUse.WEATHER
                         key == MOON_LIGHT && value.isTrue()                      -> uses += CwfPlaceUse.SUN_AND_MOON
+                        key == IMAGE && value.text() == MOON_IMAGE               -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == ANIMATION_MOON && inAnimation && value.isTrue()   -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == DAY_LOOK && value is JsonObject                   -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == WEATHER_LOOKS && value is JsonObject              -> uses += setOf(CwfPlaceUse.WEATHER, CwfPlaceUse.SUN_AND_MOON)
@@ -150,7 +173,8 @@ object CwfPlaceNeeds {
                     toVisit.addLast(value to (inAnimation || key == ANIMATION))
                 }
 
-                else          -> Unit
+                // Any text can be a formula
+                else          -> element.text()?.takeIf { "v_" in it }?.let { text -> FORMULA_NAME.findAll(text).forEach { found -> FORMULA_VALUES[found.value]?.let { uses += it } } }
             }
         }
     }

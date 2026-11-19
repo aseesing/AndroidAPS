@@ -22,7 +22,7 @@ object StoredWeather {
     const val JSON_VALUE_KEY = CwfPlaceNeeds.WEATHER_TEMPERATURE
 
     /** The value of the kind of weather for a design: [KINDS] gives its number. */
-    const val KIND_VALUE_KEY = "weather_kind"
+    const val KIND_VALUE_KEY = CwfPlaceNeeds.WEATHER_KIND
 
     /** The kinds of weather the phone sends, in the order of their number: 0 clear, 1 partly cloudy, 2 cloudy, 3 rain. */
     val KINDS = listOf(EventData.Weather.CLEAR, EventData.Weather.PARTLY, EventData.Weather.CLOUDY, EventData.Weather.RAIN)
