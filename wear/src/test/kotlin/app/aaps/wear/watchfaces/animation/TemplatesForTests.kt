@@ -7,29 +7,14 @@ package app.aaps.wear.watchfaces.animation
 import org.json.JSONObject
 
 /**
- * The layer templates every design can `use` (see [Templates]), as one json document. Kept as text in
- * Kotlin, not as a resource, so the phone preview (`wear/cwfrender`, which copies the watch's Kotlin
- * files) has them too.
- *
- * - `rain`: falling streaks, behind the data
- * - `glitch`: short bursts of thin coloured bands that jump sideways, behind the data
- * - `pulse`: a picture that beats at the heart rate (`bpm`), with a glow
- * - `blink`: a view that blinks while a value is low
- * - `sweep`: a hand that swings to the end of its scale and back to its value
- * - `slide`: a view that slides to the end of its scale and back to its value
- * - `wobble`: a hand that shakes round its value
- * - `trace`: a view that draws itself in from the left, with a bright line at the edge
- * - `glint`: a light that slides once over the shiny parts (rings and boxes)
- *
- * The times are in ms of the wake (`ms`), the sizes in design pixels, the alphas 0 to 255.
- *
- * The formulas give exactly the numbers of the effects these templates replace (`f32` where those
- * worked in 32-bit floats), so a design looks the same pixel for pixel.
+ * The nine templates of the manual (`docs/watchface-animation.html`, chapter 7), for the tests. The app
+ * has no templates of its own: a design brings them in the `templates` of its animation, and so do the
+ * tests (see [animationOf]). Keep this text the same as the templates of the manual.
  */
-object BuiltInTemplates {
+object TemplatesForTests {
 
-    /** The templates by name. One shared object: [Templates] only reads it. */
-    val all: JSONObject by lazy { JSONObject(TEXT) }
+    /** A new copy of the templates by name, so a test may change it. */
+    fun all(): JSONObject = JSONObject(TEXT)
 
     private val TEXT = $$"""
 {
@@ -50,24 +35,23 @@ object BuiltInTemplates {
       "shape": "line", "colors": ["$color"], "slot": "back", "count": "$count", "seed": "$seed",
       "if": "$count > 0",
       "let": {
-        "sinA": "f32(sin(f32($angle) * (pi / 180)))",
-        "cosA": "f32(cos(f32($angle) * (pi / 180)))",
-        "tanA": "f32(tan(f32($angle) * (pi / 180)))",
-        "longest": "f32($length * f32(1 + $lengthVariation))",
-        "span": "f32(f32($region.height + f32(longest * cosA)) + 1)",
-        "pad": "f32(longest * abs(sinA))",
-        "fromX": "f32(f32($region.left - max(0, f32($region.height * tanA))) - pad)",
-        "toX": "f32(f32(f32($region.left + $region.width) + max(0, f32(-$region.height * tanA))) + pad)",
-        "spread": "f32(toX - fromX)",
+        "sinA": "sin($angle * pi / 180)",
+        "cosA": "cos($angle * pi / 180)",
+        "tanA": "tan($angle * pi / 180)",
+        "longest": "$length * (1 + $lengthVariation)",
+        "span": "$region.height + longest * cosA + 1",
+        "pad": "longest * abs(sinA)",
+        "fromX": "$region.left - max(0, $region.height * tanA) - pad",
+        "toX": "$region.left + $region.width + max(0, -$region.height * tanA) + pad",
         "fallen": "mod(r2 * span + $speed * (0.8 + 0.4 * r3) * ms / 1000, span)",
         "streak": "$length * (1 + $lengthVariation * (2 * r4 - 1))"
       },
-      "x": "fromX + r1 * spread + fallen * tanA - (streak) * sinA",
-      "y": "$region.top + fallen - (streak) * cosA",
+      "x": "fromX + r1 * (toX - fromX) + fallen * tanA - streak * sinA",
+      "y": "$region.top + fallen - streak * cosA",
       "length": "streak",
       "angle": "$angle",
       "thickness": "$thickness",
-      "alpha": "env * f32($alpha / 255) * (0.45 + 0.55 * r5)",
+      "alpha": "env * $alpha / 255 * (0.45 + 0.55 * r5)",
       "clip": {"rect": "$region", "round": true}
     }]
   },
@@ -96,15 +80,15 @@ object BuiltInTemplates {
         "start": "floor(hash($seed, period, 1) * ($periodMs - $burstMs))",
         "inPeriod": "mod(ms, $periodMs)",
         "jumps": "floor((inPeriod - start) / 40)",
-        "h": "($minHeight + hash($seed, period, 2 + i * 4) * f32(f32($maxHeight) - f32($minHeight)))",
-        "w": "($minWidth + hash($seed, period, 3 + i * 4) * f32(f32($maxWidth) - f32($minWidth)))"
+        "h": "$minHeight + hash($seed, period, 2 + i * 4) * ($maxHeight - $minHeight)",
+        "w": "$minWidth + hash($seed, period, 3 + i * 4) * ($maxWidth - $minWidth)"
       },
       "x": "$region.left - w / 2 + hash($seed, period, 5 + i * 4) * $region.width + (mod(jumps + i, 3) - 1) * $jump",
       "y": "$region.top + hash($seed, period, 4 + i * 4) * max(0, $region.height - h)",
       "width": "w",
       "height": "h",
       "colorIndex": "mod(i, 2)",
-      "alpha": "if(hash($seed, period, 0) < $chance && inPeriod >= start && inPeriod < start + $burstMs, f32($alpha / 255) * env, 0)",
+      "alpha": "if(hash($seed, period, 0) < $chance && inPeriod >= start && inPeriod < start + $burstMs, env * $alpha / 255, 0)",
       "clip": {"rect": "$region", "round": true}
     }]
   },
@@ -120,11 +104,20 @@ object BuiltInTemplates {
     },
     "layers": [{
       "image": "$image", "rect": {"left": "$left", "top": "$top", "width": "$width", "height": "$height"}, "slot": "front",
-      "scaleX": "1 + $amplitude * pulse(ms, bpm, $secondBeat) * env",
-      "scaleY": "1 + $amplitude * pulse(ms, bpm, $secondBeat) * env",
-      "glowAlpha": "f32($glowAlpha / 255) * pulse(ms, bpm, $secondBeat) * env",
+      "let": {
+        "period": "floor(60000 / bpm)",
+        "at": "mod(max(0, floor(ms)), period)",
+        "rise": "min(120, period * 0.3)",
+        "fall": "max(50, period * 0.16)",
+        "first": "if(at < rise, pow(sin(pi / 2 * at / rise), 2), exp(-(at - rise) / fall))",
+        "d": "(at - rise - min(250, period * 0.3)) / max(25, period * 0.06)",
+        "beat": "clamp(first + $secondBeat * exp(-d * d), 0, 1) * env"
+      },
+      "scaleX": "1 + $amplitude * beat",
+      "scaleY": "1 + $amplitude * beat",
+      "glowAlpha": "$glowAlpha / 255 * beat",
       "glow": {"color": "$glowColor", "radius": "$glowRadius"},
-      "maxScale": "f32(1 + f32($amplitude))",
+      "maxScale": "1 + $amplitude",
       "clip": {"round": false}
     }]
   },
@@ -151,8 +144,12 @@ object BuiltInTemplates {
     },
     "layers": [{
       "view": "$view",
-      "let": {"w": "ms - $delayMs"},
-      "rotation": "if(w <= 0, $emptyAngle, if(w < $upMs, $emptyAngle + f32(f32($fullAngle) - f32($emptyAngle)) * easeInOut(w / $upMs), if(w < $upMs + $settleMs, $fullAngle + (rot0 - $fullAngle) * settle((w - $upMs) / $settleMs), rot0))) - rot0"
+      "let": {
+        "w": "ms - $delayMs",
+        "s": "clamp((w - $upMs) / $settleMs, 0, 1)",
+        "settled": "1 - exp(-5 * s) * cos(3 * pi * s) - exp(-5) * s"
+      },
+      "rotation": "if(w <= 0, $emptyAngle, if(w < $upMs, $emptyAngle + ($fullAngle - $emptyAngle) * easeInOut(w / $upMs), if(w < $upMs + $settleMs, $fullAngle + (rot0 - $fullAngle) * settled, rot0))) - rot0"
     }]
   },
   "slide": {
@@ -165,8 +162,12 @@ object BuiltInTemplates {
     },
     "layers": [{
       "view": "$view",
-      "let": {"w": "ms - $delayMs"},
-      "x": "if(w <= 0, 0, if(w < $upMs, 0 + ($fullDx - 0) * easeInOut(w / $upMs), if(w < $upMs + $settleMs, $fullDx + (dx0 - $fullDx) * settle((w - $upMs) / $settleMs), dx0))) - dx0"
+      "let": {
+        "w": "ms - $delayMs",
+        "s": "clamp((w - $upMs) / $settleMs, 0, 1)",
+        "settled": "1 - exp(-5 * s) * cos(3 * pi * s) - exp(-5) * s"
+      },
+      "x": "if(w <= 0, 0, if(w < $upMs, $fullDx * easeInOut(w / $upMs), if(w < $upMs + $settleMs, $fullDx + (dx0 - $fullDx) * settled, dx0))) - dx0"
     }]
   },
   "wobble": {
@@ -210,7 +211,7 @@ object BuiltInTemplates {
       "y": "$rect.top",
       "width": "$width",
       "height": "$rect.height",
-      "alpha": "if(w > 0 && w < $durationMs, f32($alpha / 255) * min(1, (1 - w / $durationMs) * 8), 0)",
+      "alpha": "if(w > 0 && w < $durationMs, $alpha / 255 * min(1, (1 - w / $durationMs) * 8), 0)",
       "clip": {"round": false}
     }]
   },
@@ -231,17 +232,17 @@ object BuiltInTemplates {
       "gradient": {"type": "linear", "stops": [[0, 0], [0.5, 1], [1, 0]]},
       "if": "$alpha > 0",
       "let": {
-        "diagonal": "f32(400 * f32(sqrt(2)))",
+        "diagonal": "400 * sqrt(2)",
         "w": "ms - $delayMs",
-        "middle": "f32(f32(200 - f32(diagonal / 2)) - f32(f32($width) / 2)) + f32(diagonal + f32(2 * f32(f32($width) / 2))) * easeInOut(w / $durationMs)"
+        "middle": "200 - diagonal / 2 - $width / 2 + (diagonal + $width) * easeInOut(w / $durationMs)"
       },
       "pivotX": 200, "pivotY": 200,
       "rotation": "$angle",
       "x": "middle - $width / 2",
-      "y": "f32(200 - diagonal)",
+      "y": "200 - diagonal",
       "width": "$width",
-      "height": "f32(2 * diagonal)",
-      "alpha": "if(w >= 0 && w <= $durationMs, f32($alpha / 255), 0)",
+      "height": "2 * diagonal",
+      "alpha": "if(w >= 0 && w <= $durationMs, $alpha / 255, 0)",
       "clip": {"round": false, "rings": "$rings", "boxes": "$boxes", "cornerRadius": "$cornerRadius"}
     }]
   }

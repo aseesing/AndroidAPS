@@ -367,7 +367,7 @@ class WakeFrameTest {
     @Test
     fun rendersSampleFramesToPng() {
         val size = 466
-        val spec = CustomWatchface().readWakeAnimation(JSONObject(sampleJson)) { if (it == "heart") heartDrawable() else null }
+        val spec = CustomWatchface().readWakeAnimation(JSONObject(withTestTemplates(sampleJson))) { if (it == "heart") heartDrawable() else null }
         assertThat(spec).isNotNull()
         var clock = 0L
         val animator = WakeAnimator(heartRate = { 75 }, timer = WakeTimer { clock })

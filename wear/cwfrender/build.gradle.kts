@@ -57,7 +57,6 @@ val wearShared = listOf(
     "watchfaces/CustomWatchface.kt",
     "watchfaces/FaceFrame.kt", // PERSONAL PATCH
     "watchfaces/animation/AnimLayerSpec.kt", // PERSONAL PATCH
-    "watchfaces/animation/BuiltInTemplates.kt", // PERSONAL PATCH
     "watchfaces/animation/Formula.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerAnimator.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerVariables.kt", // PERSONAL PATCH

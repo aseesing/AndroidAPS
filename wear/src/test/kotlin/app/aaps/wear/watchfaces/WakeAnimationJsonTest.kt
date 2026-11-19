@@ -24,6 +24,7 @@ import app.aaps.wear.watchfaces.animation.LayerSlot
 import app.aaps.wear.watchfaces.animation.LayerSource
 import app.aaps.wear.watchfaces.animation.ShapeKind
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
+import app.aaps.wear.watchfaces.animation.withTestTemplates
 import com.google.common.truth.Truth.assertThat
 import org.json.JSONObject
 import org.junit.Test
@@ -96,7 +97,7 @@ class WakeAnimationJsonTest {
 
     @Test
     fun aTemplateIsExpandedWithItsDefaultsAndPictures() {
-        val spec = read("""{"animation": {"fps": 20, "layers": [{"use": "rain", "count": 50, "color": "#80FF0000"}, {"use": "pulse", "image": "heart", "top": 30}]}}""")!!
+        val spec = read(withTestTemplates("""{"animation": {"fps": 20, "layers": [{"use": "rain", "count": 50, "color": "#80FF0000"}, {"use": "pulse", "image": "heart", "top": 30}]}}"""))!!
         assertThat(spec.fps).isEqualTo(20)
         assertThat(spec.errors).isEmpty()
         val (rain, pulse) = spec.layers
@@ -111,7 +112,7 @@ class WakeAnimationJsonTest {
     }
 
     @Test
-    fun aDesignTemplateComesBeforeTheBuiltInOneAndUsesOthers() {
+    fun aDesignTemplateUsesOthersAndAnUnknownNameIsLeftOut() {
         val spec = read(
             $$"""{"animation": {
                  "templates": {
@@ -131,7 +132,7 @@ class WakeAnimationJsonTest {
             mapOf(LayerProp.X to "0", LayerProp.Y to "0 + 3", LayerProp.RADIUS to "3")
         ).inOrder()
         assertThat(spec.layers[2].source).isEqualTo(LayerSource.View("chart"))
-        assertThat(spec.errors).containsExactly("layer 2: no template 'nothing'", "layer 3: 'spark' has no parameter 'colour'")
+        assertThat(spec.errors).containsExactly("layer 2: no template 'nothing' in the templates of the design", "layer 3: 'spark' has no parameter 'colour'")
     }
 
     @Test
@@ -143,7 +144,7 @@ class WakeAnimationJsonTest {
 
     @Test
     fun brokenValuesFallBackInsteadOfBreakingTheDesign() {
-        val spec = read("""{"animation": {"fps": "fast", "layers": [{"use": "rain", "count": "many"}, {"use": "pulse", "image": "nothere"}]}}""")!!
+        val spec = read(withTestTemplates("""{"animation": {"fps": "fast", "layers": [{"use": "rain", "count": "many"}, {"use": "pulse", "image": "nothere"}]}}"""))!!
         assertThat(spec.fps).isEqualTo(WakeAnimationSpec().fps)
         // a number parameter that is not a number keeps its default
         assertThat(spec.layers.first().copies).isEqualTo(LayerCopies.Count(90, 7))
