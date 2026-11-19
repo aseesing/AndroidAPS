@@ -1029,8 +1029,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     // ---- Wake-up animation (private patch): rain and a beating heart after a wrist raise ----
 
-    /** PERSONAL PATCH: the fonts and the watch settings for the text layers, see [WatchFaceTexts]. */
-    private val faceTexts by lazy(LazyThreadSafetyMode.NONE) { WatchFaceTexts(this, { sp }) { FontMap.font(it) } }
+    /** PERSONAL PATCH: the fonts and the watch settings for the text layers, see [WatchFaceTexts]. Internal for the design tests. */
+    internal val faceTexts by lazy(LazyThreadSafetyMode.NONE) { WatchFaceTexts(this, { sp }) { FontMap.font(it) } }
 
     /** Plays the optional `animation` of the design; see [WakeAnimator]. */
     private val wake = WakeAnimator(
