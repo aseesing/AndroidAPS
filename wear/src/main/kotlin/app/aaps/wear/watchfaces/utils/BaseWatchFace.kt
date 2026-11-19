@@ -355,7 +355,7 @@ abstract class BaseWatchFace : WatchFace() {
     fun ageLevel(id: Int = 0): Int =
         if (timeSince(id) <= 1000 * 60 * 12) 1 else 0
 
-    fun timeSince(id: Int = 0): Double = (System.currentTimeMillis() - singleBg[id].timeStamp).toDouble()
+    fun timeSince(id: Int = 0): Double = (frameTime() - singleBg[id].timeStamp).toDouble() // PERSONAL PATCH: frameTime
 
     private fun readingAge(id: Int = 0): String {
         val localBg = singleBg[id]
@@ -634,7 +634,7 @@ abstract class BaseWatchFace : WatchFace() {
         binding.status?.visibility = sp.getBoolean(R.string.key_show_external_status, true).toVisibility()
         binding.loop?.visibility = sp.getBoolean(R.string.key_show_external_status, true).toVisibility()
         if (status[0].openApsStatus != -1L) {
-            val minutes = ((System.currentTimeMillis() - status[0].openApsStatus) / 1000 / 60).toInt()
+            val minutes = ((frameTime() - status[0].openApsStatus) / 1000 / 60).toInt() // PERSONAL PATCH: frameTime
             binding.loop?.text = "$minutes'"
             if (minutes > 14) {
                 loopLevel = 0
@@ -688,7 +688,7 @@ abstract class BaseWatchFace : WatchFace() {
             binding.statusExt1?.visibility = sp.getBoolean(R.string.key_show_external_status, true).toVisibility()
             binding.loopExt1?.visibility = sp.getBoolean(R.string.key_show_external_status, true).toVisibility()
             if (status[1].openApsStatus != -1L) {
-                val minutes = ((System.currentTimeMillis() - status[1].openApsStatus) / 1000 / 60).toInt()
+                val minutes = ((frameTime() - status[1].openApsStatus) / 1000 / 60).toInt() // PERSONAL PATCH: frameTime
                 binding.loopExt1?.text = "$minutes'"
                 if (minutes > 14) {
                     loopLevelExt1 = 0
@@ -743,7 +743,7 @@ abstract class BaseWatchFace : WatchFace() {
             binding.statusExt2?.visibility = sp.getBoolean(R.string.key_show_external_status, true).toVisibility()
             binding.loopExt2?.visibility = sp.getBoolean(R.string.key_show_external_status, true).toVisibility()
             if (status[2].openApsStatus != -1L) {
-                val minutes = ((System.currentTimeMillis() - status[2].openApsStatus) / 1000 / 60).toInt()
+                val minutes = ((frameTime() - status[2].openApsStatus) / 1000 / 60).toInt() // PERSONAL PATCH: frameTime
                 binding.loopExt2?.text = "$minutes'"
                 if (minutes > 14) {
                     loopLevelExt2 = 0
@@ -907,12 +907,12 @@ abstract class BaseWatchFace : WatchFace() {
                 if (lowResMode)
                     BgGraphBuilder(
                         sp, dateUtil, graphData.entries, treatmentData.predictions, treatmentData.temps, treatmentData.basals, treatmentData.boluses, pointSize,
-                        midColor, gridColor, basalBackgroundColor, basalCenterColor, bolusColor, carbColor, timeframe
+                        midColor, gridColor, basalBackgroundColor, basalCenterColor, bolusColor, carbColor, timeframe, frameTime() // PERSONAL PATCH: frameTime
                     )
                 else
                     BgGraphBuilder(
                         sp, dateUtil, graphData.entries, treatmentData.predictions, treatmentData.temps, treatmentData.basals, treatmentData.boluses,
-                        pointSize, highColor, lowColor, midColor, gridColor, basalBackgroundColor, basalCenterColor, bolusColor, carbColor, timeframe
+                        pointSize, highColor, lowColor, midColor, gridColor, basalBackgroundColor, basalCenterColor, bolusColor, carbColor, timeframe, frameTime() // PERSONAL PATCH: frameTime
                     )
             bgGraphBuilder.glucoseLine = glucoseLine?.let { if (lowResMode) it.copy(colour = null) else it } // PERSONAL PATCH: ambient has one colour
             binding.chart?.lineChartData = bgGraphBuilder.lineData()
@@ -929,6 +929,13 @@ abstract class BaseWatchFace : WatchFace() {
         mLastDirection = singleBg[0].sgvString
         return true
     }
+
+    /**
+     * PERSONAL PATCH: the time the frame shows, for the clock and date fields and the ages of the
+     * values. Now on the watch; a face that draws a frame for another instant (a render, the phone
+     * preview) gives that instant.
+     */
+    protected open fun frameTime(): Long = dateUtil.now()
 
     /**
      * [setDataFields], except in the first frame after a wake (see [FirstFrameAfterWake]): then only

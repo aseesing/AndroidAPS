@@ -15,7 +15,7 @@ class WakeTimerTest {
 
     private var now = 1_000_000L
     private val timer = WakeTimer { now }
-    private val spec = WakeAnimationSpec(durationMs = 6000, fps = 24, rain = RainSpec())
+    private val spec = oneLayer(durationMs = 6000, fps = 24)
 
     @Test
     fun withoutAnAnimationNothingChanges() {
@@ -28,7 +28,7 @@ class WakeTimerTest {
 
     @Test
     fun startsWithTheFirstFrameAfterTheDesignIsSet() {
-        timer.spec = spec
+        timer.use(spec)
         assertThat(timer.wantsFrames).isTrue()
         // fast frames are asked for already, so the first frame comes soon
         assertThat(timer.updateDelay(60_000)).isEqualTo(41)
@@ -39,7 +39,7 @@ class WakeTimerTest {
 
     @Test
     fun stopsAfterTheDurationAndTheRateGoesBack() {
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
         now += 5999
         assertThat(timer.frame()).isEqualTo(5999)
@@ -56,7 +56,7 @@ class WakeTimerTest {
 
     @Test
     fun rateIsOneFramePerFpsWhilePlaying() {
-        timer.spec = spec.copy(fps = 20)
+        timer.use(spec.copy(fps = 20))
         timer.frame()
         assertThat(timer.updateDelay(60_000)).isEqualTo(50)
         assertThat(timer.updateDelay(1000)).isEqualTo(50)
@@ -66,7 +66,7 @@ class WakeTimerTest {
 
     @Test
     fun ambientOrHiddenStopsAtOnce() {
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
         now += 1000
         timer.stop()
@@ -78,7 +78,7 @@ class WakeTimerTest {
 
     @Test
     fun aWakePlaysFromTheStartAgain() {
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
         now += 2000
         timer.stop()
@@ -91,7 +91,7 @@ class WakeTimerTest {
 
     @Test
     fun aWakeWhilePlayingDoesNotRestart() {
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
         now += 300
         // the second signal of the same wrist raise, or a tap during the animation
@@ -101,22 +101,22 @@ class WakeTimerTest {
 
     @Test
     fun theSameDesignReadAgainDoesNotRestart() {
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
         now += 1000
-        timer.spec = spec.copy()
+        timer.use(spec.copy())
         assertThat(timer.frame()).isEqualTo(1000)
         // but a different design plays from the start
-        timer.spec = spec.copy(fps = 12)
+        timer.use(spec.copy(fps = 12))
         now += 100
         assertThat(timer.frame()).isEqualTo(0)
     }
 
     @Test
     fun removingTheAnimationStopsIt() {
-        timer.spec = spec
+        timer.use(spec)
         timer.frame()
-        timer.spec = null
+        timer.use(null)
         assertThat(timer.frame()).isNull()
         assertThat(timer.updateDelay(60_000)).isEqualTo(60_000)
     }
@@ -133,7 +133,7 @@ class WakeTimerTest {
 
     @Test
     fun oneWakeDrawsAtMostFpsTimesDurationFrames() {
-        timer.spec = spec
+        timer.use(spec)
         val frames = framesOfOneWake()
         println("PERF wake animation: one wake drew $frames frames (budget ${spec.maxFrames})")
         assertThat(spec.maxFrames).isEqualTo(144)
@@ -143,7 +143,7 @@ class WakeTimerTest {
 
     @Test
     fun extraFramesFromDataDoNotRaiseTheBudget() {
-        timer.spec = spec
+        timer.use(spec)
         var frames = 0
         repeat(1000) {
             if (timer.frame() != null) frames++
@@ -156,22 +156,21 @@ class WakeTimerTest {
     @Test
     fun aSlowWatchDrawsFewerFramesInTheSameTime() {
         // the library draws at most 10 frames a second when the battery is low
-        timer.spec = spec
+        timer.use(spec)
         val frames = framesOfOneWake(extraDelay = 59)
         assertThat(frames).isEqualTo(60)
     }
 
     @Test
     fun specLimitsAreKept() {
-        val wild = WakeAnimationSpec(durationMs = 100_000, fps = 120, fadeMs = 99_000, rain = RainSpec(count = 5000)).normalized()
+        val wild = oneLayer(durationMs = 100_000, fps = 120, fadeMs = 99_000).normalized()
         assertThat(wild.durationMs).isEqualTo(WakeAnimationSpec.MAX_DURATION_MS)
         assertThat(wild.fps).isEqualTo(WakeAnimationSpec.MAX_FPS)
         assertThat(wild.fadeMs).isEqualTo(WakeAnimationSpec.MAX_DURATION_MS / 2)
-        assertThat(wild.rain?.count).isEqualTo(RainSpec.MAX_COUNT)
         assertThat(wild.maxFrames).isEqualTo(900)
-        assertThat(WakeAnimationSpec(rain = RainSpec(count = 0)).normalized().hasContent).isFalse()
-        // a heart without its image in the zip is no heart
-        assertThat(WakeAnimationSpec(pulse = PulseSpec(image = "missing")).normalized().pulse).isNull()
+        assertThat(WakeAnimationSpec().normalized().hasContent).isFalse()
+        // a picture that is not in the zip is no layer
+        assertThat(WakeAnimationSpec(layers = listOf(AnimLayerSpec(LayerSource.Image("missing", null, DesignRect.FULL)))).normalized().hasContent).isFalse()
     }
 
     @Test

@@ -563,6 +563,11 @@ abstract class WatchFace : WatchFaceService() {
         return applicationContext.getSystemService(name) ?: super.getSystemService(name)
     }
 
+    /** PERSONAL PATCH: asks for a frame without new content, unlike [invalidate]: the kept pictures stay. */
+    protected fun requestFrame() {
+        renderer?.invalidate()
+    }
+
     private companion object {
 
         /** How long the library highlights a tapped complication, the same as in `CanvasComplicationDrawable`. */

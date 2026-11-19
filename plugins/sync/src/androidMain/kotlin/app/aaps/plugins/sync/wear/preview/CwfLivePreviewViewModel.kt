@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.plugins.sync.wear.preview
 
+import android.graphics.Bitmap
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -25,6 +26,7 @@ import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -133,11 +135,17 @@ class CwfLivePreviewViewModel(
      * Gives null while the face can not be drawn right: no design, or no whole design on the phone (see
      * [CwfFullDesigns]); it goes on when the design changes. Gives null and ends when the preview
      * failed. The caller shows the static picture for null.
+     *
+     * The renderer draws into a few bitmaps in turn (see `CwfPreviewRenderer.frame`), and only into one
+     * that the screen does not show and will not show again ([FrameHandOff]). Each frame is a new
+     * [PreviewFrame], so the screen draws every one; each bitmap is wrapped for Compose once.
      */
-    fun frames(sizePx: Int, slot: PreviewSlot): Flow<ImageBitmap?> = flow {
+    fun frames(sizePx: Int, slot: PreviewSlot): Flow<PreviewFrame?> = flow {
         val waits = waiting.getValue(slot)
         var shortCopy: CwfData? = null
         var design: CwfData? = null
+        val handOff = FrameHandOff<Bitmap>()
+        val wrapped = HashMap<Bitmap, ImageBitmap>()
         while (currentCoroutineContext().isActive) {
             val now = watchDesign(slot).value
             if (now !== shortCopy) {
@@ -158,13 +166,21 @@ class CwfLivePreviewViewModel(
                 // A new length of the wake-up animation is shown by playing it
                 if (settings != null && renderer.applyWatchSettings(settings)) renderer.wake()
                 val time = System.currentTimeMillis()
-                renderer.frame(sizePx, time) to renderer.frameDelayMs(MS_PER_SECOND - time % MS_PER_SECOND)
+                renderer.frame(sizePx, time, handOff::isFree) to renderer.frameDelayMs(MS_PER_SECOND - time % MS_PER_SECOND)
             }
             if (next == null) {
                 emit(null)
                 return@flow
             }
-            emit(next.first.asImageBitmap())
+            val bitmap = next.first
+            if (bitmap == null) {
+                // Every bitmap is still on the screen or about to be: wait for the screen to draw
+                delay(BUSY_WAIT_MS)
+                continue
+            }
+            // Wrapped once per bitmap; a bitmap made new (another size) gets its own
+            if (wrapped.size > MAX_WRAPPED) wrapped.keys.retainAll { it === bitmap }
+            emit(PreviewFrame(wrapped.getOrPut(bitmap) { bitmap.asImageBitmap() }, handOff.handedOut(bitmap), handOff))
             withTimeoutOrNull(next.second) { waits.nudge.receive() }
         }
     }.catch { emit(null) }
@@ -193,5 +209,11 @@ class CwfLivePreviewViewModel(
     private companion object {
 
         const val MS_PER_SECOND = 1000L
+
+        /** How long to wait when no bitmap is free to draw into: about one screen frame. */
+        const val BUSY_WAIT_MS = 8L
+
+        /** More wrapped bitmaps than the renderer has means some are of an old size. */
+        const val MAX_WRAPPED = 3
     }
 }

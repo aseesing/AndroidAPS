@@ -55,39 +55,43 @@ val wearShared = listOf(
     "watchdirect/WatchSensorLink.kt", // PERSONAL PATCH
     "watchfaces/CustomSlotDefaults.kt", // PERSONAL PATCH
     "watchfaces/CustomWatchface.kt",
+    "watchfaces/FaceFrame.kt", // PERSONAL PATCH
     "watchfaces/animation/AnimLayerSpec.kt", // PERSONAL PATCH
-    "watchfaces/animation/AnimPresets.kt", // PERSONAL PATCH
+    "watchfaces/animation/BuiltInTemplates.kt", // PERSONAL PATCH
     "watchfaces/animation/Formula.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerAnimator.kt", // PERSONAL PATCH
+    "watchfaces/animation/LayerVariables.kt", // PERSONAL PATCH
     "watchfaces/animation/PulseCurve.kt", // PERSONAL PATCH
+    "watchfaces/animation/Templates.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeAnimationJson.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeAnimationSpec.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeAnimator.kt", // PERSONAL PATCH
-    "watchfaces/animation/WakeFrameLayers.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeLength.kt", // PERSONAL PATCH
-    "watchfaces/animation/WakeMotion.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeTimer.kt", // PERSONAL PATCH
+    "watchfaces/animation/WallClock.kt", // PERSONAL PATCH
     "watchfaces/colour/ColourLooks.kt", // PERSONAL PATCH
     "watchfaces/daynight/DayNightChoice.kt",
     "watchfaces/daynight/DayNightClock.kt",
-    "watchfaces/daynight/DayOverlay.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonLight.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPhase.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPicture.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPosition.kt", // PERSONAL PATCH
     "watchfaces/daynight/NightFace.kt",
     "watchfaces/daynight/OldDayNightPreferences.kt", // PERSONAL PATCH: brings the old place keys, which the design tests still name
-    "watchfaces/daynight/Orbit.kt", // PERSONAL PATCH
     "watchfaces/daynight/SkyCycle.kt", // PERSONAL PATCH
     "watchfaces/daynight/SkyTimes.kt", // PERSONAL PATCH
     "watchfaces/daynight/StoredWeather.kt", // PERSONAL PATCH
     "watchfaces/daynight/SunTimes.kt",
+    "watchfaces/design/LegacyDesign.kt", // PERSONAL PATCH
+    "watchfaces/design/Looks.kt", // PERSONAL PATCH
     "watchfaces/settingsync/CwfSettingNames.kt", // PERSONAL PATCH
     "watchfaces/settingsync/CwfSyncedSettings.kt", // PERSONAL PATCH
     "watchfaces/utils/BaseWatchFace.kt",
     "watchfaces/utils/BgGraphBuilder.kt",
     "watchfaces/utils/DesignTimeText.kt", // PERSONAL PATCH
+    "watchfaces/utils/DynamicImages.kt", // PERSONAL PATCH
     "watchfaces/utils/FirstFrameAfterWake.kt", // PERSONAL PATCH
+    "watchfaces/utils/FrameLayers.kt", // PERSONAL PATCH
     "watchfaces/utils/GlucoseLine.kt", // PERSONAL PATCH
     "watchfaces/utils/LayeredFrame.kt", // PERSONAL PATCH
     "watchfaces/utils/LogTimeGraph.kt", // PERSONAL PATCH
@@ -101,9 +105,12 @@ val wearShared = listOf(
     "watchfaces/utils/WatchFaceSettings.kt",
     "watchfaces/utils/WatchFaceTime.kt",
     "watchfaces/utils/WatchMode.kt",
+    "watchfaces/utils/ViewPainter.kt", // PERSONAL PATCH
+    "watchfaces/utils/ViewImages.kt", // PERSONAL PATCH
     "watchfaces/utils/WatchShape.kt",
     "watchfaces/utils/WatchBatteryLevel.kt", // PERSONAL PATCH
     "watchfaces/utils/WatchfaceViewAdapter.kt",
+    "watchfaces/values/FaceValues.kt", // PERSONAL PATCH
 )
 
 val sharedKotlinDir = layout.buildDirectory.dir("generated/wearShared/kotlin")

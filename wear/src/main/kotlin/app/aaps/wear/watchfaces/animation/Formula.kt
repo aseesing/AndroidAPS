@@ -37,6 +37,17 @@ class FormulaException(message: String) : IllegalArgumentException(message)
  */
 class Formula private constructor(private val root: Node, val text: String) {
 
+    /**
+     * The variables the formula reads, one bit per index of [parse]'s name lookup (bit `1 shl index`).
+     * An index of 63 or more sets bit 63. 0 for a formula that reads no variable: it is one fixed
+     * number. So a caller can tell which formulas give the same value for every copy, or for a whole
+     * wake, and work those out less often.
+     */
+    val reads: Long = root.reads()
+
+    /** The index of every variable the formula reads, each once, in rising order; empty for a fixed number. */
+    val variables: IntArray = root.indices(HashSet()).sorted().toIntArray()
+
     /** The value for the variables in [vars], indexed as the name lookup of [parse] gave them. */
     fun eval(vars: DoubleArray): Double = root.eval(vars)
 
@@ -64,13 +75,14 @@ class Formula private constructor(private val root: Node, val text: String) {
 
         /**
          * Reads [text]. [names] gives the index of a variable in the array passed to [eval], or null
-         * when the name is not known.
+         * when the name is not known. [constants] gives the value of a name that is a fixed number (a
+         * `let` of fixed numbers only), or null: such a name is folded into the formula like a number.
          *
          * @throws FormulaException when the text is not a valid formula
          */
-        fun parse(text: String, names: (String) -> Int?): Formula {
+        fun parse(text: String, constants: (String) -> Double? = { null }, names: (String) -> Int?): Formula {
             if (text.length > MAX_LENGTH) throw FormulaException("formula longer than $MAX_LENGTH characters")
-            val parser = Parser(tokenize(text), names)
+            val parser = Parser(tokenize(text), names, constants)
             val root = parser.expression()
             if (!parser.atEnd()) throw FormulaException("unexpected '${parser.peekText()}' in '$text'")
             if (parser.nodes > MAX_NODES) throw FormulaException("formula has more than $MAX_NODES parts")
@@ -84,7 +96,8 @@ class Formula private constructor(private val root: Node, val text: String) {
             "floor" to 1..1, "ceil" to 1..1, "round" to 1..1, "fract" to 1..1, "mod" to 2..2,
             "min" to 2..8, "max" to 2..8, "clamp" to 3..3, "mix" to 3..3, "step" to 2..2, "smoothstep" to 3..3,
             "if" to 3..3, "noise" to 1..2, "hash" to 1..3,
-            "easeInOut" to 1..1, "settle" to 1..1, "pulse" to 3..3
+            "easeInOut" to 1..1, "settle" to 1..1, "pulse" to 3..3,
+            "window" to 3..3, "pingpong" to 2..2, "f32" to 1..1
         )
 
         // ---- the functions, also used by the presets and the tests ----
@@ -119,6 +132,26 @@ class Formula private constructor(private val root: Node, val text: String) {
         private fun step(h: Long, v: Double): Long = mix64(h xor java.lang.Double.doubleToLongBits(if (v == 0.0) 0.0 else v))
         private fun toUnit(h: Long): Double = (h ushr 11) * (1.0 / (1L shl 53))
 
+        /**
+         * How far [t] is through the time from [start] to [start] + [duration]: 0 before, 1 after, and
+         * evenly from 0 to 1 in between. A [duration] of 0 or less is a step at [start].
+         */
+        fun window(t: Double, start: Double, duration: Double): Double =
+            if (duration <= 0.0) (if (t >= start) 1.0 else 0.0) else ((t - start) / duration).coerceIn(0.0, 1.0)
+
+        /**
+         * Goes from 0 up to [length] and back down to 0 as [x] runs from 0 to 2 x [length], and again,
+         * like a ball between two walls. 0 for a [length] of 0 or less.
+         */
+        fun pingpong(x: Double, length: Double): Double = if (length > 0.0) length - abs(mod(x, 2 * length) - length) else 0.0
+
+        /**
+         * [x] rounded to a 32-bit float, as the shortest decimal that is that float. The first effects
+         * of the engine worked out their numbers in 32-bit floats and wrote them into their formulas as
+         * such decimals; the built-in templates use this to give exactly the same numbers.
+         */
+        fun f32(x: Double): Double = x.toFloat().toString().toDouble()
+
         /** Smooth random from 0 to 1 along [x]: the same x always gives the same value. */
         fun noise(x: Double): Double {
             val i = floor(x)
@@ -147,60 +180,95 @@ class Formula private constructor(private val root: Node, val text: String) {
             return z xor (z ushr 31)
         }
 
-        /**
-         * The work of each function, looked up once when a formula is read, so working it out costs no
-         * search by name. None of these makes an object.
-         */
-        private val IMPLEMENTATIONS: Map<String, (DoubleArray) -> Double> = mapOf(
-            "sin" to { a -> sin(a[0]) },
-            "cos" to { a -> cos(a[0]) },
-            "tan" to { a -> tan(a[0]) },
-            "atan2" to { a -> atan2(a[0], a[1]) },
-            "abs" to { a -> abs(a[0]) },
-            "sign" to { a -> sign(a[0]) },
-            "sqrt" to { a -> sqrt(a[0]) },
-            "exp" to { a -> exp(a[0]) },
-            "log" to { a -> ln(a[0]) },
-            "pow" to { a -> a[0].pow(a[1]) },
-            "floor" to { a -> floor(a[0]) },
-            "ceil" to { a -> ceil(a[0]) },
+        // The work of each function, by the number of values it is given, looked up once when a
+        // formula is read, so working it out costs no search by name. Each is a `fun interface` that
+        // takes and gives plain numbers: a Kotlin function type would box every result, and these run
+        // many times per frame. None of them makes an object.
+
+        private fun interface Fn1 {
+
+            fun apply(a: Double): Double
+        }
+
+        private fun interface Fn2 {
+
+            fun apply(a: Double, b: Double): Double
+        }
+
+        private fun interface Fn3 {
+
+            fun apply(a: Double, b: Double, c: Double): Double
+        }
+
+        /** For the functions that take more than three values: [a] holds them. */
+        private fun interface FnN {
+
+            fun apply(a: DoubleArray): Double
+        }
+
+        private val FN1: Map<String, Fn1> = mapOf(
+            "sin" to Fn1 { a -> sin(a) },
+            "cos" to Fn1 { a -> cos(a) },
+            "tan" to Fn1 { a -> tan(a) },
+            "abs" to Fn1 { a -> abs(a) },
+            "sign" to Fn1 { a -> sign(a) },
+            "sqrt" to Fn1 { a -> sqrt(a) },
+            "exp" to Fn1 { a -> exp(a) },
+            "log" to Fn1 { a -> ln(a) },
+            "floor" to Fn1 { a -> floor(a) },
+            "ceil" to Fn1 { a -> ceil(a) },
             // A half goes up, like a person rounds (kotlin.math.round would make round(2.5) = 2)
-            "round" to { a -> floor(a[0] + 0.5) },
-            "fract" to { a -> a[0] - floor(a[0]) },
-            "mod" to { a -> mod(a[0], a[1]) },
-            "min" to { a ->
+            "round" to Fn1 { a -> floor(a + 0.5) },
+            "fract" to Fn1 { a -> a - floor(a) },
+            "noise" to Fn1 { a -> noise(a) },
+            "hash" to Fn1 { a -> hash(a) },
+            "easeInOut" to Fn1 { a -> easeInOut(a) },
+            "settle" to Fn1 { a -> settle(a) },
+            "f32" to Fn1 { a -> f32(a) }
+        )
+
+        private val FN2: Map<String, Fn2> = mapOf(
+            "atan2" to Fn2 { a, b -> atan2(a, b) },
+            "pow" to Fn2 { a, b -> a.pow(b) },
+            "mod" to Fn2 { a, b -> mod(a, b) },
+            "min" to Fn2 { a, b -> min(a, b) },
+            "max" to Fn2 { a, b -> max(a, b) },
+            "step" to Fn2 { a, b -> if (b >= a) 1.0 else 0.0 },
+            "noise" to Fn2 { a, b -> noise(a, b) },
+            "hash" to Fn2 { a, b -> hash(a, b) },
+            "pingpong" to Fn2 { a, b -> pingpong(a, b) }
+        )
+
+        private val FN3: Map<String, Fn3> = mapOf(
+            "min" to Fn3 { a, b, c -> min(min(a, b), c) },
+            "max" to Fn3 { a, b, c -> max(max(a, b), c) },
+            "clamp" to Fn3 { a, b, c -> a.coerceIn(min(b, c), max(b, c)) },
+            "mix" to Fn3 { a, b, c -> a + (b - a) * c },
+            "smoothstep" to Fn3 { a, b, c ->
+                if (a == b) {
+                    // Both edges the same: a hard step, not 0 / 0
+                    if (c >= a) 1.0 else 0.0
+                } else {
+                    val u = ((c - a) / (b - a)).coerceIn(0.0, 1.0)
+                    u * u * (3 - 2 * u)
+                }
+            },
+            "hash" to Fn3 { a, b, c -> hash(a, b, c) },
+            "pulse" to Fn3 { a, b, c -> PulseCurve.value(a.toLong(), b.toInt(), c.toFloat()).toDouble() },
+            "window" to Fn3 { a, b, c -> window(a, b, c) }
+        )
+
+        private val FNN: Map<String, FnN> = mapOf(
+            "min" to FnN { a ->
                 var m = a[0]
                 for (i in 1 until a.size) m = min(m, a[i])
                 m
             },
-            "max" to { a ->
+            "max" to FnN { a ->
                 var m = a[0]
                 for (i in 1 until a.size) m = max(m, a[i])
                 m
-            },
-            "clamp" to { a -> a[0].coerceIn(min(a[1], a[2]), max(a[1], a[2])) },
-            "mix" to { a -> a[0] + (a[1] - a[0]) * a[2] },
-            "step" to { a -> if (a[1] >= a[0]) 1.0 else 0.0 },
-            "smoothstep" to { a ->
-                if (a[0] == a[1]) {
-                    // Both edges the same: a hard step, not 0 / 0
-                    if (a[2] >= a[0]) 1.0 else 0.0
-                } else {
-                    val u = ((a[2] - a[0]) / (a[1] - a[0])).coerceIn(0.0, 1.0)
-                    u * u * (3 - 2 * u)
-                }
-            },
-            "noise" to { a -> if (a.size == 1) noise(a[0]) else noise(a[0], a[1]) },
-            "hash" to { a ->
-                when (a.size) {
-                    1    -> hash(a[0])
-                    2    -> hash(a[0], a[1])
-                    else -> hash(a[0], a[1], a[2])
-                }
-            },
-            "easeInOut" to { a -> easeInOut(a[0]) },
-            "settle" to { a -> settle(a[0]) },
-            "pulse" to { a -> PulseCurve.value(a[0].toLong(), a[1].toInt(), a[2].toFloat()).toDouble() }
+            }
         )
 
         // The operators of [Binary], as numbers, so working one out is a jump and not a text compare
@@ -271,7 +339,7 @@ class Formula private constructor(private val root: Node, val text: String) {
             return tokens
         }
 
-        private class Parser(private val tokens: List<Token>, private val names: (String) -> Int?) {
+        private class Parser(private val tokens: List<Token>, private val names: (String) -> Int?, private val constants: (String) -> Double?) {
 
             private var pos = 0
             var nodes = 0
@@ -378,6 +446,7 @@ class Formula private constructor(private val root: Node, val text: String) {
                         pos++
                         if (isKind('(')) return call(token.text)
                         if (token.text == "pi") return count(Const(PI))
+                        constants(token.text)?.let { return count(Const(it)) }
                         val index = names(token.text) ?: throw FormulaException("unknown name '${token.text}'")
                         count(Var(index))
                     }
@@ -398,7 +467,7 @@ class Formula private constructor(private val root: Node, val text: String) {
                 }
                 expect(')')
                 if (args.size !in arity) throw FormulaException("'$name' takes ${arity.first}..${arity.last} values, not ${args.size}")
-                val node = if (name == "if") If(args[0], args[1], args[2]) else Call(name, args.toTypedArray())
+                val node = if (name == "if") If(args[0], args[1], args[2]) else callOf(name, args)
                 return fold(count(node))
             }
 
@@ -408,12 +477,29 @@ class Formula private constructor(private val root: Node, val text: String) {
             private fun fold(node: Node): Node = if (node.children().all { it is Const }) Const(node.eval(DoubleArray(0))) else node
         }
 
+        /** The part that works out the function [name] for [args], with the work for that many values. */
+        private fun callOf(name: String, args: List<Node>): Node {
+            fun missing(): Nothing = throw IllegalStateException("$name/${args.size}")
+            return when (args.size) {
+                1    -> Call1(FN1[name] ?: missing(), args[0])
+                2    -> Call2(FN2[name] ?: missing(), args[0], args[1])
+                3    -> Call3(FN3[name] ?: missing(), args[0], args[1], args[2])
+                else -> CallN(FNN[name] ?: missing(), args.toTypedArray())
+            }
+        }
+
         // ---- the parts of a formula ----
 
         private abstract class Node {
 
             abstract fun eval(v: DoubleArray): Double
             open fun children(): List<Node> = emptyList()
+
+            /** The variables this part reads, see [Formula.reads]. Only used when a formula is read. */
+            open fun reads(): Long = children().fold(0L) { mask, child -> mask or child.reads() }
+
+            /** Adds the index of every variable this part reads to [into], see [Formula.variables]. */
+            open fun indices(into: MutableSet<Int>): MutableSet<Int> = into.also { children().forEach { child -> child.indices(it) } }
         }
 
         private class Const(val value: Double) : Node() {
@@ -424,6 +510,8 @@ class Formula private constructor(private val root: Node, val text: String) {
         private class Var(val index: Int) : Node() {
 
             override fun eval(v: DoubleArray) = v[index]
+            override fun reads(): Long = 1L shl min(index, 63)
+            override fun indices(into: MutableSet<Int>): MutableSet<Int> = into.also { it.add(index) }
         }
 
         private class Negate(val a: Node) : Node() {
@@ -479,15 +567,32 @@ class Formula private constructor(private val root: Node, val text: String) {
             override fun children() = listOf(a, b)
         }
 
-        private class Call(name: String, val args: Array<Node>) : Node() {
+        private class Call1(val work: Fn1, val a: Node) : Node() {
 
-            private val work = IMPLEMENTATIONS[name] ?: throw IllegalStateException(name)
+            override fun eval(v: DoubleArray): Double = work.apply(a.eval(v))
+            override fun children() = listOf(a)
+        }
+
+        private class Call2(val work: Fn2, val a: Node, val b: Node) : Node() {
+
+            override fun eval(v: DoubleArray): Double = work.apply(a.eval(v), b.eval(v))
+            override fun children() = listOf(a, b)
+        }
+
+        private class Call3(val work: Fn3, val a: Node, val b: Node, val c: Node) : Node() {
+
+            override fun eval(v: DoubleArray): Double = work.apply(a.eval(v), b.eval(v), c.eval(v))
+            override fun children() = listOf(a, b, c)
+        }
+
+        private class CallN(val work: FnN, val args: Array<Node>) : Node() {
+
             private val values = DoubleArray(args.size)
             override fun eval(v: DoubleArray): Double {
                 // A fresh array per call is not needed: a formula is only worked out on one thread,
                 // and a node never holds itself, so no call can overwrite the values of its own caller
                 for (i in args.indices) values[i] = args[i].eval(v)
-                return work(values)
+                return work.apply(values)
             }
 
             override fun children() = args.toList()

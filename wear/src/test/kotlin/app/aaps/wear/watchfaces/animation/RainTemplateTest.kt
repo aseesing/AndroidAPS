@@ -11,6 +11,7 @@ import android.graphics.Color
 import androidx.core.graphics.createBitmap
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -25,16 +26,37 @@ import kotlin.math.tan
 import kotlin.random.Random
 
 /**
- * The rain preset: the same streaks as the old `RainField` drew, the same for the same seed, never
- * outside the round screen or its region, and it never runs out.
+ * The built-in template `rain`: the same streaks as the old `RainField` drew, the same for the same
+ * seed, never outside the round screen or its region, and it never runs out.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class)
-class RainPresetTest {
+class RainTemplateTest {
 
-    /** The streak math of the old `RainField`, kept here as the reference the preset must match. */
-    private class OldRain(spec: RainSpec) {
+    /** The parameters of the template, with its defaults. */
+    private data class Rain(
+        val count: Int = 90,
+        val seed: Long = 7,
+        val speed: Float = 520f,
+        val angle: Float = 12f,
+        val length: Float = 22f,
+        val lengthVariation: Float = 0.4f,
+        val thickness: Float = 1.6f,
+        val color: Int = Color.rgb(166, 200, 255),
+        val alpha: Int = 150,
+        val region: DesignRect = DesignRect.FULL
+    ) {
+
+        fun json(): JSONObject = use(
+            "rain", "count" to count, "seed" to seed, "speed" to speed.toDouble(), "angle" to angle.toDouble(), "length" to length.toDouble(),
+            "lengthVariation" to lengthVariation.toDouble(), "thickness" to thickness.toDouble(), "color" to colorText(color), "alpha" to alpha,
+            "region" to rectJson(region)
+        )
+    }
+
+    /** The streak math of the old `RainField`, kept here as the reference the template must match. */
+    private class OldRain(spec: Rain) {
 
         private val region = spec.region
         private val sinA = sin(Math.toRadians(spec.angle.toDouble())).toFloat()
@@ -74,11 +96,7 @@ class RainPresetTest {
 
     private data class Streak(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val alpha: Float)
 
-    private fun animator(spec: RainSpec): LayerAnimator {
-        val layers = WakeAnimationSpec(rain = spec).normalized().allLayers()
-        assertThat(layers).hasSize(1)
-        return LayerAnimator(layers).also { assertThat(it.errors).isEmpty() }
-    }
+    private fun animator(spec: Rain): LayerAnimator = animatorOf(animationOf(spec.json())).also { assertThat(it.size).isEqualTo(1) }
 
     /** Every streak of the preset at [elapsedMs]: from where the line starts to where it ends, not cut. */
     private fun streaks(animator: LayerAnimator, count: Int, elapsedMs: Long, env: Float = 1f): List<Streak> {
@@ -95,12 +113,11 @@ class RainPresetTest {
     @Test
     fun thePresetDrawsTheSameStreaksAsTheOldRain() {
         val specs = listOf(
-            RainSpec(),
-            RainSpec(seed = 8, angle = -30f, lengthVariation = 0f, region = DesignRect(100f, 50f, 150f, 120f)),
-            RainSpec(count = 300, seed = 1234567, speed = 4000f, angle = 45f, length = 80f, lengthVariation = 0.9f, alpha = 77)
+            Rain(),
+            Rain(seed = 8, angle = -30f, lengthVariation = 0f, region = DesignRect(100f, 50f, 150f, 120f)),
+            Rain(count = 300, seed = 1234567, speed = 4000f, angle = 45f, length = 80f, lengthVariation = 0.9f, alpha = 77)
         )
-        for (raw in specs) {
-            val spec = raw.normalized()
+        for (spec in specs) {
             val old = OldRain(spec)
             val animator = animator(spec)
             for (t in listOf(0L, 41L, 1234L, 3000L, 5999L)) streaks(animator, spec.count, t).forEachIndexed { i, s ->
@@ -114,15 +131,15 @@ class RainPresetTest {
 
     @Test
     fun theSameSeedGivesTheSameRain() {
-        val a = animator(RainSpec())
-        val b = animator(RainSpec())
+        val a = animator(Rain())
+        val b = animator(Rain())
         for (t in listOf(0L, 41L, 1234L, 5999L)) assertThat(streaks(a, 90, t)).isEqualTo(streaks(b, 90, t))
-        assertThat(streaks(animator(RainSpec(seed = 8)), 90, 1234)).isNotEqualTo(streaks(a, 90, 1234))
+        assertThat(streaks(animator(Rain(seed = 8)), 90, 1234)).isNotEqualTo(streaks(a, 90, 1234))
     }
 
     @Test
     fun theRainFallsAndSlantsAndFades() {
-        val animator = animator(RainSpec(count = 1, seed = 3, angle = 20f, lengthVariation = 0f))
+        val animator = animator(Rain(count = 1, seed = 3, angle = 20f, lengthVariation = 0f))
         // A moment where the streak does not start again at the top in the next 40 ms
         val t = (0L until 3000L step 10).first { streaks(animator, 1, it + 40)[0].y1 > streaks(animator, 1, it)[0].y1 }
         val before = streaks(animator, 1, t)[0]
@@ -138,9 +155,9 @@ class RainPresetTest {
     @Test
     fun theRainIsCutToItsRegionAndTheRoundScreen() {
         val region = DesignRect(100f, 50f, 150f, 120f)
-        assertThat(rainLayer(RainSpec(region = region)).clip).isEqualTo(LayerClip(rect = region, round = true))
+        assertThat(readAnimation(animationOf(Rain(region = region).json())).layers.single().clip).isEqualTo(LayerClip(rect = region, round = true))
         // Drawn: nothing outside the region, and something inside it
-        val inRegion = lit(RainSpec(count = 120, angle = -30f, alpha = 255, color = Color.WHITE, region = region))
+        val inRegion = lit(Rain(count = 120, angle = -30f, alpha = 255, color = Color.WHITE, region = region))
         var seen = 0
         for (y in 0 until 400) for (x in 0 until 400) if (inRegion.isLit(x, y)) {
             seen++
@@ -148,14 +165,14 @@ class RainPresetTest {
         }
         assertThat(seen).isGreaterThan(0)
         // Nothing outside the round screen
-        val all = lit(RainSpec(count = 300, thickness = 4f, alpha = 255, color = Color.WHITE))
+        val all = lit(Rain(count = 300, thickness = 4f, alpha = 255, color = Color.WHITE))
         for (y in 0 until 400) for (x in 0 until 400) if (all.isLit(x, y))
             assertWithMessage("lit at $x,$y").that(hypot(x + 0.5f - 200f, y + 0.5f - 200f)).isAtMost(201f)
     }
 
     @Test
     fun theRainNeverRunsOut() {
-        val spec = RainSpec(count = 90)
+        val spec = Rain(count = 90)
         val animator = animator(spec)
         val counts = (0L until 6000L step 41).map { t -> streaks(animator, spec.count, t).count { it.isSeen() } }
         println("RAIN visible streaks per frame: min ${counts.min()}, max ${counts.max()} of 90")
@@ -169,7 +186,7 @@ class RainPresetTest {
     }
 
     /** The rain of [spec] drawn on black at 1 screen pixel per design pixel, many frames on top of each other. */
-    private fun lit(spec: RainSpec): Bitmap {
+    private fun lit(spec: Rain): Bitmap {
         val bitmap = createBitmap(400, 400).apply { eraseColor(Color.BLACK) }
         val canvas = Canvas(bitmap)
         val animator = animator(spec)
@@ -181,4 +198,15 @@ class RainPresetTest {
     }
 
     private fun Bitmap.isLit(x: Int, y: Int): Boolean = Color.red(getPixel(x, y)) > 8
+
+    @Test
+    fun theLimitsOfTheOldPresetStay() {
+        val layer = readAnimation(animationOf(Rain(count = 1000, speed = 1f, angle = 80f, thickness = 0f, alpha = 900).json())).layers.single()
+        assertThat(layer.copies).isEqualTo(LayerCopies.Count(300, 7))
+        assertThat(layer.props[LayerProp.ANGLE]).isEqualTo("45")
+        assertThat(layer.props[LayerProp.THICKNESS]).isEqualTo("0.5")
+        assertThat(layer.props[LayerProp.ALPHA]).contains("(255 / 255)")
+        // No streaks, no layer
+        assertThat(readAnimation(animationOf(Rain(count = 0).json())).layers).isEmpty()
+    }
 }

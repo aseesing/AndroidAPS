@@ -136,8 +136,8 @@ class CwfPreviewRendererTest {
     fun aNewSizeIsDrawnAsAFaceOfThatSize() {
         val renderer = stillRenderer(TestDesigns.still())
         val now = System.currentTimeMillis()
-        val big = renderer.frame(SIZE, now)
-        val small = renderer.frame(SMALL, now)
+        val big = renderer.frame(SIZE, now).kept()
+        val small = renderer.frame(SMALL, now).kept()
         save(small, "small")
         assertThat(small.width).isEqualTo(SMALL)
         // The same as a face built for that size from the start: the scale is not the one of the first size
@@ -176,6 +176,56 @@ class CwfPreviewRendererTest {
     }
 
     @Test
+    fun aSmallFirstFrameDoesNotKeepTheFaceSmall() {
+        // Seen in the snapshot test: after a first frame of 32 px, a frame of 400 px drew the face at
+        // 32 px in the top left corner, because the views kept the sizes of the first layout
+        val now = System.currentTimeMillis()
+        val renderer = stillRenderer(TestDesigns.still())
+        renderer.frame(32, now)
+        val after = renderer.frame(SIZE, now)
+        save(after, "after_small_frame")
+        val fresh = stillRenderer(TestDesigns.still(), "cwf_preview_fresh").frame(SIZE, now)
+        assertThat(after.sameAs(fresh)).isTrue()
+        // And back to small: the small face again, not the corner of the large one
+        val small = renderer.frame(32, now).kept()
+        assertThat(small.sameAs(stillRenderer(TestDesigns.still(), "cwf_preview_fresh_small").frame(32, now))).isTrue()
+    }
+
+    @Test
+    fun framesAreDrawnIntoThreeBitmapsInTurn() {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_buffers")
+        val now = System.currentTimeMillis()
+        values(now).forEach(renderer::apply)
+        renderer.setDesign(TestDesigns.animated())
+        // While the animation plays and after it: the frame shown last is never drawn into
+        val frames = (0 until 6).map { i ->
+            ShadowSystemClock.advanceBy(Duration.ofMillis(if (i == 3) 16_000 else 40))
+            renderer.frame(SIZE, now + i * 40)
+        }
+        assertThat(renderer.isAnimating).isFalse()
+        for (i in 1 until frames.size) assertThat(frames[i]).isNotSameInstanceAs(frames[i - 1])
+        assertThat(frames.distinct()).hasSize(3)
+        assertThat(frames.none { it.isRecycled }).isTrue()
+    }
+
+    @Test
+    fun aBitmapTheCallerStillShowsIsNeverDrawnInto() {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_busy")
+        val now = System.currentTimeMillis()
+        values(now).forEach(renderer::apply)
+        renderer.setDesign(TestDesigns.animated())
+        val busy = HashSet<Bitmap>()
+        // The screen shows none of the frames yet: three are handed out, then there is no free bitmap
+        repeat(3) { busy += renderer.frame(SIZE, now + it * 40) { bitmap -> bitmap !in busy }!! }
+        assertThat(busy).hasSize(3)
+        assertThat(renderer.frame(SIZE, now + 120) { bitmap -> bitmap !in busy }).isNull()
+        // One is free again: that one is drawn into
+        val free = busy.first()
+        busy -= free
+        assertThat(renderer.frame(SIZE, now + 160) { bitmap -> bitmap !in busy }).isSameInstanceAs(free)
+    }
+
+    @Test
     fun afterReleaseTheSameFaceIsDrawnAgainAndItsAnimationPlays() {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
         val now = System.currentTimeMillis()
@@ -183,7 +233,7 @@ class CwfPreviewRendererTest {
         renderer.setDesign(TestDesigns.animated())
         renderer.frame(SIZE, now)
         ShadowSystemClock.advanceBy(Duration.ofSeconds(16))
-        val before = renderer.frame(SIZE, now)
+        val before = renderer.frame(SIZE, now).kept()
         assertThat(renderer.isAnimating).isFalse()
 
         renderer.release()
@@ -197,9 +247,9 @@ class CwfPreviewRendererTest {
         assertThat(after.sameAs(before)).isTrue()
     }
 
-    /** A renderer with values and [design], and the wake-up animation switched off. */
-    private fun stillRenderer(design: CwfData): CwfPreviewRenderer {
-        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
+    /** A renderer named [name] with values and [design], and the wake-up animation switched off. */
+    private fun stillRenderer(design: CwfData, name: String = PreviewHost.DEFAULT_NAME): CwfPreviewRenderer {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), name)
         renderer.watchSettings.edit().putString(lengthKey, "0").commit()
         val now = System.currentTimeMillis()
         values(now).forEach(renderer::apply)
@@ -308,6 +358,9 @@ class CwfPreviewRendererTest {
             EventData.SingleBg(dataset = 0, timeStamp = now - (35 - i) * 300_000L, sgv = 125.0 + 35.0 * sin(i * PI / 14.0), high = 180.0, low = 70.0)
         }))
     )
+
+    /** A copy of a frame: the renderer draws into its frames again two frames later. */
+    private fun Bitmap.kept(): Bitmap = copy(Bitmap.Config.ARGB_8888, false)
 
     private fun save(bitmap: Bitmap, name: String) = File(out, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 

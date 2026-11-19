@@ -177,6 +177,9 @@ internal class SkyTimes(
         /** The value of [nextSunEvent] for a design (`dynData`): a time, shown with `@time` (see `DesignTimeText`). */
         const val NEXT_SUN_EVENT_KEY = CwfPlaceNeeds.SUN_NEXT_TIME
 
+        /** A time later than any [nextSunEvent], in epoch ms (1 January 2100): the end of its value range. */
+        const val LAST_SUN_EVENT_MS = 4_102_444_800_000.0
+
         private const val DAYS_AROUND = 2L
         private const val MINUTES_PER_DAY = 24 * 60
         private const val MINUTE_MS = 60_000L

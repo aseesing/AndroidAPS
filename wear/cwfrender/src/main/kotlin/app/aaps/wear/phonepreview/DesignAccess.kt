@@ -11,9 +11,13 @@ import android.graphics.drawable.Drawable
 import androidx.wear.watchface.complications.rendering.ComplicationDrawable
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
-import app.aaps.wear.watchfaces.animation.WakeFrameParts
 import app.aaps.wear.watchfaces.colour.ColourLooks
+import app.aaps.wear.watchfaces.daynight.MoonPicture
+import app.aaps.wear.watchfaces.daynight.StoredWeather
+import app.aaps.wear.watchfaces.design.LegacyDesign
+import app.aaps.wear.watchfaces.design.Looks
 import app.aaps.wear.watchfaces.utils.ComplicationStyleValues
+import app.aaps.wear.watchfaces.utils.FrameParts
 import org.json.JSONObject
 import kotlin.math.max
 
@@ -29,10 +33,31 @@ object DesignAccess {
         face.readWakeAnimation(json, image)
 
     /** The parts of [face] that a wake frame draws: the real views, with a clock of your own. */
-    fun wakeParts(face: CustomWatchface): WakeFrameParts = face.wakeParts
+    fun wakeParts(face: CustomWatchface): FrameParts = face.wakeParts
 
-    /** The moon of a moon layer of [face] at [epochMs], in a square of [size] pixels, as the watch draws it. */
-    fun wakeMoon(face: CustomWatchface, epochMs: Long, size: Int): Bitmap? = face.wakeMoon(epochMs, size)
+    /** The moon of a `@moon` layer of [face] at [epochMs], in a square of [size] pixels, as the watch draws it. */
+    fun wakeMoon(face: CustomWatchface, epochMs: Long, size: Int): Bitmap? = face.dynamicImage(MoonPicture.NAME, epochMs, size)
+
+    /**
+     * [design] in the new form, as the watch reads it: the old keys rewritten (see [LegacyDesign]);
+     * [images] are the names of the pictures of the zip.
+     */
+    fun translate(design: JSONObject, images: Set<String> = emptySet()): JSONObject = LegacyDesign.translate(design, images)
+
+    /**
+     * [design] (old or new form) as the watch shows it in the day ([isDay]) or at night, in [weather]
+     * (`clear`, `partly`, `cloudy`, `rain`, or null when unknown): its looks laid over it, see [Looks].
+     */
+    fun lookOf(design: JSONObject, isDay: Boolean, weather: String?): JSONObject = look(design, emptySet(), isDay, weather).json
+
+    /** The pictures [images] (name to data) of [design] as the watch shows them, for [isDay] and [weather] as in [lookOf]. */
+    fun <T> picturesOf(design: JSONObject, images: Map<String, T>, isDay: Boolean, weather: String?): Map<String, T> =
+        look(design, images.keys, isDay, weather).swapped(images)
+
+    private fun look(design: JSONObject, images: Set<String>, isDay: Boolean, weather: String?): Looks.Look {
+        val values = mapOf("is_day" to if (isDay) 1.0 else 0.0, StoredWeather.KIND_VALUE_KEY to StoredWeather.kindNumber(weather))
+        return Looks().apply(LegacyDesign.translate(design, images)) { values[it] }
+    }
 
     /** How many colour choices the watch shows for [design]. */
     fun colourChoiceCount(design: JSONObject?): Int = ColourLooks.rows(design).size

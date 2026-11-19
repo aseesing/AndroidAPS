@@ -200,6 +200,48 @@ class CwfPlaceNeedsTest {
     }
 
     @Test
+    fun theMoonPictureNeedsThePlace() {
+        // The moon as a picture of a view, and of a layer of the animation
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"moon": {"width": 40, "height": 40, "textvalue": "", "image": "@moon"}}"""))
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"animation": {"layers": [{"image": "@moon", "x": 200, "y": 90, "rest": 0}]}}"""))
+        // Another picture is only a picture
+        assertTrue(uses("""{"animation": {"layers": [{"image": "moon"}, {"image": "@other"}]}}""").isEmpty())
+    }
+
+    @Test
+    fun aFormulaThatReadsTheSkyNeedsThePlace() {
+        // A view on its arc, as a layer that stays on the face
+        val orbit = """
+            {"animation": {"layers": [{
+                "view": "freetext1", "rest": 0,
+                "let": {"angle": "(180 + 360 * clamp(if(v_sun_cycle == v_sun_cycle, v_sun_cycle, 0), 0, 1)) * (pi / 180)"},
+                "x": "200 + 150 * cos(angle) - cx0", "y": "200 + 150 * sin(angle) - cy0"
+            }]}}
+        """
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses(orbit))
+        for (value in listOf("v_sun_progress", "v_night_progress", "v_moon_cycle", "v_sun_next_time", "v_is_day"))
+            assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"animation": {"layers": [{"shape": "rect", "alpha": "1 - $value"}]}}"""), value)
+        // The moon phase is the same all over the world, and a longer name is another value
+        assertTrue(uses("""{"animation": {"layers": [{"shape": "rect", "alpha": "v_moon_phase + my_v_is_day + v_is_day_old + v_sgv"}]}}""").isEmpty())
+    }
+
+    @Test
+    fun theLooksNeedThePlaceForWhatTheirConditionsRead() {
+        // The look of the day
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"looks": [{"when": "v_is_day == 1", "patch": {"background": {"color": "#FFFFFF"}}}]}"""))
+        // A look of the weather alone: the phone looks the weather up, the watch needs no rule
+        val weather = """{"looks": [{"when": "v_weather_kind == 3", "images": {"Cloud": "CloudRain"}}]}"""
+        assertEquals(setOf(CwfPlaceUse.WEATHER), uses(weather))
+        assertFalse(CwfPlaceNeeds.needsRule(weather))
+        // A look of the weather by day
+        assertEquals(
+            setOf(CwfPlaceUse.WEATHER, CwfPlaceUse.SUN_AND_MOON),
+            uses("""{"looks": [{"when": "v_is_day == 1 && v_weather_kind == 3", "images": {"Cloud": "CloudRain"}}]}""")
+        )
+        assertEquals(setOf(CwfPlaceUse.WEATHER), uses("""{"animation": {"layers": [{"shape": "rect", "alpha": "v_weather_temperature / 30"}]}}"""))
+    }
+
+    @Test
     fun theExplicitKeyAsksForThePlace() {
         assertEquals(setOf(CwfPlaceUse.ASKED), uses("""{"metadata": {"name": "Mine"}, "needsPlace": true}"""))
         assertTrue(uses("""{"metadata": {"name": "Mine"}, "needsPlace": false}""").isEmpty())

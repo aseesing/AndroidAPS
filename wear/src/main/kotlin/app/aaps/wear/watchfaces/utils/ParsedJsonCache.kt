@@ -20,12 +20,19 @@ class ParsedJsonCache {
     var parses = 0
         private set
 
-    fun parse(json: String): JSONObject {
-        parsed?.let { if (json == text) return it }
-        val result = JSONObject(json)
+    /**
+     * [json] parsed and then changed by [transform], made again only when [json] or [extra] (compared
+     * with `equals`, for example the names of the pictures of the zip that [transform] reads) changed.
+     */
+    fun parse(json: String, extra: Any? = null, transform: (JSONObject) -> JSONObject = { it }): JSONObject {
+        parsed?.let { if (json == text && extra == this.extra) return it }
+        val result = transform(JSONObject(json))
         parses++
         text = json
+        this.extra = extra
         parsed = result
         return result
     }
+
+    private var extra: Any? = null
 }

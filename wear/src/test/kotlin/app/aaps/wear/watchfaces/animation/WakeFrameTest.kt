@@ -21,17 +21,26 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.graphics.createBitmap
+import androidx.wear.watchface.WatchState
 import app.aaps.wear.watchfaces.CustomWatchface
-import app.aaps.wear.watchfaces.utils.drawWithHidden
+import app.aaps.wear.watchfaces.utils.FrameLayers
+import app.aaps.wear.watchfaces.utils.FrameParts
+import app.aaps.wear.watchfaces.utils.ViewPainter
+import app.aaps.wear.watchfaces.utils.WakeLayers
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.json.JSONObject
+import org.json.JSONArray
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import java.io.File
 import kotlin.math.abs
 
@@ -66,24 +75,34 @@ class WakeFrameTest {
             parent.layout(0, 0, size, size)
         }
 
-        fun drawOnly(canvas: Canvas, vararg keep: Int) = drawWithHidden(parent, views.filterIndexed { index, _ -> index !in keep }, canvas)
+        private val painter = ViewPainter(parent)
 
-        val parts = object : WakeFrameParts {
+        fun drawOnly(canvas: Canvas, vararg keep: Int) = painter.draw(canvas, keep.sorted().map { views[it] }.toTypedArray())
+
+        val parts = object : FrameParts {
             override fun prepare() = layout()
             override fun background(canvas: Canvas) = drawOnly(canvas, 0)
             override fun data(canvas: Canvas, leaveOut: Set<String>) = drawOnly(canvas, *(listOf(1) - leaveOut.mapNotNull { it.toIntOrNull() }.toSet()).toIntArray())
-            override fun views(canvas: Canvas, keys: Set<String>, turns: Map<String, Float>, shifts: Map<String, Float>) {
-                val turned = turns.mapNotNull { (key, degrees) -> key.toIntOrNull()?.let { views[it] }?.let { view -> Triple(view, view.rotation, degrees) } }
-                val shifted = shifts.mapNotNull { (key, dx) -> key.toIntOrNull()?.let { views[it] }?.let { view -> Triple(view, view.translationX, dx) } }
-                turned.forEach { (view, rotation, degrees) -> view.rotation = rotation + degrees }
-                shifted.forEach { (view, translation, dx) -> view.translationX = translation + dx * size / 120f }
-                drawOnly(canvas, *keys.mapNotNull { it.toIntOrNull() }.toIntArray())
-                turned.forEach { (view, rotation, _) -> view.rotation = rotation }
-                shifted.forEach { (view, translation, _) -> view.translationX = translation }
+            override fun view(canvas: Canvas, effects: ViewEffects, index: Int) = moved(canvas, effects, listOf(index))
+            override fun views(canvas: Canvas, effects: ViewEffects, members: BooleanArray) =
+                moved(canvas, effects, effects.keys.indices.filter { members[it] && !effects.isHidden(it) && !effects.isClipped(it) })
+
+            /** Draws the views of the keys at [indices] of [effects], turned and moved as it says. */
+            private fun moved(canvas: Canvas, effects: ViewEffects, indices: List<Int>) {
+                val moved = indices.mapNotNull { i -> effects.keys[i].toIntOrNull()?.let { views.getOrNull(it) }?.let { view -> Triple(view, view.rotation, view.translationX) to i } }
+                moved.forEach { (saved, i) ->
+                    if (effects.isTurned(i)) saved.first.rotation = saved.second + effects.turn(i)
+                    if (effects.isMoved(i)) saved.first.translationX = saved.third + effects.dx(i) * size / 120f
+                }
+                drawOnly(canvas, *indices.mapNotNull { effects.keys[it].toIntOrNull() }.toIntArray())
+                moved.forEach { (saved, _) ->
+                    saved.first.rotation = saved.second
+                    saved.first.translationX = saved.third
+                }
             }
 
-            override fun rotation(key: String): Float? = key.toIntOrNull()?.let { views.getOrNull(it) }?.rotation
-            override fun offsetX(key: String): Float? = key.toIntOrNull()?.let { views.getOrNull(it) }?.let { it.left * 120f / size - LEFTS.getValue(key.toInt()) }
+            override fun rotation(key: String): Float = key.toIntOrNull()?.let { views.getOrNull(it) }?.rotation ?: Float.NaN
+            override fun offsetX(key: String): Float = key.toIntOrNull()?.let { views.getOrNull(it) }?.let { it.left * 120f / size - LEFTS.getValue(key.toInt()) } ?: Float.NaN
             override fun clockText(canvas: Canvas) = drawOnly(canvas, 2)
             override fun top(canvas: Canvas, leaveOut: Set<String>) = drawOnly(canvas, *(listOf(3, 4) - leaveOut.mapNotNull { it.toIntOrNull() }.toSet()).toIntArray())
             override fun secondHand(canvas: Canvas) = drawOnly(canvas, 5)
@@ -132,18 +151,25 @@ class WakeFrameTest {
     private val size = 200
 
     /** The rain of [spec], drawn by the layer system as the wake draws it. */
-    private fun rainOf(spec: RainSpec) = LayerAnimator(WakeAnimationSpec(rain = spec).normalized().allLayers())
+    private fun rainOf(vararg params: Pair<String, Any?>) = animatorOf(animationOf(use("rain", *params)))
 
     private fun LayerAnimator.drawRain(canvas: Canvas, elapsed: Long, size: Int) {
         setTime(elapsed, 6000, 1f, t0)
         drawSlot(canvas, LayerSlot.BACK, size / DESIGN_SIZE)
     }
 
+    /** Draws only [back] live, as the rain of a wake. */
+    private fun live(back: (Canvas) -> Unit = {}) = object : WakeLayers {
+        override fun back(canvas: Canvas) = back(canvas)
+        override fun views(canvas: Canvas) {}
+        override fun front(canvas: Canvas) {}
+    }
+
     private fun composed(face: Face, rain: LayerAnimator?, elapsed: Long): Bitmap {
         val frame = createBitmap(face.size, face.size)
-        WakeFrameLayers().draw(
-            Canvas(frame), face.size, face.size, t0, 1, emptyList(), face.parts,
-            rain = { rain?.drawRain(it, elapsed, face.size) }, heart = {}
+        FrameLayers().drawWake(
+            Canvas(frame), face.size, face.size, t0, 1, emptyList(), face.parts, emptySet(),
+            live { rain?.drawRain(it, elapsed, face.size) }
         )
         return frame
     }
@@ -159,7 +185,7 @@ class WakeFrameTest {
     @Test
     fun theFrameIsBackgroundThenRainThenTheRest() {
         val face = Face(context, size)
-        val rain = rainOf(RainSpec(count = 120, alpha = 255, thickness = 3f))
+        val rain = rainOf("count" to 120, "alpha" to 255, "thickness" to 3)
         val expected = createBitmap(size, size).apply { eraseColor(Color.BLACK) }
         val canvas = Canvas(expected)
         face.drawOnly(canvas, 0)
@@ -176,7 +202,7 @@ class WakeFrameTest {
     fun theDataViewsLookTheSameWithAndWithoutRain() {
         val face = Face(context, size)
         val plain = composed(face, null, 0)
-        val rainy = composed(face, rainOf(RainSpec(count = 300, alpha = 255, thickness = 4f)), 2000)
+        val rainy = composed(face, rainOf("count" to 300, "alpha" to 255, "thickness" to 4), 2000)
         // inside the opaque blue data box, away from the views above it, every pixel is unchanged
         val s = size / 120f
         var changedOutside = 0
@@ -191,15 +217,15 @@ class WakeFrameTest {
     @Test
     fun keptPicturesAreDrawnOncePerMinuteOrTenSeconds() {
         val face = Face(context, 120)
-        val layers = WakeFrameLayers()
+        val layers = FrameLayers()
         val frame = createBitmap(120, 120)
         // 6 s at 24 fps, starting at a whole minute
-        for (i in 0 until 144) layers.draw(Canvas(frame), 120, 120, t0 + i * 41L, 1, emptyList(), face.parts, {}, {})
+        for (i in 0 until 144) layers.drawWake(Canvas(frame), 120, 120, t0 + i * 41L, 1, emptyList(), face.parts, emptySet(), live())
         assertThat(layers.backgroundDraws).isEqualTo(1)
         assertThat(layers.dataDraws).isEqualTo(1)
         assertThat(layers.topDraws).isEqualTo(1)
         // new data: the data pictures again
-        layers.draw(Canvas(frame), 120, 120, t0 + 6000, 2, emptyList(), face.parts, {}, {})
+        layers.drawWake(Canvas(frame), 120, 120, t0 + 6000, 2, emptyList(), face.parts, emptySet(), live())
         assertThat(layers.dataDraws).isEqualTo(2)
         assertThat(layers.topDraws).isEqualTo(2)
     }
@@ -218,7 +244,7 @@ class WakeFrameTest {
     fun aWakeDrawsItsFramesAndThenTheFaceIsNormalAgain() {
         var clock = 0L
         val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { clock })
-        animator.setDesign(WakeAnimationSpec(rain = RainSpec()))
+        animator.setDesign(readAnimation(animationOf(use("rain"))))
         val loop = Loop(animator, Face(context, 120))
         var drawn = 0
         var normalFrames = 0
@@ -239,7 +265,7 @@ class WakeFrameTest {
     fun aWakeWaitsForTheLayoutAndNeverPlaysWhereItIsNotAllowed() {
         var clock = 0L
         val animator = WakeAnimator(heartRate = { null }, timer = WakeTimer { clock })
-        animator.setDesign(WakeAnimationSpec(rain = RainSpec()))
+        animator.setDesign(readAnimation(animationOf(use("rain"))))
         val loop = Loop(animator, Face(context, 120))
         assertThat(loop.frame(t0, ready = false)).isFalse()
         assertThat(animator.updateDelay(60_000)).isEqualTo(41)       // still waiting, so frames come soon
@@ -253,6 +279,28 @@ class WakeFrameTest {
         assertThat(animator.wakeOnTap()).isTrue()
         assertThat(loop.frame(t0 + clock, allowed = false)).isFalse()
         assertThat(animator.updateDelay(60_000)).isEqualTo(60_000)
+    }
+
+    private fun watchState(ambient: MutableStateFlow<Boolean?>) = WatchState(
+        MutableStateFlow(0), ambient, MutableStateFlow(false), MutableStateFlow(true),
+        hasLowBitAmbient = false, hasBurnInProtection = false, analogPreviewReferenceTimeMillis = 0, digitalPreviewReferenceTimeMillis = 0,
+        chinHeight = 0, isHeadless = false, watchFaceInstanceId = MutableStateFlow("test")
+    )
+
+    @Test
+    fun watchingTheSameStateAgainAddsNoCollectorsAndANewStateReplacesThem() {
+        val job = Job()
+        val scope = CoroutineScope(job + StandardTestDispatcher())
+        val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { 0L }, newScope = { scope })
+        val state = watchState(MutableStateFlow(false))
+        animator.watch(state)
+        animator.watch(state)
+        assertThat(job.children.count { it.isActive }).isEqualTo(2)
+        // The face made again: the collectors of the old state stop
+        animator.watch(watchState(MutableStateFlow(false)))
+        assertThat(job.children.count { it.isActive }).isEqualTo(2)
+        animator.release()
+        assertThat(job.isActive).isFalse()
     }
 
     @Test
@@ -347,9 +395,9 @@ class WakeFrameTest {
         val face = Face(context, 120)
         val bitmap = createBitmap(120, 120)
         val canvas = Canvas(bitmap)
-        val blink = BlinkSpec(views = listOf("1"), valueKey = "battery", atOrBelow = 20.0)
+        val blink = animationOf(use("blink", "view" to "1", "valueKey" to "battery", "atOrBelow" to 20)).put("durationMs", 3000)
         fun animator() = WakeAnimator(heartRate = { 72 }, value = { if (it == "battery") level else null }, timer = WakeTimer { clock })
-            .apply { setDesign(WakeAnimationSpec(durationMs = 3000, blink = listOf(blink))) }
+            .apply { setDesign(readAnimation(blink)) }
 
         /** The colour in a corner of the data box that nothing else covers, after a frame [ms] into the wake, or null for a normal frame. */
         fun WakeAnimator.boxAt(ms: Long): Int? {
@@ -391,7 +439,7 @@ class WakeFrameTest {
         val canvas = Canvas(bitmap)
         // The blue box turns from 0 to 45 degrees and back: turned, its corner shows the background
         val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { clock }).apply {
-            setDesign(WakeAnimationSpec(durationMs = 1000, sweep = listOf(SweepSpec(listOf("1"), emptyAngle = 0f, fullAngle = 45f, upMs = 200, settleMs = 300))))
+            setDesign(readAnimation(animationOf(use("sweep", "view" to "1", "emptyAngle" to 0, "fullAngle" to 45, "upMs" to 200, "settleMs" to 300)).put("durationMs", 1000)))
         }
 
         fun cornerAt(ms: Long): Int? {
@@ -413,7 +461,7 @@ class WakeFrameTest {
         val canvas = Canvas(bitmap)
         // The yellow box (above the clock text, 40..90 px) slides 20 px right and back
         val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { clock }).apply {
-            setDesign(WakeAnimationSpec(durationMs = 1000, slide = listOf(SlideSpec(listOf("4"), fullDx = 20f, upMs = 200, settleMs = 300))))
+            setDesign(readAnimation(animationOf(use("slide", "view" to "4", "fullDx" to 20, "upMs" to 200, "settleMs" to 300)).put("durationMs", 1000)))
         }
 
         fun pixelAt(ms: Long): Int? {
@@ -436,8 +484,8 @@ class WakeFrameTest {
         val bitmap = createBitmap(120, 120)
         val canvas = Canvas(bitmap)
         // The blue box is 10..70 px of 120, so 33..233 of the design
-        val trace = TraceSpec(view = "1", rect = DesignRect(33f, 33f, 200f, 200f), durationMs = 1000, alpha = 0)
-        val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { clock }).apply { setDesign(WakeAnimationSpec(durationMs = 2000, trace = trace)) }
+        val trace = use("trace", "view" to "1", "rect" to rectJson(DesignRect(33f, 33f, 200f, 200f)), "durationMs" to 1000, "alpha" to 0)
+        val animator = WakeAnimator(heartRate = { 72 }, timer = WakeTimer { clock }).apply { setDesign(readAnimation(animationOf(trace).put("durationMs", 2000))) }
 
         fun at(ms: Long, x: Int): Int {
             clock = ms
@@ -454,9 +502,9 @@ class WakeFrameTest {
     @Test
     fun theGlintLightsOnlyItsShapes() {
         val bitmap = createBitmap(200, 200).apply { eraseColor(Color.BLACK) }
-        val glint = GlintSpec(rings = listOf(DesignRing(200f, 200f, 150f, 190f)), angle = 0f, width = 400f, alpha = 255, durationMs = 900)
+        val glint = use("glint", "rings" to JSONArray("[{\"cx\": 200, \"cy\": 200, \"inner\": 150, \"outer\": 190}]"), "angle" to 0, "width" to 400, "alpha" to 255, "durationMs" to 900)
         // Halfway through: the middle of the band on the middle of the face
-        LayerAnimator(WakeAnimationSpec(glint = glint).normalized().allLayers()).apply {
+        animatorOf(animationOf(glint)).apply {
             setTime(450, 6000, 1f, t0)
             drawSlot(Canvas(bitmap), LayerSlot.FRONT, 0.5f)
         }
@@ -467,15 +515,9 @@ class WakeFrameTest {
     }
 
     @Test
-    fun blinkValuesAreKeptSafe() {
-        val blink = BlinkSpec(views = listOf("a", "", "a", "b"), valueKey = "v", atOrBelow = 20.0, periodMs = 10).normalized()
-        assertThat(blink.views).containsExactly("a", "b").inOrder()
-        assertThat(blink.periodMs).isEqualTo(BlinkSpec.MIN_PERIOD_MS)
-        assertThat(BlinkSpec(listOf("a"), "v", 20.0, periodMs = 60_000).normalized().periodMs).isEqualTo(BlinkSpec.MAX_PERIOD_MS)
-        // A blink with no view or no value is dropped, and a blink alone is an animation
-        val spec = WakeAnimationSpec(blink = listOf(BlinkSpec(emptyList(), "v", 20.0), BlinkSpec(listOf("a"), "", 20.0), BlinkSpec(listOf("b"), "v", 20.0))).normalized()
-        assertThat(spec.blink).hasSize(1)
+    fun aBlinkWithNoValueIsLeftOutAndABlinkAloneIsAnAnimation() {
+        val spec = readAnimation(animationOf(use("blink", "view" to "b", "valueKey" to "v", "atOrBelow" to 20))).normalized()
         assertThat(spec.hasContent).isTrue()
-        assertThat(LayerAnimator(spec.allLayers()).viewKeys).containsExactly("b")
+        assertThat(animatorOf(animationOf(use("blink", "view" to "b", "valueKey" to "v", "atOrBelow" to 20))).viewKeys).containsExactly("b")
     }
 }
