@@ -24,6 +24,8 @@ import app.aaps.wear.watchfaces.animation.LayerSlot
 import app.aaps.wear.watchfaces.animation.LayerSource
 import app.aaps.wear.watchfaces.animation.ShapeKind
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
+import app.aaps.wear.watchfaces.animation.withTestTemplates
+import app.aaps.wear.watchfaces.daynight.ManualMoon
 import com.google.common.truth.Truth.assertThat
 import org.json.JSONObject
 import org.junit.Test
@@ -57,7 +59,7 @@ class WakeAnimationJsonTest {
         val dayNight = listOf(R.string.key_day_night_look, R.string.key_day_night_always_on)
         assertThat(keys("""{"looks": [{"when": "v_is_day == 1", "patch": {}}]}""")).containsAtLeastElementsIn(dayNight)
         // the old day look too, through the translation
-        assertThat(keys("""{"dayLook": {}}""")).containsAtLeastElementsIn(dayNight)
+        assertThat(keys("""{"looks": [{"when": "v_is_day == 1", "patch": {}}]}""")).containsAtLeastElementsIn(dayNight)
         // a look of the weather only, and "day", the view of the day of the month, are not a day look
         assertThat(keys("""{"looks": [{"when": "v_weather_kind == 3", "patch": {}}]}""")).containsNoneIn(dayNight)
         assertThat(keys("""{"day": {}}""")).containsNoneIn(dayNight)
@@ -96,7 +98,7 @@ class WakeAnimationJsonTest {
 
     @Test
     fun aTemplateIsExpandedWithItsDefaultsAndPictures() {
-        val spec = read("""{"animation": {"fps": 20, "layers": [{"use": "rain", "count": 50, "color": "#80FF0000"}, {"use": "pulse", "image": "heart", "top": 30}]}}""")!!
+        val spec = read(withTestTemplates("""{"animation": {"fps": 20, "layers": [{"use": "rain", "count": 50, "color": "#80FF0000"}, {"use": "pulse", "image": "heart", "top": 30}]}}"""))!!
         assertThat(spec.fps).isEqualTo(20)
         assertThat(spec.errors).isEmpty()
         val (rain, pulse) = spec.layers
@@ -111,7 +113,7 @@ class WakeAnimationJsonTest {
     }
 
     @Test
-    fun aDesignTemplateComesBeforeTheBuiltInOneAndUsesOthers() {
+    fun aDesignTemplateUsesOthersAndAnUnknownNameIsLeftOut() {
         val spec = read(
             $$"""{"animation": {
                  "templates": {
@@ -131,7 +133,7 @@ class WakeAnimationJsonTest {
             mapOf(LayerProp.X to "0", LayerProp.Y to "0 + 3", LayerProp.RADIUS to "3")
         ).inOrder()
         assertThat(spec.layers[2].source).isEqualTo(LayerSource.View("chart"))
-        assertThat(spec.errors).containsExactly("layer 2: no template 'nothing'", "layer 3: 'spark' has no parameter 'colour'")
+        assertThat(spec.errors).containsExactly("layer 2: no template 'nothing' in the templates of the design", "layer 3: 'spark' has no parameter 'colour'")
     }
 
     @Test
@@ -143,7 +145,7 @@ class WakeAnimationJsonTest {
 
     @Test
     fun brokenValuesFallBackInsteadOfBreakingTheDesign() {
-        val spec = read("""{"animation": {"fps": "fast", "layers": [{"use": "rain", "count": "many"}, {"use": "pulse", "image": "nothere"}]}}""")!!
+        val spec = read(withTestTemplates("""{"animation": {"fps": "fast", "layers": [{"use": "rain", "count": "many"}, {"use": "pulse", "image": "nothere"}]}}"""))!!
         assertThat(spec.fps).isEqualTo(WakeAnimationSpec().fps)
         // a number parameter that is not a number keeps its default
         assertThat(spec.layers.first().copies).isEqualTo(LayerCopies.Count(90, 7))
@@ -202,6 +204,38 @@ class WakeAnimationJsonTest {
         val spec = layer("""{"image": "nothere"}""")
         assertThat(spec.source).isEqualTo(LayerSource.Image("nothere", null, DesignRect.FULL))
         assertThat(spec.normalized()).isNull()
+    }
+
+    @Test
+    fun aGroupAndItsBlendsAreRead() {
+        val spec = layer("""{"shape": "circle", "group": "moon", "blend": "erase"}""")
+        assertThat(spec.group).isEqualTo("moon")
+        assertThat(spec.blend).isEqualTo(LayerBlend.ERASE)
+        assertThat(layer("""{"shape": "circle", "group": "moon", "blend": "inside"}""").blend).isEqualTo(LayerBlend.INSIDE)
+        assertThat(layer("""{"shape": "circle"}""").group).isNull()
+        // Without a group these two would cut the face: the layer is left out
+        assertThat(layer("""{"shape": "circle", "blend": "erase"}""").normalized()).isNull()
+        // A view is drawn with the views, never in a group
+        assertThat(layer("""{"view": "chart", "group": "moon"}""").normalized()!!.group).isNull()
+    }
+
+    @Test
+    fun theMoonTemplateOfTheManualGivesPlainLayersWithoutErrors() {
+        val spec = read(ManualMoon.design("""{"use": "moon", "left": 316, "top": 78, "size": 44}""").toString())!!
+        assertThat(spec.errors).isEmpty()
+        val layers = spec.normalized().layers
+        assertThat(layers).hasSize(6)
+        // All stay on the face, in the back slot, and the photo of the app is in its square
+        assertThat(layers.map { it.restSeconds }.distinct()).containsExactly(0f)
+        assertThat(layers.map { it.slot }.distinct()).containsExactly(LayerSlot.BACK)
+        assertThat(layers.map { it.source }.filterIsInstance<LayerSource.Dynamic>().distinct()).containsExactly(LayerSource.Dynamic("moon", DesignRect(316f, 78f, 44f, 44f)))
+        assertThat(layers.map { it.group }).containsExactly(null, null, "moon", "moon", "moon", "moon").inOrder()
+        // Only in the wake, and in front
+        val wake = read(ManualMoon.design("""{"use": "moon", "rest": "", "slot": "front"}""").toString())!!.normalized().layers
+        // The watch has no moon template of its own
+        assertThat(read("""{"animation": {"layers": [{"use": "moon"}]}}""")!!.errors).isNotEmpty()
+        assertThat(wake.map { it.restSeconds }.distinct()).containsExactly(null)
+        assertThat(wake.map { it.slot }.distinct()).containsExactly(LayerSlot.FRONT)
     }
 
     @Test

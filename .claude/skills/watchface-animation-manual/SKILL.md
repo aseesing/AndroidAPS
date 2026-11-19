@@ -1,6 +1,6 @@
 ---
 name: watchface-animation-manual
-description: Keep the manual of the watch face layer engine (docs/watchface-animation.html) true to the code. Use in the same change whenever a key, a default or a limit, a formula function or variable, a `v_` value, a built-in template, a look rule or a drawing rule of the wear animation engine changes, and before trusting the manual to write a design.
+description: Keep the manual of the watch face layer engine (docs/watchface-animation.html) true to the code. Use in the same change whenever a key, a default or a limit, a formula function or variable, a `v_` value, a template rule, a look rule or a drawing rule of the wear animation engine changes, and before trusting the manual to write a design.
 ---
 
 <!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md). -->
@@ -19,7 +19,7 @@ page yourself. Do not add a script or a test for it (the user's decision, 2026-1
 In the same commit as any change to what a design can say or to what the watch does with it:
 
 - `wear/.../watchfaces/animation/` (the parser `WakeAnimationJson`, `AnimLayerSpec`, `Formula`,
-  `LayerVariables`, `LayerAnimator`, `Templates`, `BuiltInTemplates`, `WakeAnimationSpec`);
+  `LayerVariables`, `LayerAnimator`, `Templates`, `WakeAnimationSpec`);
 - `wear/.../watchfaces/design/Looks.kt`;
 - `wear/.../watchfaces/utils/` (`DynamicImages`, `FrameLayers`, `ViewPainter`, `ViewImages`,
   `DesignTimeText`);
@@ -41,7 +41,8 @@ in the code may be missing in the page, and nothing in the page may be missing i
 | `Formula.FUNCTIONS` and the operators of the parser | Chapter 5, with a curve for a function that shapes time | `FUNCTIONS`, `FN`, `parseFormula` |
 | `LayerVariables.FIXED` and the `v_` prefix | Chapter 5, "Variables" | `FIXED`, `V` |
 | The limits (`AnimLayerSpec.MAX_*`, `WakeAnimationSpec.MIN_DURATION_MS` and so on, `Formula.MAX_*`) | Chapter 11 and the tables | The `MAX_*` and `MIN_*` lines at the top of the script |
-| `BuiltInTemplates` (every template, parameter, default and limit) and the rules of `Templates` | Chapter 7, one parameter table for each template | `BUILT_IN_TEMPLATES` (a copy of the Kotlin text), `expandTemplates` |
+| The rules of `Templates` (the app has no templates of its own) | Chapter 7 | `expandTemplates` |
+| The nine templates in `TemplatesForTests` (wear tests) and `DesignTemplates` (repository `aaps-watchfaces`): the same text | Chapter 7: the `templates` of each template example, and the parameter table under it | Nothing: each example carries its templates |
 | `ValueMap` in `CustomWatchface` (every key and its range) | The table in chapter 6 | The values an example reads must exist in `ValueMap` |
 | `Looks` (`when`, `patch`, `images`, the order) | Chapter 9 | `applyLooks` |
 | How a layer is drawn (`LayerAnimator`, `FrameLayers`, `ViewPainter`) | The text beside the examples, "Known limits" in chapter 11 | `Animator`, `beginFrame`, `Scene` |
@@ -57,8 +58,8 @@ Then:
 4. **Open the page in a browser** and scroll through all of it. A broken example shows its error in
    the picture box. Only the example "Three mistakes" in chapter 11 may show errors. Look at the
    pictures of the examples you changed: do they show what the text says?
-5. **The note "Old zips"** near the top stays only while the watch still reads the old short keys
-   (`LegacyDesign`). Take it out with the translator.
+5. **Every example that uses `use` carries its templates** in `animation.templates`. The page has no
+   templates of its own, as the app has none.
 
 ## Rules for the text
 
@@ -83,8 +84,17 @@ Then:
 - No outside files, no network, no real person, device or place of the user (examples use Amsterdam).
 - Keep the header comment at the top of the file.
 
+## The moon template of chapter 13
+
+The example `ex-moon-template` holds the moon template as JSON to copy. The watch has no copy of it.
+The tests of the wear app (`ManualMoon`) and the design repo (`MoonTemplate` in `aaps-watchfaces`) read
+it from this page: keep the figure id, keep its `<pre>` valid JSON with `animation.templates.moon`, and
+run `:wear:testFullDebugUnitTest` after a change to it. The designs get the new template when their
+zips are built again.
+
 ## What the player does not copy
 
 Known, and said on the page: the face is a stand-in (simple views, no complications), `@moon` is a
-drawn moon with north up, the sun is fixed at 06:00 to 18:00, rest layers are redrawn each frame, the
+drawn full moon and the moon values come from two sliders (the page has no place), a group opens its
+sheet at its first layer (the watch: at the first one that is drawn), the sun is fixed at 06:00 to 18:00, rest layers are redrawn each frame, the
 glow is a canvas shadow, and there is no picture memory limit. Do not "fix" the watch to match these.

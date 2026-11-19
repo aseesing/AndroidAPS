@@ -19,7 +19,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.math.hypot
 import kotlin.math.max
 
-/** The built-in template `glitch`: short bursts of bands, the same for the same seed, inside the round screen. */
+/** The template `glitch` of the manual ([TemplatesForTests]): short bursts of bands, the same for the same seed, inside the round screen. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = Application::class)
@@ -165,6 +165,6 @@ class GlitchTemplateTest {
         val layer = readAnimation(animationOf(Glitch(periodMs = 200, burstMs = 900, minHeight = 30f, maxHeight = 3f).json())).layers.single()
         val alpha = layer.props.getValue(LayerProp.ALPHA)
         assertThat(alpha).contains("start + 200,")
-        assertThat(layer.lets.toMap().getValue("h")).contains("f32(f32(30) - f32(30))")
+        assertThat(layer.lets.toMap().getValue("h")).contains("(30 - 30)")
     }
 }

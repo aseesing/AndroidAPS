@@ -96,8 +96,8 @@ class Formula private constructor(private val root: Node, val text: String) {
             "floor" to 1..1, "ceil" to 1..1, "round" to 1..1, "fract" to 1..1, "mod" to 2..2,
             "min" to 2..8, "max" to 2..8, "clamp" to 3..3, "mix" to 3..3, "step" to 2..2, "smoothstep" to 3..3,
             "if" to 3..3, "noise" to 1..2, "hash" to 1..3,
-            "easeInOut" to 1..1, "settle" to 1..1, "pulse" to 3..3,
-            "window" to 3..3, "pingpong" to 2..2, "f32" to 1..1
+            "easeInOut" to 1..1,
+            "window" to 3..3, "pingpong" to 2..2
         )
 
         // ---- the functions, also used by the presets and the tests ----
@@ -107,18 +107,6 @@ class Formula private constructor(private val root: Node, val text: String) {
 
         /** Slow at the start and the end: 0 at 0, 1 at 1. */
         fun easeInOut(u: Double): Double = 0.5 - 0.5 * cos(PI * u.coerceIn(0.0, 1.0))
-
-        /**
-         * From 0 to 1 like a damped spring: past 1 by about a fifth, a smaller swing back, and exactly 1
-         * at the end, so a hand stops on its value without a jump.
-         */
-        fun settle(u: Double): Double {
-            val x = u.coerceIn(0.0, 1.0)
-            val spring = 1 - exp(-5 * x) * cos(3 * PI * x)
-            // The spring is not quite 1 at the end; pull the rest in over the last part
-            val rest = (1 - exp(-5.0) * cos(3 * PI)) - 1
-            return spring - rest * x
-        }
 
         /**
          * A number from 0 to 1 that is always the same for the same values, and looks random. One, two
@@ -144,13 +132,6 @@ class Formula private constructor(private val root: Node, val text: String) {
          * like a ball between two walls. 0 for a [length] of 0 or less.
          */
         fun pingpong(x: Double, length: Double): Double = if (length > 0.0) length - abs(mod(x, 2 * length) - length) else 0.0
-
-        /**
-         * [x] rounded to a 32-bit float, as the shortest decimal that is that float. The first effects
-         * of the engine worked out their numbers in 32-bit floats and wrote them into their formulas as
-         * such decimals; the built-in templates use this to give exactly the same numbers.
-         */
-        fun f32(x: Double): Double = x.toFloat().toString().toDouble()
 
         /** Smooth random from 0 to 1 along [x]: the same x always gives the same value. */
         fun noise(x: Double): Double {
@@ -222,9 +203,7 @@ class Formula private constructor(private val root: Node, val text: String) {
             "fract" to Fn1 { a -> a - floor(a) },
             "noise" to Fn1 { a -> noise(a) },
             "hash" to Fn1 { a -> hash(a) },
-            "easeInOut" to Fn1 { a -> easeInOut(a) },
-            "settle" to Fn1 { a -> settle(a) },
-            "f32" to Fn1 { a -> f32(a) }
+            "easeInOut" to Fn1 { a -> easeInOut(a) }
         )
 
         private val FN2: Map<String, Fn2> = mapOf(
@@ -254,7 +233,6 @@ class Formula private constructor(private val root: Node, val text: String) {
                 }
             },
             "hash" to Fn3 { a, b, c -> hash(a, b, c) },
-            "pulse" to Fn3 { a, b, c -> PulseCurve.value(a.toLong(), b.toInt(), c.toFloat()).toDouble() },
             "window" to Fn3 { a, b, c -> window(a, b, c) }
         )
 

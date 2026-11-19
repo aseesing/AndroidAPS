@@ -13,6 +13,9 @@ import java.math.BigDecimal
  * `{"use": "rain", "count": 90, "color": "#A6C8FF"}`. Expanded to plain layers when the design is
  * read, so the engine itself only knows plain layers.
  *
+ * The app has no templates of its own: a design brings every template it uses, in the `templates` of
+ * its animation. A `use` of a name the design does not define is left out, with an error.
+ *
  * A template is `{"params": {...}, "layers": [...]}`:
  * - `params` gives each parameter its default value (a number, a text, an object or a list), or
  *   `{"default": 90, "min": 0, "max": 300, "int": true}` with limits: the value is cut to them, and made
@@ -26,13 +29,9 @@ import java.math.BigDecimal
  * - a template layer with `"if": "<formula of the parameters>"` is left out when the formula is 0, so a
  *   part that cannot show is not a layer at all.
  *
- * The design's own templates ([own], the `templates` of the animation) come before the built-in ones
- * ([BuiltInTemplates]) of the same name.
- *
- * @param own the templates of the design, by name, or null
- * @param builtIn the templates of the app, by name
+ * @param own the templates of the design (the `templates` of the animation), by name, or null
  */
-class Templates(private val own: JSONObject? = null, private val builtIn: JSONObject = BuiltInTemplates.all) {
+class Templates(private val own: JSONObject?) {
 
     /**
      * The plain layers of [layers]: a layer with `use` is replaced by the layers of its template, the
@@ -53,9 +52,9 @@ class Templates(private val own: JSONObject? = null, private val builtIn: JSONOb
             return
         }
         val name = entry.optString(USE)
-        val template = own?.optJSONObject(name) ?: builtIn.optJSONObject(name)
+        val template = own?.optJSONObject(name)
         when {
-            template == null         -> return errors.plusAssign("$where: no template '$name'")
+            template == null         -> return errors.plusAssign("$where: no template '$name' in the templates of the design")
             name in using            -> return errors.plusAssign("$where: template '$name' uses itself")
             using.size >= MAX_DEPTH  -> return errors.plusAssign("$where: templates nested more than $MAX_DEPTH deep")
         }

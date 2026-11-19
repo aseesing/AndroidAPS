@@ -32,6 +32,17 @@ object MoonLight {
 
         /** The part of the moon that is lit, 0 to 1. */
         val litFraction: Double get() = (1 - terminator) / 2
+
+        /** [limbAngle] as a layer turns: degrees with the clock from straight up, -180 to 180 (90 is to the right). The value `moon_limb`. */
+        val limbTurn: Double get() = withTheClock(limbAngle)
+
+        /** [northAngle] as a layer turns: degrees with the clock from straight up, -180 to 180. The value `moon_north`. */
+        val northTurn: Double get() = withTheClock(northAngle)
+
+        private fun withTheClock(againstTheClock: Double): Double {
+            val turn = ((-againstTheClock % 360.0) + 360.0) % 360.0
+            return if (turn > 180.0) turn - 360.0 else turn
+        }
     }
 
     /**

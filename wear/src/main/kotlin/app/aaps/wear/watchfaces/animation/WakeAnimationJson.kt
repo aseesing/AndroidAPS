@@ -18,11 +18,12 @@ import java.math.BigDecimal
  *   "durationMs": 6000, "fps": 24, "fadeMs": 600, "fallbackBpm": 60,
  *   "let": {"mx": "200 + 120 * cos(2 * pi * v_moon_cycle)"},
  *   "templates": {"snow": {"params": {...}, "layers": [...]}},
- *   "layers": [{"use": "rain", "count": 90}, {"image": "Halo", "x": "mx", ...}]
+ *   "layers": [{"use": "snow", "count": 90}, {"image": "Halo", "x": "mx", ...}]
  * }
  * ```
  *
- * The layers that `use` a template are expanded first (see [Templates]). A number of a layer may also
+ * The layers that `use` a template of `templates` are expanded first (see [Templates]); the app has no
+ * templates of its own. A number of a layer may also
  * be given as a formula of fixed numbers (`"maxScale": "1 + 0.2"`), which is what a template gives
  * after its parameters are filled in.
  *
@@ -71,6 +72,7 @@ class WakeAnimationJson(
             // A view is always drawn with the views
             slot = if (source is LayerSource.View) LayerSlot.VIEWS else enumOf(json.optString("slot"), LayerSlot.BACK),
             blend = enumOf(json.optString("blend"), LayerBlend.NORMAL),
+            group = json.optString("group").takeIf { it.isNotEmpty() },
             copies = copies,
             props = props(json),
             lets = lets(json),

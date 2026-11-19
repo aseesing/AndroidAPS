@@ -83,11 +83,11 @@ import app.aaps.wear.watchfaces.daynight.DayNightChoice
 import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.GeoPoint
 import app.aaps.wear.watchfaces.daynight.MoonPhase
-import app.aaps.wear.watchfaces.daynight.MoonPicture
+import app.aaps.wear.watchfaces.daynight.MoonLight
+import app.aaps.wear.watchfaces.daynight.MoonPhoto
 import app.aaps.wear.watchfaces.daynight.NightFace
 import app.aaps.wear.watchfaces.daynight.SkyTimes
 import app.aaps.wear.watchfaces.daynight.StoredWeather
-import app.aaps.wear.watchfaces.design.LegacyDesign
 import app.aaps.wear.watchfaces.design.Looks
 import app.aaps.wear.watchfaces.daynight.placeOf
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
@@ -113,6 +113,7 @@ import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
 import app.aaps.wear.watchfaces.utils.WatchFaceSettings
 import app.aaps.wear.watchfaces.utils.WatchfaceViewAdapter.Companion.SelectedWatchFace
 import app.aaps.wear.watchfaces.utils.DynamicImages
+import app.aaps.wear.watchfaces.utils.ViewTemplates
 import app.aaps.wear.watchfaces.utils.ViewImages
 import app.aaps.wear.watchfaces.utils.secondVisibility
 import dev.zacsweers.metro.Inject
@@ -191,10 +192,14 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     /** PERSONAL PATCH: the place for the moon, from [skyRule]; null without a place. */
     private fun skyPlace(): GeoPoint? = placeOf(skyRule)
 
-    // PERSONAL PATCH: the pictures the watch draws itself, like the moon (`"image": "@moon"` of a view or
-    // a layer, see MoonPicture): one photo, one picture per size
-    private val dynamicImages = DynamicImages(mapOf(MoonPicture.NAME to MoonPicture({ BitmapFactory.decodeResource(resources, R.drawable.personal_moon_full) }, ::skyPlace)))
-    private val viewImages by lazy(LazyThreadSafetyMode.NONE) { ViewImages(resources, dynamicImages) } // PERSONAL PATCH: the `image` of a view
+    // PERSONAL PATCH: the pictures that come with the watch app, like the photo of the full moon
+    // (`"image": "@moon"` of a view or a layer, see MoonPhoto): one photo, one picture per size
+    private val dynamicImages = DynamicImages(mapOf(MoonPhoto.NAME to MoonPhoto { BitmapFactory.decodeResource(resources, R.drawable.personal_moon_full) }))
+    private val viewTemplates by lazy(LazyThreadSafetyMode.NONE) { ViewTemplates(resources, { json -> readWakeAnimation(json) { key -> resDataMap[key]?.toDrawable(resources) } }, { json.optJSONObject(WakeAnimationSpec.JSON_KEY)?.optJSONObject(WakeAnimationJson.TEMPLATES) }, ::dynamicImage, ::designValue) } // PERSONAL PATCH: a template as the `image` of a view
+    private val viewImages by lazy(LazyThreadSafetyMode.NONE) { ViewImages(resources, dynamicImages, viewTemplates) } // PERSONAL PATCH: the `image` of a view
+
+    /** PERSONAL PATCH: how the moon looks now, seen from the place of [skyRule] (north up without one): the values `moon_lit`, `moon_limb` and `moon_north`. */
+    private fun moonLook(): MoonLight.Look = MoonLight.at(renderNow(), skyPlace())
 
     private fun viewImage(key: String, view: JSONObject?, width: Int, height: Int): Drawable? = viewImages.drawable(key, view, width, height, renderNow(), resDataMap)
 
@@ -352,7 +357,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 if (json == null || json.has(WakeAnimationSpec.JSON_KEY)) add(WakeLength.row())
                 // Day face and night face: only when there is a night face to choose
                 // PERSONAL PATCH: also for a design with a look of the day, and with no design read
-                if (hasNightFace || json == null || Looks.reads(LegacyDesign.translate(json), ValueMap.IS_DAY.key)) {
+                if (hasNightFace || json == null || Looks.reads(json, ValueMap.IS_DAY.key)) {
                     add(DayNightChoice.activeRow())
                     add(DayNightChoice.alwaysOnRow())
                 }
@@ -1011,6 +1016,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         frameLayers.release() // PERSONAL PATCH
         wake.release() // PERSONAL PATCH: the wake-up animation
         dynamicImages.release() // PERSONAL PATCH
+        viewTemplates.release() // PERSONAL PATCH
         super.onDestroy()
     }
 
@@ -1072,7 +1078,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     }
 
     /** Reads the optional `animation` key of the design [json]; [image] finds a picture of the zip by its key. See [WakeAnimationJson]. */
-    internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = WakeAnimationJson(::getColor, image).read(LegacyDesign.translate(json)) // PERSONAL PATCH: old keys too, see LegacyDesign
+    internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = WakeAnimationJson(::getColor, image).read(json)
 
     override fun onTimeChanged(oldTime: app.aaps.wear.watchfaces.utils.WatchFaceTime, newTime: app.aaps.wear.watchfaces.utils.WatchFaceTime) {
         super.onTimeChanged(oldTime, newTime)
@@ -1238,7 +1244,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 val daySwap = showsNightFace != styleShowsNightFace
                 styleShowsNightFace = showsNightFace
                 val colours = ColourLooks.choices { key, default -> sp.getString(key, default) } // PERSONAL PATCH
-                val parsed = (if (showsNightFace) parsedNightJson else parsedJson).parse(face.json, face.resData.keys) { LegacyDesign.translate(it, face.resData.keys) } // PERSONAL PATCH: old keys, see LegacyDesign
+                val parsed = (if (showsNightFace) parsedNightJson else parsedJson).parse(face.json)
                 val design = colourLooks.apply(parsed, colours) // PERSONAL PATCH: colours
                 // PERSONAL PATCH: the looks whose conditions are true now (day, weather), see Looks
                 val look = (if (showsNightFace) nightLooks else looks).apply(design) { key -> if (key == ValueMap.IS_DAY.key) (if (showDay) 1.0 else 0.0) else designValue(key) }
@@ -2237,6 +2243,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         NIGHT_PROGRESS(JsonKeyValues.NIGHT_PROGRESS.key, 0.0, 1.0),
         SUN_CYCLE(JsonKeyValues.SUN_CYCLE.key, 0.0, 1.0), // PERSONAL PATCH
         MOON_CYCLE(JsonKeyValues.MOON_CYCLE.key, 0.0, 1.0), // PERSONAL PATCH
+        MOON_LIT(CwfPlaceNeeds.MOON_LIT, 0.0, 1.0), // PERSONAL PATCH: how much of the moon is lit
+        MOON_LIMB(CwfPlaceNeeds.MOON_LIMB, -180.0, 180.0), // PERSONAL PATCH: where the lit side points, degrees with the clock from straight up
+        MOON_NORTH(CwfPlaceNeeds.MOON_NORTH, -180.0, 180.0), // PERSONAL PATCH: where the moon's north points, degrees with the clock from straight up
         WEATHER_TEMPERATURE(StoredWeather.JSON_VALUE_KEY, -50.0, 50.0), // PERSONAL PATCH
         NEXT_SUN_EVENT(DayNightClock.NEXT_SUN_EVENT_KEY, 0.0, SkyTimes.LAST_SUN_EVENT_MS), // PERSONAL PATCH: a time (epoch ms), for "@time"; the range holds every time, so `dynValue` never cuts it
         SENSOR_LEFT(PartTimeLeft.SENSOR_KEY, 0.0, 72.0), // PERSONAL PATCH: hours
@@ -2345,6 +2354,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.NIGHT_PROGRESS   -> cwf.dayNight.nightProgress(cwf.renderNow())
             ValueMap.SUN_CYCLE        -> cwf.dayNight.sunCycle(cwf.renderNow()) // PERSONAL PATCH
             ValueMap.MOON_CYCLE       -> cwf.dayNight.moonCycle(cwf.renderNow()) // PERSONAL PATCH
+            ValueMap.MOON_LIT         -> cwf.moonLook().litFraction // PERSONAL PATCH
+            ValueMap.MOON_LIMB        -> cwf.moonLook().limbTurn // PERSONAL PATCH
+            ValueMap.MOON_NORTH       -> cwf.moonLook().northTurn // PERSONAL PATCH
             ValueMap.WEATHER_TEMPERATURE -> cwf.storedTemperature() // PERSONAL PATCH
             ValueMap.NEXT_SUN_EVENT   -> cwf.dayNight.nextSunEvent(cwf.renderNow())?.toDouble() // PERSONAL PATCH
             ValueMap.SENSOR_LEFT      -> PartTimeLeft.hours(cwf.status[0].sensorEndsAt, cwf.renderNow()) // PERSONAL PATCH

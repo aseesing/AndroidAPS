@@ -208,14 +208,8 @@ class FormulaTest {
         "noise" to listOf("noise(3)" to Formula.hash(3.0), "noise(2, 5)" to Formula.hash(2.0, 5.0)),
         "hash" to listOf("hash(1)" to Formula.hash(1.0), "hash(1, 2)" to Formula.hash(1.0, 2.0), "hash(1, 2, 3)" to Formula.hash(1.0, 2.0, 3.0)),
         "easeInOut" to listOf("easeInOut(0)" to 0.0, "easeInOut(0.5)" to 0.5, "easeInOut(1)" to 1.0),
-        "settle" to listOf("settle(0)" to 0.0, "settle(1)" to 1.0),
-        "pulse" to listOf(
-            "pulse(120, 60, 0.35)" to PulseCurve.value(120, 60, 0.35f).toDouble(),
-            "pulse(500, 90, 0)" to PulseCurve.value(500, 90, 0f).toDouble()
-        ),
         "window" to listOf("window(3, 2, 4)" to 0.25, "window(1, 2, 0)" to 0.0, "window(2, 2, 0)" to 1.0),
-        "pingpong" to listOf("pingpong(3, 2)" to 1.0, "pingpong(4, 2)" to 0.0, "pingpong(1, 0)" to 0.0),
-        "f32" to listOf("f32(0.5)" to 0.5, "f32(0.1)" to 0.1)
+        "pingpong" to listOf("pingpong(3, 2)" to 1.0, "pingpong(4, 2)" to 0.0, "pingpong(1, 0)" to 0.0)
     )
 
     @Test
@@ -236,7 +230,6 @@ class FormulaTest {
         assertThat(eval("min(x, y, t)", t = 3.0, x = 5.0, y = 4.0)).isEqualTo(3.0)
         assertThat(eval("clamp(x, 0, 1)", x = 0.25)).isEqualTo(0.25)
         assertThat(eval("noise(x)", x = 2.0)).isEqualTo(Formula.hash(2.0))
-        assertThat(eval("pulse(t, 60, 0.35)", t = 120.0)).isWithin(1e-6).of(PulseCurve.value(120, 60, 0.35f).toDouble())
         // The same call node used again with other values
         val f = parse("max(x, y) + max(y, x)")
         assertThat(f.eval(doubleArrayOf(0.0, 1.0, 2.0, 0.0))).isEqualTo(4.0)
@@ -254,7 +247,7 @@ class FormulaTest {
         assertError("noise(1, 2, 3)", "takes 1..2")
         assertError("hash()", "takes 1..3")
         assertError("hash(1, 2, 3, 4)", "takes 1..3")
-        assertError("pulse(1, 2)", "takes 3..3")
+        assertError("window(1, 2)", "takes 3..3")
     }
 
     // ---- easing, settle, noise and hash ----
@@ -271,16 +264,6 @@ class FormulaTest {
             assertThat(v).isAtLeast(last)
             last = v
         }
-    }
-
-    @Test
-    fun settleGoesPastOneAndStopsOnOne() {
-        assertThat(Formula.settle(0.0)).isWithin(1e-12).of(0.0)
-        assertThat(Formula.settle(1.0)).isWithin(1e-12).of(1.0)
-        assertThat(Formula.settle(2.0)).isWithin(1e-12).of(1.0)
-        val highest = (0..1000).maxOf { Formula.settle(it / 1000.0) }
-        assertThat(highest).isGreaterThan(1.1)
-        assertThat(highest).isLessThan(1.3)
     }
 
     @Test

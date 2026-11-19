@@ -33,14 +33,15 @@ enum class CwfPlaceUse {
  * A design needs the place when its json (the animation is a part of it) has any of these:
  * - [CwfPlaceUse.SUN_AND_MOON]:
  *   - a `valueKey` (of a `dynData`, a `dynPref`, an `orbit` or an animation `blink`) that is one of
- *     `sun_progress`, `night_progress`, `sun_cycle`, `moon_cycle` or [SUN_NEXT_TIME],
+ *     `sun_progress`, `night_progress`, `sun_cycle`, `moon_cycle`, `moon_limb`, `moon_north` or [SUN_NEXT_TIME],
  *   - a view with `"moonLight": true` (the moon drawn the way it stands in the sky there),
  *   - a layer with `"moon": true` inside an `animation`,
  *   - a `dayLook`, laid over the design from sunrise to sunset,
  *   - `weatherLooks`: their names say day or night (`day_rain`), so they follow sunrise and sunset,
- *   - a picture `"image": "@moon"` ([MOON_IMAGE]) of a view or of a layer,
  *   - a formula (any text of the json: of a layer, of a `let`, the `when` of a look) that reads one of
- *     the values above as `v_<name>`, or `v_is_day`;
+ *     the values above as `v_<name>`, or `v_is_day`. A design that draws the moon of now brings its own
+ *     template for it (see the manual, chapter 13), and the formulas of that template read
+ *     `v_moon_limb` and `v_moon_north`;
  * - [CwfPlaceUse.WEATHER]: `weatherLooks`, a `valueKey` that is [WEATHER_TEMPERATURE], or a formula
  *   that reads `v_weather_kind` or `v_weather_temperature`;
  * - [CwfPlaceUse.ASKED]: `"needsPlace": true` at the top of the json, for a design that wants the
@@ -49,7 +50,8 @@ enum class CwfPlaceUse {
  * Only [needsRule] designs get the rule (which can hold the place) on the watch. The weather alone
  * does not: the phone looks it up and sends only the weather.
  *
- * Everything else, the moon phase (`moon_phase`) too, is the same all over the world.
+ * Everything else is the same all over the world: the moon phase (`moon_phase`), how much of the moon
+ * is lit (`moon_lit`), and the plain photo of the full moon (`"image": "@moon"`).
  *
  * The json is read as leniently as the watch reads it (`org.json`): comments (line comments and block comments),
  * commas before a closing bracket, keys and texts without quotes. The watch also takes `#` comments,
@@ -71,7 +73,7 @@ object CwfPlaceNeeds {
     /** The weather looks of a design (`DayOverlay` on the watch). */
     const val WEATHER_LOOKS = "weatherLooks"
 
-    /** A view that shows the moon (`MoonPicture` on the watch). */
+    /** The old key of a view that shows the moon (`LegacyDesign` on the watch). */
     const val MOON_LIGHT = "moonLight"
 
     /** The wake-up animation of a design (`WakeAnimationSpec` on the watch). */
@@ -92,16 +94,22 @@ object CwfPlaceNeeds {
     /** The value that is 1 while the face shows the day (`DayNightChoice` on the watch). */
     const val IS_DAY = "is_day"
 
-    /** The picture of the moon as it stands in the sky, the `image` of a view or of a layer (`MoonPicture` on the watch). */
-    const val MOON_IMAGE = "@moon"
+    /** The value of how much of the moon is lit, 0 to 1. The same all over the world. */
+    const val MOON_LIT = "moon_lit"
 
-    private const val IMAGE = "image"
+    /** The value of the direction the lit side of the moon points to, as it stands in the sky of the place (`MoonLight` on the watch). */
+    const val MOON_LIMB = "moon_limb"
+
+    /** The value of the direction of the moon's north, as it stands in the sky of the place (`MoonLight` on the watch). */
+    const val MOON_NORTH = "moon_north"
+
 
     private const val VALUE_KEY = "valueKey"
 
     /** The values that come from the sun and the moon of the place. */
     private val SKY_VALUES = setOf(
-        JsonKeyValues.SUN_PROGRESS.key, JsonKeyValues.NIGHT_PROGRESS.key, JsonKeyValues.SUN_CYCLE.key, JsonKeyValues.MOON_CYCLE.key, SUN_NEXT_TIME
+        JsonKeyValues.SUN_PROGRESS.key, JsonKeyValues.NIGHT_PROGRESS.key, JsonKeyValues.SUN_CYCLE.key, JsonKeyValues.MOON_CYCLE.key, SUN_NEXT_TIME,
+        MOON_LIMB, MOON_NORTH
     )
 
     /** The values as a formula names them (`v_sun_cycle`), with what each needs the place for. */
@@ -165,7 +173,6 @@ object CwfPlaceNeeds {
                         key == VALUE_KEY && value.text() in SKY_VALUES           -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == VALUE_KEY && value.text() == WEATHER_TEMPERATURE  -> uses += CwfPlaceUse.WEATHER
                         key == MOON_LIGHT && value.isTrue()                      -> uses += CwfPlaceUse.SUN_AND_MOON
-                        key == IMAGE && value.text() == MOON_IMAGE               -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == ANIMATION_MOON && inAnimation && value.isTrue()   -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == DAY_LOOK && value is JsonObject                   -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == WEATHER_LOOKS && value is JsonObject              -> uses += setOf(CwfPlaceUse.WEATHER, CwfPlaceUse.SUN_AND_MOON)

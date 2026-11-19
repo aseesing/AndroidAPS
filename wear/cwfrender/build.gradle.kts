@@ -57,7 +57,6 @@ val wearShared = listOf(
     "watchfaces/CustomWatchface.kt",
     "watchfaces/FaceFrame.kt", // PERSONAL PATCH
     "watchfaces/animation/AnimLayerSpec.kt", // PERSONAL PATCH
-    "watchfaces/animation/BuiltInTemplates.kt", // PERSONAL PATCH
     "watchfaces/animation/Formula.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerAnimator.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerVariables.kt", // PERSONAL PATCH
@@ -74,7 +73,7 @@ val wearShared = listOf(
     "watchfaces/daynight/DayNightClock.kt",
     "watchfaces/daynight/MoonLight.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPhase.kt", // PERSONAL PATCH
-    "watchfaces/daynight/MoonPicture.kt", // PERSONAL PATCH
+    "watchfaces/daynight/MoonPhoto.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPosition.kt", // PERSONAL PATCH
     "watchfaces/daynight/NightFace.kt",
     "watchfaces/daynight/OldDayNightPreferences.kt", // PERSONAL PATCH: brings the old place keys, which the design tests still name
@@ -82,7 +81,6 @@ val wearShared = listOf(
     "watchfaces/daynight/SkyTimes.kt", // PERSONAL PATCH
     "watchfaces/daynight/StoredWeather.kt", // PERSONAL PATCH
     "watchfaces/daynight/SunTimes.kt",
-    "watchfaces/design/LegacyDesign.kt", // PERSONAL PATCH
     "watchfaces/design/Looks.kt", // PERSONAL PATCH
     "watchfaces/settingsync/CwfSettingNames.kt", // PERSONAL PATCH
     "watchfaces/settingsync/CwfSyncedSettings.kt", // PERSONAL PATCH
@@ -107,6 +105,7 @@ val wearShared = listOf(
     "watchfaces/utils/WatchMode.kt",
     "watchfaces/utils/ViewPainter.kt", // PERSONAL PATCH
     "watchfaces/utils/ViewImages.kt", // PERSONAL PATCH
+    "watchfaces/utils/ViewTemplates.kt", // PERSONAL PATCH
     "watchfaces/utils/WatchShape.kt",
     "watchfaces/utils/WatchBatteryLevel.kt", // PERSONAL PATCH
     "watchfaces/utils/WatchfaceViewAdapter.kt",

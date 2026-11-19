@@ -11,9 +11,9 @@ import kotlin.math.ceil
  * The wake-up animation of a Custom watch face design: for a few seconds after the wrist is raised,
  * and the layers that stay on the face while no wake plays.
  *
- * Everything is a layer of the one layer system ([AnimLayerSpec]), drawn by [LayerAnimator]. The
- * effects a design uses often (rain, a heart that beats, hands that swing, ...) are built-in templates
- * that expand to such layers when the design is read (see [Templates]).
+ * Everything is a layer of the one layer system ([AnimLayerSpec]), drawn by [LayerAnimator]. An effect
+ * a design uses often (rain, a heart that beats, hands that swing, ...) is a template of the design
+ * that expands to such layers when the design is read (see [Templates]).
  *
  * Plain values only. `CustomWatchface` reads them from the optional `animation` key of the design
  * json (see [WakeAnimationJson]) and hands them over. All sizes and positions are in the 400 x 400

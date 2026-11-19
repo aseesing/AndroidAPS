@@ -157,7 +157,7 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
     and look different on the watch. The random numbers (<code>r1</code> to <code>r8</code>) can differ from those on the
     watch. Click a picture to play it again.
     Click in the JSON of an example and type to change it: the picture follows, and the Reset button or a reload of the
-    page brings the old text back.
+    page brings the old text back. The Copy button copies the JSON as it is in the box.
   </div>
 
   <nav class="toc" aria-label="Table of contents">
@@ -189,14 +189,10 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
       <li><a href="#view-keys">Keys outside <code>animation</code></a></li>
       <li><a href="#limits">Limits and tips</a></li>
       <li><a href="#reference">Key reference</a></li>
+      <li><a href="#moon">Example: the moon from plain layers</a></li>
     </ol>
   </nav>
 
-  <div class="note" id="old-keys">
-    <strong>Old zips.</strong> Older designs use short keys such as <code>rain</code>, <code>dayLook</code> or
-    <code>orbit</code>. The watch still reads them for now: it rewrites them to the keys of this manual when it reads the
-    design. New designs should use only the keys of this manual.
-  </div>
 </header>
 
 <main>
@@ -248,7 +244,7 @@ so the circle fades in and out. After the wake the face is empty again: this lay
 <tr><td><code>fadeMs</code></td><td>whole number</td><td>600</td><td>0 to half of the length</td><td>The variable <code>env</code> rises from 0 to 1 over this time at the start and falls back over it at the end. With 0, <code>env</code> is always 1.</td></tr>
 <tr><td><code>fallbackBpm</code></td><td>whole number</td><td>60</td><td>40 to 180</td><td>The heart rate (<code>bpm</code>) when the watch has measured none.</td></tr>
 <tr><td><code>let</code></td><td>object</td><td>none</td><td>16 names</td><td>Named formulas for all layers, see <a href="#let"><code>let</code></a>.</td></tr>
-<tr><td><code>templates</code></td><td>object</td><td>none</td><td></td><td>The design's own templates, see <a href="#templates">templates</a>.</td></tr>
+<tr><td><code>templates</code></td><td>object</td><td>none</td><td></td><td>The templates of the design. The app has none of its own. See <a href="#templates">templates</a>.</td></tr>
 <tr><td><code>layers</code></td><td>list</td><td>empty</td><td>40 layers, 1500 copies in all</td><td>The layers, in paint order inside each slot. An entry is a plain layer or <code>{"use": ...}</code>.</td></tr>
 </tbody></table></div>
 
@@ -423,32 +419,13 @@ fills the whole face. A side that is not given takes the side of the whole face.
 <code>x</code> moves it 60 design pixels to the left and to the right.</figcaption>
 </figure>
 
-<h3 id="source-moon">A picture the watch draws: <code>"image": "@moon"</code></h3>
-<p>An <code>image</code> name that starts with <code>@</code> is a picture the watch draws itself. There is one now:
-<code>@moon</code>, the moon as it is in the sky at this moment. The watch makes it from one photo of the full moon: the
-part that is not lit is made dark, and the moon is turned the way it stands in the sky at the place of the wearer (north is up when
-the watch has no place). It is drawn in the middle of <code>rect</code>, as a square of the shorter side. It is asked for
-again once a minute, and the watch draws a new moon every 15 minutes. It has no <code>glow</code>. A design with
-<code>@moon</code> needs the place, see <a href="#needs-place"><code>needsPlace</code></a>.</p>
-
-<figure class="ex" id="ex-moon" data-face="off" data-controls="moon">
-<pre>{
-  "animation": {
-    "durationMs": 4000,
-    "layers": [
-      {"shape": "rect", "color": "#33415C", "x": 60, "y": 110, "width": 280, "height": 180, "rest": 0},
-      {
-        "image": "@moon",
-        "rect": {"left": 60, "top": 110, "width": 280, "height": 180},
-        "rest": 0,
-        "rotation": "env * 10 * sin(t * 2)"
-      }
-    ]
-  }
-}</pre>
-<figcaption><strong>The moon.</strong> The grey box shows the <code>rect</code>. The moon is a square in its middle. Move the
-slider to see other phases. The page draws a simple moon; the watch uses a photo and turns it for your sky.</figcaption>
-</figure>
+<h3 id="source-app">A picture of the app: <code>"image": "@moon"</code></h3>
+<p>An <code>image</code> name that starts with <code>@</code> is a picture that comes with the watch app, so the zip does
+not need it. There is one now: <code>@moon</code>, a photo of the full moon, cut round, with north up. It is only the
+photo: it shows no phase and it does not turn by itself. It is drawn in the middle of <code>rect</code>, as a square of
+the shorter side. It has no <code>glow</code>. The watch has no ready-made moon of this moment: a design builds it from
+this photo with plain layers. <a href="#moon">Chapter 13</a> does that step by step, and ends with a template you can
+copy.</p>
 
 <h3 id="source-shape">A shape: <code>shape</code></h3>
 <p><code>shape</code> is <code>"rect"</code>, <code>"circle"</code> or <code>"line"</code>. Another word leaves the layer
@@ -532,7 +509,8 @@ written as a formula of fixed numbers, like <code>"maxScale": "1 + 0.2"</code>.<
 <tr><td><code>colors</code></td><td>list of colour texts</td><td></td><td>Several colours for a shape; <code>colorIndex</code> picks one. Comes before <code>color</code>.</td></tr>
 <tr><td><code>gradient</code></td><td>object</td><td>none</td><td>Fades the colour over a rectangle or a circle, see below.</td></tr>
 <tr><td><code>slot</code></td><td><code>back</code>, <code>views</code>, <code>front</code></td><td><code>back</code></td><td>Where in the face the layer is drawn, see <a href="#frames">slots</a>.</td></tr>
-<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code></td><td><code>normal</code></td><td>How the layer is laid over what is below it.</td></tr>
+<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code>, <code>erase</code>, <code>inside</code></td><td><code>normal</code></td><td>How the layer is laid over what is below it. <code>erase</code> and <code>inside</code> work only in a <a href="#key-group"><code>group</code></a>.</td></tr>
+<tr><td><code>group</code></td><td>text</td><td>none</td><td>The name of a group: layers that follow each other with the same name are drawn on a sheet of their own, see <a href="#key-group"><code>group</code></a>.</td></tr>
 <tr><td><code>glow</code></td><td>object</td><td>none</td><td>A soft glow round a picture: <code>color</code> (default white) and <code>radius</code> (default 10, cut to 0 to 40).</td></tr>
 <tr><td><code>maxScale</code></td><td>number</td><td>1</td><td>The largest scale the picture is drawn at; it is made sharp for that size. Cut to 0.1 to 4.</td></tr>
 <tr><td><code>clip</code></td><td>object</td><td>the round screen</td><td>Where the layer may show, see below.</td></tr>
@@ -695,6 +673,46 @@ circle covers the band. Middle <code>add</code>: the colours are added. Right <c
 softer.</figcaption>
 </figure>
 
+<h3 id="key-group">Layers on a sheet of their own: <code>group</code></h3>
+<p><code>"group": "name"</code> puts a layer in a group. Layers of one slot that follow each other with the same name are
+drawn together on a clear sheet of their own. Then the sheet is laid over the face. In a group two more values of
+<code>blend</code> work:</p>
+<ul>
+  <li><code>erase</code>: the layer is not drawn. It takes away what the group has drawn so far, as much as the layer is
+    solid. Its colour does not count.</li>
+  <li><code>inside</code>: the layer is drawn only where the group has drawn something so far, as solid as that is, and it
+    takes the place of what was there. It changes only the pixels in its own box: the <code>rect</code> of a picture, the
+    outline of a rectangle or a circle.</li>
+</ul>
+<p>Both change only the sheet of the group. The face below the group is never cut. A layer with <code>erase</code> or
+<code>inside</code> and no <code>group</code> is left out. A group ends at the first layer with another name or with
+none. A view layer is never in a group.</p>
+<p>The sheet is as big as the <code>clip.rect</code> of the first layer of the group that is drawn. Without a
+<code>clip.rect</code> there it is as big as the face. A small sheet costs less, so give the first layer a
+<code>clip.rect</code> when the group is small. Nothing of the group shows outside its sheet.</p>
+<figure class="ex" id="ex-group" data-face="off">
+<pre>{
+  "animation": {
+    "durationMs": 4000,
+    "layers": [
+      {"shape": "rect", "color": "#35507A", "x": 0, "y": 120, "width": 400, "height": 160},
+      {"shape": "circle", "color": "#C97B2A", "radius": 60, "x": 110, "y": 200,
+       "group": "ring"},
+      {"shape": "circle", "radius": 40, "x": "110 + 30 * sin(t * 2)", "y": 200,
+       "group": "ring", "blend": "erase"},
+      {"shape": "circle", "radius": 60, "x": 290, "y": 200,
+       "group": "window"},
+      {"image": "Background",
+       "rect": {"left": 190, "top": 100, "width": 200, "height": 200},
+       "x": "30 * sin(t * 2)",
+       "group": "window", "blend": "inside"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Two groups.</strong> Left: the second circle erases a hole in the first one. The blue band below
+the group is not cut. Right: the picture is drawn <code>inside</code> the white circle, and nowhere else.</figcaption>
+</figure>
+
 <h3 id="key-glow">A glow round a picture: <code>glow</code>, <code>glowAlpha</code></h3>
 <p><code>glow</code> makes a soft shape of the picture in one colour, once, when the picture is made. The prop
 <code>glowAlpha</code> says how strong it shows; its default is 0, so a glow without <code>glowAlpha</code> shows nothing.
@@ -720,7 +738,8 @@ stronger and weaker.</figcaption>
 <h3 id="key-gradient">A colour that fades: <code>gradient</code></h3>
 <p><code>"gradient": {"type": "linear" | "radial", "stops": [[position, alpha], ...]}</code>. A stop says: at this position
 (0 to 1) the colour is this solid (0 to 1). There must be at least two stops, each a pair of numbers, or the layer is left
-out. <code>linear</code> runs along the width of a rectangle, from its left edge (0) to its right edge (1).
+out. <code>linear</code> runs along the width of a rectangle, from its left edge (0) to its right edge (1). On a circle it runs
+the same way, from the left edge of the circle to its right edge.
 <code>radial</code> runs from the middle of a circle (0) to its edge (1); on a rectangle it runs from the middle to the
 edges, stretched to the rectangle. A line has no gradient. A rectangle with a gradient needs a width above 0.</p>
 <figure class="ex" id="ex-gradient-linear" data-face="off">
@@ -1118,12 +1137,8 @@ goes from left to right. Use brackets when you are not sure.</p>
   <td><span class="curve" data-f="window(x, 1, 2)" data-x0="0" data-x1="4"></span><br><code>window(x, 1, 2)</code></td></tr>
 <tr><td><code>easeInOut(u)</code></td><td>From 0 at 0 to 1 at 1, slow at the start and at the end. <code>u</code> is cut to 0 to 1.</td>
   <td><span class="curve" data-f="easeInOut(x)" data-x0="0" data-x1="1"></span><br><code>easeInOut(x)</code></td></tr>
-<tr><td><code>settle(u)</code></td><td>From 0 to 1 like a spring: it goes past 1 by about a fifth, swings back a little, and is exactly 1 at the end. For a hand that stops on its value.</td>
-  <td><span class="curve" data-f="settle(x)" data-x0="0" data-x1="1"></span><br><code>settle(x)</code></td></tr>
 <tr><td><code>pingpong(x, length)</code></td><td>Goes from 0 up to <code>length</code> and back to 0 while <code>x</code> runs from 0 to 2 x <code>length</code>, then starts again. 0 for a length of 0 or less.</td>
   <td><span class="curve" data-f="pingpong(x, 1)" data-x0="0" data-x1="4"></span><br><code>pingpong(x, 1)</code></td></tr>
-<tr><td><code>pulse(ms, bpm, secondBeat)</code></td><td>One heart beat after another, from 0 (rest) to 1 (top of the beat): a quick rise, a slower fall, and a small second beat of size <code>secondBeat</code> (0 to 1). <code>ms</code> is a time in milliseconds, <code>bpm</code> is cut to 40 to 180.</td>
-  <td><span class="curve" data-f="pulse(x, 60, 0.35)" data-x0="0" data-x1="2000"></span><br><code>pulse(x, 60, 0.35)</code></td></tr>
 <tr><td><code>sin(x)</code>, <code>cos(x)</code></td><td>The wave functions. <code>x</code> is in radians: a whole wave takes <code>2 * pi</code>. So <code>sin(t * 2 * pi)</code> makes one wave per second.</td>
   <td><span class="curve" data-f="sin(x)" data-x0="0" data-x1="12.566"></span><br><code>sin(x)</code><br><span class="curve" data-f="cos(x)" data-x0="0" data-x1="12.566"></span><br><code>cos(x)</code></td></tr>
 <tr><td><code>step(edge, x)</code></td><td>1 when <code>x</code> is <code>edge</code> or more, else 0.</td>
@@ -1164,7 +1179,6 @@ goes from left to right. Use brackets when you are not sure.</p>
 <tr><td><code>exp(x)</code>, <code>log(x)</code></td><td>e to the power <code>x</code>, and the natural logarithm. <code>exp(-t * 3)</code> falls fast towards 0.</td><td><span class="curve" data-f="exp(-x * 3)" data-x0="0" data-x1="2"></span><br><code>exp(-x * 3)</code></td></tr>
 <tr><td><code>tan(x)</code></td><td>The tangent, <code>x</code> in radians.</td><td><span class="curve" data-f="tan(x)" data-x0="-1.2" data-x1="1.2"></span></td></tr>
 <tr><td><code>atan2(y, x)</code></td><td>The angle of the point <code>x</code>, <code>y</code> seen from 0, 0, in radians, from -pi to pi.</td><td><span class="curve" data-f="atan2(x, 1)" data-x0="-5" data-x1="5"></span><br><code>atan2(x, 1)</code></td></tr>
-<tr><td><code>f32(x)</code></td><td><code>x</code> rounded as a 32-bit number. Only the built-in templates use it, to give the same pixels as older versions. Do not use it in a design: it will go away.</td><td></td></tr>
 </tbody></table></div>
 
 <figure class="ex" id="ex-window" data-face="off">
@@ -1193,19 +1207,23 @@ own start time. The square moves only from second 1 to second 4.</figcaption>
   "animation": {
     "durationMs": 4000,
     "fadeMs": 0,
-    "let": {"p": "window(t, 0.5, 2)"},
+    "let": {
+      "p": "window(t, 0.5, 2)",
+      "spring": "1 - exp(-5 * p) * cos(3 * pi * p) - exp(-5) * p"
+    },
     "layers": [
       {"shape": "circle", "color": "#9AA5B5", "x": 100, "radius": 20,
        "y": "320 - 220 * p"},
       {"shape": "circle", "color": "#4CC9F0", "x": 200, "radius": 20,
        "y": "320 - 220 * easeInOut(p)"},
       {"shape": "circle", "color": "#FFD166", "x": 300, "radius": 20,
-       "y": "320 - 220 * settle(p)"}
+       "y": "320 - 220 * spring"}
     ]
   }
 }</pre>
 <figcaption><strong>Three ways to go from 0 to 1.</strong> All three circles rise in the same two seconds. Grey: evenly.
-Blue: <code>easeInOut</code>, soft at both ends. Yellow: <code>settle</code>, goes too far and swings back.</figcaption>
+Blue: <code>easeInOut</code>, soft at both ends. Yellow: <code>spring</code>, goes too far by about a fifth, swings back
+and is exactly 1 at the end. The templates <code>sweep</code> and <code>slide</code> use this formula.</figcaption>
 </figure>
 
 <figure class="ex" id="ex-pingpong" data-face="off">
@@ -1255,18 +1273,25 @@ second, with no link between them.</figcaption>
 <pre>{
   "animation": {
     "durationMs": 6000,
+    "let": {
+      "period": "60000 / bpm",
+      "at": "mod(t * 1000, period)",
+      "beat": "if(at &lt; 120, pow(sin(pi / 2 * at / 120), 2), exp(-(at - 120) / (period * 0.16)))"
+    },
     "layers": [
       {
         "image": "Heart",
         "rect": {"left": 140, "top": 140, "width": 120, "height": 120},
-        "scale": "1 + 0.25 * pulse(ms, bpm, 0.35) * env",
+        "scale": "1 + 0.25 * beat * env",
         "maxScale": 1.25
       }
     ]
   }
 }</pre>
-<figcaption><strong><code>pulse</code> and <code>bpm</code>.</strong> The heart beats at the heart rate of the wearer. Move
-the slider: a higher rate gives shorter beats.</figcaption>
+<figcaption><strong>A beat from <code>bpm</code>.</strong> The heart beats at the heart rate of the wearer.
+<code>period</code> is the time of one beat in milliseconds, <code>at</code> the time since the last beat started, and
+<code>beat</code> a quick rise and a slower fall. The template <a href="#t-pulse"><code>pulse</code></a> adds a small
+second beat. Move the slider: a higher rate gives shorter beats.</figcaption>
 </figure>
 
 <h3 id="variables">Variables</h3>
@@ -1417,6 +1442,9 @@ and distance <code>d</code> from the <code>let</code> of its layer.</figcaption>
 <tr><td><code>night_progress</code></td><td>How far the night is: 0 at sunset, 0.5 in the middle of the night, 1 at sunrise. In the day 0.</td><td>0 to 1</td></tr>
 <tr><td><code>sun_cycle</code></td><td>One round of the sun: 0 at sunrise, 0.25 half way the day, 0.5 at sunset, 0.75 half way the night, 1 at the next sunrise.</td><td>0 to 1</td></tr>
 <tr><td><code>moon_cycle</code></td><td>One round of the moon: 0 at moonrise, 0.5 at moonset, 1 at the next moonrise. 0.25 when the moon does not set for two days, 0.75 when it does not rise.</td><td>0 to 1</td></tr>
+<tr><td><code>moon_lit</code></td><td>How much of the moon is lit: 0 at new moon, 0.5 at a quarter, 1 at full moon. The same all over the world.</td><td>0 to 1</td></tr>
+<tr><td><code>moon_limb</code></td><td>The direction the lit side of the moon points to, as the moon stands in the sky of the wearer. In degrees with the clock from straight up, like <code>rotation</code>: 90 is to the right. Without a place: as seen with north up.</td><td>-180 to 180</td></tr>
+<tr><td><code>moon_north</code></td><td>The direction the north of the moon points to in the sky of the wearer, in degrees with the clock from straight up. It is the <code>rotation</code> for the photo <code>@moon</code>. Without a place it is 0: north up.</td><td>-180 to 180</td></tr>
 <tr><td><code>sun_next_time</code></td><td>The moment of the next sunrise or sunset, as a clock time in milliseconds. Made to show as a text with <a href="#time-token"><code>@time</code></a>. No value without a place, and where the sun does not rise or set in the next days.</td><td>a moment</td></tr>
 <tr><td><code>is_day</code></td><td>1 while the face shows the day, 0 while it shows the night. It follows the sun, or the watch settings "Day / night look" and "Always-on look" when the wearer chose day or night there.</td><td>0 or 1</td></tr>
 <tr><td><code>weather_kind</code></td><td>The weather the phone sent: 0 clear, 1 partly cloudy, 2 cloudy, 3 rain. No value when the phone sent none, or when it is older than 3 hours.</td><td>0 to 3</td></tr>
@@ -1501,9 +1529,9 @@ A design needs the place when it has one of these:</p>
 <ul>
   <li>a formula anywhere in the JSON (a prop, a <code>let</code>, the <code>when</code> of a look) that reads
     <code>v_sun_progress</code>, <code>v_night_progress</code>, <code>v_sun_cycle</code>, <code>v_moon_cycle</code>,
-    <code>v_sun_next_time</code> or <code>v_is_day</code> (the sun and the moon);</li>
+    <code>v_moon_limb</code>, <code>v_moon_north</code>, <code>v_sun_next_time</code> or <code>v_is_day</code> (the sun
+    and the moon);</li>
   <li>a <code>valueKey</code> that is one of those keys (without <code>is_day</code>);</li>
-  <li><code>"image": "@moon"</code> on a layer or on a view;</li>
   <li>a formula that reads <code>v_weather_kind</code> or <code>v_weather_temperature</code>, or a
     <code>valueKey</code> <code>weather_temperature</code> (the weather: the phone looks it up and sends only the
     weather);</li>
@@ -1513,283 +1541,27 @@ A design needs the place when it has one of these:</p>
   "needsPlace": true
 }</pre>
 <p>Without a place a design must still look right: the day is then from 07:00 to 19:00 (or the fixed times of the
-wearer), the moon stands north up, and <code>sun_next_time</code> has no value. <code>moon_phase</code> never needs the
-place.</p>
+wearer), the moon stands north up, and <code>sun_next_time</code> has no value. <code>moon_phase</code>,
+<code>moon_lit</code> and the photo <code>@moon</code> never need the place.</p>
 
 <!-- =================================================================================== 7 -->
 <h2 id="templates">7. Templates: <code>use</code></h2>
 
-<p>A template is a ready-made effect: one or more layers with some parameters. An entry of <code>layers</code> with
-<code>use</code> is replaced by the layers of the template when the design is read:</p>
+<p>A template is an effect with parameters: one or more layers that a design can use more than once. The design keeps
+its templates in <code>animation.templates</code>, by name. An entry of <code>layers</code> with <code>use</code> is
+replaced by the layers of that template when the design is read:</p>
 <pre>{"use": "rain", "count": 120, "color": "#7FB6FF"}</pre>
+<p>The app has no ready-made templates. A design brings every template it uses. A <code>use</code> of a name that is not
+in the <code>templates</code> of the design is left out, with an error. The <a href="#template-library">nine templates</a>
+at the end of this chapter are ready to copy into a design.</p>
 <p>The other keys of the entry are the parameters. A parameter that you do not give has its default. A
 number parameter is cut to its limits. A key that the template does not know is an error in the design tests, and is not
-used. So you cannot add layer keys such as <code>slot</code> or <code>rest</code> to a <code>use</code> entry: write your
-own template for that. A <code>use</code> of a template that does not exist is left out.</p>
+used. So you cannot add layer keys such as <code>slot</code> or <code>rest</code> to a <code>use</code> entry: change the
+template for that.</p>
 
-<p>The watch has nine built-in templates. Times are in milliseconds of the wake, sizes in design pixels, and the
-<code>alpha</code> parameters of the templates go from 0 to 255.</p>
+<h3 id="own-templates">How to write a template</h3>
 
-<h3 id="t-rain"><code>rain</code>: falling streaks</h3>
-<figure class="ex" id="ex-rain" data-face="on">
-<pre>{
-  "animation": {
-    "durationMs": 5000,
-    "layers": [
-      {"use": "rain", "count": 120, "angle": -14, "color": "#7FB6FF", "alpha": 170}
-    ]
-  }
-}</pre>
-<figcaption><strong>Rain behind the data.</strong> The streaks are in the slot <code>back</code>, so the numbers stay easy
-to read. The rain fades in and out with <code>env</code>.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>count</code></td><td>90</td><td>0 to 300, whole</td><td>How many streaks. 0 makes no layer.</td></tr>
-<tr><td><code>seed</code></td><td>7</td><td>whole</td><td>Another seed gives another pattern.</td></tr>
-<tr><td><code>speed</code></td><td>520</td><td>10 to 4000</td><td>Design pixels per second. Each streak falls at 0.8 to 1.2 times this.</td></tr>
-<tr><td><code>angle</code></td><td>12</td><td>-45 to 45</td><td>Degrees from straight down. Positive leans to the right.</td></tr>
-<tr><td><code>length</code></td><td>22</td><td>1 to 200</td><td>The length of a streak.</td></tr>
-<tr><td><code>lengthVariation</code></td><td>0.4</td><td>0 to 0.9</td><td>How much the lengths differ: 0.4 means from 0.6 to 1.4 times <code>length</code>.</td></tr>
-<tr><td><code>thickness</code></td><td>1.6</td><td>0.5 to 10</td><td>The width of a streak.</td></tr>
-<tr><td><code>color</code></td><td><code>#A6C8FF</code></td><td></td><td>The colour.</td></tr>
-<tr><td><code>alpha</code></td><td>150</td><td>0 to 255, whole</td><td>How solid the strongest streaks are. Each streak has 0.45 to 1 times this.</td></tr>
-<tr><td><code>region</code></td><td>the whole face</td><td></td><td><code>left</code>, <code>top</code>, <code>width</code>, <code>height</code>: where it rains. Give only the sides you change.</td></tr>
-</tbody></table></div>
-
-<figure class="ex" id="ex-rain-region" data-face="off">
-<pre>{
-  "animation": {
-    "durationMs": 5000,
-    "layers": [
-      {
-        "use": "rain",
-        "count": 60, "speed": 160, "angle": 0,
-        "length": 6, "lengthVariation": 0.5, "thickness": 4,
-        "color": "#FFFFFF", "alpha": 230,
-        "region": {"left": 100, "top": 60, "width": 200, "height": 220}
-      }
-    ]
-  }
-}</pre>
-<figcaption><strong>The same template, other numbers.</strong> Short, thick, slow, white and straight down: snow in a
-window. <code>region</code> keeps it inside a box.</figcaption>
-</figure>
-
-<h3 id="t-glitch"><code>glitch</code>: bands that jump</h3>
-<figure class="ex" id="ex-glitch" data-face="on">
-<pre>{
-  "animation": {
-    "durationMs": 6000,
-    "layers": [
-      {"use": "glitch", "periodMs": 900, "chance": 0.8, "burstMs": 220, "bands": 4,
-       "seed": 4, "color1": "#FF003C", "color2": "#00C8D8"}
-    ]
-  }
-}</pre>
-<figcaption><strong>A screen that glitches.</strong> The time is cut into periods of 900 ms. In 8 of 10 periods a short
-burst of thin bands shows, at a random moment. The bands jump sideways every 40 ms.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>periodMs</code></td><td>700</td><td>100 to 10000, whole</td><td>The length of one period. Each period has at most one burst.</td></tr>
-<tr><td><code>chance</code></td><td>0.6</td><td>0 to 1</td><td>The chance that a period has a burst. 0 makes no layer.</td></tr>
-<tr><td><code>burstMs</code></td><td>160</td><td>16 to <code>periodMs</code>, whole</td><td>How long a burst shows.</td></tr>
-<tr><td><code>bands</code></td><td>3</td><td>0 to 12, whole</td><td>How many bands in a burst. 0 makes no layer.</td></tr>
-<tr><td><code>seed</code></td><td>5</td><td>whole</td><td>Another seed gives another pattern.</td></tr>
-<tr><td><code>minHeight</code>, <code>maxHeight</code></td><td>2, 8</td><td>0.5 to 40; <code>maxHeight</code> not below <code>minHeight</code></td><td>The height of a band.</td></tr>
-<tr><td><code>minWidth</code>, <code>maxWidth</code></td><td>80, 300</td><td>1 to 400; <code>maxWidth</code> not below <code>minWidth</code></td><td>The width of a band.</td></tr>
-<tr><td><code>jump</code></td><td>8</td><td>0 to 40</td><td>How far a band jumps sideways.</td></tr>
-<tr><td><code>color1</code>, <code>color2</code></td><td><code>#FF003C</code>, <code>#00C8D8</code></td><td></td><td>The bands take these colours in turn.</td></tr>
-<tr><td><code>alpha</code></td><td>200</td><td>0 to 255, whole</td><td>How solid the bands are.</td></tr>
-<tr><td><code>region</code></td><td>the whole face</td><td></td><td>Where the bands show.</td></tr>
-</tbody></table></div>
-
-<h3 id="t-pulse"><code>pulse</code>: a picture that beats</h3>
-<figure class="ex" id="ex-pulse-template" data-face="on" data-controls="bpm nobpm">
-<pre>{
-  "animation": {
-    "durationMs": 6000,
-    "fallbackBpm": 110,
-    "layers": [
-      {"use": "pulse", "image": "Heart",
-       "left": 286, "top": 74, "width": 40, "height": 40,
-       "amplitude": 0.25, "glowAlpha": 255, "glowRadius": 12}
-    ]
-  }
-}</pre>
-<figcaption><strong>A heart at the heart rate.</strong> The picture grows a little with each beat and has a glow that
-beats too. It is in the slot <code>front</code>. Tick the box: without a measured heart rate it beats at
-<code>fallbackBpm</code>, here 110.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>image</code></td><td>none</td><td></td><td>The picture of the zip. You must give it.</td></tr>
-<tr><td><code>left</code>, <code>top</code>, <code>width</code>, <code>height</code></td><td>175, 40, 50, 50</td><td></td><td>Where the picture lies.</td></tr>
-<tr><td><code>amplitude</code></td><td>0.12</td><td>0 to 0.5</td><td>How much it grows at the top of a beat: 0.12 is 12 percent.</td></tr>
-<tr><td><code>secondBeat</code></td><td>0.35</td><td>0 to 1</td><td>The size of the small second beat.</td></tr>
-<tr><td><code>glowColor</code></td><td><code>#FF3050</code></td><td></td><td>The colour of the glow.</td></tr>
-<tr><td><code>glowAlpha</code></td><td>160</td><td>0 to 255, whole</td><td>How strong the glow is at the top of a beat.</td></tr>
-<tr><td><code>glowRadius</code></td><td>10</td><td>0 to 40</td><td>How soft the glow is. 0 means no glow.</td></tr>
-</tbody></table></div>
-
-<h3 id="t-blink"><code>blink</code>: a view that blinks while a value is low</h3>
-<figure class="ex" id="ex-blink" data-face="on" data-controls="battery" data-set='{"battery": 15}'>
-<pre>{
-  "animation": {
-    "durationMs": 5000,
-    "layers": [
-      {"use": "blink", "view": "uploader_battery", "valueKey": "watch_battery", "atOrBelow": 20}
-    ]
-  }
-}</pre>
-<figcaption><strong>A warning that blinks.</strong> While the watch battery is 20 or less, the view
-<code>uploader_battery</code> of the test face is hidden in the second half of every second. Move the slider above 20: no
-blinking. A missing value never blinks.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>view</code></td><td>none</td><td></td><td>The key of the view that blinks. One <code>use</code> per view.</td></tr>
-<tr><td><code>valueKey</code></td><td>none</td><td></td><td>The <a href="#values">value key</a> to watch, without <code>v_</code>.</td></tr>
-<tr><td><code>atOrBelow</code></td><td>0</td><td></td><td>The view blinks while the value is this or less.</td></tr>
-<tr><td><code>periodMs</code></td><td>1000</td><td>200 to 5000, whole</td><td>One blink: shown for the first half, hidden for the second.</td></tr>
-</tbody></table></div>
-
-<h3 id="t-sweep"><code>sweep</code>: a hand that swings to the end of its scale and back</h3>
-<figure class="ex" id="ex-sweep" data-face="on" data-controls="phone">
-<pre>{
-  "animation": {
-    "durationMs": 4000,
-    "layers": [
-      {"use": "sweep", "view": "freetext2", "emptyAngle": -60, "fullAngle": 60,
-       "delayMs": 300, "upMs": 600, "settleMs": 900}
-    ]
-  }
-}</pre>
-<figcaption><strong>The gauge wakes up.</strong> The small hand at the left starts at the empty end of its scale
-(<code>emptyAngle</code>), swings to the full end (<code>fullAngle</code>) and then settles on its real value, like the
-hands of a car when you start it. The angles are those the view has at the two ends of its scale.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>view</code></td><td>none</td><td></td><td>The key of the view (a hand).</td></tr>
-<tr><td><code>emptyAngle</code>, <code>fullAngle</code></td><td>0, 0</td><td></td><td>The turn of the view, in degrees, at the empty end and at the full end of its scale.</td></tr>
-<tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>The hand waits this long at the empty end.</td></tr>
-<tr><td><code>upMs</code></td><td>600</td><td>50 to 5000, whole</td><td>The time to swing to the full end.</td></tr>
-<tr><td><code>settleMs</code></td><td>900</td><td>50 to 5000, whole</td><td>The time to settle on its value.</td></tr>
-</tbody></table></div>
-
-<h3 id="t-slide"><code>slide</code>: a view that slides to the end of its scale and back</h3>
-<figure class="ex" id="ex-slide" data-face="on">
-<pre>{
-  "animation": {
-    "durationMs": 4000,
-    "layers": [
-      {"use": "slide", "view": "delta", "fullDx": 100, "delayMs": 300}
-    ]
-  }
-}</pre>
-<figcaption><strong>The same for a view that moves sideways.</strong> <code>slide</code> is for a marker that a design
-moves left and right by its value. It starts where the design puts it, slides <code>fullDx</code> to the right and
-settles where its value puts it. The view of the test face does not move by a value, so it comes back to its own place.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>view</code></td><td>none</td><td></td><td>The key of the view.</td></tr>
-<tr><td><code>fullDx</code></td><td>0</td><td></td><td>How far right of its design place the view is at the full end of its scale.</td></tr>
-<tr><td><code>delayMs</code>, <code>upMs</code>, <code>settleMs</code></td><td>0, 600, 900</td><td>as for <code>sweep</code></td><td>The times.</td></tr>
-</tbody></table></div>
-
-<h3 id="t-wobble"><code>wobble</code>: a hand that shakes round its value</h3>
-<figure class="ex" id="ex-wobble" data-face="on">
-<pre>{
-  "animation": {
-    "durationMs": 4000,
-    "layers": [
-      {"use": "wobble", "view": "direction", "delayMs": 400, "amplitude": 35, "hz": 3, "decayMs": 500}
-    ]
-  }
-}</pre>
-<figcaption><strong>A shake that dies away.</strong> The trend arrow shakes 35 degrees to both sides, 3 times per second.
-After 5 times <code>decayMs</code> it stands still.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>view</code></td><td>none</td><td></td><td>The key of the view.</td></tr>
-<tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>When the shake starts.</td></tr>
-<tr><td><code>amplitude</code></td><td>16</td><td>-90 to 90</td><td>The first swing, in degrees.</td></tr>
-<tr><td><code>hz</code></td><td>2.5</td><td>0.2 to 10</td><td>Swings per second.</td></tr>
-<tr><td><code>decayMs</code></td><td>350</td><td>50 to 5000, whole</td><td>How fast it dies away: after this time about a third is left.</td></tr>
-</tbody></table></div>
-
-<h3 id="t-trace"><code>trace</code>: a view that draws itself in</h3>
-<figure class="ex" id="ex-trace" data-face="on">
-<pre>{
-  "animation": {
-    "durationMs": 4000,
-    "layers": [
-      {"use": "trace", "view": "chart",
-       "rect": {"left": 70, "top": 250, "width": 260, "height": 86},
-       "delayMs": 300, "durationMs": 1500,
-       "color": "#B9E8C0", "alpha": 220, "width": 12}
-    ]
-  }
-}</pre>
-<figcaption><strong>The graph is drawn from left to right.</strong> The view is cut off at a line that moves to the right,
-and a bright soft line marks the edge. <code>rect</code> is the place of the view in the design: the line runs over its
-width.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>view</code></td><td><code>chart</code></td><td></td><td>The key of the view.</td></tr>
-<tr><td><code>rect</code></td><td>the whole face</td><td></td><td>The place of the view: <code>left</code>, <code>top</code>, <code>width</code>, <code>height</code>.</td></tr>
-<tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>The view is hidden until then.</td></tr>
-<tr><td><code>durationMs</code></td><td>1000</td><td>50 to 5000, whole</td><td>The time to draw the whole view.</td></tr>
-<tr><td><code>color</code>, <code>alpha</code>, <code>width</code></td><td><code>#FFFFFF</code>, 140, 8</td><td><code>alpha</code> 0 to 255 whole, <code>width</code> 0 to 40</td><td>The bright line at the edge. With <code>width</code> or <code>alpha</code> 0 there is no line.</td></tr>
-</tbody></table></div>
-
-<h3 id="t-glint"><code>glint</code>: a light over the shiny parts</h3>
-<figure class="ex" id="ex-glint" data-face="on">
-<pre>{
-  "animation": {
-    "durationMs": 4000,
-    "layers": [
-      {"use": "glint",
-       "rings": [{"cx": 200, "cy": 200, "inner": 184, "outer": 200}],
-       "boxes": [{"left": 66, "top": 246, "width": 268, "height": 94}],
-       "cornerRadius": 8,
-       "delayMs": 400, "durationMs": 1200,
-       "angle": 30, "width": 90, "alpha": 200}
-    ]
-  }
-}</pre>
-<figcaption><strong>A glint.</strong> A band of light slides once over the face, but it shows only in the
-<code>rings</code> and <code>boxes</code> you give: here a ring at the edge and the frame of the graph. Without <code>rings</code> and
-<code>boxes</code> nothing shows.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>rings</code>, <code>boxes</code></td><td>empty</td><td></td><td>Where the light shows, as in <a href="#key-clip"><code>clip</code></a>.</td></tr>
-<tr><td><code>cornerRadius</code></td><td>0</td><td>0 to 200</td><td>Rounds the corners of the <code>boxes</code>.</td></tr>
-<tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>When the light starts.</td></tr>
-<tr><td><code>durationMs</code></td><td>900</td><td>50 to 5000, whole</td><td>The time to cross the face.</td></tr>
-<tr><td><code>angle</code></td><td>30</td><td></td><td>The turn of the band, in degrees.</td></tr>
-<tr><td><code>width</code></td><td>60</td><td>1 to 400</td><td>The width of the band.</td></tr>
-<tr><td><code>color</code>, <code>alpha</code></td><td><code>#FFFFFF</code>, 90</td><td><code>alpha</code> 0 to 255, whole</td><td>The light. With <code>alpha</code> 0 there is no layer.</td></tr>
-</tbody></table></div>
-
-<h3 id="own-templates">Your own templates: <code>templates</code></h3>
-
-<p>A design can bring its own templates in <code>animation.templates</code>. A template has two keys:</p>
+<p>A template in <code>animation.templates</code> has two keys:</p>
 <ul>
   <li><code>params</code>: every parameter with its default. The default is a number, a text, an object or a list. To
     give limits, write <code>{"default": 40, "min": 0, "max": 200, "int": true}</code>: the value is then cut to
@@ -1811,8 +1583,7 @@ width.</figcaption>
     <code>"area": {"top": 200}</code> keeps the other sides.</li>
   <li>A layer of a template with <code>"if": "&lt;formula of the parameters&gt;"</code> is left out when the formula is 0.
     After the parameters are filled in, it must be a formula of fixed numbers.</li>
-  <li>A layer of a template may <code>use</code> another template, at most 4 deep, and never itself.</li>
-  <li>A template of the design comes before a built-in template with the same name.</li>
+  <li>A layer of a template may <code>use</code> another template of the design, at most 4 deep, and never itself.</li>
 </ul>
 
 <figure class="ex" id="ex-own-template" data-face="off">
@@ -1862,12 +1633,36 @@ flakes over the whole face. The second gives 25 big blue flakes in the lower hal
   "animation": {
     "durationMs": 5000,
     "templates": {
+      "streaks": {
+        "params": {
+          "count": {"default": 40, "min": 0, "max": 200, "int": true},
+          "seed": 1,
+          "speed": 400,
+          "length": 16,
+          "alpha": 0.8,
+          "color": "#A6C8FF"
+        },
+        "layers": [
+          {
+            "shape": "line",
+            "colors": ["$color"],
+            "slot": "back",
+            "count": "$count",
+            "seed": "$seed",
+            "x": "r1 * 400",
+            "y": "mod(r2 * 440 + t * $speed * (0.8 + 0.4 * r3), 440) - 20",
+            "length": "$length",
+            "thickness": 1.5,
+            "alpha": "$alpha * env"
+          }
+        ]
+      },
       "storm": {
         "params": {"color": "#A6C8FF"},
         "layers": [
-          {"use": "rain", "count": 70, "speed": 700, "angle": 20, "color": "$color"},
-          {"use": "rain", "count": 40, "speed": 380, "angle": 20, "length": 12,
-           "alpha": 90, "seed": 9, "color": "$color"}
+          {"use": "streaks", "count": 70, "speed": 700, "color": "$color"},
+          {"use": "streaks", "count": 40, "speed": 380, "length": 10,
+           "alpha": 0.4, "seed": 9, "color": "$color"}
         ]
       }
     },
@@ -1876,9 +1671,502 @@ flakes over the whole face. The second gives 25 big blue flakes in the lower hal
     ]
   }
 }</pre>
-<figcaption><strong>A template that uses a template.</strong> <code>storm</code> is two <code>rain</code> layers: fast
-streaks in front and slow, short ones behind. The design chooses one colour for both.</figcaption>
+<figcaption><strong>A template that uses a template.</strong> <code>storm</code> is two <code>streaks</code> layers: fast,
+long streaks and slow, short, faint ones. The design chooses one colour for both.</figcaption>
 </figure>
+
+<h3 id="template-library">Nine templates to copy</h3>
+
+<p>Each example below holds the whole template in its <code>templates</code>, with a picture that uses it. The Copy button
+under the picture copies the JSON of the example. Put the templates your design uses into its own
+<code>templates</code>. Times are in milliseconds of the wake, sizes in design pixels, and the <code>alpha</code>
+parameters go from 0 to 255. The formulas use only the functions of <a href="#functions">chapter 5</a>.</p>
+
+<h3 id="t-rain"><code>rain</code>: falling streaks</h3>
+<figure class="ex" id="ex-rain" data-face="on">
+<pre>{
+  "animation": {
+    "durationMs": 5000,
+    "templates": {
+      "rain": {
+        "params": {
+          "count": {"default": 90, "min": 0, "max": 300, "int": true},
+          "seed": {"default": 7, "int": true},
+          "speed": {"default": 520, "min": 10, "max": 4000},
+          "angle": {"default": 12, "min": -45, "max": 45},
+          "length": {"default": 22, "min": 1, "max": 200},
+          "lengthVariation": {"default": 0.4, "min": 0, "max": 0.9},
+          "thickness": {"default": 1.6, "min": 0.5, "max": 10},
+          "color": "#A6C8FF",
+          "alpha": {"default": 150, "min": 0, "max": 255, "int": true},
+          "region": {"left": 0, "top": 0, "width": 400, "height": 400}
+        },
+        "layers": [{
+          "shape": "line", "colors": ["$color"], "slot": "back", "count": "$count", "seed": "$seed",
+          "if": "$count &gt; 0",
+          "let": {
+            "sinA": "sin($angle * pi / 180)",
+            "cosA": "cos($angle * pi / 180)",
+            "tanA": "tan($angle * pi / 180)",
+            "longest": "$length * (1 + $lengthVariation)",
+            "span": "$region.height + longest * cosA + 1",
+            "pad": "longest * abs(sinA)",
+            "fromX": "$region.left - max(0, $region.height * tanA) - pad",
+            "toX": "$region.left + $region.width + max(0, -$region.height * tanA) + pad",
+            "fallen": "mod(r2 * span + $speed * (0.8 + 0.4 * r3) * ms / 1000, span)",
+            "streak": "$length * (1 + $lengthVariation * (2 * r4 - 1))"
+          },
+          "x": "fromX + r1 * (toX - fromX) + fallen * tanA - streak * sinA",
+          "y": "$region.top + fallen - streak * cosA",
+          "length": "streak",
+          "angle": "$angle",
+          "thickness": "$thickness",
+          "alpha": "env * $alpha / 255 * (0.45 + 0.55 * r5)",
+          "clip": {"rect": "$region", "round": true}
+        }]
+      }
+    },
+    "layers": [
+      {"use": "rain", "count": 120, "angle": -14, "color": "#7FB6FF", "alpha": 170}
+    ]
+  }
+}</pre>
+<figcaption><strong>Rain behind the data.</strong> The streaks are in the slot <code>back</code>, so the numbers stay easy
+to read. The rain fades in and out with <code>env</code>. For snow in a window, change the <code>use</code> entry to
+<code>"speed": 160, "angle": 0, "length": 6, "thickness": 4, "color": "#FFFFFF"</code> and give it
+<code>"region": {"left": 100, "top": 60, "width": 200, "height": 220}</code>.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>count</code></td><td>90</td><td>0 to 300, whole</td><td>How many streaks. 0 makes no layer.</td></tr>
+<tr><td><code>seed</code></td><td>7</td><td>whole</td><td>Another seed gives another pattern.</td></tr>
+<tr><td><code>speed</code></td><td>520</td><td>10 to 4000</td><td>Design pixels per second. Each streak falls at 0.8 to 1.2 times this.</td></tr>
+<tr><td><code>angle</code></td><td>12</td><td>-45 to 45</td><td>Degrees from straight down. Positive leans to the right.</td></tr>
+<tr><td><code>length</code></td><td>22</td><td>1 to 200</td><td>The length of a streak.</td></tr>
+<tr><td><code>lengthVariation</code></td><td>0.4</td><td>0 to 0.9</td><td>How much the lengths differ: 0.4 means from 0.6 to 1.4 times <code>length</code>.</td></tr>
+<tr><td><code>thickness</code></td><td>1.6</td><td>0.5 to 10</td><td>The width of a streak.</td></tr>
+<tr><td><code>color</code></td><td><code>#A6C8FF</code></td><td></td><td>The colour.</td></tr>
+<tr><td><code>alpha</code></td><td>150</td><td>0 to 255, whole</td><td>How solid the strongest streaks are. Each streak has 0.45 to 1 times this.</td></tr>
+<tr><td><code>region</code></td><td>the whole face</td><td></td><td><code>left</code>, <code>top</code>, <code>width</code>, <code>height</code>: where it rains. Give only the sides you change.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-glitch"><code>glitch</code>: bands that jump</h3>
+<figure class="ex" id="ex-glitch" data-face="on">
+<pre>{
+  "animation": {
+    "durationMs": 6000,
+    "templates": {
+      "glitch": {
+        "params": {
+          "periodMs": {"default": 700, "min": 100, "max": 10000, "int": true},
+          "chance": {"default": 0.6, "min": 0, "max": 1},
+          "burstMs": {"default": 160, "min": 16, "max": "$periodMs", "int": true},
+          "bands": {"default": 3, "min": 0, "max": 12, "int": true},
+          "seed": {"default": 5, "int": true},
+          "minHeight": {"default": 2, "min": 0.5, "max": 40},
+          "maxHeight": {"default": 8, "min": "$minHeight", "max": 40},
+          "minWidth": {"default": 80, "min": 1, "max": 400},
+          "maxWidth": {"default": 300, "min": "$minWidth", "max": 400},
+          "jump": {"default": 8, "min": 0, "max": 40},
+          "color1": "#FF003C",
+          "color2": "#00C8D8",
+          "alpha": {"default": 200, "min": 0, "max": 255, "int": true},
+          "region": {"left": 0, "top": 0, "width": 400, "height": 400}
+        },
+        "layers": [{
+          "shape": "rect", "colors": ["$color1", "$color2"], "slot": "back", "count": "$bands", "seed": "$seed",
+          "if": "$bands &gt; 0 &amp;&amp; $chance &gt; 0",
+          "let": {
+            "period": "floor(ms / $periodMs)",
+            "start": "floor(hash($seed, period, 1) * ($periodMs - $burstMs))",
+            "inPeriod": "mod(ms, $periodMs)",
+            "jumps": "floor((inPeriod - start) / 40)",
+            "h": "$minHeight + hash($seed, period, 2 + i * 4) * ($maxHeight - $minHeight)",
+            "w": "$minWidth + hash($seed, period, 3 + i * 4) * ($maxWidth - $minWidth)"
+          },
+          "x": "$region.left - w / 2 + hash($seed, period, 5 + i * 4) * $region.width + (mod(jumps + i, 3) - 1) * $jump",
+          "y": "$region.top + hash($seed, period, 4 + i * 4) * max(0, $region.height - h)",
+          "width": "w",
+          "height": "h",
+          "colorIndex": "mod(i, 2)",
+          "alpha": "if(hash($seed, period, 0) &lt; $chance &amp;&amp; inPeriod &gt;= start &amp;&amp; inPeriod &lt; start + $burstMs, env * $alpha / 255, 0)",
+          "clip": {"rect": "$region", "round": true}
+        }]
+      }
+    },
+    "layers": [
+      {"use": "glitch", "periodMs": 900, "chance": 0.8, "burstMs": 220, "bands": 4,
+       "seed": 4, "color1": "#FF003C", "color2": "#00C8D8"}
+    ]
+  }
+}</pre>
+<figcaption><strong>A screen that glitches.</strong> The time is cut into periods of 900 ms. In 8 of 10 periods a short
+burst of thin bands shows, at a random moment. The bands jump sideways every 40 ms.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>periodMs</code></td><td>700</td><td>100 to 10000, whole</td><td>The length of one period. Each period has at most one burst.</td></tr>
+<tr><td><code>chance</code></td><td>0.6</td><td>0 to 1</td><td>The chance that a period has a burst. 0 makes no layer.</td></tr>
+<tr><td><code>burstMs</code></td><td>160</td><td>16 to <code>periodMs</code>, whole</td><td>How long a burst shows.</td></tr>
+<tr><td><code>bands</code></td><td>3</td><td>0 to 12, whole</td><td>How many bands in a burst. 0 makes no layer.</td></tr>
+<tr><td><code>seed</code></td><td>5</td><td>whole</td><td>Another seed gives another pattern.</td></tr>
+<tr><td><code>minHeight</code>, <code>maxHeight</code></td><td>2, 8</td><td>0.5 to 40; <code>maxHeight</code> not below <code>minHeight</code></td><td>The height of a band.</td></tr>
+<tr><td><code>minWidth</code>, <code>maxWidth</code></td><td>80, 300</td><td>1 to 400; <code>maxWidth</code> not below <code>minWidth</code></td><td>The width of a band.</td></tr>
+<tr><td><code>jump</code></td><td>8</td><td>0 to 40</td><td>How far a band jumps sideways.</td></tr>
+<tr><td><code>color1</code>, <code>color2</code></td><td><code>#FF003C</code>, <code>#00C8D8</code></td><td></td><td>The bands take these colours in turn.</td></tr>
+<tr><td><code>alpha</code></td><td>200</td><td>0 to 255, whole</td><td>How solid the bands are.</td></tr>
+<tr><td><code>region</code></td><td>the whole face</td><td></td><td>Where the bands show.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-pulse"><code>pulse</code>: a picture that beats</h3>
+<figure class="ex" id="ex-pulse-template" data-face="on" data-controls="bpm nobpm">
+<pre>{
+  "animation": {
+    "durationMs": 6000,
+    "fallbackBpm": 110,
+    "templates": {
+      "pulse": {
+        "params": {
+          "image": "",
+          "left": 175, "top": 40, "width": 50, "height": 50,
+          "amplitude": {"default": 0.12, "min": 0, "max": 0.5},
+          "secondBeat": {"default": 0.35, "min": 0, "max": 1},
+          "glowColor": "#FF3050",
+          "glowAlpha": {"default": 160, "min": 0, "max": 255, "int": true},
+          "glowRadius": {"default": 10, "min": 0, "max": 40}
+        },
+        "layers": [{
+          "image": "$image", "rect": {"left": "$left", "top": "$top", "width": "$width", "height": "$height"}, "slot": "front",
+          "let": {
+            "period": "floor(60000 / bpm)",
+            "at": "mod(max(0, floor(ms)), period)",
+            "rise": "min(120, period * 0.3)",
+            "fall": "max(50, period * 0.16)",
+            "first": "if(at &lt; rise, pow(sin(pi / 2 * at / rise), 2), exp(-(at - rise) / fall))",
+            "d": "(at - rise - min(250, period * 0.3)) / max(25, period * 0.06)",
+            "beat": "clamp(first + $secondBeat * exp(-d * d), 0, 1) * env"
+          },
+          "scaleX": "1 + $amplitude * beat",
+          "scaleY": "1 + $amplitude * beat",
+          "glowAlpha": "$glowAlpha / 255 * beat",
+          "glow": {"color": "$glowColor", "radius": "$glowRadius"},
+          "maxScale": "1 + $amplitude",
+          "clip": {"round": false}
+        }]
+      }
+    },
+    "layers": [
+      {"use": "pulse", "image": "Heart",
+       "left": 286, "top": 74, "width": 40, "height": 40,
+       "amplitude": 0.25, "glowAlpha": 255, "glowRadius": 12}
+    ]
+  }
+}</pre>
+<figcaption><strong>A heart at the heart rate.</strong> The picture grows a little with each beat and has a glow that
+beats too. It is in the slot <code>front</code>. Tick the box: without a measured heart rate it beats at
+<code>fallbackBpm</code>, here 110.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>image</code></td><td>none</td><td></td><td>The picture of the zip. You must give it.</td></tr>
+<tr><td><code>left</code>, <code>top</code>, <code>width</code>, <code>height</code></td><td>175, 40, 50, 50</td><td></td><td>Where the picture lies.</td></tr>
+<tr><td><code>amplitude</code></td><td>0.12</td><td>0 to 0.5</td><td>How much it grows at the top of a beat: 0.12 is 12 percent.</td></tr>
+<tr><td><code>secondBeat</code></td><td>0.35</td><td>0 to 1</td><td>The size of the small second beat.</td></tr>
+<tr><td><code>glowColor</code></td><td><code>#FF3050</code></td><td></td><td>The colour of the glow.</td></tr>
+<tr><td><code>glowAlpha</code></td><td>160</td><td>0 to 255, whole</td><td>How strong the glow is at the top of a beat.</td></tr>
+<tr><td><code>glowRadius</code></td><td>10</td><td>0 to 40</td><td>How soft the glow is. 0 means no glow.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-blink"><code>blink</code>: a view that blinks while a value is low</h3>
+<figure class="ex" id="ex-blink" data-face="on" data-controls="battery" data-set='{"battery": 15}'>
+<pre>{
+  "animation": {
+    "durationMs": 5000,
+    "templates": {
+      "blink": {
+        "params": {
+          "view": "",
+          "valueKey": "",
+          "atOrBelow": 0,
+          "periodMs": {"default": 1000, "min": 200, "max": 5000, "int": true}
+        },
+        "layers": [{
+          "view": "$view",
+          "alpha": "if(v_$valueKey &lt;= $atOrBelow &amp;&amp; mod(ms, $periodMs) &gt;= floor($periodMs / 2), 0, 1)"
+        }]
+      }
+    },
+    "layers": [
+      {"use": "blink", "view": "uploader_battery", "valueKey": "watch_battery", "atOrBelow": 20}
+    ]
+  }
+}</pre>
+<figcaption><strong>A warning that blinks.</strong> While the watch battery is 20 or less, the view
+<code>uploader_battery</code> of the test face is hidden in the second half of every second. Move the slider above 20: no
+blinking. A missing value never blinks.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>view</code></td><td>none</td><td></td><td>The key of the view that blinks. One <code>use</code> per view.</td></tr>
+<tr><td><code>valueKey</code></td><td>none</td><td></td><td>The <a href="#values">value key</a> to watch, without <code>v_</code>.</td></tr>
+<tr><td><code>atOrBelow</code></td><td>0</td><td></td><td>The view blinks while the value is this or less.</td></tr>
+<tr><td><code>periodMs</code></td><td>1000</td><td>200 to 5000, whole</td><td>One blink: shown for the first half, hidden for the second.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-sweep"><code>sweep</code>: a hand that swings to the end of its scale and back</h3>
+<figure class="ex" id="ex-sweep" data-face="on" data-controls="phone">
+<pre>{
+  "animation": {
+    "durationMs": 4000,
+    "templates": {
+      "sweep": {
+        "params": {
+          "view": "",
+          "emptyAngle": 0,
+          "fullAngle": 0,
+          "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
+          "upMs": {"default": 600, "min": 50, "max": 5000, "int": true},
+          "settleMs": {"default": 900, "min": 50, "max": 5000, "int": true}
+        },
+        "layers": [{
+          "view": "$view",
+          "let": {
+            "w": "ms - $delayMs",
+            "s": "clamp((w - $upMs) / $settleMs, 0, 1)",
+            "settled": "1 - exp(-5 * s) * cos(3 * pi * s) - exp(-5) * s"
+          },
+          "rotation": "if(w &lt;= 0, $emptyAngle, if(w &lt; $upMs, $emptyAngle + ($fullAngle - $emptyAngle) * easeInOut(w / $upMs), if(w &lt; $upMs + $settleMs, $fullAngle + (rot0 - $fullAngle) * settled, rot0))) - rot0"
+        }]
+      }
+    },
+    "layers": [
+      {"use": "sweep", "view": "freetext2", "emptyAngle": -60, "fullAngle": 60,
+       "delayMs": 300, "upMs": 600, "settleMs": 900}
+    ]
+  }
+}</pre>
+<figcaption><strong>The gauge wakes up.</strong> The small hand at the left starts at the empty end of its scale
+(<code>emptyAngle</code>), swings to the full end (<code>fullAngle</code>) and then settles on its real value, like the
+hands of a car when you start it. The angles are those the view has at the two ends of its scale.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>view</code></td><td>none</td><td></td><td>The key of the view (a hand).</td></tr>
+<tr><td><code>emptyAngle</code>, <code>fullAngle</code></td><td>0, 0</td><td></td><td>The turn of the view, in degrees, at the empty end and at the full end of its scale.</td></tr>
+<tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>The hand waits this long at the empty end.</td></tr>
+<tr><td><code>upMs</code></td><td>600</td><td>50 to 5000, whole</td><td>The time to swing to the full end.</td></tr>
+<tr><td><code>settleMs</code></td><td>900</td><td>50 to 5000, whole</td><td>The time to settle on its value.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-slide"><code>slide</code>: a view that slides to the end of its scale and back</h3>
+<figure class="ex" id="ex-slide" data-face="on">
+<pre>{
+  "animation": {
+    "durationMs": 4000,
+    "templates": {
+      "slide": {
+        "params": {
+          "view": "",
+          "fullDx": 0,
+          "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
+          "upMs": {"default": 600, "min": 50, "max": 5000, "int": true},
+          "settleMs": {"default": 900, "min": 50, "max": 5000, "int": true}
+        },
+        "layers": [{
+          "view": "$view",
+          "let": {
+            "w": "ms - $delayMs",
+            "s": "clamp((w - $upMs) / $settleMs, 0, 1)",
+            "settled": "1 - exp(-5 * s) * cos(3 * pi * s) - exp(-5) * s"
+          },
+          "x": "if(w &lt;= 0, 0, if(w &lt; $upMs, $fullDx * easeInOut(w / $upMs), if(w &lt; $upMs + $settleMs, $fullDx + (dx0 - $fullDx) * settled, dx0))) - dx0"
+        }]
+      }
+    },
+    "layers": [
+      {"use": "slide", "view": "delta", "fullDx": 100, "delayMs": 300}
+    ]
+  }
+}</pre>
+<figcaption><strong>The same for a view that moves sideways.</strong> <code>slide</code> is for a marker that a design
+moves left and right by its value. It starts where the design puts it, slides <code>fullDx</code> to the right and
+settles where its value puts it. The view of the test face does not move by a value, so it comes back to its own place.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>view</code></td><td>none</td><td></td><td>The key of the view.</td></tr>
+<tr><td><code>fullDx</code></td><td>0</td><td></td><td>How far right of its design place the view is at the full end of its scale.</td></tr>
+<tr><td><code>delayMs</code>, <code>upMs</code>, <code>settleMs</code></td><td>0, 600, 900</td><td>as for <code>sweep</code></td><td>The times.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-wobble"><code>wobble</code>: a hand that shakes round its value</h3>
+<figure class="ex" id="ex-wobble" data-face="on">
+<pre>{
+  "animation": {
+    "durationMs": 4000,
+    "templates": {
+      "wobble": {
+        "params": {
+          "view": "",
+          "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
+          "amplitude": {"default": 16, "min": -90, "max": 90},
+          "hz": {"default": 2.5, "min": 0.2, "max": 10},
+          "decayMs": {"default": 350, "min": 50, "max": 5000, "int": true}
+        },
+        "layers": [{
+          "view": "$view",
+          "let": {"w": "ms - $delayMs"},
+          "rotation": "if(w &lt;= 0 || w &gt; $decayMs * 5, 0, $amplitude * exp(-w / $decayMs) * sin(2 * pi * $hz * w / 1000))"
+        }]
+      }
+    },
+    "layers": [
+      {"use": "wobble", "view": "direction", "delayMs": 400, "amplitude": 35, "hz": 3, "decayMs": 500}
+    ]
+  }
+}</pre>
+<figcaption><strong>A shake that dies away.</strong> The trend arrow shakes 35 degrees to both sides, 3 times per second.
+After 5 times <code>decayMs</code> it stands still.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>view</code></td><td>none</td><td></td><td>The key of the view.</td></tr>
+<tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>When the shake starts.</td></tr>
+<tr><td><code>amplitude</code></td><td>16</td><td>-90 to 90</td><td>The first swing, in degrees.</td></tr>
+<tr><td><code>hz</code></td><td>2.5</td><td>0.2 to 10</td><td>Swings per second.</td></tr>
+<tr><td><code>decayMs</code></td><td>350</td><td>50 to 5000, whole</td><td>How fast it dies away: after this time about a third is left.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-trace"><code>trace</code>: a view that draws itself in</h3>
+<figure class="ex" id="ex-trace" data-face="on">
+<pre>{
+  "animation": {
+    "durationMs": 4000,
+    "templates": {
+      "trace": {
+        "params": {
+          "view": "chart",
+          "rect": {"left": 0, "top": 0, "width": 400, "height": 400},
+          "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
+          "durationMs": {"default": 1000, "min": 50, "max": 5000, "int": true},
+          "color": "#FFFFFF",
+          "alpha": {"default": 140, "min": 0, "max": 255, "int": true},
+          "width": {"default": 8, "min": 0, "max": 40}
+        },
+        "layers": [{
+          "view": "$view",
+          "let": {"w": "ms - $delayMs"},
+          "clipRight": "$rect.left + $rect.width * clamp(w / $durationMs, 0, 1)",
+          "alpha": "if(w &gt; 0, 1, 0)"
+        }, {
+          "shape": "rect", "colors": ["$color"], "slot": "views",
+          "gradient": {"type": "linear", "stops": [[0, 0], [0.5, 1], [1, 0]]},
+          "if": "$width &gt; 0 &amp;&amp; $alpha &gt; 0",
+          "let": {
+            "w": "ms - $delayMs",
+            "edge": "$rect.left + $rect.width * clamp(w / $durationMs, 0, 1)"
+          },
+          "x": "edge - $width / 2",
+          "y": "$rect.top",
+          "width": "$width",
+          "height": "$rect.height",
+          "alpha": "if(w &gt; 0 &amp;&amp; w &lt; $durationMs, $alpha / 255 * min(1, (1 - w / $durationMs) * 8), 0)",
+          "clip": {"round": false}
+        }]
+      }
+    },
+    "layers": [
+      {"use": "trace", "view": "chart",
+       "rect": {"left": 70, "top": 250, "width": 260, "height": 86},
+       "delayMs": 300, "durationMs": 1500,
+       "color": "#B9E8C0", "alpha": 220, "width": 12}
+    ]
+  }
+}</pre>
+<figcaption><strong>The graph is drawn from left to right.</strong> The view is cut off at a line that moves to the right,
+and a bright soft line marks the edge. <code>rect</code> is the place of the view in the design: the line runs over its
+width.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>view</code></td><td><code>chart</code></td><td></td><td>The key of the view.</td></tr>
+<tr><td><code>rect</code></td><td>the whole face</td><td></td><td>The place of the view: <code>left</code>, <code>top</code>, <code>width</code>, <code>height</code>.</td></tr>
+<tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>The view is hidden until then.</td></tr>
+<tr><td><code>durationMs</code></td><td>1000</td><td>50 to 5000, whole</td><td>The time to draw the whole view.</td></tr>
+<tr><td><code>color</code>, <code>alpha</code>, <code>width</code></td><td><code>#FFFFFF</code>, 140, 8</td><td><code>alpha</code> 0 to 255 whole, <code>width</code> 0 to 40</td><td>The bright line at the edge. With <code>width</code> or <code>alpha</code> 0 there is no line.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-glint"><code>glint</code>: a light over the shiny parts</h3>
+<figure class="ex" id="ex-glint" data-face="on">
+<pre>{
+  "animation": {
+    "durationMs": 4000,
+    "templates": {
+      "glint": {
+        "params": {
+          "rings": [],
+          "boxes": [],
+          "cornerRadius": {"default": 0, "min": 0, "max": 200},
+          "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
+          "durationMs": {"default": 900, "min": 50, "max": 5000, "int": true},
+          "angle": 30,
+          "width": {"default": 60, "min": 1, "max": 400},
+          "color": "#FFFFFF",
+          "alpha": {"default": 90, "min": 0, "max": 255, "int": true}
+        },
+        "layers": [{
+          "shape": "rect", "colors": ["$color"], "slot": "front",
+          "gradient": {"type": "linear", "stops": [[0, 0], [0.5, 1], [1, 0]]},
+          "if": "$alpha &gt; 0",
+          "let": {
+            "diagonal": "400 * sqrt(2)",
+            "w": "ms - $delayMs",
+            "middle": "200 - diagonal / 2 - $width / 2 + (diagonal + $width) * easeInOut(w / $durationMs)"
+          },
+          "pivotX": 200, "pivotY": 200,
+          "rotation": "$angle",
+          "x": "middle - $width / 2",
+          "y": "200 - diagonal",
+          "width": "$width",
+          "height": "2 * diagonal",
+          "alpha": "if(w &gt;= 0 &amp;&amp; w &lt;= $durationMs, $alpha / 255, 0)",
+          "clip": {"round": false, "rings": "$rings", "boxes": "$boxes", "cornerRadius": "$cornerRadius"}
+        }]
+      }
+    },
+    "layers": [
+      {"use": "glint",
+       "rings": [{"cx": 200, "cy": 200, "inner": 184, "outer": 200}],
+       "boxes": [{"left": 66, "top": 246, "width": 268, "height": 94}],
+       "cornerRadius": 8,
+       "delayMs": 400, "durationMs": 1200,
+       "angle": 30, "width": 90, "alpha": 200}
+    ]
+  }
+}</pre>
+<figcaption><strong>A glint.</strong> A band of light slides once over the face, but it shows only in the
+<code>rings</code> and <code>boxes</code> you give: here a ring at the edge and the frame of the graph. Without <code>rings</code> and
+<code>boxes</code> nothing shows.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>rings</code>, <code>boxes</code></td><td>empty</td><td></td><td>Where the light shows, as in <a href="#key-clip"><code>clip</code></a>.</td></tr>
+<tr><td><code>cornerRadius</code></td><td>0</td><td>0 to 200</td><td>Rounds the corners of the <code>boxes</code>.</td></tr>
+<tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>When the light starts.</td></tr>
+<tr><td><code>durationMs</code></td><td>900</td><td>50 to 5000, whole</td><td>The time to cross the face.</td></tr>
+<tr><td><code>angle</code></td><td>30</td><td></td><td>The turn of the band, in degrees.</td></tr>
+<tr><td><code>width</code></td><td>60</td><td>1 to 400</td><td>The width of the band.</td></tr>
+<tr><td><code>color</code>, <code>alpha</code></td><td><code>#FFFFFF</code>, 90</td><td><code>alpha</code> 0 to 255, whole</td><td>The light. With <code>alpha</code> 0 there is no layer.</td></tr>
+</tbody></table></div>
 
 <!-- =================================================================================== 8 -->
 <h2 id="views">8. View layers</h2>
@@ -2081,7 +2369,9 @@ gives four views a dark text colour and swaps the background picture. A design w
         "freetext1": {"visibility": "visible"},
         "animation": {
           "durationMs": 5000,
-          "layers": [{"use": "rain", "count": 110, "color": "#9CC4FF"}]
+          "layers": [{"shape": "line", "color": "#9CC4FF", "slot": "back", "count": 110,
+                      "x": "r1 * 400", "y": "mod(r2 * 440 + t * 500, 440) - 20",
+                      "length": 20, "thickness": 1.5, "alpha": "0.6 * env"}]
         }
       },
       "images": {"Background": "BackgroundRain", "Cloud": "CloudRain"}
@@ -2089,7 +2379,7 @@ gives four views a dark text colour and swaps the background picture. A design w
   ]
 }</pre>
 <figcaption><strong>Weather.</strong> The design has a cloud view that is hidden. With clouds, the first look shows it.
-In the rain, the second look shows it, swaps two pictures and adds an <code>animation</code> with rain. While the weather
+In the rain, the second look shows it, swaps two pictures and adds an <code>animation</code> with rain: one line layer with 110 copies. While the weather
 is not known, no look is on: a comparison with a missing value is false.</figcaption>
 </figure>
 
@@ -2127,19 +2417,78 @@ Custom watch face (<code>width</code>, <code>topmargin</code>, <code>fontColor</
 part of this manual.</p>
 
 <h3 id="view-image">A picture on a view: <code>image</code></h3>
-<p>A view can show a picture with the view key <code>image</code>: the name of a zip picture, or <code>"@moon"</code>.
-The picture is the background of the view, stretched to its size, and it is coloured like the key
-<code>background</code>. Looks can swap it. For <code>@moon</code> make the view a square. It works on text views (such
-as <code>freetext1</code> to <code>freetext4</code>), not on picture views.</p>
-<figure class="ex" id="ex-view-image" data-face="on" data-loop="still" data-controls="moon">
+<p>A view can show a picture with the view key <code>image</code>. It is one of three things: the name of a zip picture,
+an app picture (<code>"@moon"</code>, the photo of the full moon), or a template with its parameters:
+<code>{"use": "moon"}</code>. The picture is the background of the view, stretched to its size, and it is coloured like
+the key <code>background</code>. Looks can swap it. It works on text views (such as <code>freetext1</code> to
+<code>freetext4</code>), not on picture views.</p>
+<p>The template is one of <code>animation.templates</code> of the design. Its layers are drawn on a
+square picture as big as the shorter side of the view. The whole 400 x 400 design space of the layers is that square, so
+a template that fills the design space fills the view. Make the view a square. The layers are drawn still, as layers
+with <code>rest</code> 0 are, with the values of now. The picture is made again only when one of the values it reads
+changes. View layers of the template are left out, and a picture is at most 512 pixels a side.</p>
+<figure class="ex" id="ex-view-image" data-face="on" data-loop="still" data-controls="moon turn">
 <pre>{
   "freetext1": {
     "width": 44, "height": 44, "topmargin": 3, "leftmargin": 178,
-    "image": "@moon"
+    "image": {"use": "moon"}
+  },
+  "animation": {
+    "templates": {
+      "moon": {
+        "params": {
+          "left": 0, "top": 0,
+          "size": {"default": 400, "min": 1, "max": 400},
+          "slot": "back",
+          "rest": 0,
+          "dark": {"default": 0.3, "min": 0, "max": 1},
+          "cover": {"default": 0.45, "min": 0, "max": 1}
+        },
+        "layers": [{
+          "shape": "circle", "color": "#000000", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "alpha": "1 - (1 - $cover) / (1 - $dark * $cover)",
+          "clip": {"round": false}
+        }, {
+          "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+          "slot": "$slot", "rest": "$rest",
+          "rotation": "v_moon_north", "maxScale": 2,
+          "alpha": "$dark * $cover",
+          "clip": {"round": false}
+        }, {
+          "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+          "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "clip": {"rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"}, "round": false}
+        }, {
+          "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "scaleX": "2 * v_moon_lit - 1",
+          "visible": "v_moon_lit &gt; 0.5",
+          "clip": {"round": false}
+        }, {
+          "shape": "circle", "group": "moon", "blend": "erase", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "scaleX": "1 - 2 * v_moon_lit",
+          "visible": "v_moon_lit &lt; 0.5",
+          "clip": {"round": false}
+        }, {
+          "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+          "group": "moon", "blend": "inside", "slot": "$slot", "rest": "$rest",
+          "rotation": "v_moon_north", "maxScale": 2,
+          "clip": {"round": false}
+        }]
+      }
+    }
   }
 }</pre>
-<figcaption><strong>The moon on a view.</strong> The view <code>freetext1</code> shows the moon of now. Because it is a
-view, a view layer can move it, for example along the path of the moon with <code>v_moon_cycle</code>.</figcaption>
+<figcaption><strong>The moon on a view.</strong> The view <code>freetext1</code> shows the moon of now, drawn by the
+template <code>moon</code> that the design brings itself (it is explained in <a href="#moon">chapter 13</a>). Its
+<code>size</code> is 400 by default, so it fills the view. Because it is a view, a view layer can move it, for example
+along the path of the moon with <code>v_moon_cycle</code>.</figcaption>
 </figure>
 
 <h3 id="time-token">A moment as a text: <code>@time</code></h3>
@@ -2236,7 +2585,7 @@ the wearer chooses. Try the buttons.</figcaption>
 <tr><td>Extra numbers of a point</td><td>8 (<code>p0</code> to <code>p7</code>)</td><td>The others are not read.</td></tr>
 <tr><td>Templates inside templates</td><td>4 deep</td><td>The entry is left out.</td></tr>
 <tr><td>A kept picture</td><td>2048 pixels a side; all pictures, glows and masks together 16 MB</td><td>A picture that does not fit is made smaller (and softer).</td></tr>
-<tr><td><code>@moon</code></td><td>512 pixels a side</td><td>Made at 512.</td></tr>
+<tr><td>An app picture (<code>@moon</code>), and the picture of a view from a template</td><td>512 pixels a side</td><td>Made at 512.</td></tr>
 </tbody></table></div>
 
 <h3 id="broken">What happens with a mistake</h3>
@@ -2292,8 +2641,8 @@ picture say what was left out. Layers are counted from 0, after the templates ar
     slot <code>front</code>).</li>
   <li><strong>Move few views.</strong> A view with a view layer is drawn again in every frame of the wake. A big view,
     like the graph, costs the most.</li>
-  <li><strong>The moon</strong> is made pixel by pixel, but only once per 15 minutes and size. Do not make it bigger
-    than you need.</li>
+  <li><strong>A group</strong> is drawn on a sheet of its own first, in every frame it shows. Keep the sheet small with a
+    <code>clip.rect</code> on its first layer. The moon template of <a href="#moon">chapter 13</a> does that.</li>
 </ul>
 
 <h3 id="known-limits">Known limits</h3>
@@ -2307,10 +2656,7 @@ picture say what was left out. Layers are counted from 0, after the templates ar
   <li>The view key <code>image</code> works on text views only.</li>
   <li>The random numbers of a layer without <code>count</code> change when a layer is added before it.</li>
   <li>The values are read at the start of a wake. A value that changes while the wake plays shows in the next wake.</li>
-  <li>There are no values for the lit part or the tilt of the moon. For the lit part use
-    <code>(1 - cos(2 * pi * v_moon_phase)) / 2</code>: 0 at new moon, 1 at full moon.</li>
-  <li>The variable <code>ms</code> and the function <code>f32</code> will go away later. Use <code>t * 1000</code> in new
-    designs when you can.</li>
+  <li>The variable <code>ms</code> will go away later. Use <code>t * 1000</code> in new designs when you can.</li>
 </ul>
 
 <!-- =================================================================================== 12 -->
@@ -2356,7 +2702,8 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>colors</code></td><td>list of colour texts</td><td></td><td></td><td>no</td><td>shape</td></tr>
 <tr><td><code>gradient</code></td><td>object: <code>type</code> (<code>linear</code>, <code>radial</code>), <code>stops</code> (list of <code>[position, alpha]</code>)</td><td>none</td><td>2 stops or more, each 0 to 1</td><td>no</td><td><code>rect</code>, <code>circle</code></td></tr>
 <tr><td><code>slot</code></td><td><code>back</code>, <code>views</code>, <code>front</code></td><td><code>back</code></td><td>a view is always in <code>views</code></td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code></td><td><code>normal</code></td><td></td><td>no</td><td>picture, shape</td></tr>
+<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code>, <code>erase</code>, <code>inside</code></td><td><code>normal</code></td><td><code>erase</code> and <code>inside</code> only in a <code>group</code></td><td>no</td><td>picture, shape</td></tr>
+<tr><td><code>group</code></td><td>text: a name</td><td>none</td><td>layers that follow each other, in one slot</td><td>no</td><td>picture, shape</td></tr>
 <tr><td><code>glow</code></td><td>object: <code>color</code>, <code>radius</code></td><td>none; white, 10</td><td><code>radius</code> 0 to 40</td><td>no</td><td>zip picture</td></tr>
 <tr><td><code>maxScale</code></td><td>number</td><td>1</td><td>0.1 to 4</td><td>no</td><td>picture</td></tr>
 <tr><td><code>clip</code></td><td>object, see below</td><td>round screen</td><td></td><td>no</td><td>picture, shape</td></tr>
@@ -2405,7 +2752,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td>a template</td><td><code>params</code></td><td>Parameter name to default, or to <code>{"default", "min", "max", "int"}</code>.</td></tr>
 <tr><td>a template</td><td><code>layers</code></td><td>The layers, with <code>$name</code> and <code>$name.key</code>.</td></tr>
 <tr><td>a layer of a template</td><td><code>if</code></td><td>A formula of the parameters; the layer is left out when it is 0.</td></tr>
-<tr><td>built in</td><td colspan="2"><code>rain</code>, <code>glitch</code>, <code>pulse</code>, <code>blink</code>, <code>sweep</code>, <code>slide</code>, <code>wobble</code>, <code>trace</code>, <code>glint</code>. See <a href="#templates">7</a>.</td></tr>
+<tr><td><code>animation</code></td><td><code>templates</code></td><td>The templates of the design, by name. The app has none of its own. Nine to copy: <a href="#template-library">7</a>.</td></tr>
 </tbody></table></div>
 
 <h3>Looks, colours and views</h3>
@@ -2416,7 +2763,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td>a look</td><td><code>patch</code></td><td>Merged into the design; <code>null</code> removes a key.</td></tr>
 <tr><td>a look</td><td><code>images</code></td><td>Picture swaps: shown name to zip picture.</td></tr>
 <tr><td><code>colourLooks</code></td><td><code>colour1</code>, <code>colour2</code></td><td>A patch each; a text that ends with <code>@colour</code> becomes the chosen colour.</td></tr>
-<tr><td>a text view</td><td><code>image</code></td><td>A zip picture or <code>@moon</code> as the background of the view.</td></tr>
+<tr><td>a text view</td><td><code>image</code></td><td>A zip picture, <code>@moon</code> or a template (<code>{"use": "moon"}</code>) as the background of the view.</td></tr>
 <tr><td>a text of a view or of a <code>dynData</code></td><td><code>@time</code></td><td>The value as a clock time.</td></tr>
 </tbody></table></div>
 
@@ -2424,9 +2771,245 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <div class="scroll"><table>
 <tbody>
 <tr><th>Operators</th><td class="wrap"><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> <code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>==</code> <code>!=</code> <code>&amp;&amp;</code> <code>||</code> <code>!</code> <code>( )</code></td></tr>
-<tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>settle</code> <code>pulse</code> <code>window</code> <code>pingpong</code> <code>f32</code></td></tr>
+<tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>window</code> <code>pingpong</code></td></tr>
 <tr><th>Variables</th><td class="wrap"><code>t</code> <code>ms</code> <code>len</code> <code>env</code> <code>i</code> <code>n</code> <code>u</code> <code>px</code> <code>py</code> <code>p0</code> to <code>p7</code> <code>r1</code> to <code>r8</code> <code>bpm</code> <code>sec</code> <code>min</code> <code>hour</code> <code>rot0</code> <code>dx0</code> <code>cx0</code> <code>cy0</code> <code>pi</code></td></tr>
-<tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>.</td></tr>
+<tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_moon_lit</code> <code>v_moon_limb</code> <code>v_moon_north</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>.</td></tr>
+</tbody></table></div>
+
+
+<!-- =================================================================================== 13 -->
+<h2 id="moon">13. Example: the moon from plain layers</h2>
+
+<p>The watch has no drawing code for the moon, and no ready-made moon. A design draws the moon of this moment with six
+plain layers: the photo <code>@moon</code> two times, and four circles. This chapter builds them one by one, and ends
+with the same layers as a <a href="#moon-template">template to copy</a> into your design. Three values say how the moon looks now: <code>v_moon_lit</code> (how much is lit),
+<code>v_moon_limb</code> (where the lit side points) and <code>v_moon_north</code> (how the moon is turned), see
+<a href="#values">chapter 6</a>.</p>
+<p>Every picture has two sliders. "Moon phase" sets how much is lit, and on which side. "Turn in the sky" turns the moon,
+as the place and the time of day do on the watch. The page has no photo: it draws a simple full moon with a white spot at
+its north.</p>
+
+<h3 id="moon-photo">Step 1: the photo, turned</h3>
+<p><code>@moon</code> is the full moon with north up. The value <code>v_moon_north</code> is the turn of the moon in the
+sky, in the same degrees as <code>rotation</code>.</p>
+<figure class="ex" id="ex-moon-1" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
+       "rotation": "v_moon_north"}
+    ]
+  }
+}</pre>
+<figcaption><strong>The photo.</strong> Always the full moon. Only the slider "Turn in the sky" changes it.</figcaption>
+</figure>
+
+<h3 id="moon-half">Step 2: the lit half</h3>
+<p>Now the shape of the lit part, in white, without the photo. Start with the half of the disc on the side of the sun. A
+<a href="#key-gradient">linear gradient</a> on a circle runs from its left edge to its right edge. With these stops the left
+half is clear and the right half is solid, with a soft line between them. <code>v_moon_limb</code> is the direction of the
+lit side, counted from straight up, and the solid half points to the right. So the circle is turned by
+<code>v_moon_limb - 90</code>.</p>
+<figure class="ex" id="ex-moon-2" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+       "rotation": "v_moon_limb - 90"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Half a disc.</strong> It points to the right while the moon grows and to the left while it shrinks. It does not follow how much is lit yet.</figcaption>
+</figure>
+
+<h3 id="moon-shape">Step 3: more than half, or less</h3>
+<p>The line between light and dark on a ball looks like half an ellipse. A circle with a <code>scaleX</code> is an ellipse.
+At full moon and at new moon it is as wide as the disc, at a quarter it has no width: its half width is the radius times
+<code>2 * v_moon_lit - 1</code>, without the sign. When more than half is lit, the ellipse is added to the half disc. When
+less than half is lit, it is taken away from it, with <code>"blend": "erase"</code>. That needs a
+<a href="#key-group"><code>group</code></a>, so the three shapes get one. The key <code>visible</code> picks which of the
+two ellipses is used. The first layer of the group gives a <code>clip.rect</code>, so the sheet of the group is only as
+big as the moon.</p>
+<figure class="ex" id="ex-moon-3" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+       "rotation": "v_moon_limb - 90",
+       "group": "lit",
+       "clip": {"rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "round": false}},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "2 * v_moon_lit - 1",
+       "visible": "v_moon_lit &gt; 0.5",
+       "group": "lit"},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "1 - 2 * v_moon_lit",
+       "visible": "v_moon_lit &lt; 0.5",
+       "group": "lit", "blend": "erase"}
+    ]
+  }
+}</pre>
+<figcaption><strong>The lit shape.</strong> Move "Moon phase": a thin sickle, a half, a nearly full disc. The blue below the group is not cut by the <code>erase</code>.</figcaption>
+</figure>
+
+<h3 id="moon-inside">Step 4: the photo inside the shape</h3>
+<p>The last layer of the group is the photo with <code>"blend": "inside"</code>. It is drawn only where the group has
+drawn the white shape, and it takes the place of the white. <code>maxScale</code> 2 asks for the photo at twice its size,
+so it stays sharp when it is turned.</p>
+<figure class="ex" id="ex-moon-4" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+       "rotation": "v_moon_limb - 90",
+       "group": "lit",
+       "clip": {"rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "round": false}},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "2 * v_moon_lit - 1",
+       "visible": "v_moon_lit &gt; 0.5",
+       "group": "lit"},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "1 - 2 * v_moon_lit",
+       "visible": "v_moon_lit &lt; 0.5",
+       "group": "lit", "blend": "erase"},
+      {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
+       "rotation": "v_moon_north", "maxScale": 2,
+       "group": "lit", "blend": "inside"}
+    ]
+  }
+}</pre>
+<figcaption><strong>The lit part of the moon.</strong> The dark part is still missing: there the sky shows.</figcaption>
+</figure>
+
+<h3 id="moon-dark">Step 5: the dark part</h3>
+<p>The dark part of the real moon is not black. You can still see it at night, and by day the blue of the sky shows
+through it. So below the group come two faint layers that fill the whole disc: a black circle and the photo. With how
+bright the dark part is (<code>dark</code>, 0.3) and how much it covers (<code>cover</code>, 0.45), the photo gets the
+<code>alpha</code> <code>dark * cover</code> and the black circle <code>1 - (1 - cover) / (1 - dark * cover)</code>. The lit
+part of step 4 is drawn over them and covers them.</p>
+<figure class="ex" id="ex-moon-5" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"shape": "circle", "color": "#000000", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "alpha": "1 - (1 - 0.45) / (1 - 0.3 * 0.45)"},
+      {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
+       "rotation": "v_moon_north", "maxScale": 2,
+       "alpha": "0.3 * 0.45"},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+       "rotation": "v_moon_limb - 90",
+       "group": "lit",
+       "clip": {"rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "round": false}},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "2 * v_moon_lit - 1",
+       "visible": "v_moon_lit &gt; 0.5",
+       "group": "lit"},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "1 - 2 * v_moon_lit",
+       "visible": "v_moon_lit &lt; 0.5",
+       "group": "lit", "blend": "erase"},
+      {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
+       "rotation": "v_moon_north", "maxScale": 2,
+       "group": "lit", "blend": "inside"}
+    ]
+  }
+}</pre>
+<figcaption><strong>The whole moon.</strong> Six plain layers, with fixed numbers for the place and the size.</figcaption>
+</figure>
+
+<h3 id="moon-template">Step 6: the moon as a template to copy</h3>
+<p>The same six layers as a <a href="#own-templates">template of the design</a>, with parameters where step 5 has
+numbers. Copy the entry <code>"moon"</code> into the <code>animation.templates</code> of your design. Then one line draws
+the moon: <code>{"use": "moon", "left": 110, "top": 110, "size": 180}</code>. A view can show it too, with
+<code>"image": {"use": "moon"}</code>, see <a href="#view-image"><code>image</code> on a view</a>. The watch does not know
+this template by itself: a design that uses it must bring it.</p>
+<p>The layers of the template have <code>"clip": {"round": false}</code>, so the moon is not cut to the round screen when
+it is the picture of a view. The formulas read <code>v_moon_limb</code> and <code>v_moon_north</code>, so a design with
+this template needs the place, see <a href="#needs-place"><code>needsPlace</code></a>.</p>
+<figure class="ex" id="ex-moon-template" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "templates": {
+      "moon": {
+        "params": {
+          "left": 0, "top": 0,
+          "size": {"default": 400, "min": 1, "max": 400},
+          "slot": "back",
+          "rest": 0,
+          "dark": {"default": 0.3, "min": 0, "max": 1},
+          "cover": {"default": 0.45, "min": 0, "max": 1}
+        },
+        "layers": [{
+          "shape": "circle", "color": "#000000", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "alpha": "1 - (1 - $cover) / (1 - $dark * $cover)",
+          "clip": {"round": false}
+        }, {
+          "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+          "slot": "$slot", "rest": "$rest",
+          "rotation": "v_moon_north", "maxScale": 2,
+          "alpha": "$dark * $cover",
+          "clip": {"round": false}
+        }, {
+          "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+          "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "clip": {"rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"}, "round": false}
+        }, {
+          "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "scaleX": "2 * v_moon_lit - 1",
+          "visible": "v_moon_lit &gt; 0.5",
+          "clip": {"round": false}
+        }, {
+          "shape": "circle", "group": "moon", "blend": "erase", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "scaleX": "1 - 2 * v_moon_lit",
+          "visible": "v_moon_lit &lt; 0.5",
+          "clip": {"round": false}
+        }, {
+          "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+          "group": "moon", "blend": "inside", "slot": "$slot", "rest": "$rest",
+          "rotation": "v_moon_north", "maxScale": 2,
+          "clip": {"round": false}
+        }]
+      }
+    },
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"use": "moon", "left": 110, "top": 110, "size": 180}
+    ]
+  }
+}</pre>
+<figcaption><strong>The moon template.</strong> The same picture as in step 5, now from one <code>use</code> line.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>left</code>, <code>top</code></td><td>0, 0</td><td></td><td>The top left corner of the square of the moon.</td></tr>
+<tr><td><code>size</code></td><td>400</td><td>1 to 400</td><td>The side of the square: the moon is as wide as this. The default fills the face, or a view.</td></tr>
+<tr><td><code>slot</code></td><td><code>back</code></td><td></td><td>The slot of all its layers.</td></tr>
+<tr><td><code>rest</code></td><td>0</td><td>0 to 30</td><td>The <code>rest</code> of all its layers: the moon stays on the face. Give <code>""</code> for a moon that shows only while a wake plays.</td></tr>
+<tr><td><code>dark</code></td><td>0.3</td><td>0 to 1</td><td>How bright the dark part is, against the lit part. Not 0, so the moon can be found at new moon.</td></tr>
+<tr><td><code>cover</code></td><td>0.45</td><td>0 to 1</td><td>How much the dark part covers what is behind it. Below 1 a day sky shows through it; with 1 it covers all.</td></tr>
 </tbody></table></div>
 
 </main>
@@ -2476,47 +3059,17 @@ var FUNCTIONS = {
   floor: [1, 1], ceil: [1, 1], round: [1, 1], fract: [1, 1], mod: [2, 2],
   min: [2, 8], max: [2, 8], clamp: [3, 3], mix: [3, 3], step: [2, 2], smoothstep: [3, 3],
   'if': [3, 3], noise: [1, 2], hash: [1, 3],
-  easeInOut: [1, 1], settle: [1, 1], pulse: [3, 3],
-  window: [3, 3], pingpong: [2, 2], f32: [1, 1]
+  easeInOut: [1, 1],
+  window: [3, 3], pingpong: [2, 2]
 };
 
 function mod(a, b) { return b === 0 ? NaN : a - b * Math.floor(a / b); }
 function easeInOut(u) { return 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1)); }
-function settle(u) {
-  var x = clamp(u, 0, 1);
-  var spring = 1 - Math.exp(-5 * x) * Math.cos(3 * Math.PI * x);
-  var rest = (1 - Math.exp(-5) * Math.cos(3 * Math.PI)) - 1;
-  return spring - rest * x;
-}
 function windowOf(t, start, duration) {
   return duration <= 0 ? (t >= start ? 1 : 0) : clamp((t - start) / duration, 0, 1);
 }
 function pingpong(x, length) { return length > 0 ? length - Math.abs(mod(x, 2 * length) - length) : 0; }
-function f32(x) {
-  var f = Math.fround(x);
-  if (!isFinite(f)) return f;
-  for (var p = 1; p <= 9; p++) {
-    var s = Number(f.toPrecision(p));
-    if (Math.fround(s) === f) return s;
-  }
-  return f;
-}
 
-/** PulseCurve.value: one heart beat, 0 (rest) to 1 (top of the beat). */
-function pulseValue(elapsedMs, bpm, secondBeat) {
-  var e = elapsedMs === elapsedMs ? Math.trunc(elapsedMs) : 0;
-  if (e < 0) e = 0;
-  var b = clamp(bpm === bpm ? Math.trunc(bpm) : 0, MIN_BPM, MAX_BPM);
-  var period = Math.floor(60000 / b);
-  var t = e % period;
-  var rise = Math.min(120, period * 0.3);
-  var decay = Math.max(50, period * 0.16);
-  var main = t < rise ? Math.pow(Math.sin(Math.PI / 2 * t / rise), 2) : Math.exp(-(t - rise) / decay);
-  var secondAt = rise + Math.min(250, period * 0.3);
-  var secondWidth = Math.max(25, period * 0.06);
-  var d = (t - secondAt) / secondWidth;
-  return clamp(main + secondBeat * Math.exp(-d * d), 0, 1);
-}
 
 /** Formula.hash: the same 64-bit mixing as the watch, so `hash` and `noise` give the same numbers. */
 var hash = (function () {
@@ -2578,9 +3131,8 @@ var FN = {
   },
   noise: function (a, b) { return b === undefined ? noise1(a) : noise2(a, b); },
   hash: hash,
-  easeInOut: easeInOut, settle: settle,
-  pulse: pulseValue,
-  window: windowOf, pingpong: pingpong, f32: f32
+  easeInOut: easeInOut,
+  window: windowOf, pingpong: pingpong
 };
 
 /** Kinds: 'n' number, 'i' name, 'o' operator, '(' ')' ',' */
@@ -2843,221 +3395,6 @@ Variables.prototype.addLocal = function (formula) { return this.add(this.readsTi
 
 // ==================================================================================== 2. templates
 
-/** The built-in templates: the text of BuiltInTemplates.kt, copied as it is. */
-var BUILT_IN_TEMPLATES = {
-  "rain": {
-    "params": {
-      "count": {"default": 90, "min": 0, "max": 300, "int": true},
-      "seed": {"default": 7, "int": true},
-      "speed": {"default": 520, "min": 10, "max": 4000},
-      "angle": {"default": 12, "min": -45, "max": 45},
-      "length": {"default": 22, "min": 1, "max": 200},
-      "lengthVariation": {"default": 0.4, "min": 0, "max": 0.9},
-      "thickness": {"default": 1.6, "min": 0.5, "max": 10},
-      "color": "#A6C8FF",
-      "alpha": {"default": 150, "min": 0, "max": 255, "int": true},
-      "region": {"left": 0, "top": 0, "width": 400, "height": 400}
-    },
-    "layers": [{
-      "shape": "line", "colors": ["$color"], "slot": "back", "count": "$count", "seed": "$seed",
-      "if": "$count > 0",
-      "let": {
-        "sinA": "f32(sin(f32($angle) * (pi / 180)))",
-        "cosA": "f32(cos(f32($angle) * (pi / 180)))",
-        "tanA": "f32(tan(f32($angle) * (pi / 180)))",
-        "longest": "f32($length * f32(1 + $lengthVariation))",
-        "span": "f32(f32($region.height + f32(longest * cosA)) + 1)",
-        "pad": "f32(longest * abs(sinA))",
-        "fromX": "f32(f32($region.left - max(0, f32($region.height * tanA))) - pad)",
-        "toX": "f32(f32(f32($region.left + $region.width) + max(0, f32(-$region.height * tanA))) + pad)",
-        "spread": "f32(toX - fromX)",
-        "fallen": "mod(r2 * span + $speed * (0.8 + 0.4 * r3) * ms / 1000, span)",
-        "streak": "$length * (1 + $lengthVariation * (2 * r4 - 1))"
-      },
-      "x": "fromX + r1 * spread + fallen * tanA - (streak) * sinA",
-      "y": "$region.top + fallen - (streak) * cosA",
-      "length": "streak",
-      "angle": "$angle",
-      "thickness": "$thickness",
-      "alpha": "env * f32($alpha / 255) * (0.45 + 0.55 * r5)",
-      "clip": {"rect": "$region", "round": true}
-    }]
-  },
-  "glitch": {
-    "params": {
-      "periodMs": {"default": 700, "min": 100, "max": 10000, "int": true},
-      "chance": {"default": 0.6, "min": 0, "max": 1},
-      "burstMs": {"default": 160, "min": 16, "max": "$periodMs", "int": true},
-      "bands": {"default": 3, "min": 0, "max": 12, "int": true},
-      "seed": {"default": 5, "int": true},
-      "minHeight": {"default": 2, "min": 0.5, "max": 40},
-      "maxHeight": {"default": 8, "min": "$minHeight", "max": 40},
-      "minWidth": {"default": 80, "min": 1, "max": 400},
-      "maxWidth": {"default": 300, "min": "$minWidth", "max": 400},
-      "jump": {"default": 8, "min": 0, "max": 40},
-      "color1": "#FF003C",
-      "color2": "#00C8D8",
-      "alpha": {"default": 200, "min": 0, "max": 255, "int": true},
-      "region": {"left": 0, "top": 0, "width": 400, "height": 400}
-    },
-    "layers": [{
-      "shape": "rect", "colors": ["$color1", "$color2"], "slot": "back", "count": "$bands", "seed": "$seed",
-      "if": "$bands > 0 && $chance > 0",
-      "let": {
-        "period": "floor(ms / $periodMs)",
-        "start": "floor(hash($seed, period, 1) * ($periodMs - $burstMs))",
-        "inPeriod": "mod(ms, $periodMs)",
-        "jumps": "floor((inPeriod - start) / 40)",
-        "h": "($minHeight + hash($seed, period, 2 + i * 4) * f32(f32($maxHeight) - f32($minHeight)))",
-        "w": "($minWidth + hash($seed, period, 3 + i * 4) * f32(f32($maxWidth) - f32($minWidth)))"
-      },
-      "x": "$region.left - w / 2 + hash($seed, period, 5 + i * 4) * $region.width + (mod(jumps + i, 3) - 1) * $jump",
-      "y": "$region.top + hash($seed, period, 4 + i * 4) * max(0, $region.height - h)",
-      "width": "w",
-      "height": "h",
-      "colorIndex": "mod(i, 2)",
-      "alpha": "if(hash($seed, period, 0) < $chance && inPeriod >= start && inPeriod < start + $burstMs, f32($alpha / 255) * env, 0)",
-      "clip": {"rect": "$region", "round": true}
-    }]
-  },
-  "pulse": {
-    "params": {
-      "image": "",
-      "left": 175, "top": 40, "width": 50, "height": 50,
-      "amplitude": {"default": 0.12, "min": 0, "max": 0.5},
-      "secondBeat": {"default": 0.35, "min": 0, "max": 1},
-      "glowColor": "#FF3050",
-      "glowAlpha": {"default": 160, "min": 0, "max": 255, "int": true},
-      "glowRadius": {"default": 10, "min": 0, "max": 40}
-    },
-    "layers": [{
-      "image": "$image", "rect": {"left": "$left", "top": "$top", "width": "$width", "height": "$height"}, "slot": "front",
-      "scaleX": "1 + $amplitude * pulse(ms, bpm, $secondBeat) * env",
-      "scaleY": "1 + $amplitude * pulse(ms, bpm, $secondBeat) * env",
-      "glowAlpha": "f32($glowAlpha / 255) * pulse(ms, bpm, $secondBeat) * env",
-      "glow": {"color": "$glowColor", "radius": "$glowRadius"},
-      "maxScale": "f32(1 + f32($amplitude))",
-      "clip": {"round": false}
-    }]
-  },
-  "blink": {
-    "params": {
-      "view": "",
-      "valueKey": "",
-      "atOrBelow": 0,
-      "periodMs": {"default": 1000, "min": 200, "max": 5000, "int": true}
-    },
-    "layers": [{
-      "view": "$view",
-      "alpha": "if(v_$valueKey <= $atOrBelow && mod(ms, $periodMs) >= floor($periodMs / 2), 0, 1)"
-    }]
-  },
-  "sweep": {
-    "params": {
-      "view": "",
-      "emptyAngle": 0,
-      "fullAngle": 0,
-      "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
-      "upMs": {"default": 600, "min": 50, "max": 5000, "int": true},
-      "settleMs": {"default": 900, "min": 50, "max": 5000, "int": true}
-    },
-    "layers": [{
-      "view": "$view",
-      "let": {"w": "ms - $delayMs"},
-      "rotation": "if(w <= 0, $emptyAngle, if(w < $upMs, $emptyAngle + f32(f32($fullAngle) - f32($emptyAngle)) * easeInOut(w / $upMs), if(w < $upMs + $settleMs, $fullAngle + (rot0 - $fullAngle) * settle((w - $upMs) / $settleMs), rot0))) - rot0"
-    }]
-  },
-  "slide": {
-    "params": {
-      "view": "",
-      "fullDx": 0,
-      "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
-      "upMs": {"default": 600, "min": 50, "max": 5000, "int": true},
-      "settleMs": {"default": 900, "min": 50, "max": 5000, "int": true}
-    },
-    "layers": [{
-      "view": "$view",
-      "let": {"w": "ms - $delayMs"},
-      "x": "if(w <= 0, 0, if(w < $upMs, 0 + ($fullDx - 0) * easeInOut(w / $upMs), if(w < $upMs + $settleMs, $fullDx + (dx0 - $fullDx) * settle((w - $upMs) / $settleMs), dx0))) - dx0"
-    }]
-  },
-  "wobble": {
-    "params": {
-      "view": "",
-      "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
-      "amplitude": {"default": 16, "min": -90, "max": 90},
-      "hz": {"default": 2.5, "min": 0.2, "max": 10},
-      "decayMs": {"default": 350, "min": 50, "max": 5000, "int": true}
-    },
-    "layers": [{
-      "view": "$view",
-      "let": {"w": "ms - $delayMs"},
-      "rotation": "if(w <= 0 || w > $decayMs * 5, 0, $amplitude * exp(-w / $decayMs) * sin(2 * pi * $hz * w / 1000))"
-    }]
-  },
-  "trace": {
-    "params": {
-      "view": "chart",
-      "rect": {"left": 0, "top": 0, "width": 400, "height": 400},
-      "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
-      "durationMs": {"default": 1000, "min": 50, "max": 5000, "int": true},
-      "color": "#FFFFFF",
-      "alpha": {"default": 140, "min": 0, "max": 255, "int": true},
-      "width": {"default": 8, "min": 0, "max": 40}
-    },
-    "layers": [{
-      "view": "$view",
-      "let": {"w": "ms - $delayMs"},
-      "clipRight": "$rect.left + $rect.width * clamp(w / $durationMs, 0, 1)",
-      "alpha": "if(w > 0, 1, 0)"
-    }, {
-      "shape": "rect", "colors": ["$color"], "slot": "views",
-      "gradient": {"type": "linear", "stops": [[0, 0], [0.5, 1], [1, 0]]},
-      "if": "$width > 0 && $alpha > 0",
-      "let": {
-        "w": "ms - $delayMs",
-        "edge": "$rect.left + $rect.width * clamp(w / $durationMs, 0, 1)"
-      },
-      "x": "edge - $width / 2",
-      "y": "$rect.top",
-      "width": "$width",
-      "height": "$rect.height",
-      "alpha": "if(w > 0 && w < $durationMs, f32($alpha / 255) * min(1, (1 - w / $durationMs) * 8), 0)",
-      "clip": {"round": false}
-    }]
-  },
-  "glint": {
-    "params": {
-      "rings": [],
-      "boxes": [],
-      "cornerRadius": {"default": 0, "min": 0, "max": 200},
-      "delayMs": {"default": 0, "min": 0, "max": 5000, "int": true},
-      "durationMs": {"default": 900, "min": 50, "max": 5000, "int": true},
-      "angle": 30,
-      "width": {"default": 60, "min": 1, "max": 400},
-      "color": "#FFFFFF",
-      "alpha": {"default": 90, "min": 0, "max": 255, "int": true}
-    },
-    "layers": [{
-      "shape": "rect", "colors": ["$color"], "slot": "front",
-      "gradient": {"type": "linear", "stops": [[0, 0], [0.5, 1], [1, 0]]},
-      "if": "$alpha > 0",
-      "let": {
-        "diagonal": "f32(400 * f32(sqrt(2)))",
-        "w": "ms - $delayMs",
-        "middle": "f32(f32(200 - f32(diagonal / 2)) - f32(f32($width) / 2)) + f32(diagonal + f32(2 * f32(f32($width) / 2))) * easeInOut(w / $durationMs)"
-      },
-      "pivotX": 200, "pivotY": 200,
-      "rotation": "$angle",
-      "x": "middle - $width / 2",
-      "y": "f32(200 - diagonal)",
-      "width": "$width",
-      "height": "f32(2 * diagonal)",
-      "alpha": "if(w >= 0 && w <= $durationMs, f32($alpha / 255), 0)",
-      "clip": {"round": false, "rings": "$rings", "boxes": "$boxes", "cornerRadius": "$cornerRadius"}
-    }]
-  }
-};
 
 /** A number as a plain decimal, without an exponent. */
 function plainDecimal(n) {
@@ -3102,8 +3439,8 @@ function expandTemplates(layers, own, errors) {
 function expandEntry(entry, using, into, errors, where, own) {
   if (!has(entry, 'use')) { into.push(entry); return; }
   var name = optString(entry.use);
-  var template = own && isObj(own[name]) && has(own, name) ? own[name] : (has(BUILT_IN_TEMPLATES, name) ? BUILT_IN_TEMPLATES[name] : null);
-  if (!isObj(template)) { errors.push(where + ": no template '" + name + "'"); return; }
+  var template = own && has(own, name) && isObj(own[name]) ? own[name] : null;
+  if (!isObj(template)) { errors.push(where + ": no template '" + name + "' in the templates of the design"); return; }
   if (using.indexOf(name) >= 0) { errors.push(where + ": template '" + name + "' uses itself"); return; }
   if (using.length >= TEMPLATE_MAX_DEPTH) { errors.push(where + ': templates nested more than ' + TEMPLATE_MAX_DEPTH + ' deep'); return; }
   var params = bindParams(isObj(template.params) ? template.params : {}, entry, name, errors, where);
@@ -3386,7 +3723,8 @@ function readLayer(json, env) {
   return {
     source: source,
     slot: source.type === 'view' ? 'views' : enumOf(optString(json.slot), ['back', 'views', 'front'], 'back'),
-    blend: enumOf(optString(json.blend), ['normal', 'add', 'screen'], 'normal'),
+    blend: enumOf(optString(json.blend), ['normal', 'add', 'screen', 'erase', 'inside'], 'normal'),
+    group: source.type === 'view' ? null : (optString(json.group) || null),
     copies: copies, props: props, lets: readLets(json), clip: clip,
     glow: isObj(json.glow) ? { color: env.color(optString(json.glow.color), WHITE), radius: floatOf(json.glow, 'radius', 10) } : null,
     maxScale: floatOf(json, 'maxScale', 1),
@@ -3401,6 +3739,7 @@ function normalizeLayer(layer, notes, index) {
   if (s.type === 'image' && !s.exists) return drop("picture '" + s.key + "' is not in the zip");
   if (layer.clip.mask && !layer.clip.mask.exists) return drop("mask '" + layer.clip.mask.key + "' is not in the zip");
   if (s.type === 'view' && !s.key) return drop('no view key');
+  if ((layer.blend === 'erase' || layer.blend === 'inside') && !layer.group) return drop("blend '" + layer.blend + "' works only in a group");
   if (s.type === 'dynamic' && !(s.rect.width > 0 && s.rect.height > 0)) return drop('the rect has no size');
   var tooLong = Object.keys(layer.props).some(function (k) { return layer.props[k].length > FORMULA_MAX_LENGTH; }) ||
     layer.lets.some(function (l) { return l[1].length > FORMULA_MAX_LENGTH; });
@@ -3875,6 +4214,49 @@ Animator.prototype.transform = function (ctx, layer, pivotX, pivotY) {
   ctx.translate(-px, -py);
 };
 
+/** The canvas name of each blend. `inside` also cuts the canvas to the box of the layer first, see `insideBox`. */
+var BLENDS = { add: 'lighter', screen: 'screen', erase: 'destination-out', inside: 'source-in' };
+
+/**
+ * For a layer with the blend `inside`: cuts the canvas to the path made last (the box of the layer), so
+ * the layer changes only the pixels in its own box, as on the watch. A browser would clear all the rest.
+ */
+function insideBox(ctx, layer) {
+  if (layer.spec.blend === 'inside') ctx.clip();
+}
+
+/**
+ * Makes `layer` (or null: no layer) draw on the right sheet: closes the group that is open when the layer
+ * is not in it (its sheet is laid over the face), and opens the sheet of the group of the layer.
+ * The watch opens the sheet at the first layer of the group that is drawn; the page at the first one.
+ */
+Animator.prototype.enterGroup = function (R, layer) {
+  var name = layer ? layer.spec.group : null;
+  if (name === this.groupName) return;
+  if (this.groupName !== null && this.groupName !== undefined) {
+    var sheetCtx = R.ctx, outer = this.groupOuter;
+    sheetCtx.restore();
+    R.ctx = outer;
+    outer.save();
+    outer.setTransform(1, 0, 0, 1, 0, 0);
+    outer.globalCompositeOperation = 'source-over';
+    outer.drawImage(sheetCtx.canvas, 0, 0);
+    outer.restore();
+  }
+  this.groupName = name;
+  if (name === null) return;
+  var sheet = R.sheet(R.ctx), rect = layer.spec.clip.rect;
+  sheet.ctx.save();
+  if (rect) {
+    // The sheet is as big as the clip.rect of the first layer of the group
+    sheet.ctx.beginPath();
+    sheet.ctx.rect(rect.left, rect.top, rect.width, rect.height);
+    sheet.ctx.clip();
+  }
+  this.groupOuter = R.ctx;
+  R.ctx = sheet.ctx;
+};
+
 /** Draws all copies of one layer; false when nothing of it can show. */
 Animator.prototype.drawLayer = function (R, layer) {
   var spec = layer.spec, source = spec.source, clip = spec.clip;
@@ -3896,7 +4278,7 @@ Animator.prototype.drawLayer = function (R, layer) {
   var n = spec.copies.size;
   if (n <= 0) return false;
 
-  var blend = spec.blend === 'add' ? 'lighter' : (spec.blend === 'screen' ? 'screen' : 'source-over');
+  var blend = BLENDS[spec.blend] || 'source-over';
   var main = R.ctx, ctx = main, scratch = null;
   if (clip.mask) {
     // A layer with a mask is drawn on its own first, then cut by the mask, then laid over the face
@@ -3980,6 +4362,9 @@ Animator.prototype.drawPicture = function (ctx, layer, rect, picture, glow, i, a
   }
   if (sw <= 0 || sh <= 0 || right === left || bottom === top) return;
   ctx.globalAlpha = a;
+  ctx.beginPath();
+  ctx.rect(left, top, right - left, bottom - top);
+  insideBox(ctx, layer);
   ctx.drawImage(picture, sx, sy, sw, sh, left, top, right - left, bottom - top);
 };
 
@@ -4011,6 +4396,9 @@ Animator.prototype.drawShape = function (ctx, layer, source, alpha, R) {
       this.transform(ctx, layer, x + width / 2, y + height / 2);
       ctx.globalAlpha = a;
       ctx.fillStyle = rgba(color);
+      ctx.beginPath();
+      ctx.rect(x, y, width, height);
+      insideBox(ctx, layer);
       ctx.fillRect(x, y, width, height);
     } else {
       if (!(width > 0)) return;
@@ -4032,9 +4420,12 @@ Animator.prototype.drawShape = function (ctx, layer, source, alpha, R) {
     if (!(radius > 0) || !isFinite(radius)) return;
     this.transform(ctx, layer, x, y);
     ctx.globalAlpha = a;
-    ctx.fillStyle = gradient ? shader(ctx.createRadialGradient(x, y, 0, x, y, radius), color, gradient) : rgba(color);
+    // On a circle a linear gradient runs from its left edge to its right edge
+    var fade = !gradient ? null : (gradient.type === 'linear' ? ctx.createLinearGradient(x - radius, 0, x + radius, 0) : ctx.createRadialGradient(x, y, 0, x, y, radius));
+    ctx.fillStyle = fade ? shader(fade, color, gradient) : rgba(color);
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
+    insideBox(ctx, layer);
     ctx.fill();
   }
 };
@@ -4050,12 +4441,20 @@ Animator.prototype.drawSlot = function (R, slot, views) {
   var self = this;
   if (slot === 'views') {
     this.viewSteps.forEach(function (step) {
-      if (step >= 0) self.drawLayer(R, self.layers[step]);
-      else if (views) views(self.viewGroups[-step - 1]);
+      if (step >= 0) {
+        self.enterGroup(R, self.layers[step]);
+        self.drawLayer(R, self.layers[step]);
+      } else {
+        self.enterGroup(R, null);
+        if (views) views(self.viewGroups[-step - 1]);
+      }
     });
   } else this.layers.forEach(function (layer) {
-    if (layer.spec.slot === slot && layer.spec.source.type !== 'view') self.drawLayer(R, layer);
+    if (layer.spec.slot !== slot || layer.spec.source.type === 'view') return;
+    self.enterGroup(R, layer);
+    self.drawLayer(R, layer);
   });
+  this.enterGroup(R, null);
 };
 
 /** Draws the layers of a slot that stay on the face while no animation plays. */
@@ -4067,8 +4466,10 @@ Animator.prototype.drawRest = function (R, nowMs, slot, value) {
     if (layer.spec.slot !== slot || layer.spec.source.type === 'view' || layer.spec.rest === null) continue;
     this.setElapsed(Math.trunc(layer.spec.rest * 1000));
     this.refreshLets();
+    this.enterGroup(R, layer);
     this.drawLayer(R, layer);
   }
+  this.enterGroup(R, null);
 };
 
 // ========================================================================== 5. stand-in pictures
@@ -4245,12 +4646,12 @@ var ZIP = {
   }
 };
 
-/** The moon as a drawing: lit from the right while it grows, north up. Not the photo of the watch. */
-function drawMoon(ctx, size, phase) {
+/** The full moon as a drawing, north up, cut round: the stand-in for the photo `@moon` of the watch. */
+function drawMoon(ctx, size) {
   var r = size / 2;
   ctx.save();
   ctx.beginPath();
-  ctx.arc(r, r, r * 0.985, 0, Math.PI * 2);
+  ctx.arc(r, r, r, 0, Math.PI * 2);
   ctx.clip();
   ctx.fillStyle = '#E9E6DC';
   ctx.fillRect(0, 0, size, size);
@@ -4260,19 +4661,10 @@ function drawMoon(ctx, size, phase) {
     ctx.arc(size * c[0], size * c[1], size * c[2], 0, Math.PI * 2);
     ctx.fill();
   });
-  // The dark part: half a disc on the dark side, made wider or narrower by the phase
-  var k = Math.cos(2 * Math.PI * phase);        // 1 new moon, 0 half, -1 full moon
-  var waxing = phase < 0.5;
-  ctx.fillStyle = 'rgba(8,10,22,0.82)';
-  // top to bottom along the dark rim, then back along the line between light and dark (half an ellipse)
+  // A light spot near the top, so a turn of the photo can be seen
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.beginPath();
-  ctx.arc(r, r, r, -Math.PI / 2, Math.PI / 2, waxing);
-  var steps = 24;
-  for (var i = 0; i <= steps; i++) {
-    var a = Math.PI / 2 - Math.PI * i / steps;
-    ctx.lineTo(r + (waxing ? k : -k) * r * Math.cos(a), r + r * Math.sin(a));
-  }
-  ctx.closePath();
+  ctx.arc(size * 0.5, size * 0.12, size * 0.04, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -4283,7 +4675,6 @@ function Pictures(make, s) {
   this.s = s;
   this.kept = new Map();
   this.swaps = {};
-  this.moonPhase = null;
 }
 Pictures.prototype.bitmap = function (id, w, h, draw) {
   var pw = clamp(Math.ceil(w * this.s), 1, 2048), ph = clamp(Math.ceil(h * this.s), 1, 2048);
@@ -4307,9 +4698,7 @@ Pictures.prototype.zip = function (key, w, h) {
 };
 Pictures.prototype.dynamic = function (name, side, nowMs) {
   if (name !== 'moon') return null;
-  var phase = this.moonPhase === null ? moonPhaseAt(nowMs) : this.moonPhase;
-  var step = Math.round(phase * 200) / 200;
-  return this.bitmap('moon:' + step, clamp(side, 1, 512 / this.s), clamp(side, 1, 512 / this.s), function (ctx, w) { drawMoon(ctx, w, step); });
+  return this.bitmap('moon', clamp(side, 1, 512 / this.s), clamp(side, 1, 512 / this.s), function (ctx, w) { drawMoon(ctx, w); });
 };
 /** The soft glow of a picture: its shape, blurred, in the colour of the glow. */
 Pictures.prototype.glow = function (picture, glow, maxScale) {
@@ -4469,6 +4858,7 @@ function Scene(example, options) {
     weather: null,          // 0 to 3, or null: not known
     bpm: 72, noBpm: false,
     moon: null,             // the moon phase of the control, or null: the real one
+    moonTurn: 0,            // how far the control turns the moon in the sky, in degrees with the clock
     colours: ['design', 'design'],
     over: {}                // values set by a control or by the example: key to number
   };
@@ -4480,6 +4870,7 @@ function Scene(example, options) {
   this.spec = null;
   this.json = this.design0;
   this.swaps = {};
+  this.viewTemplates = {};
 }
 
 Scene.prototype.nowMs = function () {
@@ -4489,6 +4880,12 @@ Scene.prototype.nowMs = function () {
   d.setHours(0, 0, 0, 0);
   return d.getTime() + Math.floor(this.inputs.clockHours * 60) * 60000 + real % 60000;
 };
+
+/** Degrees as a turn from -180 to 180. */
+function halfTurn(degrees) {
+  var turn = mod(degrees, 360);
+  return turn > 180 ? turn - 360 : turn;
+}
 
 /** The values of the test face now: what `v_<key>` reads. A key that is not here has no value. */
 Scene.prototype.refreshValues = function (nowMs) {
@@ -4507,6 +4904,9 @@ Scene.prototype.refreshValues = function (nowMs) {
     uploader_battery: 85, rig_battery: 60, timestamp: 2, loop: 3,
     day: d.getDate(), day_name: ((d.getDay() + 6) % 7) + 1, month: d.getMonth() + 1, week_number: week,
     watch_battery: 64, moon_phase: phase,
+    // The page has no place: the lit side is right while the moon grows, and the control turns the moon
+    moon_lit: (1 - Math.cos(2 * Math.PI * phase)) / 2,
+    moon_limb: halfTurn((phase < 0.5 ? 90 : -90) + inputs.moonTurn), moon_north: halfTurn(inputs.moonTurn),
     sun_progress: skyNow.sunProgress, night_progress: skyNow.nightProgress, sun_cycle: skyNow.sunCycle,
     moon_cycle: skyAt(mod(h - phase * 24, 24)).sunCycle,
     sun_next_time: next.getTime(), sensor_left: 50, pump_left: 30,
@@ -4694,10 +5094,42 @@ Scene.prototype.drawView = function (R, key, fx, nowMs) {
   ctx.restore();
 };
 
+/**
+ * The picture of a view that shows a template of the design, `"image": {"use": "moon"}` (ViewTemplates):
+ * the layers of the template, drawn still with the values of now, where the whole design space is the view.
+ */
+Scene.prototype.drawViewTemplate = function (R, st, use, nowMs) {
+  var own = isObj(this.json.animation) && isObj(this.json.animation.templates) ? this.json.animation.templates : null;
+  var self = this, text = JSON.stringify([use, own]);
+  if (!has(this.viewTemplates, text)) {
+    var swaps = this.swaps, animator = null;
+    var spec = readAnimation({ animation: own ? { templates: own, layers: [use] } : { layers: [use] } }, {
+      color: function (c, fallback) { return self.color(c, fallback); },
+      hasImage: function (name) { return has(ZIP, has(swaps, name) ? swaps[name] : name); }
+    });
+    if (spec) {
+      spec.layers = spec.layers.filter(function (layer) { return layer.source.type !== 'view'; });
+      if (spec.layers.length) animator = new Animator(spec);
+      if (animator && !animator.layers.length) animator = null;
+    }
+    this.viewTemplates[text] = animator;
+  }
+  var anim = this.viewTemplates[text];
+  if (!anim) return;
+  var ctx = R.ctx;
+  ctx.save();
+  ctx.scale(st.w / DESIGN_SIZE, st.h / DESIGN_SIZE);
+  anim.setWakeValues(function (key) { return self.value(key); }, FALLBACK_BPM);
+  anim.setTime(0, MAX_DURATION_MS, 0, nowMs);
+  ['back', 'views', 'front'].forEach(function (slot) { anim.drawSlot(R, slot); });
+  ctx.restore();
+};
+
 /** A text view: its picture or colour behind, its text in the middle. */
 Scene.prototype.drawTextView = function (R, st, nowMs) {
   var ctx = R.ctx, json = st.json, picture = null;
-  var image = has(json, 'image') ? optString(json.image) : '';
+  var image = has(json, 'image') && !isObj(json.image) ? optString(json.image) : '';
+  if (isObj(json.image)) this.drawViewTemplate(R, st, json.image, nowMs);
   if (image.charAt(0) === '@') picture = R.pictures.dynamic(image.substring(1), Math.min(st.w, st.h), nowMs);
   else if (image) picture = R.pictures.zip(image, st.w, st.h);
   if (!picture && has(json, 'background')) picture = R.pictures.zip(optString(json.background), st.w, st.h);
@@ -4787,7 +5219,6 @@ Scene.prototype.drawPart = function (R, part, leaveOut, nowMs) {
 function beginFrame(R, scene) {
   var ctx = R.ctx;
   R.pictures.swaps = scene.swaps;
-  R.pictures.moonPhase = scene.inputs.moon;
   ctx.setTransform(R.s, 0, 0, R.s, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
@@ -4862,7 +5293,7 @@ Scene.prototype.drawNormal = function (R) {
 
 /** A surface to draw on: a canvas of `size` x `size` pixels. `make(w, h)` gives a new canvas. */
 function makeSurface(canvas, size, make) {
-  var s = size / DESIGN_SIZE, scratch = null;
+  var s = size / DESIGN_SIZE, scratch = null, sheet = null;
   return {
     canvas: canvas, ctx: canvas.getContext('2d'), s: s, size: size,
     pictures: new Pictures(make, s),
@@ -4874,6 +5305,19 @@ function makeSurface(canvas, size, make) {
       scratch.ctx.setTransform(s, 0, 0, s, 0, 0);
       scratch.ctx.globalAlpha = 1;
       return scratch;
+    },
+    /** The clear sheet of a group, drawn on in the same place as `from` draws now. */
+    sheet: function (from) {
+      if (!sheet) {
+        var c = make(size, size);
+        sheet = { canvas: c, ctx: c.getContext('2d') };
+      }
+      sheet.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      sheet.ctx.globalAlpha = 1;
+      sheet.ctx.globalCompositeOperation = 'source-over';
+      sheet.ctx.clearRect(0, 0, size, size);
+      sheet.ctx.setTransform(from.getTransform());
+      return sheet;
     }
   };
 }
@@ -4891,13 +5335,14 @@ var CONTROLS = {
   phone: { label: 'Phone battery', type: 'range', min: 0, max: 100, step: 1, start: 85, set: function (s, v) { s.inputs.over.uploader_battery = v; }, show: function (v) { return v + ' %'; } },
   sgv: { label: 'Glucose', type: 'range', min: 40, max: 300, step: 1, start: 115, set: function (s, v) { s.inputs.over.sgv = v; }, show: function (v) { return v + ' mg/dl'; } },
   moon: { label: 'Moon phase', type: 'range', min: 0, max: 0.99, step: 0.01, start: 0.3, set: function (s, v) { s.inputs.moon = v; }, show: function (v) { return v.toFixed(2); } },
+  turn: { label: 'Turn in the sky', type: 'range', min: -180, max: 180, step: 5, start: 0, set: function (s, v) { s.inputs.moonTurn = v; }, show: function (v) { return v + ' degrees'; } },
   colour: { label: 'Main colour', type: 'choice', options: [['as designed', 'design'], ['cyan', '#00E5FF'], ['orange', '#FF9F1C']], start: 'design',
     set: function (s, v) { s.inputs.colours = [v, 'design']; } }
 };
 
 var api = {
   parseFormula: parseFormula, FormulaError: FormulaError, FUNCTIONS: FUNCTIONS, FN: FN, FIXED: FIXED, PROPS: PROPS,
-  BUILT_IN_TEMPLATES: BUILT_IN_TEMPLATES, expandTemplates: expandTemplates, readAnimation: readAnimation, Animator: Animator,
+  expandTemplates: expandTemplates, readAnimation: readAnimation, Animator: Animator,
   applyLooks: applyLooks, colourLook: colourLook, merge: merge, Scene: Scene, makeSurface: makeSurface, ZIP: ZIP,
   BASE_DESIGN: BASE_DESIGN, FACE_VIEWS: FACE_VIEWS, numberText: numberText, plainDecimal: plainDecimal, SeededRandom: SeededRandom,
   envelope: envelope, drawMoon: drawMoon, moonPhaseAt: moonPhaseAt, CONTROLS: CONTROLS
@@ -5043,8 +5488,12 @@ Player.prototype.makeEditable = function () {
   this.reset.type = 'button';
   this.reset.title = 'Bring back the text of the page';
   this.reset.hidden = true;
+  this.copy = el('button', 'ex-play', 'Copy');
+  this.copy.type = 'button';
+  this.copy.title = 'Copy the JSON of this example';
   this.controls.parentNode.insertBefore(this.editNote, this.controls);
   this.controls.parentNode.insertBefore(this.reset, this.controls);
+  this.controls.parentNode.insertBefore(this.copy, this.controls);
 
   function typeText(text) { doc.execCommand('insertText', false, text); }
   function readNow() {
@@ -5082,6 +5531,25 @@ Player.prototype.makeEditable = function () {
     touched = false;
     if (timer !== null) readNow();
     pre.innerHTML = highlight(typedText(pre));
+  });
+  this.copy.addEventListener('click', function () {
+    var text = typedText(pre);
+    function copied(ok) {
+      self.copy.textContent = ok ? 'Copied' : 'Select the text and copy it';
+      window.setTimeout(function () { self.copy.textContent = 'Copy'; }, 1500);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { copied(true); }, function () { copied(false); });
+    } else {
+      var area = el('textarea');
+      area.value = text;
+      doc.body.appendChild(area);
+      area.select();
+      var ok = false;
+      try { ok = doc.execCommand('copy'); } catch (e) { ok = false; }
+      doc.body.removeChild(area);
+      copied(ok);
+    }
   });
   this.reset.addEventListener('click', function () {
     touched = false;

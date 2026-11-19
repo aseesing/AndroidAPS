@@ -16,8 +16,13 @@ internal fun testColor(text: String, default: Int): Int = runCatching { Color.pa
 internal fun readAnimation(animation: JSONObject, images: Map<String, Drawable> = emptyMap()): WakeAnimationSpec =
     WakeAnimationJson(::testColor) { images[it] }.read(JSONObject().put(WakeAnimationSpec.JSON_KEY, animation))!!
 
-/** An animation of [layers] (plain layers or `use` entries). */
-internal fun animationOf(vararg layers: JSONObject): JSONObject = JSONObject().put("layers", JSONArray().apply { layers.forEach { put(it) } })
+/** An animation of [layers] (plain layers or `use` entries), with the templates of the manual ([TemplatesForTests]). */
+internal fun animationOf(vararg layers: JSONObject): JSONObject =
+    JSONObject().put(WakeAnimationJson.TEMPLATES, TemplatesForTests.all()).put("layers", JSONArray().apply { layers.forEach { put(it) } })
+
+/** The design json [design] with the templates of the manual ([TemplatesForTests]) in its `animation`. */
+internal fun withTestTemplates(design: String): String =
+    JSONObject(design).also { json -> json.optJSONObject(WakeAnimationSpec.JSON_KEY)?.put(WakeAnimationJson.TEMPLATES, TemplatesForTests.all()) }.toString()
 
 /** One `use` of the template [name] with [params]. */
 internal fun use(name: String, vararg params: Pair<String, Any?>): JSONObject =

@@ -26,7 +26,7 @@ import kotlin.math.tan
 import kotlin.random.Random
 
 /**
- * The built-in template `rain`: the same streaks as the old `RainField` drew, the same for the same
+ * The template `rain` of the manual ([TemplatesForTests]): the same streaks as the old `RainField` drew, the same for the same
  * seed, never outside the round screen or its region, and it never runs out.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -205,7 +205,7 @@ class RainTemplateTest {
         assertThat(layer.copies).isEqualTo(LayerCopies.Count(300, 7))
         assertThat(layer.props[LayerProp.ANGLE]).isEqualTo("45")
         assertThat(layer.props[LayerProp.THICKNESS]).isEqualTo("0.5")
-        assertThat(layer.props[LayerProp.ALPHA]).contains("(255 / 255)")
+        assertThat(layer.props[LayerProp.ALPHA]).contains("env * 255 / 255 *")
         // No streaks, no layer
         assertThat(readAnimation(animationOf(Rain(count = 0).json())).layers).isEmpty()
     }

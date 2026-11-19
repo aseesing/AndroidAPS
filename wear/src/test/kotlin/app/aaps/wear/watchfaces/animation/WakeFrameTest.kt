@@ -317,9 +317,9 @@ class WakeFrameTest {
 
     private val sampleJson = """
         {"metadata": {"name": "Rain sample"},
-         "animation": {"durationMs": 6000, "fps": 24, "fadeMs": 600,
-           "rain": {"count": 110, "speed": 560, "angle": 14, "length": 26, "thickness": 1.8, "color": "#B4D2FF", "alpha": 170},
-           "pulse": {"image": "heart", "left": 176, "top": 52, "width": 48, "height": 44, "amplitude": 0.14, "glowColor": "#FF3050", "glowAlpha": 180, "glowRadius": 9}}}
+         "animation": {"durationMs": 6000, "fps": 24, "fadeMs": 600, "layers": [
+           {"use": "rain", "count": 110, "speed": 560, "angle": 14, "length": 26, "thickness": 1.8, "color": "#B4D2FF", "alpha": 170},
+           {"use": "pulse", "image": "heart", "left": 176, "top": 52, "width": 48, "height": 44, "amplitude": 0.14, "glowColor": "#FF3050", "glowAlpha": 180, "glowRadius": 9}]}}
     """.trimIndent()
 
     /** A red heart, like the one a design would put in its zip. */
@@ -367,7 +367,7 @@ class WakeFrameTest {
     @Test
     fun rendersSampleFramesToPng() {
         val size = 466
-        val spec = CustomWatchface().readWakeAnimation(JSONObject(sampleJson)) { if (it == "heart") heartDrawable() else null }
+        val spec = CustomWatchface().readWakeAnimation(JSONObject(withTestTemplates(sampleJson))) { if (it == "heart") heartDrawable() else null }
         assertThat(spec).isNotNull()
         var clock = 0L
         val animator = WakeAnimator(heartRate = { 75 }, timer = WakeTimer { clock })

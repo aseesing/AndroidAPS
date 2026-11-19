@@ -13,6 +13,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.wear.R
 import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.GeoPoint
+import app.aaps.wear.watchfaces.daynight.MoonLight
 import app.aaps.wear.watchfaces.daynight.MoonPhase
 import app.aaps.wear.watchfaces.daynight.StoredWeather
 import app.aaps.wear.watchfaces.utils.PartTimeLeft
@@ -110,6 +111,9 @@ class CustomWatchfaceValuesTest {
             "night_progress" to sky.nightProgress(now),
             "sun_cycle" to sky.sunCycle(now),
             "moon_cycle" to sky.moonCycle(now),
+            "moon_lit" to MoonLight.at(now, PLACE).litFraction,
+            "moon_limb" to MoonLight.at(now, PLACE).limbTurn,
+            "moon_north" to MoonLight.at(now, PLACE).northTurn,
             "sun_next_time" to sky.nextSunEvent(now)?.toDouble()
         )
         for ((key, value) in expected) assertWithMessage(key).that(face.designValue(key)).isEqualTo(value)

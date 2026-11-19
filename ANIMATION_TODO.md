@@ -3,16 +3,19 @@
 Cut on 2026-11-18 to finish the refactor sooner. The plan and the new design format are in
 `ANIMATION_REFACTOR_PLAN.md` (section 7). Items are in the order that makes sense to pick them up.
 
-## 1. Port the designs, then delete the old keys
+## 1. The old design keys are gone from the watch
 
-The engine core only knows the new generic model. A translator (`watchfaces/design/LegacyDesign.kt`)
-rewrites the older design keys at load time, so every existing zip keeps working unchanged.
+Done on 2026-11-19. The generators in `aaps-watchfaces` still write their short keys (`rain`, `dayLook`,
+`orbit` and so on), and `DesignShorthand` there rewrites a design into the form the watch reads when a
+zip is made. All zips in `cwf-designs` are in that form (a test checks it), with the same pixels as
+before (175 snapshot frames). The watch code no longer has the translator (`LegacyDesign`).
 
-- [ ] Port the generators in `aaps-watchfaces` to emit the new keys: presets as `{"use": ...}` layers,
-      `"image": "@moon"` for `moon: true` and `moonLight`, view layers with `rest` for `orbit`, `looks`
-      for `dayLook` / `weatherLooks`. Regenerate the zips; compare pixels with `cwf-snapshots/baseline`.
-- [ ] A test in the design repo that no zip in `cwf-designs/` holds an old key.
-- [ ] Delete `LegacyDesign.kt` and its tests. Zips on the watch must then be sent again.
+- [ ] A zip made before 2026-11-19 that is still on a watch or a phone loses its animation, its looks and
+      its moon with this build, without an error: send the new zip again. A night face is a zip too.
+- [ ] `CwfPlaceNeeds` (phone) still knows the old keys next to the new ones. Take the old ones out, with
+      their tests, once no old zip is in use.
+- [ ] Write the generators in the new keys directly, and drop `DesignShorthand`, when a design needs
+      something the short keys cannot say.
 - [ ] Update the TypeScript designer (`aaps-watchfaces/designer`) to the new model.
 
 ## 2. Generic features not built yet (no current design needs them)
@@ -22,8 +25,9 @@ rewrites the older design keys at load time, so every existing zip keeps working
 - [ ] Points with extra columns (`p0..`), so one layer can give each point its own phase or colour
       (Aurora Town uses 4 copies of one layer for its chasing lights).
 - [ ] View layers with `y`, scale and real alpha; a `visible` formula per layer.
-- [ ] More values for formulas where a design wants them: `moon_lit`, `moon_limb`, `moon_north`,
-      `sun_altitude` (Aurora Town approximates the moon's turn by hand).
+- [x] The moon values `moon_lit`, `moon_limb` and `moon_north` (2026-11-19, see section 8).
+- [ ] More values for formulas where a design wants them: `sun_altitude`. Aurora Town still works out
+      the turn of its moon light by hand from `moon_phase` and `moon_cycle`; it can read `v_moon_limb` now.
 - [ ] Keyframes as sugar over formulas.
 - [ ] Anything the phase 2a report lists as "not built" (see below).
 
@@ -32,7 +36,8 @@ rewrites the older design keys at load time, so every existing zip keeps working
 - [ ] The phone preview makes a new bitmap per animation frame again, if the reuse was taken out
       (see the phase 2a report): a safe reuse needs to know which frame Compose still shows.
 - [ ] `LayerAnimator` keeps its pictures (images, glow, masks) after a wake ends.
-- [ ] The moon picture is shaded on the CPU, pixel by pixel.
+- [x] The moon picture was shaded on the CPU, pixel by pixel: a template of the design draws it with
+      plain layers now (section 8).
 
 ## 4. Tests and tooling
 
@@ -56,9 +61,12 @@ Not built:
 - [ ] Values beyond `is_day` and `weather_kind`.
 
 To clean up when the designs are ported (section 1):
-- [ ] Remove the formula function `f32` (it copies the 32-bit float rounding of the old presets, so the
-      built-in templates give the same pixels as before).
-- [ ] Remove the variable `ms` (use `t*1000`).
+- [x] The app has no built-in templates any more, and the formula functions `f32`, `settle` and `pulse`
+      are gone (done on 2026-11-19, branch `local/wear-no-builtin-templates`). A design brings every
+      template it uses in `animation.templates`; the nine old ones are in chapter 7 of the manual, written
+      with plain formulas. The zips of `aaps-watchfaces` carry the templates they use (`DesignTemplates`).
+      A zip made before this change loses its effects on a watch with this build until it is sent again.
+- [ ] Remove the variable `ms` (use `t*1000`). The nine templates of the manual still use `ms`.
 - [ ] `CwfDesignBase` in the design repo keeps its own old-form `lookOf` and `lookImages`.
 
 Known limits:
@@ -74,8 +82,8 @@ Must be checked on real devices (reasoned out, not tested):
       `FrameHandOff` has no unit test.
 
 Tests: none ignored. `DayOverlayTest` and `OrbitTest` were removed; their cases moved to `LooksTest`
-and `LegacyDesignTest`. `MoonPictureTest` lost its `moonLight` test (the key is read by the translator
-now). Not added: a unit test for `FrameHandOff`; the light-path test of section 4.
+and the test of the translator, which now lives in the design repository (`DesignShorthandTest`).
+`MoonPictureTest` lost its `moonLight` test (the key is read by the translator). Not added: a unit test for `FrameHandOff`; the light-path test of section 4.
 
 The snapshot harness now renders each design in its own JVM (`-PsnapshotOut`), which seems to remove the
 font flake; the item in section 4 can be dropped if it stays away.
@@ -103,7 +111,7 @@ from the `key_location_*` preferences. The engine reads it (`skyRule`, `skyPlace
 `docs/watchface-animation.html` is the manual of the design format, with a live picture for every
 example (a small JavaScript copy of the rules draws them). A change to the engine's logic changes the
 page in the same commit: the text, the key table at its end and, when a drawing rule changed, the
-page's own player (the built-in templates are copied into it).
+page's own player. The page has no templates of its own: each example carries the templates it uses.
 There is no test for the page: the check is an instruction for the agent, the skill
 `watchface-animation-manual` (`.claude/skills/`).
 
@@ -112,5 +120,25 @@ Found while the manual was written, by reading the code, not tried:
       `time`, `hour`, `minute`, `second` or `second_hand` may draw that view twice (once by the face, once
       by the layer). Check in the preview; the manual warns about it.
 - [ ] The manual follows the code where the plan (`ANIMATION_REFACTOR_PLAN.md`, section 7) says something
-      else: `ms` and `f32` still exist, `r1..r8` come from `Random(seed)` and not from a hash, the easing
-      function is `easeInOut`, the built-in templates are a Kotlin string and not a JSON asset.
+      else: `ms` still exists, `r1..r8` come from `Random(seed)` and not from a hash, the easing
+      function is `easeInOut`, and there are no built-in templates at all (a design brings its own).
+
+## 8. The moon from plain layers (branch `local/wear-moon-template`, 2026-11-19)
+
+A template draws the moon with six plain layers. The watch does not have that template (the user's
+decision of 2026-11-19: no built-in templates): it is in the manual, chapter 13, as JSON to copy (the
+example `ex-moon-template`), and a design brings it in `animation.templates`. The design repo embeds it
+(`MoonTemplate`, `DesignShorthand`), and the tests here read it from the manual (`ManualMoon`), so keep
+that example valid JSON under that id. `@moon` is only the plain photo (`MoonPhoto`). New generic keys:
+`group` with the blends `erase` and `inside`, and a template as the picture of a view
+(`"image": {"use": "moon"}`, `ViewTemplates`).
+
+- [x] The user compared the old and the new moon on 2026-11-19 and said yes: `MoonPicture.kt` and its
+      test are deleted. `MoonTemplateTest` tests the template alone and writes its moons to
+      `wear/build/moon-template/`. The design repo renders the template itself (`MoonTemplate.draw`) for
+      the moon it bakes into the stock Aurora Town background.
+- [ ] A zip made on 2026-11-18 or 2026-11-19 holds `"image": "@moon"` and shows the plain full moon with
+      this build. An older zip (`"moon": true`, `"moonLight": true`) is no longer read at all (the
+      old keys are gone), so it shows no moon. The zips of the design repo are rebuilt with the
+      template; send them again.
+- [ ] A group draws on a sheet of its own in every frame of a wake. Not measured on a watch.

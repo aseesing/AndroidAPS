@@ -10,6 +10,7 @@ import androidx.core.graphics.createBitmap
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
@@ -22,15 +23,31 @@ import java.util.zip.ZipOutputStream
  */
 internal object TestDesigns {
 
-    /** A dark face with the time and glucose, a wake-up animation of 15 s, and slot 1 as a row of white text. */
+    /**
+     * A dark face with the time and glucose, a wake-up animation of 15 s, and slot 1 as a row of white text.
+     * The animation is falling streaks from a template of the design: the app has no templates of its own.
+     */
     fun animated(): CwfData = load("Test_Animated", face("Test Animated", "#101828").apply {
-        put("animation", JSONObject().put("durationMs", 15_000).put("fps", 24).put("fadeMs", 600).put(
-            "rain", JSONObject().put("count", 140).put("seed", 11).put("speed", 470).put("angle", -14).put("length", 28)
-                .put("thickness", 1.6).put("color", "#5E86B8").put("alpha", 64)
+        put("animation", JSONObject().put("durationMs", 15_000).put("fps", 24).put("fadeMs", 600).put("templates", JSONObject(STREAKS)).put(
+            "layers", JSONArray().put(
+                JSONObject().put("use", "streaks").put("count", 140).put("seed", 11).put("speed", 470).put("color", "#5E86B8").put("alpha", 0.25)
+            )
         ))
         put("complication1", slot(left = 256, top = 196, width = 103, height = 24, color = "#FFFFFF"))
         getJSONObject("metadata").put("key_show_complication1", "true")
     }, "#101828")
+
+    /** A template of falling streaks, as a design writes it. */
+    private const val STREAKS = $$"""
+        {"streaks": {
+          "params": {"count": 40, "seed": 1, "speed": 400, "color": "#A6C8FF", "alpha": 0.8},
+          "layers": [{
+            "shape": "line", "colors": ["$color"], "slot": "back", "count": "$count", "seed": "$seed",
+            "x": "r1 * 400", "y": "mod(r2 * 440 + t * $speed * (0.8 + 0.4 * r3), 440) - 20",
+            "length": 28, "thickness": 1.6, "alpha": "$alpha * env"
+          }]
+        }}
+    """
 
     /** A face like [animated] in other colours, without animation and without slots. */
     fun still(): CwfData = load("Test_Still", face("Test Still", "#3A1020"), "#3A1020")

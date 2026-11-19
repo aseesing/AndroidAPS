@@ -21,7 +21,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * The built-in templates of the views that move (`sweep`, `slide`, `wobble`), draw themselves in
+ * The templates of the manual ([TemplatesForTests]) of the views that move (`sweep`, `slide`, `wobble`), draw themselves in
  * (`trace`), blink (`blink`), and of the light (`glint`): the layer formulas give the same numbers as
  * the old code, which is kept here as the reference.
  */
@@ -109,9 +109,6 @@ class WakeMotionTest {
     fun theCurvesStartAtZeroAndEndAtOne() {
         assertThat(Formula.easeInOut(0.0)).isWithin(1e-6).of(0.0)
         assertThat(Formula.easeInOut(1.0)).isWithin(1e-6).of(1.0)
-        assertThat(Formula.settle(0.0)).isWithin(1e-6).of(0.0)
-        assertThat(Formula.settle(1.0)).isWithin(1e-6).of(1.0)
-        for (k in 0..20) assertThat(Formula.settle(k / 20.0)).isWithin(1e-6).of(oldSettle(k / 20f).toDouble())
     }
 
     @Test
@@ -216,9 +213,9 @@ class WakeMotionTest {
     fun valuesAreKeptSafe() {
         val wild = readAnimation(animationOf(Sweep("a", 0f, 10f, delayMs = -5, upMs = 0, settleMs = 1_000_000).json())).layers.single()
         val rotation = wild.props.getValue(LayerProp.ROTATION)
-        assertThat(wild.lets).containsExactly("w" to "ms - 0")
+        assertThat(wild.lets.toMap()).containsEntry("w", "ms - 0")
+        assertThat(wild.lets.toMap()).containsEntry("s", "clamp((w - 50) / 5000, 0, 1)")
         assertThat(rotation).contains("easeInOut(w / 50)")
-        assertThat(rotation).contains("settle((w - 50) / 5000)")
         val wobble = readAnimation(animationOf(Wobble("a", amplitude = 500f, hz = 100f).json())).layers.single().props.getValue(LayerProp.ROTATION)
         assertThat(wobble).contains("90 * exp(")
         assertThat(wobble).contains("2 * pi * 10 * w")
