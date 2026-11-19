@@ -65,8 +65,8 @@ class PreviewHost(
     private val simpleUi: SimpleUi by lazy { SimpleUi(this, sp, dateUtil) }
 
     /**
-     * The heart rate and steps store of the face, in the same file as on the watch (see
-     * `HealthModule`), here behind [name]. The watch does not send these values, so on the phone it stays empty.
+     * The heart rate store of the face, in the same file as on the watch (see
+     * `HealthModule`), here behind [name]. The watch does not send the heart rate, so on the phone it stays empty.
      */
     val healthValues: HealthValues by lazy { HealthValues(getSharedPreferences(HealthValues.FILE, MODE_PRIVATE)) }
 
@@ -103,7 +103,7 @@ class PreviewHost(
         target.simpleUi = simpleUi
         if (target is CustomWatchface) {
             target.context = this
-            target.healthValues = healthValues // heart rate and steps
+            target.healthValues = healthValues // heart rate
         }
         return true
     }

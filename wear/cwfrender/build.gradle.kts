@@ -41,7 +41,6 @@ val wearShared = listOf(
     "data/LiveComplicationData.kt",
     "data/PlaceRuleKeeping.kt",
     "events/EventWearPreferenceChange.kt",
-    "health/HealthComplicationData.kt",
     "health/HealthValues.kt",
     "utils/ViewExtensions.kt",
     "watchfaces/CustomSlotDefaults.kt",
