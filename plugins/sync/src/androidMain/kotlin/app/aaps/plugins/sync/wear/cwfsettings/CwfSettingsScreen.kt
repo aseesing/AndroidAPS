@@ -150,7 +150,8 @@ internal fun CwfSettingsContent(
 /** One setting: a switch, or a list of choices. */
 @Composable
 private fun CwfSettingItem(row: CwfSettingRow, onChange: (name: String, value: String) -> Unit) {
-    val title: @Composable () -> Unit = { Text(androidStringResource(row.setting.title)) }
+    val designTitle = (row.setting as? CwfSyncedSetting.Choice)?.labels?.title
+    val title: @Composable () -> Unit = { Text(designTitle ?: androidStringResource(row.setting.title)) }
     val setByDesign: @Composable (() -> Unit)? =
         if (row.setByDesign) ({ Text(stringResource(SyncStrings.wear_cwf_settings_set_by_design, stringResource(KeysStrings.pref_title_wear_custom_watchface_authorization))) }) else null
     when (val setting = row.setting) {
@@ -163,9 +164,10 @@ private fun CwfSettingItem(row: CwfSettingRow, onChange: (name: String, value: S
         )
 
         is CwfSyncedSetting.Choice -> {
-            val labels = stringArrayResource(setting.entries)
-            val values = stringArrayResource(setting.entryValues).toList()
-            val labelOf = { value: String -> labels.getOrNull(values.indexOf(value)) ?: value }
+            // An option of the design brings its own texts; a value it does not have is its default
+            val labels = setting.labels?.entries ?: stringArrayResource(setting.entries).toList()
+            val values = setting.labels?.entryValues ?: stringArrayResource(setting.entryValues).toList()
+            val labelOf = { value: String -> labels.getOrNull(values.indexOf(value)) ?: labels.getOrNull(values.indexOf(setting.defaultValue)) ?: value }
             ListPreference(
                 value = row.value,
                 onValueChange = { onChange(row.name, it) },

@@ -15,6 +15,7 @@ import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.plugins.sync.wear.WearPlugin
 import app.aaps.plugins.sync.wear.preview.PreviewSlot
 import app.aaps.shared.impl.rx.bus.RxBusImpl
+import app.aaps.wear.watchfaces.settingsync.CwfSyncedSetting
 import app.aaps.wear.watchfaces.settingsync.CwfSyncedSettings
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
@@ -214,6 +215,23 @@ class CwfSettingsSyncPhoneTest {
         // No design known: every look setting, as the watch menu does
         assertThat(CwfSettingsViewModel.uiStateOf(sut.names, emptyMap(), null, fromWatch = false).look.map { it.setting })
             .containsExactlyElementsIn(CwfSyncedSettings.faceLook).inOrder()
+    }
+
+    @Test
+    fun anOptionOfTheDesignHasTheTextsOfTheDesign() {
+        val json = """{"options": [{"name": "santa", "title": "Santa", "choices": ["At Christmas", "Always", "Never"], "default": 2}]}"""
+        val state = CwfSettingsViewModel.uiStateOf(sut.names, emptyMap(), CwfData(json, mutableMapOf(), mutableMapOf()), fromWatch = true)
+
+        val row = state.look.single { it.name == "cwf_option_1" }
+        val setting = row.setting as CwfSyncedSetting.Choice
+        assertThat(setting.labels?.title).isEqualTo("Santa")
+        assertThat(setting.labels?.entries).containsExactly("At Christmas", "Always", "Never").inOrder()
+        // While nothing is chosen the row shows the default of the design
+        assertThat(row.value).isEqualTo("2")
+        // The watch takes the number of a choice, and "as designed"
+        assertThat(sut.names.isAllowed("cwf_option_1", "1")).isTrue()
+        assertThat(sut.names.isAllowed("cwf_option_1", "design")).isTrue()
+        assertThat(sut.names.isAllowed("cwf_option_1", "santa")).isFalse()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

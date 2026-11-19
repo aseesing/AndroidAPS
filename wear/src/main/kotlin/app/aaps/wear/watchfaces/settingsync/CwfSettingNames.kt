@@ -19,14 +19,15 @@ class CwfSettingNames(resources: Resources) {
     /** Stored name -> setting, in the order of [CwfSyncedSettings.all]. */
     val settings: Map<String, CwfSyncedSetting> = CwfSyncedSettings.all.associateBy { resources.getString(it.key) }
 
-    private val names: Map<CwfSyncedSetting, String> = settings.entries.associate { (name, setting) -> setting to name }
+    /** Setting key -> stored name. By key, so a setting with the texts of a design has its name too. */
+    private val names: Map<Int, String> = settings.entries.associate { (name, setting) -> setting.key to name }
 
     private val allowedChoices: Map<String, Set<String>> = settings.mapNotNull { (name, setting) ->
         (setting as? CwfSyncedSetting.Choice)?.let { name to resources.getStringArray(it.entryValues).toSet() }
     }.toMap()
 
     /** The stored name of [setting]. */
-    fun nameOf(setting: CwfSyncedSetting): String = names.getValue(setting)
+    fun nameOf(setting: CwfSyncedSetting): String = names.getValue(setting.key)
 
     /** True when [name] is one of these settings and [value] is a value it can have. */
     fun isAllowed(name: String, value: String): Boolean =

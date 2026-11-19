@@ -93,6 +93,7 @@ class CustomWatchfaceConfigurationFragment : PreferenceFragmentCompat() {
                 is WatchFaceSettingRow.Choice    -> ListPreference(context).apply {
                     setEntries(row.entries)
                     setEntryValues(row.entryValues)
+                    row.labels?.let { entries = it.entries.toTypedArray(); entryValues = it.entryValues.toTypedArray() } // PERSONAL PATCH: choices of the design
                     setDefaultValue(row.defaultValue)
                     // Shows the chosen entry, the way "%s" does in a settings xml.
                     summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
@@ -112,6 +113,7 @@ class CustomWatchfaceConfigurationFragment : PreferenceFragmentCompat() {
             }
             preference.key = getString(row.key)
             preference.setTitle(row.title)
+            (row as? WatchFaceSettingRow.Choice)?.labels?.let { preference.title = it.title } // PERSONAL PATCH: title of the design
             // Long titles wrap instead of being cut, as on every other watch settings screen.
             preference.layoutResource = R.layout.preference_material_multiline
             preference.isPersistent = row is WatchFaceSettingRow.Toggle || row is WatchFaceSettingRow.Choice

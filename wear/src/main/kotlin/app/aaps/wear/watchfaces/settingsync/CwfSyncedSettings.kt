@@ -10,6 +10,7 @@ import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.wear.R
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.colour.ColourLooks
+import app.aaps.wear.watchfaces.options.ChoiceLabels
 import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
 
 /*
@@ -53,13 +54,17 @@ sealed interface CwfSyncedSetting {
         override val defaultValue: String get() = default.toString()
     }
 
-    /** A setting with a fixed list of values. */
+    /**
+     * A setting with a fixed list of values. [labels] are the texts of the design for an option of the
+     * design (`DesignOptions`): then they take the place of [title], [entries] and [entryValues].
+     */
     data class Choice(
         @StringRes override val key: Int,
         @StringRes override val title: Int,
         @ArrayRes val entries: Int,
         @ArrayRes val entryValues: Int,
-        override val defaultValue: String
+        override val defaultValue: String,
+        val labels: ChoiceLabels? = null
     ) : CwfSyncedSetting {
 
         override val metadataKey: CwfMetadataKey? get() = null
@@ -107,10 +112,15 @@ object CwfSyncedSettings {
 
     /**
      * The [faceLook] settings that the design [json] gives something to act on, as the watch's menu
-     * shows them. All of them when [json] is null or cannot be read.
+     * shows them. All of them when [json] is null or cannot be read. An option of the design comes with
+     * the texts and the default of the design.
      */
     fun faceLookFor(json: String?): List<CwfSyncedSetting> {
-        val used = CustomWatchface.settingRows(json, systemEditor = true, hasNightFace = false).map { it.key }.toSet()
-        return faceLook.filter { it.key in used }
+        val used = CustomWatchface.settingRows(json, systemEditor = true, hasNightFace = false).associateBy { it.key }
+        return faceLook.mapNotNull { setting ->
+            val row = used[setting.key] ?: return@mapNotNull null
+            val labels = (row as? WatchFaceSettingRow.Choice)?.labels
+            if (setting is CwfSyncedSetting.Choice && labels != null) setting.copy(labels = labels, defaultValue = row.defaultValue) else setting
+        }
     }
 }
