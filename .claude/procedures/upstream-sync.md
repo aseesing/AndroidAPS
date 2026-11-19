@@ -50,6 +50,7 @@ as before.
 | `local/wear-anim-manual` | The manual of the layer engine for people who write designs: `docs/watchface-animation.html`, one page with a live picture for every example, linked from `.github/README.md`. A change to the engine's logic changes this page in the same commit |
 | `local/wear-anim-manual-edit` | The JSON of every example in the manual of the layer engine can be changed in the page: the picture follows the typing, a broken text keeps the last good picture and shows the error under it, and a Reset button brings the text of the page back |
 | `local/wear-anim-no-old-keys` | Watch: the old design keys (`rain`, `dayLook`, `orbit`, `moonLight` and so on) are no longer read. The zips of `aaps-watchfaces` from 2026-11-19 on are written in the new form; an older zip must be sent to the watch again |
+| `local/wear-no-builtin-templates` | Watch: the app has no built-in templates and no formula functions `f32`, `settle` and `pulse`; a design brings every template it uses in `animation.templates`. The manual has the nine old templates as examples to copy. Built on `local/wear-anim-no-old-keys`. A zip of `aaps-watchfaces` made before branch `no-builtin-templates` there loses its effects until it is sent again |
 
 `master` of this fork is a plain copy of upstream `master`.
 

@@ -59,9 +59,12 @@ Not built:
 - [ ] Values beyond `is_day` and `weather_kind`.
 
 To clean up when the designs are ported (section 1):
-- [ ] Remove the formula function `f32` (it copies the 32-bit float rounding of the old presets, so the
-      built-in templates give the same pixels as before).
-- [ ] Remove the variable `ms` (use `t*1000`).
+- [x] The app has no built-in templates any more, and the formula functions `f32`, `settle` and `pulse`
+      are gone (done on 2026-11-19, branch `local/wear-no-builtin-templates`). A design brings every
+      template it uses in `animation.templates`; the nine old ones are in chapter 7 of the manual, written
+      with plain formulas. The zips of `aaps-watchfaces` carry the templates they use (`DesignTemplates`).
+      A zip made before this change loses its effects on a watch with this build until it is sent again.
+- [ ] Remove the variable `ms` (use `t*1000`). The nine templates of the manual still use `ms`.
 - [ ] `CwfDesignBase` in the design repo keeps its own old-form `lookOf` and `lookImages`.
 
 Known limits:
@@ -106,7 +109,7 @@ from the `key_location_*` preferences. The engine reads it (`skyRule`, `skyPlace
 `docs/watchface-animation.html` is the manual of the design format, with a live picture for every
 example (a small JavaScript copy of the rules draws them). A change to the engine's logic changes the
 page in the same commit: the text, the key table at its end and, when a drawing rule changed, the
-page's own player (the built-in templates are copied into it).
+page's own player. The page has no templates of its own: each example carries the templates it uses.
 There is no test for the page: the check is an instruction for the agent, the skill
 `watchface-animation-manual` (`.claude/skills/`).
 
@@ -115,5 +118,5 @@ Found while the manual was written, by reading the code, not tried:
       `time`, `hour`, `minute`, `second` or `second_hand` may draw that view twice (once by the face, once
       by the layer). Check in the preview; the manual warns about it.
 - [ ] The manual follows the code where the plan (`ANIMATION_REFACTOR_PLAN.md`, section 7) says something
-      else: `ms` and `f32` still exist, `r1..r8` come from `Random(seed)` and not from a hash, the easing
-      function is `easeInOut`, the built-in templates are a Kotlin string and not a JSON asset.
+      else: `ms` still exists, `r1..r8` come from `Random(seed)` and not from a hash, the easing
+      function is `easeInOut`, and there are no built-in templates at all (a design brings its own).
