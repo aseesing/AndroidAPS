@@ -2034,7 +2034,25 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         RESERVOIR_LEVEL_EXT2(JsonKeyValues.RESERVOIR_LEVEL_EXT2.key, 0.0, 2.0),
         RIG_BATTERY_EXT2(ViewKeys.RIG_BATTERY_EXT2.key, 0.0, 100.0),
         TIMESTAMP_EXT2(ViewKeys.TIMESTAMP_EXT2.key, 0.0, 60.0),
-        LOOP_EXT2(ViewKeys.LOOP_EXT2.key, 0.0, 28.0);
+        LOOP_EXT2(ViewKeys.LOOP_EXT2.key, 0.0, 28.0),
+        IOB(JsonKeyValues.IOB.key, -5.0, 20.0),
+        IOB_BOLUS(JsonKeyValues.IOB_BOLUS.key, 0.0, 20.0),
+        IOB_BASAL(JsonKeyValues.IOB_BASAL.key, -5.0, 5.0),
+        COB(JsonKeyValues.COB.key, 0.0, 200.0),
+        BASAL_RATE(ViewKeys.BASALRATE.key, 0.0, 5.0),
+        BGI(ViewKeys.BGI.key, -25.0, 25.0),
+        IOB_EXT1(JsonKeyValues.IOB_EXT1.key, -5.0, 20.0),
+        IOB_BOLUS_EXT1(JsonKeyValues.IOB_BOLUS_EXT1.key, 0.0, 20.0),
+        IOB_BASAL_EXT1(JsonKeyValues.IOB_BASAL_EXT1.key, -5.0, 5.0),
+        COB_EXT1(JsonKeyValues.COB_EXT1.key, 0.0, 200.0),
+        BASAL_RATE_EXT1(ViewKeys.BASALRATE_EXT1.key, 0.0, 5.0),
+        BGI_EXT1(ViewKeys.BGI_EXT1.key, -25.0, 25.0),
+        IOB_EXT2(JsonKeyValues.IOB_EXT2.key, -5.0, 20.0),
+        IOB_BOLUS_EXT2(JsonKeyValues.IOB_BOLUS_EXT2.key, 0.0, 20.0),
+        IOB_BASAL_EXT2(JsonKeyValues.IOB_BASAL_EXT2.key, -5.0, 5.0),
+        COB_EXT2(JsonKeyValues.COB_EXT2.key, 0.0, 200.0),
+        BASAL_RATE_EXT2(ViewKeys.BASALRATE_EXT2.key, 0.0, 5.0),
+        BGI_EXT2(ViewKeys.BGI_EXT2.key, -25.0, 25.0);
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2131,6 +2149,24 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.RIG_BATTERY_EXT2 -> cwf.status[2].rigBattery.replace("%", "").toDoubleOrNull()
             ValueMap.LOOP_EXT2        -> if (cwf.status[2].openApsStatus != -1L) ((System.currentTimeMillis() - cwf.status[2].openApsStatus) / 1000 / 60).toDouble() else null
             ValueMap.TIMESTAMP_EXT2   -> if (cwf.singleBg[2].timeStamp != 0L) floor(cwf.timeSince(2) / (1000 * 60)) else null
+            ValueMap.IOB -> cwf.status[0].iobValue
+            ValueMap.IOB_BOLUS -> cwf.status[0].iobBolusValue
+            ValueMap.IOB_BASAL -> cwf.status[0].iobBasalValue
+            ValueMap.COB -> cwf.status[0].cobValue.takeIf { it >= 0.0 }
+            ValueMap.BASAL_RATE -> cwf.status[0].basalRateValue
+            ValueMap.BGI -> cwf.status[0].bgiMgdl
+            ValueMap.IOB_EXT1 -> cwf.status[1].iobValue
+            ValueMap.IOB_BOLUS_EXT1 -> cwf.status[1].iobBolusValue
+            ValueMap.IOB_BASAL_EXT1 -> cwf.status[1].iobBasalValue
+            ValueMap.COB_EXT1 -> cwf.status[1].cobValue.takeIf { it >= 0.0 }
+            ValueMap.BASAL_RATE_EXT1 -> cwf.status[1].basalRateValue
+            ValueMap.BGI_EXT1 -> cwf.status[1].bgiMgdl
+            ValueMap.IOB_EXT2 -> cwf.status[2].iobValue
+            ValueMap.IOB_BOLUS_EXT2 -> cwf.status[2].iobBolusValue
+            ValueMap.IOB_BASAL_EXT2 -> cwf.status[2].iobBasalValue
+            ValueMap.COB_EXT2 -> cwf.status[2].cobValue.takeIf { it >= 0.0 }
+            ValueMap.BASAL_RATE_EXT2 -> cwf.status[2].basalRateValue
+            ValueMap.BGI_EXT2 -> cwf.status[2].bgiMgdl
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->

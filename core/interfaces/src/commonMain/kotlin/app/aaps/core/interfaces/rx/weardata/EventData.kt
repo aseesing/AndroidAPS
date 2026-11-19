@@ -458,7 +458,14 @@ sealed class EventData : Event() {
         // The "time to eat" timer: when it was started and when it rings. Null when none runs, or from an older sender.
         // The watch draws the end in its BG graph and rings itself at that time.
         val eatReminderStartedAt: Long? = null,
-        val eatReminderEndsAt: Long? = null
+        val eatReminderEndsAt: Long? = null,
+        // Numbers for the value keys of the Custom watch face (the texts above are formatted for the screen,
+        // and a percent temp basal has no rate in U/h). Null when not known, or from an older sender.
+        val iobValue: Double? = null, // U, bolus and basal together
+        val iobBolusValue: Double? = null, // U
+        val iobBasalValue: Double? = null, // U
+        val basalRateValue: Double? = null, // U/h, the temp basal when one runs
+        val bgiMgdl: Double? = null // mg/dl per 5 minutes
     ) : EventData(), EventDataSet
 
     @Serializable
