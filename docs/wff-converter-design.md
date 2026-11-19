@@ -425,15 +425,19 @@ this is new.
 - `text`: the glucose formatted in the wearer's unit (what `glucose(v_sgv)` gives), without the
   arrow.
 - `title`: the delta in the wearer's unit.
-- `smallImage`: the design's own arrow picture for the current direction, drawn from the zip.
+- `monochromaticImage`: the design's own arrow picture for the current direction, drawn from the
+  zip. Not `smallImage`: the emulator does not draw `[COMPLICATION.SMALL_IMAGE]` inside a
+  `RANGED_VALUE` complication, but it draws `[COMPLICATION.MONOCHROMATIC_IMAGE]`, and without a
+  `tintColor` the picture keeps its own colours (11.1, answer 2).
 - No data: `NoDataComplicationData`, so the face shows its "no reading" branch (`---`).
 - Updates: when a reading arrives.
 
 In the face: the colour comes from a `Condition` on `[COMPLICATION.RANGED_VALUE_VALUE]` with the
 wearer's thresholds as constants. A gauge hand is a `Transform angle` on the same value.
 
-To prove: that WFF shows `[COMPLICATION.SMALL_IMAGE]` inside a `RANGED_VALUE` complication. If not,
-the arrow needs its own `SMALL_IMAGE` slot (one slot more).
+Proven on the emulator: the arrow rides in this slot as the monochromatic image, so it needs no
+slot of its own. A real watch may tint monochromatic images; if it does, the arrow gets its own
+`SMALL_IMAGE` slot (one slot more).
 
 ### 5.2 Reading age: `RANGED_VALUE` with a dynamic value
 
@@ -913,6 +917,38 @@ Questions an emulator test can answer (cheap, do first):
 11. How does the runtime report its WFF version? Is `SDK_INT` enough?
 12. Does the validator's per-configuration footprint count option variants per configuration (not
     summed)?
+
+### 11.1 Answers from the Wear OS 6 emulator (2026-11-20)
+
+Probe faces were written by hand, built with aapt2, zipalign and apksigner, and set with
+`adb shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation
+set-watchface --es watchFaceId <package>`. A small probe provider app sent the data (a settable
+`RANGED_VALUE`, a dynamic age, a `SMALL_IMAGE` of a chosen size).
+
+| # | Answer |
+|---|---|
+| 1 | **Yes.** A `Reference` (`source="angle"`, the angle set by a `Transform` from `[COMPLICATION.RANGED_VALUE_VALUE]`) inside one slot is read live in another slot's `Complication`, outside all slots in a `Template` and in a `Condition`. Both ways. |
+| 2 | **No** for `[COMPLICATION.SMALL_IMAGE]` in a `RANGED_VALUE` complication: not drawn. **Yes** for `[COMPLICATION.MONOCHROMATIC_IMAGE]`, which keeps its colours without `tintColor`. `[COMPLICATION.TITLE]` works too. |
+| 3 | **Yes** with the screen on: a `DynamicFloat` (minutes since the reading) ticks by itself, drives a `Condition` and a `Reference`, and keeps counting with the provider's process stopped. Always-on cannot be seen on the emulator (the display goes off). |
+| 4 | Inside a `Group`, a part with `renderMode="MASK"` masks the parts with `renderMode="SOURCE"` (a square became a circle). A `Group` does **not** clip its children to its box. |
+| 5 | `PLUS` is an exact add (#404080 + #808040 = #c0c0c0), `SCREEN` is 1 - (1 - a)(1 - b) (#a0a0a0). Both equal ours. |
+| 6 | `Transform` works on `Rectangle width`, `Line endX` and `Arc endAngle`. |
+| 7 | **Yes**: `ColorOption colors="#a #b"`, read as `[CONFIGURATION.<id>.0]` and `.1` in a `Fill color`. |
+| 8 | **No**: with literal `displayName` texts the editor shows "1st option" for every setting and choice. Names must be string resources. So the APK step must write strings into `resources.arsc` (placeholders in a template, or our own `resources.arsc` writer). |
+| 9 | A tap while a `TAP` loop plays starts the loop again from frame 0. |
+| 10 | `%` keeps the sign of the left side (`-7 % 3` = -1). `fract(-0.25)` = -0.25 (ours: 0.75). `5 / 0` = 0. `round(-2.5)` = -2, `round(2.5)` = 3. Radians. `[MOON_PHASE_POSITION]` is a fraction (9.42 and growing), not a whole day. `[DAY_OF_WEEK]`: 1 is Sunday. **`icuText` takes an ICU skeleton, not a pattern**: `"yyyy-MM-dd"` gave `11/20/2026`. `numberFormat` rounds half to even. Joining texts with `+` does not work: one `Parameter` per value. |
+| 11 | A face that declares format version 5 is refused on Wear OS 6 ("could not resolve resource-only watch face"). The runtime APK has no version property. `SDK_INT` 36 means WFF 4. |
+| 12 | **Per choice.** Active memory is the sum of decoded pictures per configuration: 135 full noise pictures in one face fail ("104.28 MB in active"), the same as 3 `ListOption`s of 45 pass. Always-on counted only 0.77 MB for that face, and 20 half-transparent full pictures passed, so the 10 MB always-on limit is far looser than 7.3 assumed. Plain pictures count less than noise (the calculator quantizes). |
+| 5.4 | A `SMALL_IMAGE` of 1200 x 1200 px is accepted and scaled into a 200 x 200 slot. |
+
+What this changes:
+- 5.1: the arrow is the glucose slot's monochromatic image.
+- The printer (section 3) writes `fract(x)` as `x - floor(x)`, never maps `date(pattern)` to
+  `icuText` (a pattern is not a skeleton), and writes our `%` as `a - b * floor(a / b)`.
+- The names table of the engine (`WffSources`, `TextFunctions`) has three WFF names whose meaning
+  differs from the runtime: `fract` for negative numbers, `icuText` and `[MOON_PHASE_POSITION]`.
+  That is an engine fix for the owner to decide.
+- Step 5 must write string resources.
 
 Questions only a real watch can answer:
 
