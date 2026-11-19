@@ -107,6 +107,7 @@ import app.aaps.wear.watchfaces.utils.PartTimeLeft
 import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
 import app.aaps.wear.watchfaces.utils.drawWithHidden
 import app.aaps.wear.watchfaces.values.FaceValues
+import app.aaps.wear.watchfaces.values.StatusValues
 import app.aaps.wear.watchfaces.utils.WatchFaceComplicationSlots
 import app.aaps.wear.watchfaces.utils.WatchFaceComplications
 import app.aaps.wear.watchfaces.utils.WatchFaceSettingRow
@@ -2251,7 +2252,27 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         SENSOR_LEFT(PartTimeLeft.SENSOR_KEY, 0.0, 72.0), // PERSONAL PATCH: hours
         PUMP_LEFT(PartTimeLeft.PUMP_KEY, 0.0, 72.0), // PERSONAL PATCH: hours
         IS_DAY(CwfPlaceNeeds.IS_DAY, 0.0, 1.0), // PERSONAL PATCH: 1 while the face shows the day (DayNightChoice)
-        WEATHER_KIND(StoredWeather.KIND_VALUE_KEY, 0.0, 3.0); // PERSONAL PATCH: 0 clear, 1 partly, 2 cloudy, 3 rain
+        WEATHER_KIND(StoredWeather.KIND_VALUE_KEY, 0.0, 3.0), // PERSONAL PATCH: 0 clear, 1 partly, 2 cloudy, 3 rain
+        IOB(StatusValues.key(StatusValues.IOB, 0), -5.0, 20.0), // PERSONAL PATCH: U
+        IOB_BOLUS(StatusValues.key(StatusValues.IOB_BOLUS, 0), 0.0, 20.0), // PERSONAL PATCH: U
+        IOB_BASAL(StatusValues.key(StatusValues.IOB_BASAL, 0), -5.0, 5.0), // PERSONAL PATCH: U
+        COB(StatusValues.key(StatusValues.COB, 0), 0.0, 200.0), // PERSONAL PATCH: grams
+        BASAL_RATE(StatusValues.key(StatusValues.BASAL_RATE, 0), 0.0, 5.0), // PERSONAL PATCH: U/h
+        BGI(StatusValues.key(StatusValues.BGI, 0), -25.0, 25.0), // PERSONAL PATCH: mg/dl per 5 minutes
+        IOB_EXT1(StatusValues.key(StatusValues.IOB, 1), -5.0, 20.0), // PERSONAL PATCH: U
+        IOB_BOLUS_EXT1(StatusValues.key(StatusValues.IOB_BOLUS, 1), 0.0, 20.0), // PERSONAL PATCH: U
+        IOB_BASAL_EXT1(StatusValues.key(StatusValues.IOB_BASAL, 1), -5.0, 5.0), // PERSONAL PATCH: U
+        COB_EXT1(StatusValues.key(StatusValues.COB, 1), 0.0, 200.0), // PERSONAL PATCH: grams
+        BASAL_RATE_EXT1(StatusValues.key(StatusValues.BASAL_RATE, 1), 0.0, 5.0), // PERSONAL PATCH: U/h
+        BGI_EXT1(StatusValues.key(StatusValues.BGI, 1), -25.0, 25.0), // PERSONAL PATCH: mg/dl per 5 minutes
+        IOB_EXT2(StatusValues.key(StatusValues.IOB, 2), -5.0, 20.0), // PERSONAL PATCH: U
+        IOB_BOLUS_EXT2(StatusValues.key(StatusValues.IOB_BOLUS, 2), 0.0, 20.0), // PERSONAL PATCH: U
+        IOB_BASAL_EXT2(StatusValues.key(StatusValues.IOB_BASAL, 2), -5.0, 5.0), // PERSONAL PATCH: U
+        COB_EXT2(StatusValues.key(StatusValues.COB, 2), 0.0, 200.0), // PERSONAL PATCH: grams
+        BASAL_RATE_EXT2(StatusValues.key(StatusValues.BASAL_RATE, 2), 0.0, 5.0), // PERSONAL PATCH: U/h
+        BGI_EXT2(StatusValues.key(StatusValues.BGI, 2), -25.0, 25.0), // PERSONAL PATCH: mg/dl per 5 minutes
+        HEART_RATE(StatusValues.HEART_RATE, 40.0, 180.0), // PERSONAL PATCH: beats per minute
+        STEPS(StatusValues.STEPS, 0.0, 20000.0); // PERSONAL PATCH: steps today
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2363,6 +2384,26 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.PUMP_LEFT        -> PartTimeLeft.hours(cwf.status[0].pumpEndsAt, cwf.renderNow()) // PERSONAL PATCH
             ValueMap.IS_DAY           -> if (cwf.showsDay()) 1.0 else 0.0 // PERSONAL PATCH
             ValueMap.WEATHER_KIND     -> StoredWeather.kindNumber(cwf.storedWeather()) // PERSONAL PATCH
+            ValueMap.IOB -> cwf.status[0].iobValue // PERSONAL PATCH
+            ValueMap.IOB_BOLUS -> cwf.status[0].iobBolusValue // PERSONAL PATCH
+            ValueMap.IOB_BASAL -> cwf.status[0].iobBasalValue // PERSONAL PATCH
+            ValueMap.COB -> StatusValues.cob(cwf.status[0]) // PERSONAL PATCH
+            ValueMap.BASAL_RATE -> cwf.status[0].basalRateValue // PERSONAL PATCH
+            ValueMap.BGI -> cwf.status[0].bgiMgdl // PERSONAL PATCH
+            ValueMap.IOB_EXT1 -> cwf.status[1].iobValue // PERSONAL PATCH
+            ValueMap.IOB_BOLUS_EXT1 -> cwf.status[1].iobBolusValue // PERSONAL PATCH
+            ValueMap.IOB_BASAL_EXT1 -> cwf.status[1].iobBasalValue // PERSONAL PATCH
+            ValueMap.COB_EXT1 -> StatusValues.cob(cwf.status[1]) // PERSONAL PATCH
+            ValueMap.BASAL_RATE_EXT1 -> cwf.status[1].basalRateValue // PERSONAL PATCH
+            ValueMap.BGI_EXT1 -> cwf.status[1].bgiMgdl // PERSONAL PATCH
+            ValueMap.IOB_EXT2 -> cwf.status[2].iobValue // PERSONAL PATCH
+            ValueMap.IOB_BOLUS_EXT2 -> cwf.status[2].iobBolusValue // PERSONAL PATCH
+            ValueMap.IOB_BASAL_EXT2 -> cwf.status[2].iobBasalValue // PERSONAL PATCH
+            ValueMap.COB_EXT2 -> StatusValues.cob(cwf.status[2]) // PERSONAL PATCH
+            ValueMap.BASAL_RATE_EXT2 -> cwf.status[2].basalRateValue // PERSONAL PATCH
+            ValueMap.BGI_EXT2 -> cwf.status[2].bgiMgdl // PERSONAL PATCH
+            ValueMap.HEART_RATE -> cwf.healthValues.heartRate()?.toDouble() // PERSONAL PATCH
+            ValueMap.STEPS -> cwf.healthValues.stepsToday()?.toDouble() // PERSONAL PATCH
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->

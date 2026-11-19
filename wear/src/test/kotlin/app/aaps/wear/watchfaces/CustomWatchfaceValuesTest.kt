@@ -76,10 +76,22 @@ class CustomWatchfaceValuesTest {
                     dataset = 0, externalStatus = "", iobSum = "1.25", iobDetail = "(0.90|0.35)", cob = "12g", currentBasal = "0.85U/h",
                     battery = "78", rigBattery = "--", openApsStatus = now - 3 * MINUTE, bgi = "-0.4", batteryLevel = 1,
                     tempTarget = "100", tempTargetLevel = 0, reservoirString = "120U", reservoir = 120.0, reservoirLevel = 0,
-                    sensorEndsAt = now + 60 * HOUR, pumpEndsAt = now + 10 * HOUR
+                    sensorEndsAt = now + 60 * HOUR, pumpEndsAt = now + 10 * HOUR, cobValue = 12.0,
+                    iobValue = 1.25, iobBolusValue = 0.9, iobBasalValue = 0.35, basalRateValue = 1.02, bgiMgdl = -7.2
+                )
+            )
+            // The second phone: the same numbers under the keys that end in _Ext1, and a percent temp basal as text
+            face.complicationDataRepository.updateStatusData(
+                EventData.Status(
+                    dataset = 1, externalStatus = "", iobSum = "-0,40", iobDetail = "(0,00|-0,40)", cob = "0g", currentBasal = "50%",
+                    battery = "55", rigBattery = "--", openApsStatus = now - 1 * MINUTE, bgi = "+0,2", batteryLevel = 1,
+                    tempTarget = "100", tempTargetLevel = 0, reservoirString = "", reservoir = 0.0, reservoirLevel = 0, cobValue = 0.0,
+                    iobValue = -0.4, iobBolusValue = 0.0, iobBasalValue = -0.4, basalRateValue = 0.4, bgiMgdl = 3.6
                 )
             )
         }
+        face.healthValues.recordHeartRate(72, now - MINUTE)
+        face.healthValues.recordSteps(4321L, now - MINUTE)
         runBlocking {
             // The watch keeps the place only for a design that needs it (see `PlaceRuleKeeping`)
             face.complicationDataRepository.storeCustomWatchface(
@@ -114,7 +126,21 @@ class CustomWatchfaceValuesTest {
             "moon_lit" to MoonLight.at(now, PLACE).litFraction,
             "moon_limb" to MoonLight.at(now, PLACE).limbTurn,
             "moon_north" to MoonLight.at(now, PLACE).northTurn,
-            "sun_next_time" to sky.nextSunEvent(now)?.toDouble()
+            "sun_next_time" to sky.nextSunEvent(now)?.toDouble(),
+            "iob" to 1.25,
+            "iob_bolus" to 0.9,
+            "iob_basal" to 0.35,
+            "cob" to 12.0,
+            "basalRate" to 1.02,
+            "bgi" to -7.2,
+            "iob_Ext1" to -0.4,
+            "iob_bolus_Ext1" to 0.0,
+            "iob_basal_Ext1" to -0.4,
+            "cob_Ext1" to 0.0,
+            "basalRate_Ext1" to 0.4,
+            "bgi_Ext1" to 3.6,
+            "heart_rate" to 72.0,
+            "steps" to 4321.0
         )
         for ((key, value) in expected) assertWithMessage(key).that(face.designValue(key)).isEqualTo(value)
         // A key that is no value, and the empty key, have none
@@ -126,7 +152,8 @@ class CustomWatchfaceValuesTest {
     fun withoutDataTheDataKeysHaveNoValue() {
         val face = newFace()
         face.reload()
-        for (key in listOf("sgv", "delta", "avg_delta", "timestamp", "loop", "uploader_battery", "weather_temperature", "sun_next_time", "sensor_left", "pump_left"))
+        for (key in listOf("sgv", "delta", "avg_delta", "timestamp", "loop", "uploader_battery", "weather_temperature", "sun_next_time", "sensor_left", "pump_left",
+            "iob", "iob_bolus", "iob_basal", "cob", "basalRate", "bgi", "iob_Ext2", "cob_Ext2", "basalRate_Ext2", "bgi_Ext2", "heart_rate", "steps"))
             assertWithMessage(key).that(face.designValue(key)).isNull()
         // The sky needs no data: without a place it follows the fixed hours
         assertThat(face.designValue("sun_cycle")).isNotNull()
