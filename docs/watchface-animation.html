@@ -79,6 +79,10 @@ figure.ex > .ex-stage { grid-row: 1 / span 2; }
 figure.ex > figcaption { font-size: 0.95rem; }
 figure.ex > figcaption strong:first-child { display: block; margin-bottom: 2px; }
 figure.ex > pre { align-self: start; max-height: 420px; overflow: auto; }
+figure.ex > pre[contenteditable] { cursor: text; }
+figure.ex > pre[contenteditable]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+figure.ex > pre[contenteditable]:focus span { color: inherit; }
+@media (pointer: coarse) { figure.ex > pre[contenteditable] { font-size: 16px; } }
 .ex-stage { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .ex-box { position: relative; width: 184px; height: 184px; }
 .ex-canvas { width: 184px; height: 184px; display: block; border-radius: 50%; background: #000; box-shadow: 0 0 0 4px #20242c, 0 0 0 5px #3a404b; cursor: pointer; }
@@ -152,6 +156,8 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
     watch or the phone preview. The pictures of the zip, the moon and the views of the face are drawn by the page itself
     and look different on the watch. The random numbers (<code>r1</code> to <code>r8</code>) can differ from those on the
     watch. Click a picture to play it again.
+    Click in the JSON of an example and type to change it: the picture follows, and the Reset button or a reload of the
+    page brings the old text back.
   </div>
 
   <nav class="toc" aria-label="Table of contents">
@@ -4904,6 +4910,7 @@ if (typeof document === 'undefined') return;
 
 var PICTURE_CSS = 184;        // the size of a picture on the page, in CSS pixels
 var PAUSE_MS = 1100;          // the normal frame between two wakes
+var EDIT_MS = 300;            // the wait after the last key, before a changed example is read again
 var doc = document;
 
 function el(tag, className, text) {
@@ -4928,6 +4935,20 @@ function highlight(text) {
     if (num) return '<span class="jn">' + num + '</span>';
     return '<span class="jl">' + lit + '</span>';
   });
+}
+
+/** The text of a box the reader types in. A browser can put a `br` or a `div` where a line ends. */
+function typedText(node) {
+  var out = '';
+  Array.prototype.forEach.call(node.childNodes, function (child) {
+    if (child.nodeType === 3) out += child.data;
+    else if (child.nodeName === 'BR') out += '\n';
+    else if (child.nodeType === 1) {
+      if (/^(DIV|P)$/.test(child.nodeName) && out && out.charAt(out.length - 1) !== '\n') out += '\n';
+      out += typedText(child);
+    }
+  });
+  return out;
 }
 
 /** One example on the page: its picture, its controls, its time line. */
@@ -4979,6 +5000,7 @@ function Player(figure, reduce) {
   figure.insertBefore(stage, figure.firstChild);
   figure.classList.add('live');
   this.pre.innerHTML = highlight(this.source);
+  this.makeEditable();
   this.surface = makeSurface(canvas, size, newCanvas);
 
   canvas.addEventListener('click', function () { self.playAgain(); });
@@ -4998,6 +5020,103 @@ Player.prototype.fail = function (e) {
   this.broken = true;
   this.error.hidden = false;
   this.error.textContent = 'This example cannot be drawn: ' + (e && e.message ? e.message : String(e));
+};
+
+/** The reader can change the JSON of the example. The picture follows a short moment after the last key. */
+Player.prototype.makeEditable = function () {
+  var self = this, pre = this.pre, timer = null, touched = false;
+  pre.setAttribute('contenteditable', 'plaintext-only');
+  var plain = pre.contentEditable === 'plaintext-only';
+  if (!plain) pre.setAttribute('contenteditable', 'true');      // an older browser
+  pre.setAttribute('role', 'textbox');
+  pre.setAttribute('aria-multiline', 'true');
+  pre.setAttribute('aria-label', 'The JSON of this example. You can change it.');
+  pre.setAttribute('spellcheck', 'false');
+  pre.setAttribute('autocapitalize', 'off');
+  pre.setAttribute('autocorrect', 'off');
+  pre.setAttribute('autocomplete', 'off');
+  pre.setAttribute('translate', 'no');
+
+  this.editNote = el('ul', 'ex-msg');
+  this.editNote.setAttribute('role', 'status');
+  this.reset = el('button', 'ex-play', 'Reset');
+  this.reset.type = 'button';
+  this.reset.title = 'Bring back the text of the page';
+  this.reset.hidden = true;
+  this.controls.parentNode.insertBefore(this.editNote, this.controls);
+  this.controls.parentNode.insertBefore(this.reset, this.controls);
+
+  function typeText(text) { doc.execCommand('insertText', false, text); }
+  function readNow() {
+    if (timer !== null) window.clearTimeout(timer);
+    timer = null;
+    self.applyEdit();
+  }
+  pre.addEventListener('input', function () {
+    touched = true;
+    if (timer !== null) window.clearTimeout(timer);
+    timer = window.setTimeout(readNow, EDIT_MS);
+  });
+  pre.addEventListener('beforeinput', function (e) {
+    // A phone can type curly quotes. JSON needs straight ones
+    if (typeof e.data !== 'string' || !/[\u2018\u2019\u201C\u201D]/.test(e.data)) return;
+    e.preventDefault();
+    typeText(e.data.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"'));
+  });
+  if (!plain) {
+    // Keep the box plain text: no styled paste, and Enter is a line break
+    pre.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      e.preventDefault();
+      typeText('\n');
+    });
+    pre.addEventListener('paste', function (e) {
+      if (!e.clipboardData) return;
+      e.preventDefault();
+      typeText(e.clipboardData.getData('text/plain'));
+    });
+  }
+  // The colours come back when the reader leaves the box
+  pre.addEventListener('blur', function () {
+    if (!touched) return;
+    touched = false;
+    if (timer !== null) readNow();
+    pre.innerHTML = highlight(typedText(pre));
+  });
+  this.reset.addEventListener('click', function () {
+    touched = false;
+    pre.innerHTML = highlight(self.source);
+    readNow();
+  });
+};
+
+/** Reads the JSON text again. While it is broken, the last good picture stays and the error shows under it. */
+Player.prototype.applyEdit = function () {
+  var text = typedText(this.pre), old = this.scene, fresh;
+  this.reset.hidden = text === this.source;
+  try {
+    var json = JSON.parse(text);
+    if (json === null || typeof json !== 'object' || Array.isArray(json)) throw new Error('a design is one JSON object: { ... }');
+    fresh = new Scene(json, { face: this.figure.getAttribute('data-face') === 'on' });
+    if (old) fresh.inputs = old.inputs;       // the controls keep what they are set to, and keep working
+    fresh.update();
+  } catch (e) {
+    this.editFailed(e);
+    return;
+  }
+  this.scene = fresh;
+  if (!old) try { this.buildControls(); } catch (e) { /* no controls */ }
+  this.broken = false;
+  this.error.hidden = true;
+  this.editFailed(null);
+  this.showMessages();
+  this.inputsChanged();
+};
+
+Player.prototype.editFailed = function (e) {
+  var list = this.editNote;
+  while (list.firstChild) list.removeChild(list.firstChild);
+  if (e) list.appendChild(el('li', 'msg-error', 'This JSON cannot be drawn: ' + (e && e.message ? e.message : String(e))));
 };
 
 Player.prototype.buildControls = function () {
@@ -5091,8 +5210,17 @@ Player.prototype.frame = function (now) {
   if (this.broken) return;
   try {
     this.step(now);
+    this.good = this.scene;
   } catch (e) {
-    this.fail(e);
+    if (this.good && this.good !== this.scene) {
+      // A changed example that cannot be drawn: back to the last one that could
+      this.scene = this.good;
+      this.editFailed(e);
+      this.showMessages();
+      this.inputsChanged();
+    } else {
+      this.fail(e);
+    }
   }
 };
 
