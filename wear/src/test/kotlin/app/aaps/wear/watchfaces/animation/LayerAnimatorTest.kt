@@ -522,7 +522,7 @@ class LayerAnimatorTest {
     }
 
     @Test
-    fun withoutAMoonPictureNothingIsDrawnAndTheOtherLayersStay() {
+    fun withoutAPictureOfTheAppNothingIsDrawnAndTheOtherLayersStay() {
         val other = rect(x = "10", y = "10")
         // No moon at all (the default), none to be had, and one that fails
         for (animator in listOf(

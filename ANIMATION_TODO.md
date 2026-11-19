@@ -125,15 +125,12 @@ example `ex-moon-template`), and a design brings it in `animation.templates`. Th
 (`MoonTemplate`, `DesignShorthand`), and the tests here read it from the manual (`ManualMoon`), so keep
 that example valid JSON under that id. `@moon` is only the plain photo (`MoonPhoto`). New generic keys:
 `group` with the blends `erase` and `inside`, and a template as the picture of a view
-(`"image": {"use": "moon"}`, `ViewTemplates`). `MoonTemplateTest` compares the template with the old
-shaded picture and writes both side by side to `wear/build/moon-compare/`.
+(`"image": {"use": "moon"}`, `ViewTemplates`).
 
-- [ ] The user compares the pictures and decides. Until then the old `MoonPicture.kt` and
-      `MoonPictureTest.kt` stay, used only by `MoonTemplateTest` and by the design repo
-      (`AuroraTownImages` bakes a moon into the stock background with `MoonPicture.draw`).
-- [ ] After the yes: delete `MoonPicture.kt` and its test, take it out of `wear/cwfrender/build.gradle.kts`,
-      turn `MoonTemplateTest` into a test of the template alone, and give the design repo its own way to
-      bake the stock moon (render the template, as `MoonTemplateTest.new` does).
+- [x] The user compared the old and the new moon on 2026-11-19 and said yes: `MoonPicture.kt` and its
+      test are deleted. `MoonTemplateTest` tests the template alone and writes its moons to
+      `wear/build/moon-template/`. The design repo renders the template itself (`MoonTemplate.draw`) for
+      the moon it bakes into the stock Aurora Town background.
 - [ ] A zip made on 2026-11-18 or 2026-11-19 holds `"image": "@moon"` and shows the plain full moon with
       this build. An older zip (`"moon": true`, `"moonLight": true`) is rewritten to `{"use": "moon"}` but
       has no such template, so it shows no moon. The zips of the design repo are rebuilt with the

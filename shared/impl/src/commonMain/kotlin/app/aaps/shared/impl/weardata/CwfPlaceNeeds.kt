@@ -73,7 +73,7 @@ object CwfPlaceNeeds {
     /** The weather looks of a design (`DayOverlay` on the watch). */
     const val WEATHER_LOOKS = "weatherLooks"
 
-    /** A view that shows the moon (`MoonPicture` on the watch). */
+    /** The old key of a view that shows the moon (`LegacyDesign` on the watch). */
     const val MOON_LIGHT = "moonLight"
 
     /** The wake-up animation of a design (`WakeAnimationSpec` on the watch). */

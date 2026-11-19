@@ -75,7 +75,6 @@ val wearShared = listOf(
     "watchfaces/daynight/MoonLight.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPhase.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPhoto.kt", // PERSONAL PATCH
-    "watchfaces/daynight/MoonPicture.kt", // PERSONAL PATCH
     "watchfaces/daynight/MoonPosition.kt", // PERSONAL PATCH
     "watchfaces/daynight/NightFace.kt",
     "watchfaces/daynight/OldDayNightPreferences.kt", // PERSONAL PATCH: brings the old place keys, which the design tests still name

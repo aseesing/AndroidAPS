@@ -34,9 +34,10 @@ import kotlin.math.hypot
 
 /**
  * The moon template of the manual ([ManualMoon]: plain layers, the photo `@moon`, a few shapes, a group)
- * against the moon the watch shaded pixel by pixel before ([MoonPicture]). They must show the same moon.
+ * drawn by the layer engine: as much lit as the values say, on the right side, turned with the sky, with
+ * a dark part that lets the sky through.
  *
- * Also writes both side by side as pictures, for the eye: `wear/build/moon-compare/`.
+ * Also writes the moons as a picture, for the eye: `wear/build/moon-template/`.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -71,11 +72,8 @@ class MoonTemplateTest {
         at("2 Dec 2026 04:00, Sydney", "2026-12-02T04:00:00+11:00", SYDNEY)
     )
 
-    /** The old moon: shaded pixel by pixel. */
-    private fun old(look: MoonLight.Look, size: Int): Bitmap = MoonPicture.draw(photo, size, look)
-
-    /** The new moon: the layers of the template, drawn by the layer engine with the three moon values. */
-    private fun new(look: MoonLight.Look, size: Int, use: String = """{"use": "moon"}"""): Bitmap {
+    /** The moon: the layers of the template, drawn by the layer engine with the three moon values. */
+    private fun moon(look: MoonLight.Look, size: Int, use: String = """{"use": "moon"}"""): Bitmap {
         val json = ManualMoon.design(use)
         val spec = WakeAnimationJson({ text, default -> runCatching { Color.parseColor(text) }.getOrDefault(default) }, { null }).read(json)!!.normalized()
         assertThat(spec.errors).isEmpty()
@@ -98,36 +96,33 @@ class MoonTemplateTest {
         canvas.drawBitmap(moon, 0f, 0f, null)
     }
 
-    /** How far two pictures are apart: the mean and the largest difference of a colour channel, 0 to 255. */
-    private fun difference(a: Bitmap, b: Bitmap): Pair<Double, Int> {
-        var sum = 0L
-        var most = 0
-        for (y in 0 until a.height) for (x in 0 until a.width) {
-            val p = a.getPixel(x, y)
-            val q = b.getPixel(x, y)
-            val d = maxOf(abs(Color.red(p) - Color.red(q)), abs(Color.green(p) - Color.green(q)), abs(Color.blue(p) - Color.blue(q)))
-            sum += d
-            most = maxOf(most, d)
-        }
-        return sum.toDouble() / (a.width * a.height) to most
+    /** The part of the disc that is covered fully: the lit part. */
+    private fun litPart(image: Bitmap): Double {
+        var lit = 0
+        for (y in 0 until image.height) for (x in 0 until image.width) if (Color.alpha(image.getPixel(x, y)) > 200) lit++
+        return lit / (Math.PI * image.width * image.width / 4)
     }
 
     @Test
-    fun theTemplateShowsTheSameMoonAsTheShadedPicture() {
-        for (size in listOf(24, 44, 96)) for (case in cases) for (sky in listOf(NIGHT_SKY, DAY_SKY)) {
-            val (mean, _) = difference(over(sky, old(case.look, size)), over(sky, new(case.look, size)))
-            assertWithMessage("${case.name}, $size px, sky ${Integer.toHexString(sky)}: mean difference").that(mean).isLessThan(if (size >= 96) MEAN_LIMIT else MEAN_LIMIT_SMALL)
-        }
+    fun asMuchIsLitAsTheValueSays() {
+        for (case in cases) assertWithMessage(case.name).that(litPart(moon(case.look, 96))).isWithin(0.03).of(case.look.litFraction)
     }
 
     @Test
-    fun asMuchIsLitAsInTheShadedPicture() {
-        fun litPart(image: Bitmap): Double {
-            var lit = 0
-            for (y in 0 until image.height) for (x in 0 until image.width) if (Color.alpha(image.getPixel(x, y)) > 200) lit++
-            return lit / (Math.PI * image.width * image.width / 4)
-        }
-        for (case in cases) assertWithMessage(case.name).that(litPart(new(case.look, 96))).isWithin(0.02).of(litPart(old(case.look, 96)))
+    fun theLitSideAndTheNorthPointWhereTheValuesSay() {
+        // A quarter with the lit side to the right, then to the top
+        val right = moon(MoonLight.Look(0.0, 270.0, 0.0), 64)
+        assertThat(Color.alpha(right.getPixel(48, 32))).isEqualTo(255)
+        assertThat(Color.alpha(right.getPixel(16, 32))).isLessThan(130)
+        val up = moon(MoonLight.Look(0.0, 0.0, 0.0), 64)
+        assertThat(Color.alpha(up.getPixel(32, 16))).isEqualTo(255)
+        assertThat(Color.alpha(up.getPixel(32, 48))).isLessThan(130)
+        // The full moon turned half round is the photo upside down
+        val straight = moon(MoonLight.Look(-1.0, 0.0, 0.0), 64)
+        val turned = moon(MoonLight.Look(-1.0, 0.0, 180.0), 64)
+        var difference = 0L
+        for (y in 8 until 56) for (x in 8 until 56) difference += abs(Color.red(straight.getPixel(x, y)) - Color.red(turned.getPixel(63 - x, 63 - y)))
+        assertThat(difference / (48.0 * 48.0)).isLessThan(8.0)
     }
 
     @Test
@@ -161,7 +156,7 @@ class MoonTemplateTest {
 
     @Test
     fun theDarkPartIsSeeThroughAndTheRestIsClear() {
-        val moon = new(MoonLight.Look(0.0, 270.0, 0.0), 64)
+        val moon = moon(MoonLight.Look(0.0, 270.0, 0.0), 64)
         // The lit side (right) covers all, the dark side lets the sky through, the corners are clear
         assertThat(Color.alpha(moon.getPixel(48, 32))).isEqualTo(255)
         assertThat(Color.alpha(moon.getPixel(16, 32))).isIn(105..125)
@@ -172,7 +167,7 @@ class MoonTemplateTest {
     @Test
     fun theTemplateFillsTheSquareItIsGiven() {
         // A moon of 100 design pixels at 250, 50: nothing is drawn outside that square
-        val image = new(MoonLight.Look(-1.0, 270.0, 0.0), 400, """{"use": "moon", "left": 250, "top": 50, "size": 100}""")
+        val image = moon(MoonLight.Look(-1.0, 270.0, 0.0), 400, """{"use": "moon", "left": 250, "top": 50, "size": 100}""")
         for (y in 0 until 400) for (x in 0 until 400) {
             val inDisc = hypot(x + 0.5 - 300, y + 0.5 - 100) < 49
             val outside = hypot(x + 0.5 - 300, y + 0.5 - 100) > 51
@@ -181,49 +176,34 @@ class MoonTemplateTest {
         }
     }
 
-    /** For the eye: every case, old and new side by side, on a night sky and on a day sky, with the difference. */
     @Test
-    fun writeThePicturesSideBySide() {
-        val out = File(System.getProperty("moon.compare.out") ?: "build/moon-compare").apply { mkdirs() }
-        val report = StringBuilder("size;case;lit;limb;north;sky;mean difference;largest difference\n")
-        for (size in listOf(96, 24)) {
-            val zoom = if (size < 48) 4 else 2
-            val cell = size * zoom + 8
-            val labelWidth = 260
-            val sheet = createBitmap(labelWidth + 6 * cell, HEADER + cases.size * cell)
-            val canvas = Canvas(sheet)
-            canvas.drawColor(Color.rgb(40, 40, 40))
-            val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13f }
-            listOf("old, night", "new, night", "difference x 4", "old, day", "new, day", "difference x 4").forEachIndexed { i, title -> canvas.drawText(title, labelWidth + i * cell + 4f, 16f, text) }
-            val blocky = Paint()
-            for ((row, case) in cases.withIndex()) {
-                val top = HEADER + row * cell
-                canvas.drawText(case.name, 6f, top + 20f, text)
-                canvas.drawText("lit %.2f  limb %.0f  north %.0f".format(case.look.litFraction, case.look.limbTurn, case.look.northTurn), 6f, top + 38f, text)
-                val oldMoon = old(case.look, size)
-                val newMoon = new(case.look, size)
-                var column = 0
-                for (sky in listOf(NIGHT_SKY, DAY_SKY)) {
-                    val a = over(sky, oldMoon)
-                    val b = over(sky, newMoon)
-                    val (mean, most) = difference(a, b)
-                    report.append("$size;${case.name};${case.look.litFraction};${case.look.limbTurn};${case.look.northTurn};${Integer.toHexString(sky)};$mean;$most\n")
-                    val diff = createBitmap(size, size)
-                    for (y in 0 until size) for (x in 0 until size) {
-                        val p = a.getPixel(x, y)
-                        val q = b.getPixel(x, y)
-                        diff.setPixel(x, y, Color.rgb((4 * abs(Color.red(p) - Color.red(q))).coerceAtMost(255), (4 * abs(Color.green(p) - Color.green(q))).coerceAtMost(255), (4 * abs(Color.blue(p) - Color.blue(q))).coerceAtMost(255)))
-                    }
-                    for (picture in listOf(a, b, diff)) {
-                        val left = labelWidth + column * cell + 4
-                        canvas.drawBitmap(picture, null, Rect(left, top + 4, left + size * zoom, top + 4 + size * zoom), blocky)
-                        column++
-                    }
-                }
+    fun theWatchCarriesTheMoonPhoto() {
+        assertThat(photo.width).isEqualTo(photo.height)
+        assertThat(photo.width).isAtLeast(128)
+    }
+
+    /** For the eye: every case on a night sky and on a day sky. */
+    @Test
+    fun writeThePictures() {
+        val out = File(System.getProperty("moon.template.out") ?: "build/moon-template").apply { mkdirs() }
+        val size = 96
+        val cell = size + 8
+        val labelWidth = 260
+        val sheet = createBitmap(labelWidth + 2 * cell, cases.size * cell)
+        val canvas = Canvas(sheet)
+        canvas.drawColor(Color.rgb(40, 40, 40))
+        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13f }
+        for ((row, case) in cases.withIndex()) {
+            val top = row * cell
+            canvas.drawText(case.name, 6f, top + 20f, text)
+            canvas.drawText("lit %.2f  limb %.0f  north %.0f".format(case.look.litFraction, case.look.limbTurn, case.look.northTurn), 6f, top + 38f, text)
+            val picture = moon(case.look, size)
+            for ((column, sky) in listOf(NIGHT_SKY, DAY_SKY).withIndex()) {
+                val left = labelWidth + column * cell + 4
+                canvas.drawBitmap(over(sky, picture), null, Rect(left, top + 4, left + size, top + 4 + size), null)
             }
-            FileOutputStream(File(out, "moon-old-and-new-${size}px.png")).use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
-        File(out, "differences.csv").writeText(report.toString())
+        FileOutputStream(File(out, "moon-template.png")).use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     private companion object {
@@ -233,14 +213,5 @@ class MoonTemplateTest {
 
         const val NIGHT_SKY = Color.BLACK
         val DAY_SKY = Color.rgb(90, 150, 220)
-
-        /**
-         * The most the two moons may differ on average, per colour channel (0 to 255): at their edges, and
-         * in the fine grain of a turned photo, which counts for more on a small moon.
-         */
-        const val MEAN_LIMIT = 5.0
-        const val MEAN_LIMIT_SMALL = 13.0
-
-        const val HEADER = 24
     }
 }
