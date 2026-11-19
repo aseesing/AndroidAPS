@@ -12,7 +12,7 @@ import app.aaps.shared.impl.rx.bus.RxBusImpl
 import app.aaps.shared.impl.sharedPreferences.SPImpl
 import app.aaps.shared.impl.utils.DateUtilImpl
 import app.aaps.wear.data.ComplicationDataRepository
-import app.aaps.wear.health.HealthValues // PERSONAL PATCH: heart rate and steps of the face
+import app.aaps.wear.health.HealthValues // PERSONAL PATCH: heart rate of the face
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.daynight.StoredWeather // PERSONAL PATCH: the weather of the face
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
@@ -65,8 +65,8 @@ class PreviewHost(
     private val simpleUi: SimpleUi by lazy { SimpleUi(this, sp, dateUtil) }
 
     /**
-     * PERSONAL PATCH: the heart rate and steps store of the face, in the same file as on the watch (see
-     * `HealthModule`), here behind [name]. The watch does not send these values, so on the phone it stays empty.
+     * PERSONAL PATCH: the heart rate store of the face, in the same file as on the watch (see
+     * `HealthModule`), here behind [name]. The watch does not send the heart rate, so on the phone it stays empty.
      */
     val healthValues: HealthValues by lazy { HealthValues(getSharedPreferences(HealthValues.FILE, MODE_PRIVATE)) }
 
@@ -103,7 +103,7 @@ class PreviewHost(
         target.simpleUi = simpleUi
         if (target is CustomWatchface) {
             target.context = this
-            target.healthValues = healthValues // PERSONAL PATCH: heart rate and steps
+            target.healthValues = healthValues // PERSONAL PATCH: heart rate
         }
         return true
     }

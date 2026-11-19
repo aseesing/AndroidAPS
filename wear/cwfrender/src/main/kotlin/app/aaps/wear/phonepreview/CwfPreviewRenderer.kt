@@ -68,16 +68,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
      */
     private inner class Drawing(val size: Int) {
 
-        /** The time of the frame being drawn, for the complication slots. */
-        var frameTime = System.currentTimeMillis()
-
-        private val slots = PreviewSlots(host, host.healthValues, logger)
-
-        val face = CustomWatchface().apply {
-            prepareForRendering(host)
-            // The system draws the slots on the watch; here the preview draws them itself
-            slotPainter = { canvas -> slots.draw(canvas, this, frameTime) }
-        }
+        val face = CustomWatchface().apply { prepareForRendering(host) }
         val pipeline = CwfFramePipeline(host, logger) { face }
         val wakeAnimator = WakeAnimator(
             heartRate = { null }, // the phone does not measure it; the pulse uses the design's fallback
@@ -247,7 +238,6 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         val index = freeBuffer(size, isFree) ?: return null
         val target = buffers[index]!!
         val drawing = drawing(size)
-        drawing.frameTime = nowMs
         // The hour, minute and date fields are filled with the data, from the real clock
         val minute = nowMs / MS_PER_MINUTE
         if (minute != drawing.minute) {

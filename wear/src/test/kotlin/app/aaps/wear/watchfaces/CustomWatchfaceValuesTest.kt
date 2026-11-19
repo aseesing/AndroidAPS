@@ -90,8 +90,6 @@ class CustomWatchfaceValuesTest {
                 )
             )
         }
-        face.healthValues.recordHeartRate(72, now - MINUTE)
-        face.healthValues.recordSteps(4321L, now - MINUTE)
         runBlocking {
             // The watch keeps the place only for a design that needs it (see `PlaceRuleKeeping`)
             face.complicationDataRepository.storeCustomWatchface(
@@ -138,9 +136,7 @@ class CustomWatchfaceValuesTest {
             "iob_basal_Ext1" to -0.4,
             "cob_Ext1" to 0.0,
             "basalRate_Ext1" to 0.4,
-            "bgi_Ext1" to 3.6,
-            "heart_rate" to 72.0,
-            "steps" to 4321.0
+            "bgi_Ext1" to 3.6
         )
         for ((key, value) in expected) assertWithMessage(key).that(face.designValue(key)).isEqualTo(value)
         // A key that is no value, and the empty key, have none
@@ -153,7 +149,7 @@ class CustomWatchfaceValuesTest {
         val face = newFace()
         face.reload()
         for (key in listOf("sgv", "delta", "avg_delta", "timestamp", "loop", "uploader_battery", "weather_temperature", "sun_next_time", "sensor_left", "pump_left",
-            "iob", "iob_bolus", "iob_basal", "cob", "basalRate", "bgi", "iob_Ext2", "cob_Ext2", "basalRate_Ext2", "bgi_Ext2", "heart_rate", "steps"))
+            "iob", "iob_bolus", "iob_basal", "cob", "basalRate", "bgi", "iob_Ext2", "cob_Ext2", "basalRate_Ext2", "bgi_Ext2"))
             assertWithMessage(key).that(face.designValue(key)).isNull()
         // The sky needs no data: without a place it follows the fixed hours
         assertThat(face.designValue("sun_cycle")).isNotNull()

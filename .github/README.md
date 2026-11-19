@@ -43,7 +43,6 @@ OnePlus Watch 2R and other round Wear OS watches.
 | 〰️ | **Glucose as a line** | A design can draw the glucose as a line instead of dots, with its own width and colour (`graphLineWidth`, `graphLineColor`). The Cyberpunk and Wilds faces do. |
 | 🌙 | **The real sun and moon** | They rise and set over a horizon as in the sky, the moon in its real phase, worked out on the watch. The watch draws the moon from a NASA photo, lit and turned as you see it in your sky. |
 | 🔋 | **Battery on the face** | Phone and watch battery side by side. A low one blinks. |
-| ❤️ | **Heart rate and steps** | On the watch face, from what the watch measures anyway. |
 | 🪫 | **Longer watch battery** | Fewer redraws and fewer messages from the phone. |
 | ⚡ | **Fast wake** | The watch face is there the moment you raise your wrist. |
 | 🩸 | **Dexcom ONE+ / G7 without xDrip+** | AAPS reads the sensor itself, even straight to the watch. |

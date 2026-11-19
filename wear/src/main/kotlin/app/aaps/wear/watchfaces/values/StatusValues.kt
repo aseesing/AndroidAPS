@@ -7,7 +7,7 @@ package app.aaps.wear.watchfaces.values
 import app.aaps.core.interfaces.rx.weardata.EventData
 
 /**
- * The value keys of the insulin and carbs numbers of the phone, and of the heart rate and steps of the watch.
+ * The value keys of the insulin and carbs numbers of the phone.
  * A design reads them as `v_<key>` in a formula and a look condition, and as `valueKey` of a `dynData`.
  * The keys of the second and third phone end in `_Ext1` and `_Ext2`, as the other keys of those phones do.
  *
@@ -22,8 +22,6 @@ object StatusValues {
     const val COB = "cob"
     const val BASAL_RATE = "basalRate"
     const val BGI = "bgi"
-    const val HEART_RATE = "heart_rate"
-    const val STEPS = "steps"
 
     /** The key of the phone with this [dataset]: 0 the own phone, 1 and 2 the others. */
     fun key(key: String, dataset: Int): String = if (dataset == 0) key else "${key}_Ext$dataset"

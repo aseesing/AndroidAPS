@@ -48,7 +48,6 @@ val wearShared = listOf(
     "data/NightFaceFromDesignFile.kt", // PERSONAL PATCH
     "data/PlaceRuleKeeping.kt", // PERSONAL PATCH
     "events/EventWearPreferenceChange.kt",
-    "health/HealthComplicationData.kt", // PERSONAL PATCH
     "health/HealthValues.kt", // PERSONAL PATCH
     "utils/ViewExtensions.kt",
     "watchdirect/WatchDirectReadings.kt", // PERSONAL PATCH

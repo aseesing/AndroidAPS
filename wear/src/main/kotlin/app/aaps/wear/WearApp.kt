@@ -78,9 +78,9 @@ class WearApp : Application(), MetroMemberInjector {
         // Refreshes the Custom watch face image complications when the picture changes, rather
         // than leaving them on the system's slow periodic timer
         cwfComplicationUpdater.start()
-        // Health Services forgets passive registrations on reboot: ask again for the heart rate and
-        // steps complications that are shown. Does nothing when none is shown.
-        passiveHealthRegistration.updateInBackground()
+        // Health Services forgets passive registrations on reboot: ask again for the heart rate when
+        // the design of the Custom watch face uses it, and follow that design from now on.
+        passiveHealthRegistration.start()
         // Direct-to-watch: listens for the phone turning it on, and picks a set-up sensor up again after a restart
         watchDirect.start()
         // The Custom watch face settings that the phone can set too: both ways, the newer change wins
