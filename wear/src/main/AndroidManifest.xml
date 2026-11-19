@@ -1206,7 +1206,8 @@
         </activity>
 
         <!-- PERSONAL PATCH: the glucose and its age as ranged values, for faces converted to the
-             Watch Face Format (complications/wff). The converted face is the push package "design". -->
+             Watch Face Format (complications/wff). The converted face joins SAFE_WATCH_FACES when it
+             becomes a pushed face (PushedFaceManifestTest keeps all lists the same). -->
         <service
             android:name=".complications.wff.WffGlucoseComplication"
             android:exported="true"
@@ -1224,7 +1225,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.design" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
         </service>
         <service
             android:name=".complications.wff.WffGlucoseAgeComplication"
@@ -1243,7 +1244,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.design" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
         </service>
 
         <!-- The result of an update of this app sent from the phone app -->
