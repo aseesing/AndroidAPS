@@ -63,6 +63,20 @@ Then:
 ## Rules for the text
 
 - Plain school English, short sentences. No em dash or en dash as a dash.
+- Write plainly. State facts, do not sell them (the user's style rules, 2026-11-19). Avoid:
+    - a tail with "-ing" that adds a comment: ", making it...", ", ensuring...", ", allowing...";
+    - a tail that praises the first half: ", which means...", ", and that is the point";
+    - "not X, but Y" and "it is not just X, it is Y";
+    - a noun with a grand second name: "the settings menu, the heart of the app";
+    - a question you answer yourself: "The result? ...", "Why does this matter? Because...";
+    - three short fragments in a row: "No tools. No stress. No surprises.";
+    - words that sell: seamless, powerful, game-changer, unlock, elevate, crucial, delve, robust;
+    - a closing summary or moral that repeats what was said.
+- Emphasis (bold or italic inside a sentence) at most once on the whole page. The bold label that
+  starts a caption or a note box is a label and stays.
+- A key word (a key, a value, a variable, a function, a template, by its real name) is set in
+  fixed-width style (`<code>`), so the reader sees it is a key word. That is not emphasis.
+- Vary the length of the sentences. If cutting the second half of a sentence loses nothing, cut it.
 - The page says at the top that the pictures show the idea, not the exact pixels. Keep that honest:
   when the player cannot copy a rule of the watch, say so beside the example. Never bend the text to
   fit the player. The Kotlin code is the truth, then the text, then the pictures.
