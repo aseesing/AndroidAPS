@@ -936,4 +936,17 @@ class LayerAnimatorTest {
         assertThat(pixel(bitmap, 30, 30)).isEqualTo(Color.RED)
         assertThat(pixel(bitmap, 50, 50)).isEqualTo(Color.BLUE)
     }
+
+    @Test
+    fun knowsWhetherAFormulaReadsTheHeartRate() {
+        // Not read: the heart rate is not asked from the watch
+        assertThat(animator(rect("t * 10", "20")).readsHeartRate).isFalse()
+        // Read by a layer formula
+        assertThat(animator(rect("20", "20", width = "bpm / 4")).readsHeartRate).isTrue()
+        // Read through a let of the animation, as the pulse template of the designs does
+        assertThat(LayerAnimator(listOf(rect("20", "20", width = "period / 100")), lets = listOf("period" to "floor(60000 / bpm)"), zone = utc).readsHeartRate).isTrue()
+        // Read in the body of an own function of the design
+        val beat = DesignFunction.read("beat(a)", "a * bpm / 60")
+        assertThat(LayerAnimator(listOf(rect("20", "20", width = "beat(10)")), zone = utc, functions = listOf(beat)).readsHeartRate).isTrue()
+    }
 }

@@ -20,7 +20,7 @@ import java.util.zip.ZipOutputStream
 internal object TestDesigns {
 
     /**
-     * A dark face with the time and glucose, a wake-up animation of 15 s, and slot 1 as a row of white text.
+     * A dark face with the time and glucose, and a wake-up animation of 15 s.
      * The animation is falling streaks from a template of the design: the app has no templates of its own.
      */
     fun animated(): CwfData = load("Test_Animated", face("Test Animated", "#101828").apply {
@@ -29,8 +29,6 @@ internal object TestDesigns {
                 JSONObject().put("use", "streaks").put("count", 140).put("seed", 11).put("speed", 470).put("color", "#5E86B8").put("alpha", 0.25)
             )
         ))
-        put("complication1", slot(left = 256, top = 196, width = 103, height = 24, color = "#FFFFFF"))
-        getJSONObject("metadata").put("key_show_complication1", "true")
     }, "#101828")
 
     /** A template of falling streaks, as a design writes it. */
@@ -45,20 +43,11 @@ internal object TestDesigns {
         }}
     """
 
-    /** A face like [animated] in other colours, without animation and without slots. */
+    /** A face like [animated] in other colours, without animation. */
     fun still(): CwfData = load("Test_Still", face("Test Still", "#3A1020"), "#3A1020")
 
     /** A face that asks for the place (`"needsPlace": true`), so it keeps the rule for when it is day, see `PlaceRuleKeeping`. */
     fun withPlace(): CwfData = load("Test_Place", face("Test Place", "#101828").put("needsPlace", true), "#101828")
-
-    /** A light face with slot 2 at 6 o'clock (left 142, top 318, 116 x 32), in the ink [STEPS_INK]. */
-    fun steps(): CwfData = load("Test_Steps", face("Test Steps", "#F2EAD8").apply {
-        put("complication2", slot(left = 142, top = 318, width = 116, height = 32, color = STEPS_INK))
-        getJSONObject("metadata").put("key_show_complication2", "true")
-    }, "#F2EAD8")
-
-    /** The colour of the text and icon of slot 2 in [steps]. */
-    const val STEPS_INK = "#1C2A5A"
 
     private fun face(name: String, background: String): JSONObject = JSONObject()
         .put("metadata", JSONObject().put("name", name).put("cwf_version", "3.0").put("key_show_date", "false"))
@@ -70,11 +59,6 @@ internal object TestDesigns {
     private fun text(left: Int, top: Int, width: Int, height: Int, size: Int, color: String, gravity: String): JSONObject = JSONObject()
         .put("width", width).put("height", height).put("topmargin", top).put("leftmargin", left).put("rotation", 0).put("visibility", "visible")
         .put("textsize", size).put("gravity", gravity).put("font", "default").put("fontStyle", "normal").put("fontColor", color)
-
-    private fun slot(left: Int, top: Int, width: Int, height: Int, color: String): JSONObject = JSONObject()
-        .put("width", width).put("height", height).put("topmargin", top).put("leftmargin", left).put("visibility", "visible")
-        .put("color", "#00000000").put("borderRadius", 0).put("fontColor", color).put("iconColor", color)
-        .put("ringPrimaryColor", "#00000000").put("ringSecondaryColor", "#00000000").put("textsize", 20).put("gravity", "center")
 
     private fun contrastTo(background: String): String =
         if (Color.luminance(Color.parseColor(background)) > 0.5f) "#202020" else "#E0E0E0"

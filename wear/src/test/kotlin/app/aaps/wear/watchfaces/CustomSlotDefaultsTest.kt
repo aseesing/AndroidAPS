@@ -6,8 +6,6 @@ import android.content.Context
 import androidx.wear.watchface.complications.data.ComplicationType
 import app.aaps.wear.complications.CobIconComplication
 import app.aaps.wear.complications.IobIconComplication
-import app.aaps.wear.health.HeartRateComplication
-import app.aaps.wear.health.StepsComplication
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,21 +26,19 @@ class CustomSlotDefaultsTest {
     }
 
     @Test
-    fun slotsOneToFourShowHeartRateStepsCarbsAndInsulin() {
-        assertDefault(HEART_RATE_SLOT_ID, HeartRateComplication::class.java, ComplicationType.RANGED_VALUE)
-        assertDefault(STEPS_SLOT_ID, StepsComplication::class.java, ComplicationType.RANGED_VALUE)
+    fun slotsOneAndTwoShowCarbsAndInsulin() {
         assertDefault(COB_SLOT_ID, CobIconComplication::class.java, ComplicationType.SHORT_TEXT)
         assertDefault(IOB_SLOT_ID, IobIconComplication::class.java, ComplicationType.SHORT_TEXT)
     }
 
     @Test
-    fun theFifthSlotShowsNothing() {
-        assertThat(customSlotDefaultSource(context, 105).primaryDataSource).isNull()
+    fun slotsThreeToFiveShowNothing() {
+        for (slotId in 103..105) assertThat(customSlotDefaultSource(context, slotId).primaryDataSource).isNull()
     }
 
     @Test
     fun theIdsAreTheCustomWatchFaceSlots() {
         // Stable forever once shipped: the system keeps the user's choice per slot id
-        assertThat(CustomWatchface.complicationSlots.map { it.id }).containsAtLeast(HEART_RATE_SLOT_ID, STEPS_SLOT_ID, COB_SLOT_ID, IOB_SLOT_ID).inOrder()
+        assertThat(CustomWatchface.complicationSlots.map { it.id }).containsAtLeast(COB_SLOT_ID, IOB_SLOT_ID).inOrder()
     }
 }

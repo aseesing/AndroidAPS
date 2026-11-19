@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import androidx.health.services.client.data.DataPoint
 import androidx.health.services.client.data.DataPointContainer
 import androidx.health.services.client.data.DataType
-import androidx.health.services.client.data.IntervalDataPoint
 import androidx.health.services.client.data.SampleDataPoint
 import app.aaps.wear.AAPSLoggerTest
 import app.aaps.wear.testing.mocks.SharedPreferencesMock
@@ -27,8 +26,8 @@ import org.robolectric.annotation.Config
 import java.time.Duration
 
 /**
- * Health Services is asked for exactly what a watch face shows, and its batches end up in the values
- * the complications read. Robolectric, because the data points are Android types.
+ * Health Services is asked for the heart rate only while the design of the face uses `bpm`, and its
+ * batches end up in the values the face reads. Robolectric, because the data points are Android types.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
@@ -49,7 +48,7 @@ class PassiveHealthTest {
         }
 
         override suspend fun register(types: Set<DataType<*, *>>) {
-            calls += registerCall(types)
+            calls += "register ${types.map { it.name }.sorted()}"
         }
 
         override suspend fun clear() {
@@ -57,125 +56,81 @@ class PassiveHealthTest {
         }
     }
 
-    private companion object {
-
-        fun registerCall(types: Set<DataType<*, *>>) = "register ${types.map { it.name }.sorted()}"
-    }
+    private val heartRateOnly = "register [${DataType.HEART_RATE_BPM.name}]"
 
     private val values = HealthValues(SharedPreferencesMock())
     private val client = FakeClient()
-    private val granted = mutableSetOf(Manifest.permission.BODY_SENSORS, Manifest.permission.ACTIVITY_RECOGNITION)
-    private val registration = PassiveHealthRegistration(client, values, AAPSLoggerTest(), CoroutineScope(Dispatchers.Unconfined)) { it in granted }
+    private val granted = mutableSetOf(Manifest.permission.BODY_SENSORS)
+    private var asked = 0
+    private val registration = PassiveHealthRegistration(client, values, AAPSLoggerTest(), CoroutineScope(Dispatchers.Unconfined), { asked++ }) { it in granted }
 
     @Test
-    fun nothingEverShownNeverTalksToHealthServices(): Unit = runBlocking<Unit> {
+    fun aFaceWithoutBpmNeverTalksToHealthServices(): Unit = runBlocking<Unit> {
+        registration.start()
         registration.update()
         assertThat(client.calls).isEmpty()
+        assertThat(asked).isEqualTo(0)
     }
 
     @Test
-    fun onlyTheShownKindIsRegistered(): Unit = runBlocking<Unit> {
-        values.setShown(HealthKind.HEART_RATE, 1, true)
+    fun onlyTheHeartRateIsRegisteredWhileTheFaceWantsIt(): Unit = runBlocking<Unit> {
+        registration.start()
+        values.faceWantsHeartRate = true
+        assertThat(client.calls).containsExactly(heartRateOnly)
+        values.faceWantsHeartRate = false
+        assertThat(client.calls).containsExactly(heartRateOnly, "clear").inOrder()
+        // Nothing registered any more: a second update leaves Health Services alone
         registration.update()
-        assertThat(client.calls).containsExactly(registerCall(setOf(DataType.HEART_RATE_BPM)))
+        assertThat(client.calls).hasSize(2)
     }
 
     @Test
-    fun bothShownRegistersBoth_andTheLastOneLeavingClearsAll(): Unit = runBlocking<Unit> {
-        values.setShown(HealthKind.HEART_RATE, 1, true)
-        values.setShown(HealthKind.STEPS, 2, true)
-        registration.update()
-        assertThat(client.calls).containsExactly(registerCall(setOf(DataType.HEART_RATE_BPM, DataType.STEPS_DAILY)))
-
-        values.setShown(HealthKind.HEART_RATE, 1, false)
-        values.setShown(HealthKind.STEPS, 2, false)
-        registration.update()
-        assertThat(client.calls.last()).isEqualTo("clear")
-        assertThat(values.passiveRegistered).isFalse()
-
-        // Cleared once is enough
-        registration.update()
-        assertThat(client.calls.filter { it == "clear" }).hasSize(1)
-    }
-
-    @Test
-    fun aKindWithoutPermissionIsNotRegistered(): Unit = runBlocking<Unit> {
-        values.setShown(HealthKind.HEART_RATE, 1, true)
-        values.setShown(HealthKind.STEPS, 2, true)
-        granted -= Manifest.permission.BODY_SENSORS
-        registration.update()
-        assertThat(client.calls).containsExactly(registerCall(setOf(DataType.STEPS_DAILY)))
-        assertThat(registration.isGranted(HealthKind.HEART_RATE)).isFalse()
-    }
-
-    @Test
-    fun aKindTheWatchCannotMeasureIsNotRegistered(): Unit = runBlocking<Unit> {
-        client.supported = setOf(DataType.STEPS_DAILY)
-        values.setShown(HealthKind.HEART_RATE, 1, true)
-        registration.update()
+    fun startRegistersAgainAfterARestart(): Unit = runBlocking<Unit> {
+        values.faceWantsHeartRate = true    // kept from before the restart, no one listened yet
         assertThat(client.calls).isEmpty()
+        registration.start()
+        assertThat(client.calls).containsExactly(heartRateOnly)
     }
 
     @Test
-    fun aPermissionGrantedElsewhereIsNoticedOnTheNextRequest(): Unit = runBlocking<Unit> {
-        values.setShown(HealthKind.HEART_RATE, 1, true)
-        granted -= Manifest.permission.BODY_SENSORS
-        registration.update()
-        assertThat(client.calls).isEmpty()
-
-        // Nothing changed: no new update
-        registration.updateIfPermissionsChanged()
-        assertThat(client.calls).isEmpty()
-
-        // Granted from the heart rate setting for the phone, not from the complication
-        granted += Manifest.permission.BODY_SENSORS
-        registration.updateIfPermissionsChanged()
-        assertThat(client.calls).containsExactly(registerCall(setOf(DataType.HEART_RATE_BPM)))
-    }
-
-    @Test
-    fun aTapAsksForTheShownKindsAndAlwaysForTheTappedOne() {
+    fun withoutPermissionNothingIsRegisteredAndTheWearerIsAskedOnce(): Unit = runBlocking<Unit> {
         granted.clear()
-        // Nothing noted as shown, for example after app data was cleared: the tapped kind is still asked for
-        assertThat(registration.missingPermissions(HealthKind.STEPS)).containsExactly(Manifest.permission.ACTIVITY_RECOGNITION)
-        assertThat(registration.missingPermissions(null)).isEmpty()
-
-        values.setShown(HealthKind.HEART_RATE, 1, true)
-        assertThat(registration.missingPermissions(HealthKind.HEART_RATE)).containsExactly(Manifest.permission.BODY_SENSORS)
-        assertThat(registration.missingPermissions(HealthKind.STEPS))
-            .containsExactly(Manifest.permission.BODY_SENSORS, Manifest.permission.ACTIVITY_RECOGNITION)
-
-        // Granted ones are not asked again
+        registration.start()
+        values.faceWantsHeartRate = true
+        values.faceWantsHeartRate = true    // the face reads its design again: no second notification
+        assertThat(client.calls).isEmpty()
+        assertThat(asked).isEqualTo(1)
+        // Allowed later (the notification opens HealthPermissionActivity, which updates)
         granted += Manifest.permission.BODY_SENSORS
-        assertThat(registration.missingPermissions(HealthKind.HEART_RATE)).isEmpty()
-    }
-
-    @Test
-    fun aComplicationNoticedOnlyOnARequestIsRegistered(): Unit = runBlocking<Unit> {
-        // App data was cleared: the system does not activate the complication again, it only requests data
-        assertThat(values.markShown(HealthKind.HEART_RATE, 7)).isTrue()
-        assertThat(values.markShown(HealthKind.HEART_RATE, 7)).isFalse()
         registration.update()
-        assertThat(client.calls).containsExactly(registerCall(setOf(DataType.HEART_RATE_BPM)))
+        assertThat(client.calls).containsExactly(heartRateOnly)
     }
 
     @Test
-    fun twoUpdatesAtOnceEndWithTheNewestList(): Unit = runBlocking<Unit> {
-        // The first update reads "heart rate only" and is held inside Health Services
-        values.setShown(HealthKind.HEART_RATE, 1, true)
+    fun aWatchThatCannotMeasureTheHeartRateRegistersNothing(): Unit = runBlocking<Unit> {
+        client.supported = setOf(DataType.STEPS_DAILY)
+        values.faceWantsHeartRate = true
+        registration.update()
+        assertThat(client.calls).isEmpty()
+    }
+
+    @Test
+    fun twoUpdatesAtOnceEndWithTheNewestWish(): Unit = runBlocking<Unit> {
+        // The first update reads "wanted" and is held inside Health Services
+        values.faceWantsHeartRate = true
         val gate = CompletableDeferred<Unit>()
         client.gate = gate
         val first = launch { registration.update() }
         yield()
-        // Meanwhile a steps complication is added, and its update starts
-        values.setShown(HealthKind.STEPS, 2, true)
+        // Meanwhile a design without bpm is loaded, and its update starts
+        values.faceWantsHeartRate = false
         val second = launch { registration.update() }
         yield()
         gate.complete(Unit)
         first.join()
         second.join()
-        // Without the lock the older list could be registered last and steps would be lost
-        assertThat(client.calls.last()).isEqualTo(registerCall(setOf(DataType.HEART_RATE_BPM, DataType.STEPS_DAILY)))
+        // Without the lock the older wish could win, and the heart rate would stay registered
+        assertThat(client.calls.last()).isEqualTo("clear")
     }
 
     // ---- batches ----
@@ -185,47 +140,33 @@ class PassiveHealthTest {
     private fun heartRate(bpm: Double, secondsAfterBoot: Long): DataPoint<*> =
         SampleDataPoint(DataType.HEART_RATE_BPM, bpm, Duration.ofSeconds(secondsAfterBoot))
 
-    private fun steps(count: Long, endSecondsAfterBoot: Long): DataPoint<*> =
-        IntervalDataPoint(DataType.STEPS_DAILY, count, Duration.ofSeconds(endSecondsAfterBoot - 60), Duration.ofSeconds(endSecondsAfterBoot))
-
     @Test
-    fun aBatchKeepsTheNewestOfEachKind() {
+    fun aBatchKeepsTheNewestHeartRate() {
         val now = bootMs + 3_600_000
-        val fresh = HealthValues(SharedPreferencesMock(), { now })
-        val changed = fresh.record(
-            DataPointContainer(listOf(heartRate(80.0, 3000), heartRate(72.0, 3500), heartRate(95.0, 3400), steps(6400, 3000), steps(6482, 3500))),
-            bootMs
-        )
-        assertThat(changed).containsExactly(HealthKind.HEART_RATE, HealthKind.STEPS)
+        val fresh = HealthValues(SharedPreferencesMock()) { now }
+        assertThat(fresh.record(DataPointContainer(listOf(heartRate(80.0, 3000), heartRate(72.0, 3500), heartRate(95.0, 3400))), bootMs)).isTrue()
         assertThat(fresh.heartRate()).isEqualTo(72)
-        assertThat(fresh.stepsToday()).isEqualTo(6482)
     }
 
     @Test
     fun aBatchWithNothingNewChangesNothing() {
         val now = bootMs + 3_600_000
-        val fresh = HealthValues(SharedPreferencesMock(), { now })
+        val fresh = HealthValues(SharedPreferencesMock()) { now }
         fresh.record(DataPointContainer(listOf(heartRate(72.0, 3500))), bootMs)
-        val changed = fresh.record(DataPointContainer(listOf(heartRate(60.0, 3000))), bootMs)
-        assertThat(changed).isEmpty()
+        assertThat(fresh.record(DataPointContainer(listOf(heartRate(60.0, 3000))), bootMs)).isFalse()
+        assertThat(fresh.record(DataPointContainer(emptyList()), bootMs)).isFalse()
         assertThat(fresh.heartRate()).isEqualTo(72)
     }
 
     // ---- manifest ----
 
     @Test
-    fun theManifestDeclaresTheSourcesAndOnlyHealthServicesMayBindTheReceiver() {
+    fun onlyHealthServicesMayBindTheReceiverAndNoHealthComplicationIsLeft() {
         val context = RuntimeEnvironment.getApplication() as Context
         val pm = context.packageManager
-        val hr = pm.getServiceInfo(ComponentName(context, HeartRateComplication::class.java), PackageManager.GET_META_DATA)
-        assertThat(hr.metaData.getString("android.support.wearable.complications.SUPPORTED_TYPES")).isEqualTo("RANGED_VALUE,SHORT_TEXT")
-        assertThat(hr.permission).isEqualTo("com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER")
-        // Asked again now and then, so an old heart rate disappears even when no new batch comes in
-        assertThat(hr.metaData.getInt("android.support.wearable.complications.UPDATE_PERIOD_SECONDS")).isEqualTo(600)
-        val steps = pm.getServiceInfo(ComponentName(context, StepsComplication::class.java), PackageManager.GET_META_DATA)
-        assertThat(steps.metaData.getString("android.support.wearable.complications.SUPPORTED_TYPES")).isEqualTo("RANGED_VALUE,GOAL_PROGRESS,SHORT_TEXT")
-        assertThat(steps.metaData.getInt("android.support.wearable.complications.UPDATE_PERIOD_SECONDS")).isEqualTo(600)
         val receiver = pm.getServiceInfo(ComponentName(context, HealthPassiveService::class.java), 0)
         assertThat(receiver.permission).isEqualTo("com.google.android.wearable.healthservices.permission.PASSIVE_DATA_BINDING")
+        val services = pm.getPackageInfo(context.packageName, PackageManager.GET_SERVICES).services.orEmpty().map { it.name }
+        assertThat(services.filter { it.startsWith("app.aaps.wear.health.") }).containsExactly(HealthPassiveService::class.java.name)
     }
 }

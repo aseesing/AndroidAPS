@@ -13,7 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-/** Builds the heart rate and steps classes once for the whole app. They take plain values, so tests can build them by hand. */
+/** Builds the heart rate classes once for the whole app. They take plain values, so tests can build them by hand. */
 @ContributesTo(AppScope::class)
 @BindingContainer
 object HealthModule {
@@ -25,11 +25,21 @@ object HealthModule {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun providePassiveHealthRegistration(context: Context, healthValues: HealthValues, aapsLogger: AAPSLogger): PassiveHealthRegistration =
+    fun provideHeartRatePermissionNotifier(context: Context): HeartRatePermissionNotifier = HeartRatePermissionNotifier(context)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun providePassiveHealthRegistration(
+        context: Context,
+        healthValues: HealthValues,
+        notifier: HeartRatePermissionNotifier,
+        aapsLogger: AAPSLogger
+    ): PassiveHealthRegistration =
         PassiveHealthRegistration(
             client = HealthServicesPassiveClient(context),
             values = healthValues,
             aapsLogger = aapsLogger,
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            askPermission = notifier::show
         ) { permission -> ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED }
 }

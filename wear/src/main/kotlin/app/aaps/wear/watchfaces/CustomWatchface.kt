@@ -919,7 +919,6 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 backgroundView.draw(this)
             }
         if (!renderSkipBackground) drawRestLayers(canvas, canvasWidth, renderNow()) // wake layers that stay on the face
-        if (!renderSkipBackground) slotPainter?.invoke(canvas) // the phone preview's slots, where the system draws them on the watch
         // super.onDraw() has just laid out mainLayout, so the placeholders hold this frame's geometry
         // and the slots' declared bounds can follow it. Not in complicationRender(): that runs per
         // slot, while one pushed option covers every slot at once.
@@ -1062,7 +1061,6 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         drawSlots = { canvas ->
             complications.syncGeometry(::visibleSlotBounds)
             slotTime?.let { drawComplicationSlots(canvas, it) }
-            slotPainter?.invoke(canvas) // the phone preview's slots
         },
         drawRest = { canvas, nowMs, slot -> drawRestLayers(canvas, canvas.width, nowMs, slot) }
     )
@@ -1303,6 +1301,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     // main face, and a swap happens at sunrise, at sunset and with the always-on look.
                     if (!daySwap) requestPreviewImageUpdate()
                     wake.setDesign(readWakeAnimation(json) { key -> resDataMap[key]?.toDrawable(resources) })
+                    healthValues.faceWantsHeartRate = wake.readsHeartRate // the heart rate is measured only for a design with `bpm`
                 }
                 if (checkPref()) {
                     DynProvider.init(this, json)
@@ -1508,7 +1507,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     fun previewImageBytes(): ByteArray? = resDataMap[ResFileMap.CUSTOM_WATCHFACE.fileName]?.value
 
     private fun prefBoolean(prefMap: PrefMap): Boolean =
-        if (isRenderOnly && slotPainter == null && ComplicationMap.entries.any { it.showPref == prefMap }) false // slotPainter, the phone preview draws its slots
+        if (isRenderOnly && ComplicationMap.entries.any { it.showPref == prefMap }) false
         else sp.getBoolean(prefMap.prefKey, prefMap.defaultValue as Boolean)
 
     private fun setVisibility(visibility: String, pref: Boolean = true): Int = when (visibility) {
@@ -2282,9 +2281,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         IOB_BASAL_EXT2(JsonKeyValues.IOB_BASAL_EXT2.key, -5.0, 5.0),
         COB_EXT2(JsonKeyValues.COB_EXT2.key, 0.0, 200.0),
         BASAL_RATE_EXT2(ViewKeys.BASALRATE_EXT2.key, 0.0, 5.0),
-        BGI_EXT2(ViewKeys.BGI_EXT2.key, -25.0, 25.0),
-        HEART_RATE(StatusValues.HEART_RATE, 40.0, 180.0), // beats per minute
-        STEPS(StatusValues.STEPS, 0.0, 20000.0); // steps today
+        BGI_EXT2(ViewKeys.BGI_EXT2.key, -25.0, 25.0);
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2414,8 +2411,6 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.COB_EXT2 -> cwf.status[2].cobValue.takeIf { it >= 0.0 }
             ValueMap.BASAL_RATE_EXT2 -> cwf.status[2].basalRateValue
             ValueMap.BGI_EXT2 -> cwf.status[2].bgiMgdl
-            ValueMap.HEART_RATE -> cwf.healthValues.heartRate()?.toDouble()
-            ValueMap.STEPS -> cwf.healthValues.stepsToday()?.toDouble()
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->
@@ -2603,19 +2598,6 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     private fun checkPref() = valPref.any { (prefMap, s) ->
         s != PrefMap.fromKey(prefMap)?.let { if (it.typeBool) prefBoolean(it).toString() else sp.getString(it.prefKey, it.defaultValue as String) }
-    }
-
-    // the phone preview has no system to draw the complication slots, so it draws them
-    // itself (`PreviewSlots` in wear/cwfrender). Never set on the watch, where the system draws them.
-    /** Draws the slots right after the background, where the system draws them on the watch. */
-    internal var slotPainter: ((Canvas) -> Unit)? = null
-
-    /** Where slot [slotId] is drawn this frame and the style the design gives it, or null when it is not shown. */
-    internal fun slotLook(slotId: Int): Pair<ComplicationRender.At, ComplicationStyleValues>? {
-        val view = complicationPlaceholder(slotId)?.takeIf { it.isVisible && it.width > 0 && it.height > 0 } ?: return null
-        if (simpleUi.isEnabled(currentWatchMode)) return null
-        val style = complications.stateFor(slotId)?.style ?: return null
-        return Pair(ComplicationRender.At(Rect(view.left, view.top, view.right, view.bottom), view.rotation), style)
     }
 
     // the layers of the wake-up animation that stay on the face while no wake plays

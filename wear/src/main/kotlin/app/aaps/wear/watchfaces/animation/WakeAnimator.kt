@@ -73,6 +73,9 @@ class WakeAnimator(
     /** The heart rate the current wake beats at. */
     val beatsPerMinute: Int get() = bpm
 
+    /** True when the animation of the design reads `bpm`, so the face needs the heart rate of the watch. */
+    val readsHeartRate: Boolean get() = animator?.readsHeartRate == true
+
     /**
      * The animation of the design now shown, or null for none. Called each time the design is read;
      * the same values again keep a running animation going.
