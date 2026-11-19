@@ -22,8 +22,9 @@ rewrites the older design keys at load time, so every existing zip keeps working
 - [ ] Points with extra columns (`p0..`), so one layer can give each point its own phase or colour
       (Aurora Town uses 4 copies of one layer for its chasing lights).
 - [ ] View layers with `y`, scale and real alpha; a `visible` formula per layer.
-- [ ] More values for formulas where a design wants them: `moon_lit`, `moon_limb`, `moon_north`,
-      `sun_altitude` (Aurora Town approximates the moon's turn by hand).
+- [x] The moon values `moon_lit`, `moon_limb` and `moon_north` (2026-11-19, see section 8).
+- [ ] More values for formulas where a design wants them: `sun_altitude`. Aurora Town still works out
+      the turn of its moon light by hand from `moon_phase` and `moon_cycle`; it can read `v_moon_limb` now.
 - [ ] Keyframes as sugar over formulas.
 - [ ] Anything the phase 2a report lists as "not built" (see below).
 
@@ -32,7 +33,8 @@ rewrites the older design keys at load time, so every existing zip keeps working
 - [ ] The phone preview makes a new bitmap per animation frame again, if the reuse was taken out
       (see the phase 2a report): a safe reuse needs to know which frame Compose still shows.
 - [ ] `LayerAnimator` keeps its pictures (images, glow, masks) after a wake ends.
-- [ ] The moon picture is shaded on the CPU, pixel by pixel.
+- [x] The moon picture was shaded on the CPU, pixel by pixel: the template `moon` draws it with plain
+      layers now (section 8).
 
 ## 4. Tests and tooling
 
@@ -114,3 +116,20 @@ Found while the manual was written, by reading the code, not tried:
 - [ ] The manual follows the code where the plan (`ANIMATION_REFACTOR_PLAN.md`, section 7) says something
       else: `ms` and `f32` still exist, `r1..r8` come from `Random(seed)` and not from a hash, the easing
       function is `easeInOut`, the built-in templates are a Kotlin string and not a JSON asset.
+
+## 8. The moon from plain layers (branch `local/wear-moon-template`, 2026-11-19)
+
+The built-in template `moon` draws the moon with six plain layers. `@moon` is only the plain photo
+(`MoonPhoto`). New generic keys: `group` with the blends `erase` and `inside`, and a template as the
+picture of a view (`"image": {"use": "moon"}`, `ViewTemplates`). `MoonTemplateTest` compares the template
+with the old shaded picture and writes both side by side to `wear/build/moon-compare/`.
+
+- [ ] The user compares the pictures and decides. Until then the old `MoonPicture.kt` and
+      `MoonPictureTest.kt` stay, used only by `MoonTemplateTest` and by the design repo
+      (`AuroraTownImages` bakes a moon into the stock background with `MoonPicture.draw`).
+- [ ] After the yes: delete `MoonPicture.kt` and its test, take it out of `wear/cwfrender/build.gradle.kts`,
+      turn `MoonTemplateTest` into a test of the template alone, and give the design repo its own way to
+      bake the stock moon (render the template, as `MoonTemplateTest.new` does).
+- [ ] A zip made on 2026-11-18 or 2026-11-19 holds `"image": "@moon"` and shows the plain full moon with
+      this build. The zips of the design repo are rebuilt with the template; send them again.
+- [ ] A group draws on a sheet of its own in every frame of a wake. Not measured on a watch.
