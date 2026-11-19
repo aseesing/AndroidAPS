@@ -63,6 +63,7 @@ import app.aaps.wear.interaction.menus.MainMenuActivity
 import app.aaps.wear.interaction.menus.PreferenceMenuActivity
 import app.aaps.wear.interaction.menus.StatusMenuActivity
 import app.aaps.wear.interaction.menus.TileMenuActivity
+import app.aaps.wear.selfupdate.WatchAppInstallStatusReceiver // PERSONAL PATCH
 import app.aaps.wear.tile.ActionsTileService
 import app.aaps.wear.tile.ActionsTileSettingsActivity
 import app.aaps.wear.tile.BgGraphTileService
@@ -565,4 +566,11 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(WizardActivity::class)
     fun bindWizardActivity(injector: MembersInjector<WizardActivity>): MembersInjector<*> = injector
+    // PERSONAL PATCH: the receiver of the watch app update. Without this entry it crashes and the
+    // watch never asks to install the update.
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(WatchAppInstallStatusReceiver::class)
+    fun bindWatchAppInstallStatusReceiver(injector: MembersInjector<WatchAppInstallStatusReceiver>): MembersInjector<*> = injector
 }
