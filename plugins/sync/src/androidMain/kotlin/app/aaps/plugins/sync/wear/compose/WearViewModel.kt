@@ -300,7 +300,15 @@ class WearViewModel(
         }
     }
 
-    fun loadWatchfaceFiles() {
+    /** Reads the designs in AAPS/export and opens the list with them. */
+    fun loadWatchfaceFiles() = readWatchfaceFiles(open = true)
+
+    /**
+     * Reads the designs in AAPS/export for the list. With [open] false the list is only filled
+     * again: a list the user closed in the meantime (a design was picked, or back was pressed)
+     * stays closed.
+     */
+    private fun readWatchfaceFiles(open: Boolean) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val cwfAuthorization = preferences.get(BooleanKey.WearCustomWatchfaceAuthorization)
             val files = fileListProvider.listCustomWatchfaceFiles()
@@ -324,7 +332,7 @@ class WearViewModel(
                     watchfaceImage = decodeWatchfaceImage(cwfFile.cwfData)
                 )
             }
-            _uiState.update { it.copy(showImportList = true, importItems = items) }
+            _uiState.update { if (open || it.showImportList) it.copy(showImportList = true, importItems = items) else it }
         }
     }
 
@@ -371,7 +379,7 @@ class WearViewModel(
                 _uiState.update { it.copy(importingDesigns = false) }
             }
             _toastEvent.emit(message)
-            loadWatchfaceFiles()
+            readWatchfaceFiles(open = false)
         }
     }
 
@@ -379,7 +387,7 @@ class WearViewModel(
     fun deleteDesign(cwfFile: CwfFile) {
         viewModelScope.launch {
             _toastEvent.emit(designImport.deleteFrom(cwfFile))
-            loadWatchfaceFiles()
+            readWatchfaceFiles(open = false)
         }
     }
 }

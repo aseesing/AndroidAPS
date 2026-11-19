@@ -403,6 +403,53 @@ internal class WearViewModelTest {
     }
 
     @Test
+    fun `a list that was closed while an import ran stays closed`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        val gate = CompletableDeferred<Unit>()
+        whenever(designImport.importFrom(any())).doSuspendableAnswer {
+            gate.await()
+            "Designs imported: 1"
+        }
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        sut.loadWatchfaceFiles()
+        waitUntil { sut.uiState.value.showImportList }
+
+        sut.importDesigns(listOf(uri))
+        // The user presses back while the import still reads from Drive
+        sut.hideImportList()
+        gate.complete(Unit)
+
+        // The list is read again on the IO dispatcher: once to open it, once after the import
+        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
+        // The state follows right after the read. Give it time to go wrong.
+        repeat(20) {
+            assertThat(sut.uiState.value.showImportList).isFalse()
+            Thread.sleep(10)
+        }
+    }
+
+    @Test
+    fun `a list that is still open after an import stays open`() = runTest(UnconfinedTestDispatcher()) {
+        val uri: Uri = mock()
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        sut.loadWatchfaceFiles()
+        waitUntil { sut.uiState.value.showImportList }
+
+        sut.importDesigns(listOf(uri))
+
+        verify(fileListProvider, timeout(2_000).times(2)).listCustomWatchfaceFiles()
+        assertThat(sut.uiState.value.showImportList).isTrue()
+    }
+
+    /** Waits for work on the IO dispatcher, at most two seconds. */
+    private fun waitUntil(condition: () -> Boolean) {
+        val end = System.nanoTime() + 2_000_000_000L
+        while (!condition() && System.nanoTime() < end) Thread.sleep(5)
+        assertThat(condition()).isTrue()
+    }
+
+    @Test
     fun `an empty pick imports nothing`() {
         sut.importDesigns(emptyList())
 
