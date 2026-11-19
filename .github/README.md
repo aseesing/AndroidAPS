@@ -34,7 +34,7 @@ OnePlus Watch 2R and other round Wear OS watches.
 
 | | Feature | What it does |
 |---|---|---|
-| 🎬 | **Wake-up animation** | Rain, glitch bands and a heart that beats at your heart rate, when you raise your wrist. |
+| 🎬 | **Wake-up animation** | Rain, glitch bands and a heart that beats at your heart rate, when you raise your wrist. A design builds it from layers and formulas: [the manual, with a live picture for every example](https://htmlpreview.github.io/?https://github.com/aseesing/AndroidAPS/blob/local/personal/docs/watchface-animation.html). |
 | 📱 | **Live preview in AAPS** | The phone shows your watch face as it looks on the watch now, animation and all. |
 | ⚙️ | **Watch face settings in AAPS** | Set up the watch face on the phone and see it at once. Changes on the watch come back. |
 | 🌗 | **Day face and night face** | One face for the day, one for the night, with the weather, the sun and the moon. |

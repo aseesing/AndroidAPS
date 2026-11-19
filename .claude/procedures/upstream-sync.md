@@ -47,6 +47,7 @@ as before.
 | `local/wear-start-after-unlock` | The watch app waits for the unlock of the watch before it starts: Android may start it earlier after a boot, and it then crashed again and again until the unlock |
 | `local/wear-log-download` | Phone: a "Download watch log" page on the Wear screen saves the log of the watch app as a zip in Downloads, over Wi-Fi (all files) or Bluetooth (the newest 10); it reuses the Wi-Fi path of the watch app update |
 | `local/wear-anim-generic` | Watch: one generic layer engine for the wake-up animation and the drawing of the personal designs. A layer is an image, a named app picture (`@moon`), a shape or a view, with formulas for every number; the old effects (rain, glitch, pulse and so on) are built-in templates; day and weather looks are one list of `looks`. Old design keys are still read (`LegacyDesign`). What is left is in `ANIMATION_TODO.md` |
+| `local/wear-anim-manual` | The manual of the layer engine for people who write designs: `docs/watchface-animation.html`, one page with a live picture for every example, linked from `.github/README.md`. A change to the engine's logic changes this page in the same commit |
 
 `master` of this fork is a plain copy of upstream `master`.
 
