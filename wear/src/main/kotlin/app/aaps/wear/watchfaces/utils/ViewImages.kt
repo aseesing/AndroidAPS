@@ -13,13 +13,15 @@ import org.json.JSONObject
 
 /**
  * The picture a view of a design shows with the view key [KEY] (`"image"`): a picture of the zip by
- * its name, or a picture the app draws itself, by `@` and its name (`"@moon"`, see [DynamicImages]).
- * It is the background of the view, like the `background` key, and is coloured the same way.
+ * its name, an app picture by `@` and its name (`"@moon"`, the photo of the full moon, see
+ * [DynamicImages]), or a layer template of the design drawn in the view (`{"use": "moon"}`, see
+ * [ViewTemplates]). It is the background of the view, like the `background` key, and is coloured the
+ * same way.
  *
  * Keeps the drawable of each view while its picture stays the same, so a style pass every minute makes
  * no new drawable. One instance per watch face.
  */
-class ViewImages(private val resources: Resources, private val dynamic: DynamicImages) {
+class ViewImages(private val resources: Resources, private val dynamic: DynamicImages, private val templates: ViewTemplates? = null) {
 
     private val kept = HashMap<String, Pair<Any, Drawable>>()
 
@@ -29,6 +31,7 @@ class ViewImages(private val resources: Resources, private val dynamic: DynamicI
      * is not there.
      */
     fun drawable(key: String, view: JSONObject?, width: Int, height: Int, nowMs: Long, zip: CwfResDataMap): Drawable? {
+        (view?.opt(KEY) as? JSONObject)?.let { use -> return templates?.drawable(key, use, width, height, nowMs) }
         val name = view?.optString(KEY)?.takeIf { it.isNotEmpty() } ?: return null
         if (name.startsWith(DYNAMIC_PREFIX)) {
             val bitmap = dynamic.bitmap(name.removePrefix(DYNAMIC_PREFIX), nowMs, minOf(width, height)) ?: return null

@@ -84,8 +84,17 @@ Then:
 - No outside files, no network, no real person, device or place of the user (examples use Amsterdam).
 - Keep the header comment at the top of the file.
 
+## The moon template of chapter 13
+
+The example `ex-moon-template` holds the moon template as JSON to copy. The watch has no copy of it.
+The tests of the wear app (`ManualMoon`) and the design repo (`MoonTemplate` in `aaps-watchfaces`) read
+it from this page: keep the figure id, keep its `<pre>` valid JSON with `animation.templates.moon`, and
+run `:wear:testFullDebugUnitTest` after a change to it. The designs get the new template when their
+zips are built again.
+
 ## What the player does not copy
 
 Known, and said on the page: the face is a stand-in (simple views, no complications), `@moon` is a
-drawn moon with north up, the sun is fixed at 06:00 to 18:00, rest layers are redrawn each frame, the
+drawn full moon and the moon values come from two sliders (the page has no place), a group opens its
+sheet at its first layer (the watch: at the first one that is drawn), the sun is fixed at 06:00 to 18:00, rest layers are redrawn each frame, the
 glow is a canvas shadow, and there is no picture memory limit. Do not "fix" the watch to match these.

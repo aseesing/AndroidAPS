@@ -503,13 +503,20 @@ class LayerAnimator(
         // Layers in a row that are cut to the round screen and to nothing before it share one cut: the
         // same cut, in the same order of cuts, made once instead of for each layer
         var roundSave = NO_SAVE
+        endGroup(canvas)
         fun endRound() {
             if (roundSave != NO_SAVE) canvas.restoreToCount(roundSave)
             roundSave = NO_SAVE
         }
         fun draw(layer: Compiled) {
             if (!prepareLayer(layer, scale)) return
-            val sharesRound = layer.spec.clip.round && layer.spec.clip.rect == null
+            // A group has its own sheet: it shares no cut with the layers around it
+            val sharesRound = layer.spec.group == null && layer.spec.clip.round && layer.spec.clip.rect == null
+            if (layer.spec.group != groupName) {
+                endGroup(canvas)
+                if (layer.spec.group != null) endRound()
+                beginGroup(canvas, layer, scale)
+            }
             if (sharesRound && roundSave == NO_SAVE) {
                 roundSave = canvas.save()
                 canvas.clipPath(roundPath(scale))
@@ -520,6 +527,7 @@ class LayerAnimator(
             for (step in viewSteps) {
                 if (step >= 0) draw(layers[step])
                 else {
+                    endGroup(canvas)
                     endRound()
                     views?.invoke(canvas, viewGroups[-step - 1])
                 }
@@ -529,6 +537,7 @@ class LayerAnimator(
                 if (layer.spec.slot != slot || layer.spec.source is LayerSource.View) continue
                 draw(layer)
             }
+        endGroup(canvas)
         endRound()
     }
 
@@ -550,6 +559,7 @@ class LayerAnimator(
             refreshLets()
             drawLayer(canvas, layer, scale)
         }
+        endGroup(canvas)
     }
 
     /** The values of a normal frame: those of now through [value], the longest wake, `env` 0, the clock time [nowMs]. */
@@ -757,6 +767,8 @@ class LayerAnimator(
     private val dst = RectF()
     private val add = PorterDuffXfermode(PorterDuff.Mode.ADD)
     private val screen = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+    private val erase = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+    private val inside = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
 
     /** Lays the offscreen layer of a masked layer over the face, with the blend of the layer. */
     private val layerPaint = Paint()
@@ -775,7 +787,35 @@ class LayerAnimator(
      * never cuts holes in what is already on the face.
      */
     private fun drawLayer(canvas: Canvas, layer: Compiled, scale: Float) {
-        if (prepareLayer(layer, scale)) paintLayer(canvas, layer, scale, roundDone = false)
+        if (!prepareLayer(layer, scale)) return
+        if (layer.spec.group != groupName) {
+            endGroup(canvas)
+            beginGroup(canvas, layer, scale)
+        }
+        paintLayer(canvas, layer, scale, roundDone = false)
+    }
+
+    /** The group that is open now (see [AnimLayerSpec.group]) and the save count that closes it. */
+    private var groupName: String? = null
+    private var groupSave = NO_SAVE
+
+    /**
+     * Opens the sheet of the group of [layer], when it has one: as big as the `clip.rect` of this
+     * layer, the first of the group that is drawn, or as the whole canvas.
+     */
+    private fun beginGroup(canvas: Canvas, layer: Compiled, scale: Float) {
+        val name = layer.spec.group ?: return
+        val rect = layer.spec.clip.rect
+        groupSave = if (rect == null) canvas.saveLayer(null, null)
+        else canvas.saveLayer(rect.left * scale, rect.top * scale, rect.right * scale, rect.bottom * scale, null)
+        groupName = name
+    }
+
+    /** Lays the sheet of the open group over the face, when there is one. */
+    private fun endGroup(canvas: Canvas) {
+        if (groupSave != NO_SAVE) canvas.restoreToCount(groupSave)
+        groupSave = NO_SAVE
+        groupName = null
     }
 
     /**
@@ -815,6 +855,8 @@ class LayerAnimator(
             LayerBlend.NORMAL -> null
             LayerBlend.ADD    -> add
             LayerBlend.SCREEN -> screen
+            LayerBlend.ERASE  -> erase
+            LayerBlend.INSIDE -> inside
         }
         val save = canvas.save()
         clip(canvas, layer, scale, roundDone)
@@ -1247,8 +1289,7 @@ class LayerAnimator(
         const val SHADER_SIZE = 100f
 
         /**
-         * The largest side of a dynamic picture. The moon is made pixel by pixel on the CPU (see
-         * `MoonPicture`), so a mistake in a design must not ask for a huge one.
+         * The largest side of a dynamic picture, so a mistake in a design cannot ask for a huge one.
          */
         const val MAX_DYNAMIC_SIZE = 512
 

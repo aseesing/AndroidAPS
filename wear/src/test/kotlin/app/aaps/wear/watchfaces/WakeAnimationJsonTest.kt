@@ -25,6 +25,7 @@ import app.aaps.wear.watchfaces.animation.LayerSource
 import app.aaps.wear.watchfaces.animation.ShapeKind
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.animation.withTestTemplates
+import app.aaps.wear.watchfaces.daynight.ManualMoon
 import com.google.common.truth.Truth.assertThat
 import org.json.JSONObject
 import org.junit.Test
@@ -203,6 +204,38 @@ class WakeAnimationJsonTest {
         val spec = layer("""{"image": "nothere"}""")
         assertThat(spec.source).isEqualTo(LayerSource.Image("nothere", null, DesignRect.FULL))
         assertThat(spec.normalized()).isNull()
+    }
+
+    @Test
+    fun aGroupAndItsBlendsAreRead() {
+        val spec = layer("""{"shape": "circle", "group": "moon", "blend": "erase"}""")
+        assertThat(spec.group).isEqualTo("moon")
+        assertThat(spec.blend).isEqualTo(LayerBlend.ERASE)
+        assertThat(layer("""{"shape": "circle", "group": "moon", "blend": "inside"}""").blend).isEqualTo(LayerBlend.INSIDE)
+        assertThat(layer("""{"shape": "circle"}""").group).isNull()
+        // Without a group these two would cut the face: the layer is left out
+        assertThat(layer("""{"shape": "circle", "blend": "erase"}""").normalized()).isNull()
+        // A view is drawn with the views, never in a group
+        assertThat(layer("""{"view": "chart", "group": "moon"}""").normalized()!!.group).isNull()
+    }
+
+    @Test
+    fun theMoonTemplateOfTheManualGivesPlainLayersWithoutErrors() {
+        val spec = read(ManualMoon.design("""{"use": "moon", "left": 316, "top": 78, "size": 44}""").toString())!!
+        assertThat(spec.errors).isEmpty()
+        val layers = spec.normalized().layers
+        assertThat(layers).hasSize(6)
+        // All stay on the face, in the back slot, and the photo of the app is in its square
+        assertThat(layers.map { it.restSeconds }.distinct()).containsExactly(0f)
+        assertThat(layers.map { it.slot }.distinct()).containsExactly(LayerSlot.BACK)
+        assertThat(layers.map { it.source }.filterIsInstance<LayerSource.Dynamic>().distinct()).containsExactly(LayerSource.Dynamic("moon", DesignRect(316f, 78f, 44f, 44f)))
+        assertThat(layers.map { it.group }).containsExactly(null, null, "moon", "moon", "moon", "moon").inOrder()
+        // Only in the wake, and in front
+        val wake = read(ManualMoon.design("""{"use": "moon", "rest": "", "slot": "front"}""").toString())!!.normalized().layers
+        // The watch has no moon template of its own
+        assertThat(read("""{"animation": {"layers": [{"use": "moon"}]}}""")!!.errors).isNotEmpty()
+        assertThat(wake.map { it.restSeconds }.distinct()).containsExactly(null)
+        assertThat(wake.map { it.slot }.distinct()).containsExactly(LayerSlot.FRONT)
     }
 
     @Test

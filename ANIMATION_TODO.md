@@ -25,8 +25,9 @@ before (175 snapshot frames). The watch code no longer has the translator (`Lega
 - [ ] Points with extra columns (`p0..`), so one layer can give each point its own phase or colour
       (Aurora Town uses 4 copies of one layer for its chasing lights).
 - [ ] View layers with `y`, scale and real alpha; a `visible` formula per layer.
-- [ ] More values for formulas where a design wants them: `moon_lit`, `moon_limb`, `moon_north`,
-      `sun_altitude` (Aurora Town approximates the moon's turn by hand).
+- [x] The moon values `moon_lit`, `moon_limb` and `moon_north` (2026-11-19, see section 8).
+- [ ] More values for formulas where a design wants them: `sun_altitude`. Aurora Town still works out
+      the turn of its moon light by hand from `moon_phase` and `moon_cycle`; it can read `v_moon_limb` now.
 - [ ] Keyframes as sugar over formulas.
 - [ ] Anything the phase 2a report lists as "not built" (see below).
 
@@ -35,7 +36,8 @@ before (175 snapshot frames). The watch code no longer has the translator (`Lega
 - [ ] The phone preview makes a new bitmap per animation frame again, if the reuse was taken out
       (see the phase 2a report): a safe reuse needs to know which frame Compose still shows.
 - [ ] `LayerAnimator` keeps its pictures (images, glow, masks) after a wake ends.
-- [ ] The moon picture is shaded on the CPU, pixel by pixel.
+- [x] The moon picture was shaded on the CPU, pixel by pixel: a template of the design draws it with
+      plain layers now (section 8).
 
 ## 4. Tests and tooling
 
@@ -120,3 +122,23 @@ Found while the manual was written, by reading the code, not tried:
 - [ ] The manual follows the code where the plan (`ANIMATION_REFACTOR_PLAN.md`, section 7) says something
       else: `ms` still exists, `r1..r8` come from `Random(seed)` and not from a hash, the easing
       function is `easeInOut`, and there are no built-in templates at all (a design brings its own).
+
+## 8. The moon from plain layers (branch `local/wear-moon-template`, 2026-11-19)
+
+A template draws the moon with six plain layers. The watch does not have that template (the user's
+decision of 2026-11-19: no built-in templates): it is in the manual, chapter 13, as JSON to copy (the
+example `ex-moon-template`), and a design brings it in `animation.templates`. The design repo embeds it
+(`MoonTemplate`, `DesignShorthand`), and the tests here read it from the manual (`ManualMoon`), so keep
+that example valid JSON under that id. `@moon` is only the plain photo (`MoonPhoto`). New generic keys:
+`group` with the blends `erase` and `inside`, and a template as the picture of a view
+(`"image": {"use": "moon"}`, `ViewTemplates`).
+
+- [x] The user compared the old and the new moon on 2026-11-19 and said yes: `MoonPicture.kt` and its
+      test are deleted. `MoonTemplateTest` tests the template alone and writes its moons to
+      `wear/build/moon-template/`. The design repo renders the template itself (`MoonTemplate.draw`) for
+      the moon it bakes into the stock Aurora Town background.
+- [ ] A zip made on 2026-11-18 or 2026-11-19 holds `"image": "@moon"` and shows the plain full moon with
+      this build. An older zip (`"moon": true`, `"moonLight": true`) is no longer read at all (the
+      old keys are gone), so it shows no moon. The zips of the design repo are rebuilt with the
+      template; send them again.
+- [ ] A group draws on a sheet of its own in every frame of a wake. Not measured on a watch.

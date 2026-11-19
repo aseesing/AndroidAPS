@@ -19,6 +19,11 @@ import android.graphics.drawable.Drawable
  * @param source what is drawn
  * @param slot where in the face it is drawn
  * @param blend how it is laid over what is below
+ * @param group the name of the group the layer is in, or null. Layers of one slot that follow each other
+ *   with the same name are drawn together on a sheet of their own, which is then laid over the face. So
+ *   [LayerBlend.ERASE] and [LayerBlend.INSIDE] only change the layers of the group, never the face below.
+ *   The sheet is as big as the [LayerClip.rect] of the first layer of the group that is drawn, or the
+ *   whole face when that has none.
  * @param copies how many times it is drawn, and how the copies differ
  * @param props the formulas of the properties; a missing one has its default (see [LayerProp])
  * @param lets named formulas of this layer, in order, worked out once per copy before the properties
@@ -35,6 +40,7 @@ data class AnimLayerSpec(
     val source: LayerSource,
     val slot: LayerSlot = LayerSlot.BACK,
     val blend: LayerBlend = LayerBlend.NORMAL,
+    val group: String? = null,
     val copies: LayerCopies = LayerCopies.One,
     val props: Map<LayerProp, String> = emptyMap(),
     val lets: List<Pair<String, String>> = emptyList(),
@@ -49,6 +55,7 @@ data class AnimLayerSpec(
         if (source is LayerSource.Image && source.drawable == null) return null  // not in the zip
         if (clip.mask != null && clip.mask.drawable == null) return null       // not in the zip: never drawn without its mask
         if (source is LayerSource.View && source.key.isEmpty()) return null
+        if (blend.needsGroup && group == null) return null                      // would cut holes in the face
         if (source is LayerSource.Shape && source.colors.isEmpty()) return null
         if (source is LayerSource.Dynamic && !(source.rect.width > 0f && source.rect.height > 0f)) return null
         if (props.values.any { it.length > Formula.MAX_LENGTH } || lets.any { it.second.length > Formula.MAX_LENGTH }) return null
@@ -58,7 +65,8 @@ data class AnimLayerSpec(
             maxScale = maxScale.coerceIn(0.1f, MAX_SCALE),
             glow = glow?.let { it.copy(radius = it.radius.coerceIn(0f, 40f)) }?.takeIf { it.radius > 0f },
             restSeconds = restSeconds?.coerceIn(0f, WakeAnimationSpec.MAX_DURATION_MS / 1000f),
-            slot = if (source is LayerSource.View) LayerSlot.VIEWS else slot
+            slot = if (source is LayerSource.View) LayerSlot.VIEWS else slot,
+            group = group.takeIf { source !is LayerSource.View }
         )
     }
 
@@ -97,8 +105,8 @@ sealed interface LayerSource {
     data class Image(val key: String, val drawable: Drawable?, val rect: DesignRect) : LayerSource
 
     /**
-     * A picture the app draws itself, asked for by its [name] (`"image": "@moon"` in the design): the
-     * moon as it is in the sky now (see `MoonPicture`). Drawn in the middle of [rect] as a square of its
+     * A picture that comes with the app, asked for by its [name] (`"image": "@moon"` in the design): the
+     * photo of the full moon (see `MoonPhoto`). Drawn in the middle of [rect] as a square of its
      * shorter side, and moved by `x` and `y` like a picture. Has no glow.
      */
     data class Dynamic(val name: String, val rect: DesignRect) : LayerSource {
@@ -157,8 +165,18 @@ data class LayerGradient(val type: Type, val stops: List<Stop>) {
  */
 enum class LayerSlot { BACK, VIEWS, FRONT }
 
-/** How a layer is laid over what is below it. [ADD] and [SCREEN] only make things lighter: for light, like an aurora or a glow. */
-enum class LayerBlend { NORMAL, ADD, SCREEN }
+/**
+ * How a layer is laid over what is below it. [ADD] and [SCREEN] only make things lighter: for light,
+ * like an aurora or a glow.
+ *
+ * [ERASE] and [INSIDE] work on the group of the layer (see [AnimLayerSpec.group]) and need one:
+ * - [ERASE]: the layer is not drawn; it takes away what the group has drawn so far, as much as the
+ *   layer is not clear.
+ * - [INSIDE]: the layer is drawn only where the group has drawn something so far, as strong as that
+ *   is, and it replaces it there. Only inside the box of the layer itself (the rectangle of a picture,
+ *   the outline of a shape): keep what was drawn before inside that box.
+ */
+enum class LayerBlend(val needsGroup: Boolean = false) { NORMAL, ADD, SCREEN, ERASE(true), INSIDE(true) }
 
 /** How many times a layer is drawn. Each copy has its own number `i` (from 0) of `n`, and `u` = i / (n - 1). */
 sealed interface LayerCopies {
