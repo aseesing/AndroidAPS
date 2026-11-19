@@ -85,13 +85,9 @@ font flake; the item in section 4 can be dropped if it stays away.
 The watch now gets the phone's place as a rule the repository keeps (`storeDayNightRule`), no longer
 from the `key_location_*` preferences. The engine reads it (`skyRule`, `skyPlace()` in `CustomWatchface`).
 
-- [ ] `CwfPlaceNeeds.of(json)` (`shared/impl/.../weardata/CwfPlaceNeeds.kt`) decides from the design
-      JSON whether a design needs the place. It knows the OLD keys only. Old zips are found, because the
-      translator runs later, on the watch. Before a design is ported, teach it the new forms:
-      `"image": "@moon"` (layer or view), a formula that reads `v_sun_progress`, `v_night_progress`,
-      `v_sun_cycle`, `v_moon_cycle`, `v_sun_next_time`, `v_is_day`, `v_weather_kind` or
-      `v_weather_temperature` (in a layer, a `let` or the `when` of a look). Or give the design
-      `"needsPlace": true`.
+- [x] `CwfPlaceNeeds.of(json)` (`shared/impl/.../weardata/CwfPlaceNeeds.kt`) knows the new forms
+      (`"image": "@moon"`, a formula that reads a sky or weather value, `"needsPlace": true`) next to
+      the old keys. Done on 2026-11-19.
 - [ ] Designs should look sensible with no place (day look 07:00 to 19:00, moon north up, "--:--").
 - [ ] `drawLayeredFrame` in `CustomWatchface` and `LayeredFrame.kt` are reviewed upstream code now. They
       are kept as they are, and one hook (`personalFrame`) draws the frame with `FrameLayers` first, so the
@@ -101,3 +97,18 @@ from the `key_location_*` preferences. The engine reads it (`skyRule`, `skyPlace
       the views are up to date; the reviewed rules of the personal preview (a new face per size, new
       values kept until a frame reads them, `WatchLineSpacing`) run on every other frame. Not tried on
       a phone.
+
+## 7. The manual
+
+`docs/watchface-animation.html` is the manual of the design format, with a live picture for every
+example (a small JavaScript copy of the rules draws them). A change to the engine's logic changes the
+page in the same commit: the text, the key table at its end and, when a drawing rule changed, the
+page's own player (the built-in templates are copied into it).
+
+Found while the manual was written, by reading the code, not tried:
+- [ ] `FaceFrame.clockText` and `secondHand` take no set of views to leave out. So a wake view layer on
+      `time`, `hour`, `minute`, `second` or `second_hand` may draw that view twice (once by the face, once
+      by the layer). Check in the preview; the manual warns about it.
+- [ ] The manual follows the code where the plan (`ANIMATION_REFACTOR_PLAN.md`, section 7) says something
+      else: `ms` and `f32` still exist, `r1..r8` come from `Random(seed)` and not from a hash, the easing
+      function is `easeInOut`, the built-in templates are a Kotlin string and not a JSON asset.
