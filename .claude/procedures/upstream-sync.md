@@ -54,6 +54,7 @@ as before.
 | `local/wear-moon-template` | Watch: the moon is no longer drawn by its own code. A design builds it from plain layers (the photo `@moon`, four circles) with a template it brings itself; the manual has that template to copy (chapter 13) and the design repo embeds it. New values `moon_lit`, `moon_limb` and `moon_north`; `@moon` is only the plain photo. New generic keys: a layer `group` with the blends `erase` and `inside`, and a template as the picture of a view (`"image": {"use": "moon"}`). The old pixel shading (`MoonPicture`) is deleted. Not merged yet |
 | `local/watch-update-receiver` | Watch: the receiver of the watch app update has its injection entry again (it was lost on 2026-11-18, so the watch crashed and never asked to install an update), and a test guards the entries of receivers |
 | `local/wear-value-keys` | Value keys for IOB (`iob`, `iob_bolus`, `iob_basal`), COB (`cob`), the basal rate (`basalRate`), BGI (`bgi`), each also with `_Ext1` and `_Ext2`, and the heart rate (`heart_rate`) and steps (`steps`) of the watch, for `v_` in formulas and looks and for `dynData`. The phone sends IOB, basal rate and BGI as numbers at the end of `EventData.Status` (`StatusNumbers`) |
+| `local/wear-design-options` | A design can declare up to 4 options (`options`, 2 to 8 choices each) that the wearer picks on the watch or the phone; the design reads them as `v_opt_<name>`. Fixed keys `cwf_option_1` to `4`, so no sync change per design |
 
 `master` of this fork is a plain copy of upstream `master`.
 
