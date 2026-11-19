@@ -288,6 +288,13 @@ class LayerAnimator(
     /** True when a formula reads the setting of the watch (see [FormulaSetting]): only then it is asked once per wake. */
     private var usesSetting = false
 
+    /**
+     * True when a formula reads `bpm`: only then the watch asks Health Services for the heart rate (see
+     * `HealthValues.faceWantsHeartRate`).
+     */
+    var readsHeartRate = false
+        private set
+
     /** The clock time of the frame, from [setTime]: a [LayerSource.Dynamic] picture is the one of then. */
     private var nowMs = 0L
 
@@ -432,9 +439,12 @@ class LayerAnimator(
         )
     }
 
-    /** Notes when a formula that reads [read] needs the clock time. */
+    /** Notes when a formula that reads [read] needs the clock time, and when it reads `bpm`. */
     private fun noteClock(read: IntArray) {
-        for (i in read) if (i == LayerVariables.SEC || i == LayerVariables.MIN || i == LayerVariables.HOUR || i == LayerVariables.DAY) usesClock = true
+        for (i in read) {
+            if (i == LayerVariables.SEC || i == LayerVariables.MIN || i == LayerVariables.HOUR || i == LayerVariables.DAY) usesClock = true
+            if (i == LayerVariables.BPM) readsHeartRate = true
+        }
     }
 
     /** True when there is a layer to draw at all. */
