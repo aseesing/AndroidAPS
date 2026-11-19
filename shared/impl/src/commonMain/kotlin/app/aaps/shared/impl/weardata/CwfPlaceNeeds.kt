@@ -38,10 +38,10 @@ enum class CwfPlaceUse {
  *   - a layer with `"moon": true` inside an `animation`,
  *   - a `dayLook`, laid over the design from sunrise to sunset,
  *   - `weatherLooks`: their names say day or night (`day_rain`), so they follow sunrise and sunset,
- *   - the built-in template of the moon, `"use": "moon"` ([MOON_TEMPLATE]), as a layer or as the `image`
- *     of a view: it turns the moon the way it stands in the sky of the place,
  *   - a formula (any text of the json: of a layer, of a `let`, the `when` of a look) that reads one of
- *     the values above as `v_<name>`, or `v_is_day`;
+ *     the values above as `v_<name>`, or `v_is_day`. A design that draws the moon of now brings its own
+ *     template for it (see the manual, chapter 13), and the formulas of that template read
+ *     `v_moon_limb` and `v_moon_north`;
  * - [CwfPlaceUse.WEATHER]: `weatherLooks`, a `valueKey` that is [WEATHER_TEMPERATURE], or a formula
  *   that reads `v_weather_kind` or `v_weather_temperature`;
  * - [CwfPlaceUse.ASKED]: `"needsPlace": true` at the top of the json, for a design that wants the
@@ -103,10 +103,6 @@ object CwfPlaceNeeds {
     /** The value of the direction of the moon's north, as it stands in the sky of the place (`MoonLight` on the watch). */
     const val MOON_NORTH = "moon_north"
 
-    /** The built-in template that draws the moon as it stands in the sky (`BuiltInTemplates` on the watch). */
-    const val MOON_TEMPLATE = "moon"
-
-    private const val USE = "use"
 
     private const val VALUE_KEY = "valueKey"
 
@@ -177,7 +173,6 @@ object CwfPlaceNeeds {
                         key == VALUE_KEY && value.text() in SKY_VALUES           -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == VALUE_KEY && value.text() == WEATHER_TEMPERATURE  -> uses += CwfPlaceUse.WEATHER
                         key == MOON_LIGHT && value.isTrue()                      -> uses += CwfPlaceUse.SUN_AND_MOON
-                        key == USE && value.text() == MOON_TEMPLATE              -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == ANIMATION_MOON && inAnimation && value.isTrue()   -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == DAY_LOOK && value is JsonObject                   -> uses += CwfPlaceUse.SUN_AND_MOON
                         key == WEATHER_LOOKS && value is JsonObject              -> uses += setOf(CwfPlaceUse.WEATHER, CwfPlaceUse.SUN_AND_MOON)

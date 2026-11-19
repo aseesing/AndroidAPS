@@ -33,8 +33,8 @@ rewrites the older design keys at load time, so every existing zip keeps working
 - [ ] The phone preview makes a new bitmap per animation frame again, if the reuse was taken out
       (see the phase 2a report): a safe reuse needs to know which frame Compose still shows.
 - [ ] `LayerAnimator` keeps its pictures (images, glow, masks) after a wake ends.
-- [x] The moon picture was shaded on the CPU, pixel by pixel: the template `moon` draws it with plain
-      layers now (section 8).
+- [x] The moon picture was shaded on the CPU, pixel by pixel: a template of the design draws it with
+      plain layers now (section 8).
 
 ## 4. Tests and tooling
 
@@ -119,10 +119,14 @@ Found while the manual was written, by reading the code, not tried:
 
 ## 8. The moon from plain layers (branch `local/wear-moon-template`, 2026-11-19)
 
-The built-in template `moon` draws the moon with six plain layers. `@moon` is only the plain photo
-(`MoonPhoto`). New generic keys: `group` with the blends `erase` and `inside`, and a template as the
-picture of a view (`"image": {"use": "moon"}`, `ViewTemplates`). `MoonTemplateTest` compares the template
-with the old shaded picture and writes both side by side to `wear/build/moon-compare/`.
+A template draws the moon with six plain layers. The watch does not have that template (the user's
+decision of 2026-11-19: no built-in templates): it is in the manual, chapter 13, as JSON to copy (the
+example `ex-moon-template`), and a design brings it in `animation.templates`. The design repo embeds it
+(`MoonTemplate`, `DesignShorthand`), and the tests here read it from the manual (`ManualMoon`), so keep
+that example valid JSON under that id. `@moon` is only the plain photo (`MoonPhoto`). New generic keys:
+`group` with the blends `erase` and `inside`, and a template as the picture of a view
+(`"image": {"use": "moon"}`, `ViewTemplates`). `MoonTemplateTest` compares the template with the old
+shaded picture and writes both side by side to `wear/build/moon-compare/`.
 
 - [ ] The user compares the pictures and decides. Until then the old `MoonPicture.kt` and
       `MoonPictureTest.kt` stay, used only by `MoonTemplateTest` and by the design repo
@@ -131,5 +135,7 @@ with the old shaded picture and writes both side by side to `wear/build/moon-com
       turn `MoonTemplateTest` into a test of the template alone, and give the design repo its own way to
       bake the stock moon (render the template, as `MoonTemplateTest.new` does).
 - [ ] A zip made on 2026-11-18 or 2026-11-19 holds `"image": "@moon"` and shows the plain full moon with
-      this build. The zips of the design repo are rebuilt with the template; send them again.
+      this build. An older zip (`"moon": true`, `"moonLight": true`) is rewritten to `{"use": "moon"}` but
+      has no such template, so it shows no moon. The zips of the design repo are rebuilt with the
+      template; send them again.
 - [ ] A group draws on a sheet of its own in every frame of a wake. Not measured on a watch.

@@ -18,8 +18,8 @@ import app.aaps.wear.watchfaces.utils.DynamicImages
 /**
  * The photo of the full moon that comes with the watch app (NASA's Scientific Visualization Studio,
  * public domain), cut round: north up, all of it lit, the rest see-through. Nothing else: no phase and
- * no turn. A design makes the moon of tonight from it with plain layers (the built-in template `moon`,
- * see `BuiltInTemplates`).
+ * no turn. A design makes the moon of tonight from it with plain layers (a template of its own, see
+ * chapter 13 of the manual, `docs/watchface-animation.html`).
  *
  * The app picture [NAME] of a design (see [DynamicImages]): a view or a layer asks for it with
  * `"image": "@moon"`, so a design zip does not need a moon picture. It never changes, so it is made

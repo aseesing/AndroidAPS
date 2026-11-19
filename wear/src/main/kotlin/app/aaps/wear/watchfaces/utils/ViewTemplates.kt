@@ -15,27 +15,30 @@ import app.aaps.wear.watchfaces.animation.LayerAnimator
 import app.aaps.wear.watchfaces.animation.LayerSlot
 import app.aaps.wear.watchfaces.animation.LayerSource
 import app.aaps.wear.watchfaces.animation.PulseCurve
+import app.aaps.wear.watchfaces.animation.WakeAnimationJson
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The picture of a view that shows a layer template: `"image": {"use": "moon"}` (see [ViewImages]).
- * The layers of the template are drawn on a square picture as big as the shorter side of the view,
+ * The picture of a view that shows a layer template of the design: `"image": {"use": "moon"}` (see
+ * [ViewImages]), where `moon` is a template in the `animation.templates` of the design. The layers of the template are drawn on a square picture as big as the shorter side of the view,
  * where the whole 400 x 400 design space of the layers is that square. So a template that fills the
- * design space by default, like `moon`, fills the view.
+ * design space by default fills the view.
  *
  * The layers are drawn still, as layers that stay on the face are (`rest` 0: the start of a wake, with
  * `env` 0), with the values of now. View layers of the template are left out. A new picture is drawn
  * only when a value the layers read changed, so a style pass every minute costs nearly nothing.
  *
  * @param read reads a design json with only an `animation` into its layers, as the face reads its own
+ * @param templates the templates of the design now (its `animation.templates`), or null
  * @param images the app pictures of the layers, as [LayerAnimator] takes them
  * @param value the value of a value key now, or null
  */
 class ViewTemplates(
     private val resources: Resources,
     private val read: (JSONObject) -> WakeAnimationSpec?,
+    private val templates: () -> JSONObject?,
     private val images: (String, Long, Int) -> Bitmap?,
     private val value: (String) -> Double?
 ) {
@@ -55,10 +58,14 @@ class ViewTemplates(
     fun drawable(key: String, use: JSONObject, width: Int, height: Int, nowMs: Long): Drawable? {
         val size = minOf(width, height).coerceAtMost(MAX_SIZE)
         if (size <= 0) return null
-        val text = use.toString()
+        val own = templates()
+        // The same entry only for the same use of the same templates
+        val text = use.toString() + (own?.toString() ?: "")
         val entry = entries[key]?.takeIf { it.use == text && it.size == size } ?: run {
             entries.remove(key)?.animator?.release()
-            val spec = read(JSONObject().put(WakeAnimationSpec.JSON_KEY, JSONObject().put("layers", JSONArray().put(JSONObject(text)))))?.normalized() ?: return null
+            val animation = JSONObject().put(WakeAnimationJson.LAYERS, JSONArray().put(JSONObject(use.toString())))
+            own?.let { animation.put(WakeAnimationJson.TEMPLATES, JSONObject(it.toString())) }
+            val spec = read(JSONObject().put(WakeAnimationSpec.JSON_KEY, animation))?.normalized() ?: return null
             Entry(text, size, LayerAnimator(spec.layers.filter { it.source !is LayerSource.View }, spec.lets, images = images)).also { entries[key] = it }
         }
         if (entry.animator.isEmpty) return null

@@ -14,7 +14,7 @@ import org.json.JSONObject
 /**
  * The picture a view of a design shows with the view key [KEY] (`"image"`): a picture of the zip by
  * its name, an app picture by `@` and its name (`"@moon"`, the photo of the full moon, see
- * [DynamicImages]), or a layer template drawn in the view (`{"use": "moon"}`, the moon of now, see
+ * [DynamicImages]), or a layer template of the design drawn in the view (`{"use": "moon"}`, see
  * [ViewTemplates]). It is the background of the view, like the `background` key, and is coloured the
  * same way.
  *

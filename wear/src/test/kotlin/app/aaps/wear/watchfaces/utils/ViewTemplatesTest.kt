@@ -11,6 +11,7 @@ import android.graphics.Paint
 import android.graphics.drawable.BitmapDrawable
 import androidx.core.graphics.createBitmap
 import app.aaps.wear.watchfaces.animation.WakeAnimationJson
+import app.aaps.wear.watchfaces.daynight.ManualMoon
 import com.google.common.truth.Truth.assertThat
 import org.json.JSONObject
 import org.junit.Test
@@ -20,7 +21,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** A view that shows a layer template as its picture: `"image": {"use": "moon"}`. */
+/** A view that shows a layer template of the design as its picture: `"image": {"use": "moon"}`. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
@@ -39,6 +40,7 @@ class ViewTemplatesTest {
 
     private val templates = ViewTemplates(
         RuntimeEnvironment.getApplication().resources,
+        templates = { ManualMoon.templates },
         read = { json -> WakeAnimationJson({ text, default -> runCatching { Color.parseColor(text) }.getOrDefault(default) }, { null }).read(json) },
         images = { _, _, size -> photo(size) },
         value = { values[it] }

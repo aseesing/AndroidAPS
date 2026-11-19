@@ -16,6 +16,7 @@ import app.aaps.wear.watchfaces.animation.testColor
 import app.aaps.wear.watchfaces.design.LegacyDesign.Orbit
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import app.aaps.wear.watchfaces.daynight.ManualMoon
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Test
@@ -146,9 +147,10 @@ class LegacyDesignTest {
         assertSameJson(layers[4], JSONObject("""{"shape": "circle", "x": 3, "radius": 7, "gradient": {"type": "radial", "stops": [[0, 1], [0.25, 1], [1, 0]]}}"""))
         // clipRight is the same key, now for any layer
         assertSameJson(layers[5], JSONObject("""{"view": "chart", "clipRight": "200"}"""))
-        val spec = WakeAnimationJson(::testColor) { null }.read(JSONObject().put(WakeAnimationSpec.JSON_KEY, JSONObject().put("layers", JSONArray(layers))))!!
+        // The moon template is not in the watch: with the one of the manual in the design it gives plain layers
+        val spec = WakeAnimationJson(::testColor) { null }.read(JSONObject().put(WakeAnimationSpec.JSON_KEY, JSONObject().put("layers", JSONArray(layers)).put("templates", ManualMoon.templates)))!!
         assertThat(spec.errors).isEmpty()
-        // The template of the moon gives several plain layers, the photo of the app among them; the other layers follow
+        // Several plain layers, the photo of the app among them; the other layers follow
         val own = spec.layers.size - 5
         assertThat(spec.layers.take(own).map { it.source }.filterIsInstance<LayerSource.Dynamic>().map { it.name }.distinct()).containsExactly("moon")
         assertThat((spec.layers[own + 1].source as LayerSource.Shape).let { it.kind to it.gradient?.type }).isEqualTo(ShapeKind.RECT to LayerGradient.Type.LINEAR)

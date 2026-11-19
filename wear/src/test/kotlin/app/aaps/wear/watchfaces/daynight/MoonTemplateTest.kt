@@ -20,7 +20,6 @@ import app.aaps.wear.watchfaces.animation.WakeAnimationJson
 import app.aaps.wear.watchfaces.utils.DynamicImages
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
-import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -34,8 +33,8 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
- * The built-in template `moon` (plain layers: the photo `@moon`, a few shapes, a group) against the
- * moon the watch shaded pixel by pixel before ([MoonPicture]). They must show the same moon.
+ * The moon template of the manual ([ManualMoon]: plain layers, the photo `@moon`, a few shapes, a group)
+ * against the moon the watch shaded pixel by pixel before ([MoonPicture]). They must show the same moon.
  *
  * Also writes both side by side as pictures, for the eye: `wear/build/moon-compare/`.
  */
@@ -77,7 +76,7 @@ class MoonTemplateTest {
 
     /** The new moon: the layers of the template, drawn by the layer engine with the three moon values. */
     private fun new(look: MoonLight.Look, size: Int, use: String = """{"use": "moon"}"""): Bitmap {
-        val json = JSONObject("""{"animation": {"layers": [$use]}}""")
+        val json = ManualMoon.design(use)
         val spec = WakeAnimationJson({ text, default -> runCatching { Color.parseColor(text) }.getOrDefault(default) }, { null }).read(json)!!.normalized()
         assertThat(spec.errors).isEmpty()
         val animator = LayerAnimator(spec.layers, spec.lets, images = { name, _, side -> if (name == MoonPhoto.NAME) MoonPhoto.round(photo, side) else null })

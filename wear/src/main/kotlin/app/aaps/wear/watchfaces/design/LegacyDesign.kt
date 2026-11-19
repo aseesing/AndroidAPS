@@ -25,7 +25,7 @@ import kotlin.math.sin
  * - the effects of the `animation` (`rain`, `glitch`, `trace`, `blink`, `sweep`, `slide`, `wobble`,
  *   `pulse`, `glint`) become `{"use": "<name>", ...}` entries at the start of `layers`, in that order
  *   (a list effect gives one entry per view); the `fallbackBpm` of `pulse` goes to the animation;
- * - a layer `"moon": true` becomes `{"use": "moon", ...}` in the square in the middle of its `rect`, with
+ * - a layer `"moon": true` becomes `{"use": "moon", ...}` (a template the design must bring itself) in the square in the middle of its `rect`, with
  *   its `slot` and `rest` (its other keys are dropped: no design used them); `"shape": "band"` a rectangle with a linear
  *   gradient (its `x` was the middle, now the left edge), `"shape": "dot"` a circle with a radial one;
  * - a view with `"moonLight": true` gets `"image": {"use": "moon"}`; a view with an `orbit` gets a view layer
@@ -68,8 +68,12 @@ object LegacyDesign {
     /** The weathers the phone sends, in the order of their number in `v_weather_kind`. */
     val WEATHERS = StoredWeather.KINDS
 
-    /** The built-in template that draws the moon, in a view or as a layer. */
-    private const val MOON_TEMPLATE = CwfPlaceNeeds.MOON_TEMPLATE
+    /**
+     * The name of the template that draws the moon, in a view or as a layer. The watch has no such
+     * template of its own: the design must bring it in `animation.templates` (the manual, chapter 13).
+     * An old zip does not, so its moon is not shown until the zip is made again.
+     */
+    private const val MOON_TEMPLATE = "moon"
 
     /** The new picture of a view that showed the moon: the template, filling the view. */
     private fun moonImage(): JSONObject = JSONObject().put(Templates.USE, MOON_TEMPLATE)
@@ -298,7 +302,7 @@ object LegacyDesign {
     }
 
     /**
-     * The built-in moon in place of the old moon layer [old]: in the square in the middle of its `rect`
+     * The moon template of the design in place of the old moon layer [old]: in the square in the middle of its `rect`
      * (the whole face without one), in its slot. Without a `rest` it shows only while a wake plays.
      */
     private fun moonUse(old: JSONObject): JSONObject {

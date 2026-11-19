@@ -35,7 +35,7 @@ class BuiltInTemplatesTest {
     @Test
     fun everyBuiltInTemplateExpandsAndCompiles() {
         val names = BuiltInTemplates.all.keys().asSequence().toList()
-        assertThat(names).containsExactly("rain", "glitch", "pulse", "blink", "sweep", "slide", "wobble", "trace", "glint", "moon")
+        assertThat(names).containsExactly("rain", "glitch", "pulse", "blink", "sweep", "slide", "wobble", "trace", "glint")
         for (name in names) {
             val spec = readAnimation(animationOf(use(name, *needed[name].orEmpty().toTypedArray())), images)
             assertWithMessage("$name: ${spec.errors}").that(spec.errors).isEmpty()

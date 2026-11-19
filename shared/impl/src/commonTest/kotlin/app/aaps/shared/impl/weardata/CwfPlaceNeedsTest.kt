@@ -200,12 +200,13 @@ class CwfPlaceNeedsTest {
     }
 
     @Test
-    fun theMoonTemplateNeedsThePlace() {
-        // The moon as the picture of a view, and as a layer of the animation
-        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"moon": {"width": 40, "height": 40, "textvalue": "", "image": {"use": "moon"}}}"""))
-        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"animation": {"layers": [{"use": "moon", "left": 180, "top": 70, "size": 40}]}}"""))
-        // The plain photo of the full moon is the same everywhere, and another template is only a template
-        assertTrue(uses("""{"moon": {"image": "@moon"}, "animation": {"layers": [{"image": "@moon"}, {"use": "rain"}]}}""").isEmpty())
+    fun aTemplateOfTheDesignNeedsThePlaceForWhatItsFormulasRead() {
+        // The moon of now is a template the design brings itself: its formulas read the turn of the moon
+        val template = """"templates": {"moon": {"params": {}, "layers": [{"image": "@moon", "rotation": "v_moon_north"}]}}"""
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"moon": {"image": {"use": "moon"}}, "animation": {$template}}"""))
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"animation": {$template, "layers": [{"use": "moon"}]}}"""))
+        // The name alone needs nothing, and the plain photo of the full moon is the same everywhere
+        assertTrue(uses("""{"moon": {"image": "@moon"}, "animation": {"layers": [{"image": "@moon"}, {"use": "moon"}, {"use": "rain"}]}}""").isEmpty())
     }
 
     @Test

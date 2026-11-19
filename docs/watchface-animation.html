@@ -422,8 +422,9 @@ fills the whole face. A side that is not given takes the side of the whole face.
 <p>An <code>image</code> name that starts with <code>@</code> is a picture that comes with the watch app, so the zip does
 not need it. There is one now: <code>@moon</code>, a photo of the full moon, cut round, with north up. It is only the
 photo: it shows no phase and it does not turn by itself. It is drawn in the middle of <code>rect</code>, as a square of
-the shorter side. It has no <code>glow</code>. For the moon as it is in the sky now, use the template
-<a href="#t-moon"><code>moon</code></a>. <a href="#moon">Chapter 13</a> builds that moon from this photo, step by step.</p>
+the shorter side. It has no <code>glow</code>. The watch has no ready-made moon of this moment: a design builds it from
+this photo with plain layers. <a href="#moon">Chapter 13</a> does that step by step, and ends with a template you can
+copy.</p>
 
 <h3 id="source-shape">A shape: <code>shape</code></h3>
 <p><code>shape</code> is <code>"rect"</code>, <code>"circle"</code> or <code>"line"</code>. Another word leaves the layer
@@ -1524,7 +1525,6 @@ A design needs the place when it has one of these:</p>
     <code>v_moon_limb</code>, <code>v_moon_north</code>, <code>v_sun_next_time</code> or <code>v_is_day</code> (the sun
     and the moon);</li>
   <li>a <code>valueKey</code> that is one of those keys (without <code>is_day</code>);</li>
-  <li>the template <code>moon</code>: <code>"use": "moon"</code>, as a layer or as the <code>image</code> of a view;</li>
   <li>a formula that reads <code>v_weather_kind</code> or <code>v_weather_temperature</code>, or a
     <code>valueKey</code> <code>weather_temperature</code> (the weather: the phone looks it up and sends only the
     weather);</li>
@@ -1548,7 +1548,7 @@ number parameter is cut to its limits. A key that the template does not know is 
 used. So you cannot add layer keys such as <code>slot</code> or <code>rest</code> to a <code>use</code> entry: write your
 own template for that. A <code>use</code> of a template that does not exist is left out.</p>
 
-<p>The watch has ten built-in templates. Times are in milliseconds of the wake, sizes in design pixels, and the
+<p>The watch has nine built-in templates. Times are in milliseconds of the wake, sizes in design pixels, and the
 <code>alpha</code> parameters of the templates go from 0 to 255.</p>
 
 <h3 id="t-rain"><code>rain</code>: falling streaks</h3>
@@ -1806,37 +1806,6 @@ width.</figcaption>
 <tr><td><code>angle</code></td><td>30</td><td></td><td>The turn of the band, in degrees.</td></tr>
 <tr><td><code>width</code></td><td>60</td><td>1 to 400</td><td>The width of the band.</td></tr>
 <tr><td><code>color</code>, <code>alpha</code></td><td><code>#FFFFFF</code>, 90</td><td><code>alpha</code> 0 to 255, whole</td><td>The light. With <code>alpha</code> 0 there is no layer.</td></tr>
-</tbody></table></div>
-
-<h3 id="t-moon"><code>moon</code>: the moon as it is in the sky now</h3>
-<p>The moon of this moment. As much of it is lit as of the real moon, the lit side points to the sun, and the moon is
-turned the way it stands in the sky of the wearer (north is up when the watch has no place). The template is made of
-plain layers: the photo <code>@moon</code> and a few shapes. <a href="#moon">Chapter 13</a> builds it step by step. It
-reads the values <code>moon_lit</code>, <code>moon_limb</code> and <code>moon_north</code>, so a design with it needs the
-place, see <a href="#needs-place"><code>needsPlace</code></a>. It stays on the face (<code>rest</code> 0) unless you say
-otherwise.</p>
-<figure class="ex" id="ex-t-moon" data-face="off" data-loop="still" data-controls="moon turn">
-<pre>{
-  "animation": {
-    "layers": [
-      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
-      {"use": "moon", "left": 110, "top": 110, "size": 180}
-    ]
-  }
-}</pre>
-<figcaption><strong>The moon.</strong> Move the sliders to see other phases and turns. The dark part lets the blue behind
-it through. The page has no place and no photo: it draws a simple full moon, lit from the right while the moon grows, and
-the slider "Turn in the sky" turns it as a place and a time of day do on the watch.</figcaption>
-</figure>
-<div class="scroll"><table>
-<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>left</code>, <code>top</code></td><td>0, 0</td><td></td><td>The top left corner of the square of the moon.</td></tr>
-<tr><td><code>size</code></td><td>400</td><td>1 to 400</td><td>The side of the square: the moon is as wide as this. The default fills the face, or a view (see <a href="#view-image"><code>image</code> on a view</a>).</td></tr>
-<tr><td><code>slot</code></td><td><code>back</code></td><td></td><td>The slot of all its layers.</td></tr>
-<tr><td><code>rest</code></td><td>0</td><td>0 to 30</td><td>The <code>rest</code> of all its layers. Give <code>""</code> for a moon that shows only while a wake plays.</td></tr>
-<tr><td><code>dark</code></td><td>0.3</td><td>0 to 1</td><td>How bright the dark part is, against the lit part. Not 0, so the moon can be found at new moon.</td></tr>
-<tr><td><code>cover</code></td><td>0.45</td><td>0 to 1</td><td>How much the dark part covers what is behind it. Below 1 a day sky shows through it; with 1 it covers all.</td></tr>
 </tbody></table></div>
 
 <h3 id="own-templates">Your own templates: <code>templates</code></h3>
@@ -2184,20 +2153,73 @@ an app picture (<code>"@moon"</code>, the photo of the full moon), or a template
 <code>{"use": "moon"}</code>. The picture is the background of the view, stretched to its size, and it is coloured like
 the key <code>background</code>. Looks can swap it. It works on text views (such as <code>freetext1</code> to
 <code>freetext4</code>), not on picture views.</p>
-<p>The layers of a template are drawn on a square picture as big as the shorter side of the view. The whole 400 x 400
-design space of the layers is that square, so a template that fills the design space, like <code>moon</code> without
-<code>left</code>, <code>top</code> and <code>size</code>, fills the view. Make the view a square. The layers are drawn
-still, as layers with <code>rest</code> 0 are, with the values of now. The picture is made again only when one of the
-values it reads changes. View layers of the template are left out, and a picture is at most 512 pixels a side.</p>
+<p>The template is one of <code>animation.templates</code> of the design, or a built-in one. Its layers are drawn on a
+square picture as big as the shorter side of the view. The whole 400 x 400 design space of the layers is that square, so
+a template that fills the design space fills the view. Make the view a square. The layers are drawn still, as layers
+with <code>rest</code> 0 are, with the values of now. The picture is made again only when one of the values it reads
+changes. View layers of the template are left out, and a picture is at most 512 pixels a side.</p>
 <figure class="ex" id="ex-view-image" data-face="on" data-loop="still" data-controls="moon turn">
 <pre>{
   "freetext1": {
     "width": 44, "height": 44, "topmargin": 3, "leftmargin": 178,
     "image": {"use": "moon"}
+  },
+  "animation": {
+    "templates": {
+      "moon": {
+        "params": {
+          "left": 0, "top": 0,
+          "size": {"default": 400, "min": 1, "max": 400},
+          "slot": "back",
+          "rest": 0,
+          "dark": {"default": 0.3, "min": 0, "max": 1},
+          "cover": {"default": 0.45, "min": 0, "max": 1}
+        },
+        "layers": [{
+          "shape": "circle", "color": "#000000", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "alpha": "1 - (1 - $cover) / (1 - $dark * $cover)",
+          "clip": {"round": false}
+        }, {
+          "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+          "slot": "$slot", "rest": "$rest",
+          "rotation": "v_moon_north", "maxScale": 2,
+          "alpha": "$dark * $cover",
+          "clip": {"round": false}
+        }, {
+          "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+          "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "clip": {"rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"}, "round": false}
+        }, {
+          "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "scaleX": "2 * v_moon_lit - 1",
+          "visible": "v_moon_lit &gt; 0.5",
+          "clip": {"round": false}
+        }, {
+          "shape": "circle", "group": "moon", "blend": "erase", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "scaleX": "1 - 2 * v_moon_lit",
+          "visible": "v_moon_lit &lt; 0.5",
+          "clip": {"round": false}
+        }, {
+          "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+          "group": "moon", "blend": "inside", "slot": "$slot", "rest": "$rest",
+          "rotation": "v_moon_north", "maxScale": 2,
+          "clip": {"round": false}
+        }]
+      }
+    }
   }
 }</pre>
-<figcaption><strong>The moon on a view.</strong> The view <code>freetext1</code> shows the moon of now. Because it is a
-view, a view layer can move it, for example along the path of the moon with <code>v_moon_cycle</code>.</figcaption>
+<figcaption><strong>The moon on a view.</strong> The view <code>freetext1</code> shows the moon of now, drawn by the
+template <code>moon</code> that the design brings itself (it is explained in <a href="#moon">chapter 13</a>). Its
+<code>size</code> is 400 by default, so it fills the view. Because it is a view, a view layer can move it, for example
+along the path of the moon with <code>v_moon_cycle</code>.</figcaption>
 </figure>
 
 <h3 id="time-token">A moment as a text: <code>@time</code></h3>
@@ -2351,7 +2373,7 @@ picture say what was left out. Layers are counted from 0, after the templates ar
   <li><strong>Move few views.</strong> A view with a view layer is drawn again in every frame of the wake. A big view,
     like the graph, costs the most.</li>
   <li><strong>A group</strong> is drawn on a sheet of its own first, in every frame it shows. Keep the sheet small with a
-    <code>clip.rect</code> on its first layer. The template <code>moon</code> does that.</li>
+    <code>clip.rect</code> on its first layer. The moon template of <a href="#moon">chapter 13</a> does that.</li>
 </ul>
 
 <h3 id="known-limits">Known limits</h3>
@@ -2462,7 +2484,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td>a template</td><td><code>params</code></td><td>Parameter name to default, or to <code>{"default", "min", "max", "int"}</code>.</td></tr>
 <tr><td>a template</td><td><code>layers</code></td><td>The layers, with <code>$name</code> and <code>$name.key</code>.</td></tr>
 <tr><td>a layer of a template</td><td><code>if</code></td><td>A formula of the parameters; the layer is left out when it is 0.</td></tr>
-<tr><td>built in</td><td colspan="2"><code>rain</code>, <code>glitch</code>, <code>pulse</code>, <code>blink</code>, <code>sweep</code>, <code>slide</code>, <code>wobble</code>, <code>trace</code>, <code>glint</code>, <code>moon</code>. See <a href="#templates">7</a>.</td></tr>
+<tr><td>built in</td><td colspan="2"><code>rain</code>, <code>glitch</code>, <code>pulse</code>, <code>blink</code>, <code>sweep</code>, <code>slide</code>, <code>wobble</code>, <code>trace</code>, <code>glint</code>. See <a href="#templates">7</a>.</td></tr>
 </tbody></table></div>
 
 <h3>Looks, colours and views</h3>
@@ -2490,9 +2512,9 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <!-- =================================================================================== 13 -->
 <h2 id="moon">13. Example: the moon from plain layers</h2>
 
-<p>The watch has no drawing code for the moon. The template <a href="#t-moon"><code>moon</code></a> is six plain layers:
-the photo <code>@moon</code> two times, and four circles. This chapter builds them one by one, so you can make such a
-thing yourself. Three values say how the moon looks now: <code>v_moon_lit</code> (how much is lit),
+<p>The watch has no drawing code for the moon, and no ready-made moon. A design draws the moon of this moment with six
+plain layers: the photo <code>@moon</code> two times, and four circles. This chapter builds them one by one, and ends
+with the same layers as a <a href="#moon-template">template to copy</a> into your design. Three values say how the moon looks now: <code>v_moon_lit</code> (how much is lit),
 <code>v_moon_limb</code> (where the lit side points) and <code>v_moon_north</code> (how the moon is turned), see
 <a href="#values">chapter 6</a>.</p>
 <p>Every picture has two sliders. "Moon phase" sets how much is lit, and on which side. "Turn in the sky" turns the moon,
@@ -2556,12 +2578,12 @@ big as the moon.</p>
       {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
        "rotation": "v_moon_limb - 90",
        "scaleX": "2 * v_moon_lit - 1",
-       "visible": "v_moon_lit > 0.5",
+       "visible": "v_moon_lit &gt; 0.5",
        "group": "lit"},
       {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
        "rotation": "v_moon_limb - 90",
        "scaleX": "1 - 2 * v_moon_lit",
-       "visible": "v_moon_lit < 0.5",
+       "visible": "v_moon_lit &lt; 0.5",
        "group": "lit", "blend": "erase"}
     ]
   }
@@ -2586,12 +2608,12 @@ so it stays sharp when it is turned.</p>
       {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
        "rotation": "v_moon_limb - 90",
        "scaleX": "2 * v_moon_lit - 1",
-       "visible": "v_moon_lit > 0.5",
+       "visible": "v_moon_lit &gt; 0.5",
        "group": "lit"},
       {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
        "rotation": "v_moon_limb - 90",
        "scaleX": "1 - 2 * v_moon_lit",
-       "visible": "v_moon_lit < 0.5",
+       "visible": "v_moon_lit &lt; 0.5",
        "group": "lit", "blend": "erase"},
       {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
        "rotation": "v_moon_north", "maxScale": 2,
@@ -2626,12 +2648,12 @@ part of step 4 is drawn over them and covers them.</p>
       {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
        "rotation": "v_moon_limb - 90",
        "scaleX": "2 * v_moon_lit - 1",
-       "visible": "v_moon_lit > 0.5",
+       "visible": "v_moon_lit &gt; 0.5",
        "group": "lit"},
       {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
        "rotation": "v_moon_limb - 90",
        "scaleX": "1 - 2 * v_moon_lit",
-       "visible": "v_moon_lit < 0.5",
+       "visible": "v_moon_lit &lt; 0.5",
        "group": "lit", "blend": "erase"},
       {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
        "rotation": "v_moon_north", "maxScale": 2,
@@ -2639,12 +2661,88 @@ part of step 4 is drawn over them and covers them.</p>
     ]
   }
 }</pre>
-<figcaption><strong>The whole moon.</strong> These are the six layers of the template <code>moon</code>, with numbers where the template has its parameters <code>left</code>, <code>top</code>, <code>size</code>, <code>dark</code> and <code>cover</code>.</figcaption>
+<figcaption><strong>The whole moon.</strong> Six plain layers, with fixed numbers for the place and the size.</figcaption>
 </figure>
 
-<p>The same in one line: <code>{"use": "moon", "left": 110, "top": 110, "size": 180}</code>. The layers of the
-template also have <code>"clip": {"round": false}</code>, so the moon is not cut to the round screen when it is the
-picture of a view.</p>
+<h3 id="moon-template">Step 6: the moon as a template to copy</h3>
+<p>The same six layers as a <a href="#own-templates">template of the design</a>, with parameters where step 5 has
+numbers. Copy the entry <code>"moon"</code> into the <code>animation.templates</code> of your design. Then one line draws
+the moon: <code>{"use": "moon", "left": 110, "top": 110, "size": 180}</code>. A view can show it too, with
+<code>"image": {"use": "moon"}</code>, see <a href="#view-image"><code>image</code> on a view</a>. The watch does not know
+this template by itself: a design that uses it must bring it.</p>
+<p>The layers of the template have <code>"clip": {"round": false}</code>, so the moon is not cut to the round screen when
+it is the picture of a view. The formulas read <code>v_moon_limb</code> and <code>v_moon_north</code>, so a design with
+this template needs the place, see <a href="#needs-place"><code>needsPlace</code></a>.</p>
+<figure class="ex" id="ex-moon-template" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "templates": {
+      "moon": {
+        "params": {
+          "left": 0, "top": 0,
+          "size": {"default": 400, "min": 1, "max": 400},
+          "slot": "back",
+          "rest": 0,
+          "dark": {"default": 0.3, "min": 0, "max": 1},
+          "cover": {"default": 0.45, "min": 0, "max": 1}
+        },
+        "layers": [{
+          "shape": "circle", "color": "#000000", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "alpha": "1 - (1 - $cover) / (1 - $dark * $cover)",
+          "clip": {"round": false}
+        }, {
+          "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+          "slot": "$slot", "rest": "$rest",
+          "rotation": "v_moon_north", "maxScale": 2,
+          "alpha": "$dark * $cover",
+          "clip": {"round": false}
+        }, {
+          "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+          "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "clip": {"rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"}, "round": false}
+        }, {
+          "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "scaleX": "2 * v_moon_lit - 1",
+          "visible": "v_moon_lit &gt; 0.5",
+          "clip": {"round": false}
+        }, {
+          "shape": "circle", "group": "moon", "blend": "erase", "slot": "$slot", "rest": "$rest",
+          "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+          "rotation": "v_moon_limb - 90",
+          "scaleX": "1 - 2 * v_moon_lit",
+          "visible": "v_moon_lit &lt; 0.5",
+          "clip": {"round": false}
+        }, {
+          "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+          "group": "moon", "blend": "inside", "slot": "$slot", "rest": "$rest",
+          "rotation": "v_moon_north", "maxScale": 2,
+          "clip": {"round": false}
+        }]
+      }
+    },
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"use": "moon", "left": 110, "top": 110, "size": 180}
+    ]
+  }
+}</pre>
+<figcaption><strong>The moon template.</strong> The same picture as in step 5, now from one <code>use</code> line.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>left</code>, <code>top</code></td><td>0, 0</td><td></td><td>The top left corner of the square of the moon.</td></tr>
+<tr><td><code>size</code></td><td>400</td><td>1 to 400</td><td>The side of the square: the moon is as wide as this. The default fills the face, or a view.</td></tr>
+<tr><td><code>slot</code></td><td><code>back</code></td><td></td><td>The slot of all its layers.</td></tr>
+<tr><td><code>rest</code></td><td>0</td><td>0 to 30</td><td>The <code>rest</code> of all its layers: the moon stays on the face. Give <code>""</code> for a moon that shows only while a wake plays.</td></tr>
+<tr><td><code>dark</code></td><td>0.3</td><td>0 to 1</td><td>How bright the dark part is, against the lit part. Not 0, so the moon can be found at new moon.</td></tr>
+<tr><td><code>cover</code></td><td>0.45</td><td>0 to 1</td><td>How much the dark part covers what is behind it. Below 1 a day sky shows through it; with 1 it covers all.</td></tr>
+</tbody></table></div>
 
 </main>
 
@@ -3272,53 +3370,6 @@ var BUILT_IN_TEMPLATES = {
       "height": "f32(2 * diagonal)",
       "alpha": "if(w >= 0 && w <= $durationMs, f32($alpha / 255), 0)",
       "clip": {"round": false, "rings": "$rings", "boxes": "$boxes", "cornerRadius": "$cornerRadius"}
-    }]
-  },
-  "moon": {
-    "params": {
-      "left": 0, "top": 0,
-      "size": {"default": 400, "min": 1, "max": 400},
-      "slot": "back",
-      "rest": 0,
-      "dark": {"default": 0.3, "min": 0, "max": 1},
-      "cover": {"default": 0.45, "min": 0, "max": 1}
-    },
-    "layers": [{
-      "shape": "circle", "color": "#000000", "slot": "$slot", "rest": "$rest",
-      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
-      "alpha": "1 - (1 - $cover) / (1 - $dark * $cover)",
-      "clip": {"round": false}
-    }, {
-      "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
-      "slot": "$slot", "rest": "$rest",
-      "rotation": "v_moon_north", "maxScale": 2,
-      "alpha": "$dark * $cover",
-      "clip": {"round": false}
-    }, {
-      "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
-      "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
-      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
-      "rotation": "v_moon_limb - 90",
-      "clip": {"rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"}, "round": false}
-    }, {
-      "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
-      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
-      "rotation": "v_moon_limb - 90",
-      "scaleX": "2 * v_moon_lit - 1",
-      "visible": "v_moon_lit > 0.5",
-      "clip": {"round": false}
-    }, {
-      "shape": "circle", "group": "moon", "blend": "erase", "slot": "$slot", "rest": "$rest",
-      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
-      "rotation": "v_moon_limb - 90",
-      "scaleX": "1 - 2 * v_moon_lit",
-      "visible": "v_moon_lit < 0.5",
-      "clip": {"round": false}
-    }, {
-      "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
-      "group": "moon", "blend": "inside", "slot": "$slot", "rest": "$rest",
-      "rotation": "v_moon_north", "maxScale": 2,
-      "clip": {"round": false}
     }]
   }
 };
@@ -5022,14 +5073,15 @@ Scene.prototype.drawView = function (R, key, fx, nowMs) {
 };
 
 /**
- * The picture of a view that shows a template, `"image": {"use": "moon"}` (ViewTemplates): the layers
- * of the template, drawn still with the values of now, where the whole design space is the view.
+ * The picture of a view that shows a template of the design, `"image": {"use": "moon"}` (ViewTemplates):
+ * the layers of the template, drawn still with the values of now, where the whole design space is the view.
  */
 Scene.prototype.drawViewTemplate = function (R, st, use, nowMs) {
-  var self = this, text = JSON.stringify(use);
+  var own = isObj(this.json.animation) && isObj(this.json.animation.templates) ? this.json.animation.templates : null;
+  var self = this, text = JSON.stringify([use, own]);
   if (!has(this.viewTemplates, text)) {
     var swaps = this.swaps, animator = null;
-    var spec = readAnimation({ animation: { layers: [use] } }, {
+    var spec = readAnimation({ animation: own ? { templates: own, layers: [use] } : { layers: [use] } }, {
       color: function (c, fallback) { return self.color(c, fallback); },
       hasImage: function (name) { return has(ZIP, has(swaps, name) ? swaps[name] : name); }
     });
