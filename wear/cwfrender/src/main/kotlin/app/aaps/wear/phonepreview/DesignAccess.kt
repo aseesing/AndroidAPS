@@ -10,6 +10,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import androidx.wear.watchface.complications.rendering.ComplicationDrawable
 import app.aaps.wear.watchfaces.CustomWatchface
+import app.aaps.wear.watchfaces.animation.FaceTexts
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.colour.ColourLooks
 import app.aaps.wear.watchfaces.daynight.MoonPhoto
@@ -36,6 +37,12 @@ object DesignAccess {
 
     /** The picture of a `@moon` layer of [face] (the photo of the full moon), in a square of [size] pixels, as the watch draws it. */
     fun wakeMoon(face: CustomWatchface, epochMs: Long, size: Int): Bitmap? = face.dynamicImage(MoonPhoto.NAME, epochMs, size)
+
+    /** The value of the value key [key] (for example `sgv`) as the face has it now, or null: the `v_<key>` of a formula. */
+    fun value(face: CustomWatchface, key: String): Double? = face.designValue(key)
+
+    /** The fonts of the design and what the watch is set to, for the text layers of a wake a test plays itself. */
+    fun faceTexts(face: CustomWatchface): FaceTexts = face.faceTexts
 
     /**
      * [design] as the watch shows it in the day ([isDay]) or at night, in [weather]

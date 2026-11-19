@@ -11,6 +11,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.core.graphics.createBitmap
 import app.aaps.wear.watchfaces.animation.DESIGN_SIZE
+import app.aaps.wear.watchfaces.animation.FaceTexts
 import app.aaps.wear.watchfaces.animation.LayerAnimator
 import app.aaps.wear.watchfaces.animation.LayerSlot
 import app.aaps.wear.watchfaces.animation.LayerSource
@@ -34,13 +35,17 @@ import org.json.JSONObject
  * @param templates the templates of the design now (its `animation.templates`), or null
  * @param images the app pictures of the layers, as [LayerAnimator] takes them
  * @param value the value of a value key now, or null
+ * @param functions the own functions of the design now (its `animation.functions`), or null
+ * @param texts the fonts of the design and what the watch is set to, for the text layers
  */
 class ViewTemplates(
     private val resources: Resources,
     private val read: (JSONObject) -> WakeAnimationSpec?,
     private val templates: () -> JSONObject?,
     private val images: (String, Long, Int) -> Bitmap?,
-    private val value: (String) -> Double?
+    private val value: (String) -> Double?,
+    private val functions: () -> JSONObject? = { null },
+    private val texts: FaceTexts = object : FaceTexts {}
 ) {
 
     private class Entry(val use: String, val size: Int, val animator: LayerAnimator) {
@@ -60,13 +65,15 @@ class ViewTemplates(
         if (size <= 0) return null
         val own = templates()
         // The same entry only for the same use of the same templates
-        val text = use.toString() + (own?.toString() ?: "")
+        val ownFunctions = functions()
+        val text = use.toString() + (own?.toString() ?: "") + (ownFunctions?.toString() ?: "")
         val entry = entries[key]?.takeIf { it.use == text && it.size == size } ?: run {
             entries.remove(key)?.animator?.release()
             val animation = JSONObject().put(WakeAnimationJson.LAYERS, JSONArray().put(JSONObject(use.toString())))
             own?.let { animation.put(WakeAnimationJson.TEMPLATES, JSONObject(it.toString())) }
+            ownFunctions?.let { animation.put(WakeAnimationJson.FUNCTIONS, JSONObject(it.toString())) }
             val spec = read(JSONObject().put(WakeAnimationSpec.JSON_KEY, animation))?.normalized() ?: return null
-            Entry(text, size, LayerAnimator(spec.layers.filter { it.source !is LayerSource.View }, spec.lets, images = images)).also { entries[key] = it }
+            Entry(text, size, LayerAnimator(spec.layers.filter { it.source !is LayerSource.View }, spec.lets, images = images, functions = spec.functions, texts = texts)).also { entries[key] = it }
         }
         if (entry.animator.isEmpty) return null
         val keys = entry.animator.valueKeys

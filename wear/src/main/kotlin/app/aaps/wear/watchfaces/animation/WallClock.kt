@@ -38,6 +38,10 @@ class WallClock {
     var hour = 0.0
         private set
 
+    /** The number of the day, counted from 1970 in [zone]: another number on another day. */
+    var day = 0.0
+        private set
+
     private var offsetMs = 0L
 
     /** From when (including) until when (not including) [offsetMs] holds, in epoch ms. */
@@ -54,6 +58,7 @@ class WallClock {
         second = secondOfDay % 60 + nanos / 1e9
         minute = (secondOfDay / 60 % 60).toDouble()
         hour = (secondOfDay / 3600).toDouble()
+        day = Math.floorDiv(epochMs + offsetMs, DAY_MS).toDouble()
     }
 
     private fun findOffset(epochMs: Long) {

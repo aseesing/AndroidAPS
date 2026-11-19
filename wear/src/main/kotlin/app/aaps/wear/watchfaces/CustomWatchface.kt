@@ -107,6 +107,7 @@ import app.aaps.wear.watchfaces.utils.LogTimeGraph
 import app.aaps.wear.watchfaces.utils.ParsedJsonCache
 import app.aaps.wear.watchfaces.utils.PartTimeLeft
 import app.aaps.wear.watchfaces.utils.WatchBatteryLevel
+import app.aaps.wear.watchfaces.utils.WatchFaceTexts // PERSONAL PATCH
 import app.aaps.wear.watchfaces.utils.drawWithHidden
 import app.aaps.wear.watchfaces.values.FaceValues
 import app.aaps.wear.watchfaces.values.StatusValues
@@ -200,7 +201,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     // PERSONAL PATCH: the pictures that come with the watch app, like the photo of the full moon
     // (`"image": "@moon"` of a view or a layer, see MoonPhoto): one photo, one picture per size
     private val dynamicImages = DynamicImages(mapOf(MoonPhoto.NAME to MoonPhoto { BitmapFactory.decodeResource(resources, R.drawable.personal_moon_full) }))
-    private val viewTemplates by lazy(LazyThreadSafetyMode.NONE) { ViewTemplates(resources, { json -> readWakeAnimation(json) { key -> resDataMap[key]?.toDrawable(resources) } }, { json.optJSONObject(WakeAnimationSpec.JSON_KEY)?.optJSONObject(WakeAnimationJson.TEMPLATES) }, ::dynamicImage, ::designValue) } // PERSONAL PATCH: a template as the `image` of a view
+    private val viewTemplates by lazy(LazyThreadSafetyMode.NONE) { ViewTemplates(resources, { json -> readWakeAnimation(json) { key -> resDataMap[key]?.toDrawable(resources) } }, { json.optJSONObject(WakeAnimationSpec.JSON_KEY)?.optJSONObject(WakeAnimationJson.TEMPLATES) }, ::dynamicImage, ::designValue, { json.optJSONObject(WakeAnimationSpec.JSON_KEY)?.optJSONObject(WakeAnimationJson.FUNCTIONS) }, faceTexts) } // PERSONAL PATCH: a template as the `image` of a view
     private val viewImages by lazy(LazyThreadSafetyMode.NONE) { ViewImages(resources, dynamicImages, viewTemplates) } // PERSONAL PATCH: the `image` of a view
 
     /** PERSONAL PATCH: how the moon looks now, seen from the place of [skyRule] (north up without one): the values `moon_lit`, `moon_limb` and `moon_north`. */
@@ -1028,12 +1029,16 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     // ---- Wake-up animation (private patch): rain and a beating heart after a wrist raise ----
 
+    /** PERSONAL PATCH: the fonts and the watch settings for the text layers, see [WatchFaceTexts]. Internal for the design tests. */
+    internal val faceTexts by lazy(LazyThreadSafetyMode.NONE) { WatchFaceTexts(this, { sp }) { FontMap.font(it) } }
+
     /** Plays the optional `animation` of the design; see [WakeAnimator]. */
     private val wake = WakeAnimator(
         heartRate = { healthValues.heartRate() },
         chosenLengthMs = { WakeLength.parse(sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) },
         value = ::designValue,
         images = ::dynamicImage, // PERSONAL PATCH: the `@moon` layers
+        texts = faceTexts, // PERSONAL PATCH: the text layers
         layers = frameLayers
     )
 

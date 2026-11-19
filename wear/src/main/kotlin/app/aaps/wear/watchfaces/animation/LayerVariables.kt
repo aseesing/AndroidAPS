@@ -12,7 +12,7 @@ package app.aaps.wear.watchfaces.animation
  * - `env` 0 to 1: rises at the start of a wake and falls at its end (see [WakeAnimationSpec.fadeMs])
  * - `i`, `n`, `u` the copy (see [LayerCopies]); `px`, `py` its point and `p0` to `p7` the extra
  *   numbers of the point; `r1` to `r8` its random numbers
- * - `bpm` the heart rate, `sec`, `min`, `hour` the time of day
+ * - `bpm` the heart rate, `sec`, `min`, `hour` the time of day (and a hidden count of the days, for the clock texts)
  * - `rot0`, `dx0` the own turn and move of a view, `cx0`, `cy0` the middle where the design puts it
  *   (see [LayerSource.View])
  * - `v_<key>` the value of a value key, for example `v_watch_battery`; NaN when there is none.
@@ -87,15 +87,24 @@ class LayerVariables {
     fun addLocal(formula: Formula): Int = add(rateOf(formula), readsTime(formula))
 
     /** True when [formula] changes with the time of the frame: it reads `t`, `ms`, `env`, the clock, or a `let` that does. */
-    fun readsTime(formula: Formula): Boolean = formula.variables.any { timed.getOrElse(it) { true } }
+    fun readsTime(formula: Formula): Boolean = readsTime(formula.variables)
+
+    /** [readsTime] for the variables a formula reads. */
+    fun readsTime(variables: IntArray): Boolean = variables.any { timed.getOrElse(it) { true } }
 
     /** How often the variable [index] can change, see [Rate]. */
     fun rate(index: Int): Int = rates[index]
 
     /** How often [formula] can change: as often as the fastest variable it reads. */
-    fun rateOf(formula: Formula): Int {
-        var rate = Rate.CONSTANT
-        for (index in formula.variables) rate = maxOf(rate, rates.getOrElse(index) { Rate.COPY })
+    fun rateOf(formula: Formula): Int = rateOf(formula.variables, formula.readsSetting)
+
+    /**
+     * [rateOf] for the variables a formula reads. A formula that reads the setting of the watch
+     * ([readsSetting], see [FormulaSetting]) is never a fixed value: it can change from wake to wake.
+     */
+    fun rateOf(variables: IntArray, readsSetting: Boolean): Int {
+        var rate = if (readsSetting) Rate.WAKE else Rate.CONSTANT
+        for (index in variables) rate = maxOf(rate, rates.getOrElse(index) { Rate.COPY })
         return rate
     }
 
@@ -118,7 +127,7 @@ class LayerVariables {
 
         val FIXED = listOf(
             "t", "ms", "len", "env", "i", "n", "u", "px", "py", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "bpm", "sec", "min", "hour",
-            "rot0", "dx0", "cx0", "cy0", "p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"
+            "rot0", "dx0", "cx0", "cy0", "p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7", DAY_NAME
         )
         const val T = 0
         const val MS = 1
@@ -140,14 +149,21 @@ class LayerVariables {
         const val CX0 = 23
         const val CY0 = 24
         const val P0 = 25
+        const val DAY = 33
+
+        /**
+         * The name of the hidden variable that counts the days (in the zone of the watch). No formula
+         * can write this name; the clock texts (`date()`) read it, so they are made again on a new day.
+         */
+        const val DAY_NAME = "#day"
 
         /** True when [name] can be the name of a `let`: letters, digits and `_`, not starting with a digit, and not a fixed name, `pi` or a value. */
         fun isName(name: String): Boolean =
             name.isNotEmpty() && (name[0].isLetter() || name[0] == '_') && name.all { it.isLetterOrDigit() || it == '_' } &&
-                name != "pi" && name !in FIXED && !name.startsWith(VALUE_PREFIX) && name !in Formula.FUNCTIONS
+                name != "pi" && name !in FIXED && !name.startsWith(VALUE_PREFIX) && name !in Formula.FUNCTIONS && name !in TextFunctions.FUNCTIONS
 
         private fun rateOfFixed(name: String): Int = when (name) {
-            "t", "ms", "env", "sec", "min", "hour" -> Rate.FRAME
+            "t", "ms", "env", "sec", "min", "hour", DAY_NAME -> Rate.FRAME
             "len", "bpm"                           -> Rate.WAKE
             else                                   -> Rate.COPY
         }

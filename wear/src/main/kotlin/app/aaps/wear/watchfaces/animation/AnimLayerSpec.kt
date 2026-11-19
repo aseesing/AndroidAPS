@@ -8,8 +8,8 @@ import android.graphics.Color
 import android.graphics.drawable.Drawable
 
 /**
- * One animated layer of a design: a picture, a picture the app draws (like the moon), a simple shape
- * or a view of the face, drawn once or many times, where every property can be a [Formula] of the
+ * One animated layer of a design: a picture, a picture the app draws (like the moon), a simple shape,
+ * a text or a view of the face, drawn once or many times, where every property can be a [Formula] of the
  * time and of the copy. A design gives them in the `layers` list of its `animation`, directly or as
  * templates (`{"use": "rain", ...}`, see [Templates]).
  *
@@ -29,7 +29,7 @@ import android.graphics.drawable.Drawable
  * @param lets named formulas of this layer, in order, worked out once per copy before the properties
  *   (the `let` of the layer); each may use the ones before it
  * @param clip where it may show
- * @param glow a soft glow round a picture, as strong as [LayerProp.GLOW]
+ * @param glow a soft glow round a picture or a text, as strong as [LayerProp.GLOW]
  * @param maxScale the largest scale the picture is drawn at; it is made sharp for that size
  * @param restSeconds when set, the layer is also drawn while no animation plays, as it is this many
  *   seconds into a wake (with `env` 0). A view layer with a rest also places its view in every normal
@@ -57,9 +57,11 @@ data class AnimLayerSpec(
         if (source is LayerSource.View && source.key.isEmpty()) return null
         if (blend.needsGroup && group == null) return null                      // would cut holes in the face
         if (source is LayerSource.Shape && source.colors.isEmpty()) return null
+        if (source is LayerSource.Text && (source.colors.isEmpty() || source.text.isEmpty() || source.text.length > Formula.MAX_LENGTH)) return null
         if (source is LayerSource.Dynamic && !(source.rect.width > 0f && source.rect.height > 0f)) return null
         if (props.values.any { it.length > Formula.MAX_LENGTH } || lets.any { it.second.length > Formula.MAX_LENGTH }) return null
         return copy(
+            source = if (source is LayerSource.Text) source.normalized() else source,
             copies = copies.normalized(),
             lets = lets.take(MAX_LETS),
             maxScale = maxScale.coerceIn(0.1f, MAX_SCALE),
@@ -126,12 +128,60 @@ sealed interface LayerSource {
     data class Shape(val kind: ShapeKind, val colors: List<Int> = listOf(Color.WHITE), val gradient: LayerGradient? = null) : LayerSource
 
     /**
+     * A text, worked out by the formula [text] (see [TextFormula]) and drawn in one line at `x`,`y`, at
+     * the exact place the formulas give, not snapped to whole pixels. So two text layers with the same
+     * text, place and size lie exactly on each other, also in two fonts whose signs are as wide.
+     * `rotation` and `scale` turn and scale it round `x`,`y`.
+     *
+     * @param text the formula of the text
+     * @param font the key of a font of the design zip, or the name of a font of the app; empty for the default font
+     * @param size the height of the font in design pixels
+     * @param align which point of the line is at `x`
+     * @param anchor which height of the line is at `y`, from the measures of the font (not of the
+     *   signs shown, so the line does not jump when the text changes)
+     * @param letterSpacing extra room between the signs, in parts of the font size
+     * @param colors the colours; the `colorIndex` property picks which (0 = the first)
+     * @param gradient makes the colour fade over the line: [LayerGradient.Type.LINEAR] from its left to
+     *   its right end, [LayerGradient.Type.RADIAL] in a circle from its middle to its ends
+     */
+    data class Text(
+        val text: String,
+        val font: String = "",
+        val size: Float = DEFAULT_SIZE,
+        val align: TextAlign = TextAlign.LEFT,
+        val anchor: TextAnchor = TextAnchor.BASELINE,
+        val letterSpacing: Float = 0f,
+        val colors: List<Int> = listOf(Color.WHITE),
+        val gradient: LayerGradient? = null
+    ) : LayerSource {
+
+        /** Values cut to safe limits. */
+        fun normalized(): Text = copy(size = size.coerceIn(MIN_SIZE, MAX_SIZE), letterSpacing = letterSpacing.coerceIn(-0.5f, 2f))
+
+        companion object {
+
+            const val DEFAULT_SIZE = 24f
+            const val MIN_SIZE = 1f
+            const val MAX_SIZE = 400f
+        }
+    }
+
+    /**
      * A view of the face, for example `chart`. `x` and `y` move it, `rotation` turns it more than it is,
      * `scaleX`, `scaleY` and `alpha` multiply its own, and `clipLeft`, `clipTop`, `clipRight` and
      * `clipBottom` cut it. Its own turn, move and middle are the variables `rot0`, `dx0`, `cx0` and `cy0`.
      */
     data class View(val key: String) : LayerSource
 }
+
+/** Which point of a text line is at `x`: its left end, its middle or its right end. */
+enum class TextAlign { LEFT, CENTER, RIGHT }
+
+/**
+ * Which height of a text line is at `y`: the line the letters stand on, the top of the font, the
+ * middle between top and bottom, or the bottom of the font.
+ */
+enum class TextAnchor { BASELINE, TOP, MIDDLE, BOTTOM }
 
 /**
  * The shapes a layer can draw:
@@ -321,10 +371,10 @@ enum class LayerProp(val key: String, val default: Double?) {
     /** The layer (or the copy) is drawn only where this is true (not 0): checked before anything is drawn. */
     VISIBLE("visible", 1.0),
 
-    /** How strong the glow of a picture is, 0 to 1. */
+    /** How strong the glow of a picture or a text is, 0 to 1. */
     GLOW("glowAlpha", 0.0),
 
-    /** Which of the shape's colours, 0 = the first. */
+    /** Which of the colours of a shape or a text, 0 = the first. */
     COLOR("colorIndex", 0.0);
 
     companion object {
