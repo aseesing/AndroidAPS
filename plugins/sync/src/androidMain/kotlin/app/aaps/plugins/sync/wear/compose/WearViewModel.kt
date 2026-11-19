@@ -33,6 +33,7 @@ import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
 import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
+import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import app.aaps.shared.impl.weardata.JsonKeyValues
 import app.aaps.shared.impl.weardata.JsonKeys
 import app.aaps.shared.impl.weardata.ResFileMap
@@ -82,7 +83,8 @@ data class WearUiState(
     /** The night face of the Custom watch face, see `CwfNight` */
     val nightFace: WearNightFaceState = WearNightFaceState(),
     /** The "Day and night" screen is open, see `WearDayNightViewModel` */
-    val showDayNight: Boolean = false
+    val showDayNight: Boolean = false,
+    val placeUse: WearPlaceUseState = WearPlaceUseState() // what the designs need the place for, see WearPlaceUseUi.kt
 )
 
 @Immutable
@@ -144,6 +146,7 @@ class WearViewModel(
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
     private val faceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(loadingWatchface = name) } }
+    private val nightFaceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(nightFace = it.nightFace.copy(loadingNightWatchface = name)) } }
 
     init {
         viewModelScope.launch {
@@ -156,6 +159,7 @@ class WearViewModel(
                 }
                 // A watch that is gone will not report the new face: stop waiting for it
                 if (device == null) faceLoading.stop()
+                if (device == null) nightFaceLoading.stop()
             }
         }
         viewModelScope.launch {
@@ -165,7 +169,7 @@ class WearViewModel(
                         hasCustomWatchface = cwfData != null,
                         watchfaceName = cwfData?.metadata?.get(CwfMetadataKey.CWF_NAME) ?: "",
                         watchfaceImage = cwfData?.let { cwf -> decodeWatchfaceImage(cwf) }
-                    )
+                    ).withMainPlaceUse(CwfPlaceNeeds.of(cwfData?.json)) // a design that needs the place, see WearPlaceUseUi.kt
                 }
             }
         }
@@ -396,7 +400,8 @@ class WearViewModel(
                             nightWatchfaceImage = cwfData?.let { cwf -> decodeWatchfaceImage(cwf) }
                         ),
                         // The "Day and night" screen closes when the night face goes
-                        showDayNight = it.showDayNight && cwfData != null
+                        showDayNight = it.showDayNight && (cwfData != null || it.placeUse.main.isNotEmpty()), // stays for a design that needs the place
+                        placeUse = it.placeUse.copy(night = CwfPlaceNeeds.of(cwfData?.json))
                     )
                 }
             }
@@ -411,6 +416,8 @@ class WearViewModel(
         val metadata = cwfFile.cwfData.metadata
         wearNightFace.chosen(metadata)
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray, night = true))
+        // As for the main face, the card shows the loading indicator until the watch reports a night face
+        if (_uiState.value.isDeviceConnected) nightFaceLoading.start(metadata[CwfMetadataKey.CWF_NAME] ?: "", wearNightFace.saved)
         _uiState.update { state ->
             // The same note as for the main face: with the complications face on the wrist nothing draws it
             val hidden = state.watchFacePushSupported && !state.customWatchfaceSelected
@@ -430,12 +437,17 @@ class WearViewModel(
 
     /** Opens the "Day and night" screen, only with a night face: without one there is nothing to set. */
     fun showDayNight() {
-        _uiState.update { it.copy(showDayNight = it.nightFace.hasNightWatchface) }
+        _uiState.update { it.copy(showDayNight = it.dayNightReachable()) } // also for a design that needs the place
     }
 
     fun hideDayNight() {
         _uiState.update { it.copy(showDayNight = false) }
     }
+
+    private val importPlace = CwfDesignImportPlace(preferences)
+
+    /** The link to the last picked design, so the file picker opens in its folder again. Null the first time. */
+    fun lastImportPlace(): String? = importPlace.last()
 
     /**
      * Copies the picked zips into AAPS/export, says how it went, and shows the list again with the
@@ -444,6 +456,7 @@ class WearViewModel(
      */
     fun importDesigns(uris: List<Uri>) {
         if (uris.isEmpty() || _uiState.value.importingDesigns) return
+        importPlace.remember(uris)
         _uiState.update { it.copy(importingDesigns = true) }
         viewModelScope.launch {
             val message = try {

@@ -2,7 +2,6 @@ package app.aaps.plugins.sync.wear.compose
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,8 +51,8 @@ import app.aaps.plugins.sync.SyncStrings
  * @param importing true while an import runs: the button is off, so a second import cannot start
  */
 @Composable
-internal fun CwfImportAction(importing: Boolean, onImport: (List<Uri>) -> Unit) {
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments(), onImport)
+internal fun CwfImportAction(importing: Boolean, onImport: (List<Uri>) -> Unit, lastPlace: () -> String? = { null }) {
+    val picker = rememberLauncherForActivityResult(OpenDesignsAt(lastPlace), onImport) // opens in the folder of the last import
     IconButton(onClick = { picker.launch(CwfDesignImport.ZIP_TYPES) }, enabled = !importing) {
         Icon(imageVector = Icons.Default.FileOpen, contentDescription = stringResource(SyncStrings.wear_design_import))
     }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The weather the phone sent last, and when it was read -->
+    <string name="key_weather_kind" translatable="false">weather_kind</string>
+    <string name="key_weather_time" translatable="false">weather_time</string>
+    <string name="key_weather_temperature" translatable="false">weather_temperature</string>
+</resources>

@@ -1,14 +1,15 @@
 package app.aaps.plugins.sync.wear.cwfsettings
 
+import android.content.Context
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
 import app.aaps.core.interfaces.rx.weardata.CwfSettingValue
-import app.aaps.core.interfaces.rx.weardata.CwfWatchSettings
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.DateUtil
+import app.aaps.wear.watchfaces.settingsync.CwfSettingNames
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -32,8 +33,12 @@ class CwfSettingsSyncPhone(
     private val store: CwfWatchSettingsStore,
     private val rxBus: RxBus,
     private val dateUtil: DateUtil,
-    private val aapsLogger: AAPSLogger
+    private val aapsLogger: AAPSLogger,
+    private val context: Context // for the names of the watch, see below
 ) {
+
+    /** The settings by their stored names on the watch, from the watch's own code and resources (not only the on/off ones). */
+    val names: CwfSettingNames by lazy { CwfSettingNames(context.resources) }
 
     /** Listens to the watch for as long as [scope] lives: the life of the wear connection service. */
     fun start(scope: CoroutineScope) {
@@ -45,7 +50,7 @@ class CwfSettingsSyncPhone(
 
     /** The user set [name] to [value] on the phone. Stored and sent to the watch; a value the watch cannot take is left out. */
     fun setByUser(name: String, value: String) {
-        if (!CwfWatchSettings.isAllowed(name, value)) return
+        if (!names.isAllowed(name, value)) return
         val all = store.setByUser(name, value, dateUtil.now())
         aapsLogger.debug(LTag.WEAR, "CWF setting $name set on the phone, sent to the watch")
         rxBus.send(EventMobileToWear(EventData.CwfSettingsSync(usable(all))))
@@ -53,7 +58,7 @@ class CwfSettingsSyncPhone(
 
     /** The settings of the watch came in. Takes the newer ones, and answers when the watch is behind. */
     fun fromWatch(message: EventData.CwfSettingsSync) {
-        val result = store.merge(message.settings, CwfWatchSettings::isAllowed)
+        val result = store.merge(message.settings, names::isAllowed)
         if (result.taken.isNotEmpty()) aapsLogger.debug(LTag.WEAR, "CWF settings from the watch: ${result.taken.keys}")
         if (result.answer && !message.isAnswer)
             rxBus.send(EventMobileToWear(EventData.CwfSettingsSync(usable(result.merged), isAnswer = true)))
@@ -66,5 +71,5 @@ class CwfSettingsSyncPhone(
 
     /** Only what the watch can take: a setting stored by an older app version may be gone or changed. */
     private fun usable(settings: Map<String, CwfSettingValue>): Map<String, CwfSettingValue> =
-        settings.filter { (name, setting) -> CwfWatchSettings.isAllowed(name, setting.value) }
+        settings.filter { (name, setting) -> names.isAllowed(name, setting.value) }
 }

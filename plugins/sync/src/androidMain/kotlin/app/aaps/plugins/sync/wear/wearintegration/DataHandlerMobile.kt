@@ -113,6 +113,8 @@ import app.aaps.core.ui.compose.LightGeneralColors
 import app.aaps.core.ui.extensions.generateCOBString
 import app.aaps.core.ui.extensions.toStringShort
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.plugins.sync.wear.cwfsettings.CwfWatchSettingsStore
+import app.aaps.plugins.sync.wear.daynight.WearPlaceUse
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -190,6 +192,9 @@ class DataHandlerMobile(
     @Inject lateinit var eatReminder: EatReminder
     @Inject lateinit var clientControlDispatcher: ClientControlActionDispatcher
     @Inject lateinit var wearNightFace: WearNightFace
+    @Inject lateinit var cwfWatchSettings: CwfWatchSettingsStore // the log time graph of the watch
+    @Inject lateinit var placeUse: WearPlaceUse // when the place may be read for the watch, see WearPlaceUse.kt
+    @Inject lateinit var wearWeather: WearWeather // the weather of the watch face, see WearWeather.kt
 
     /** What the watch faces have now, for the live preview on the phone. Before the collectors below, which send. */
     private val lastWatchFaceValues = LastWatchFaceValues()
@@ -1254,6 +1259,9 @@ class DataHandlerMobile(
     private fun sendQuickWizardListToWear() =
         sendToWear(EventData.QuickWizard(ArrayList(quickWizard.list().filter { e -> e.forDevice(QuickWizardEntry.DEVICE_WATCH) }.map { e -> e.toWear() })))
 
+    /** When the sensor and the pod or cannula stop, for the gauges of the Custom watch face. */
+    private val partTimes = WearPartTimes(persistenceLayer, activePlugin, preferences)
+
     /**
      * A resend asked for explicitly (by the watch, a new connection or the wear screen): send everything,
      * also what the watch should already have, see [UnchangedToWearFilter].
@@ -1293,6 +1301,9 @@ class DataHandlerMobile(
         )
         // The night face of the Custom watch face; nothing without one
         wearNightFace.resendMessages().forEach { sendToWear(it) }
+        placeUse.designRequest(wearNightFace.isKnown())?.let { rxBus.send(EventMobileToWear(it)) } // once after the update, see WearPlaceUse.kt
+        // The last weather, so a watch that restarted has it at once
+        wearWeather.last()?.let { rxBus.send(EventMobileToWear(it)) }
         // QuickWizard
         sendQuickWizardListToWear()
         //UserAction
@@ -1328,8 +1339,7 @@ class DataHandlerMobile(
             val lowLine = profileUtil.convertToMgdl(preferences.get(UnitDoubleKey.OverviewLowMark), units)
             val highLine = profileUtil.convertToMgdl(preferences.get(UnitDoubleKey.OverviewHighMark), units)
             val slopeArrow = (trendCalculator.getTrendArrow(iobCobCalculator.ads) ?: TrendArrow.NONE).symbol
-            val graphStart = dateUtil.now() - T.hours(WEAR_GRAPH_HOURS).msecs()
-            val recent = bucketedData.filter { it.timestamp >= graphStart }
+            val recent = graphHistory.pick(bucketedData, dateUtil.now()) { it.timestamp } // a day for the log time graph, see WearGraphHistory
             EventData.GraphData(ArrayList(recent.map { buildSingleBg(it, glucoseStatus, units, lowLine, highLine, slopeArrow) }))
         }
 
@@ -1412,7 +1422,7 @@ class DataHandlerMobile(
 
     private suspend fun sendTreatments() {
         val now = System.currentTimeMillis()
-        val startTimeWindow = now - (60000 * 60 * 5.5).toLong()
+        val startTimeWindow = graphHistory.treatmentsFrom(now) // a day for the log time graph
         val basals = arrayListOf<EventData.TreatmentData.Basal>()
         val temps = arrayListOf<EventData.TreatmentData.TempBasal>()
         val boluses = arrayListOf<EventData.TreatmentData.Treatment>()
@@ -1589,6 +1599,7 @@ class DataHandlerMobile(
     }
 
     private suspend fun sendStatus(caller: String) {
+        wearWeather.refresh(scope) // only when a design shows the weather and it is allowed; never throws, see WearWeather.kt
         val profile = profileFunction.getProfile()
         var status = rh.gs(CoreUiStrings.noprofile)
         var iobSum = ""
@@ -1679,6 +1690,8 @@ class DataHandlerMobile(
         val runningModeRecord = loop.runningModeRecord()
         // The "time to eat" timer, on a client the copy of the master's
         val eatReminderState = eatReminder.state.value
+        val sensorEndsAt = partTimes.sensorEnd()
+        val pumpEndsAt = partTimes.pumpEnd()
 
         sendToWear(
             EventData.Status(
@@ -1710,7 +1723,9 @@ class DataHandlerMobile(
                 iobBolusValue = numbers.iobBolus,
                 iobBasalValue = numbers.iobBasal,
                 basalRateValue = numbers.basalRate,
-                bgiMgdl = numbers.bgiMgdl
+                bgiMgdl = numbers.bgiMgdl,
+                sensorEndsAt = sensorEndsAt,
+                pumpEndsAt = pumpEndsAt
             )
         )
     }
@@ -1980,6 +1995,7 @@ class DataHandlerMobile(
         aapsLogger.debug(LTag.WEAR, "Custom Watchface received from ${command.sourceNodeId}")
         val cwfData = customWatchface.customWatchfaceData
         rxBus.send(EventWearUpdateGui(cwfData, command.exportFile))
+        if (!command.exportFile) placeUse.mainDesignReported(cwfData, wearNightFace.isOnWatch()) // what the design needs the place for
         val watchfaceName = preferences.get(StringNonKey.WearCwfWatchfaceName)
         val authorVersion = preferences.get(StringNonKey.WearCwfAuthorVersion)
         if (cwfData.metadata[CwfMetadataKey.CWF_NAME] != watchfaceName || cwfData.metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] != authorVersion) {
@@ -2013,8 +2029,15 @@ class DataHandlerMobile(
     /** The watch has no night face (any more). */
     private fun handleNoNightWatchface(command: EventData.ActionClearNightWatchface) {
         aapsLogger.debug(LTag.WEAR, "No night watchface on ${command.sourceNodeId}")
+        if (!wearNightFace.isKnown()) placeUse.ruleRefused()?.let { rxBus.send(EventMobileToWear(it)) } // the watch refused the rule, see WearPlaceUse.kt
         wearNightFace.noneOnWatch()
     }
+
+    /** What the live preview of the watch face starts with: the values of the watch face, the weather and the rule for day and night. */
+    internal fun lastSentToWear(): List<EventData> = lastSentToWatchFace() + listOfNotNull(wearWeather.last(), placeUse.lastRule())
+
+    /** A day of history while the watch draws the log time graph, see [WearGraphHistory]. */
+    private val graphHistory = WearGraphHistory(T.hours(WEAR_GRAPH_HOURS).msecs()) { WearGraphHistory.logGraphOn(cwfWatchSettings.values.value) }
 }
 
 /**

@@ -58,13 +58,13 @@ class CwfPreviewEngineTest {
         val engine = CwfPreviewEngine(app, logger)
         assertThat(engine.isRunning).isFalse()
 
-        assertThat(engine.use { Thread.currentThread().name }).startsWith("CwfPreview")
+        assertThat(engine.use(PreviewSlot.DAY) { Thread.currentThread().name }).startsWith("CwfPreview")
         assertThat(engine.isRunning).isTrue()
 
         engine.release()
         stopped(engine)
 
-        assertThat(engine.use { 42 }).isEqualTo(42)
+        assertThat(engine.use(PreviewSlot.DAY) { 42 }).isEqualTo(42)
         assertThat(engine.isRunning).isTrue()
         engine.release()
         stopped(engine)
@@ -73,10 +73,10 @@ class CwfPreviewEngineTest {
     @Test
     fun aFailureSwitchesThePreviewOff() = runBlocking {
         val engine = CwfPreviewEngine(app, logger)
-        val result: Int? = engine.use<Int> { error("broken") }
+        val result: Int? = engine.use<Int>(PreviewSlot.DAY) { error("broken") }
         assertThat(result).isNull()
         assertThat(engine.failed).isTrue()
-        assertThat(engine.use { 1 }).isNull()
+        assertThat(engine.use(PreviewSlot.NIGHT) { 1 }).isNull()
         engine.release()
         stopped(engine)
     }
@@ -84,17 +84,58 @@ class CwfPreviewEngineTest {
     @Test
     fun whenTheScreenStopsShowingThePreviewItIsReleased() = runBlocking {
         val engine = CwfPreviewEngine(app, logger)
-        val wearPlugin: WearPlugin = mock { on { savedCustomWatchface } doReturn MutableStateFlow<CwfData?>(null) }
-        val dataHandlerMobile: DataHandlerMobile = mock { on { lastSentToWatchFace() } doReturn emptyList() }
-        val viewModel = CwfLivePreviewViewModel(
-            engine, wearPlugin, CwfFullDesigns(mock<FileListProvider>()), dataHandlerMobile, RxBusImpl(logger), CwfWatchSettingsStore(app)
-        )
-        engine.use { }
+        val viewModel = viewModel(engine)
+        engine.use(PreviewSlot.DAY) { }
         assertThat(engine.isRunning).isTrue()
 
         // No design yet: the static picture. Taking one frame and stopping, as the screen does on STOP
-        assertThat(viewModel.frames(100).first()).isNull()
+        assertThat(viewModel.frames(100, PreviewSlot.DAY).first()).isNull()
         stopped(engine)
         assertThat(engine.isRunning).isFalse()
+    }
+
+    private fun viewModel(engine: CwfPreviewEngine): CwfLivePreviewViewModel {
+        val wearPlugin: WearPlugin = mock {
+            on { savedCustomWatchface } doReturn MutableStateFlow<CwfData?>(null)
+            on { savedNightWatchface } doReturn MutableStateFlow<CwfData?>(null)
+        }
+        val dataHandlerMobile: DataHandlerMobile = mock { on { lastSentToWear() } doReturn emptyList() }
+        return CwfLivePreviewViewModel(
+            engine, wearPlugin, CwfFullDesigns(mock<FileListProvider>()), dataHandlerMobile, RxBusImpl(logger), CwfWatchSettingsStore(app)
+        )
+    }
+
+    @Test
+    fun theThreadRunsWhileAnyFaceIsShown() = runBlocking {
+        val engine = CwfPreviewEngine(app, logger)
+        engine.shown(PreviewSlot.DAY)
+        engine.shown(PreviewSlot.NIGHT)
+        assertThat(engine.use(PreviewSlot.DAY) { 1 }).isEqualTo(1)
+        assertThat(engine.use(PreviewSlot.NIGHT) { 2 }).isEqualTo(2)
+
+        // The night face is no longer shown: the day face goes on, on the same thread
+        engine.hidden(PreviewSlot.NIGHT)
+        val first = engine.use(PreviewSlot.DAY) { Thread.currentThread() }
+        delay(200) // the release runs in the background
+        assertThat(engine.isRunning).isTrue()
+        assertThat(engine.use(PreviewSlot.DAY) { Thread.currentThread() }).isSameInstanceAs(first)
+
+        // No face is shown: the thread stops
+        engine.hidden(PreviewSlot.DAY)
+        stopped(engine)
+    }
+
+    @Test
+    fun aScreenThatEndsWhileAnotherShowsTheSameFaceKeepsTheThread() = runBlocking {
+        val engine = CwfPreviewEngine(app, logger)
+        // The settings dialog opens over the card: its preview starts before the card's one ends
+        engine.shown(PreviewSlot.DAY)
+        engine.shown(PreviewSlot.DAY)
+        engine.use(PreviewSlot.DAY) { }
+        engine.hidden(PreviewSlot.DAY)
+        delay(200)
+        assertThat(engine.isRunning).isTrue()
+        engine.hidden(PreviewSlot.DAY)
+        stopped(engine)
     }
 }

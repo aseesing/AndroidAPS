@@ -1,7 +1,6 @@
 package app.aaps.plugins.sync.wear.compose
 
 import android.content.res.Configuration
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,19 +24,25 @@ import androidx.compose.ui.tooling.preview.Preview
 import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.plugins.sync.wear.cwfsettings.CwfPreviewAndSettings
+import app.aaps.plugins.sync.wear.preview.PreviewSlot
 
 /**
  * The night face on the Wear screen, see `CwfNight`.
  *
  * @param hasNightWatchface whether the watch reported a night face
  * @param importForNight whether the open import list sends the chosen zip as the night face
+ * @param loadingNightWatchface the name of a night face on its way to the watch, or
+ *   null. The card shows it with a loading indicator in place of the preview, as the main face card
+ *   does, see [WearFaceLoadingTracker]
  */
 @Immutable
 data class WearNightFaceState(
     val hasNightWatchface: Boolean = false,
     val nightWatchfaceName: String = "",
     val nightWatchfaceImage: ImageBitmap? = null,
-    val importForNight: Boolean = false
+    val importForNight: Boolean = false,
+    val loadingNightWatchface: String? = null // loading indicator of the night face
 )
 
 /**
@@ -70,6 +75,7 @@ internal fun NightWatchfaceCard(
     onDayNightSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val loading = state.loadingNightWatchface // loading indicator of the night face
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -97,15 +103,18 @@ internal fun NightWatchfaceCard(
             if (state.hasNightWatchface)
                 ButtonRow(button1 = ButtonDef(Icons.Default.Schedule, stringResource(SyncStrings.wear_day_night_settings), onDayNightSettings), button2 = null)
 
-            state.nightWatchfaceImage?.let { image ->
+            loading?.let { FaceLoadingIndicator(it) } // loading indicator of the night face
+            state.nightWatchfaceImage?.takeIf { loading == null }?.let { image ->
                 Spacer(modifier = Modifier.height(AapsSpacing.small))
-                Image(
+                // Live, as the main face, with the settings button under it (see CwfPreviewAndSettings)
+                CwfPreviewAndSettings(
                     bitmap = image,
                     contentDescription = state.nightWatchfaceName,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = AapsSpacing.extraLarge),
-                    contentScale = ContentScale.FillWidth
+                    contentScale = ContentScale.FillWidth,
+                    slot = PreviewSlot.NIGHT
                 )
             }
         }

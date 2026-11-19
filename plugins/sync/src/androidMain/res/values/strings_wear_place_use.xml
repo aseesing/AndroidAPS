@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings for a watch face design that needs the place (the real sun and moon, the weather),
+    see WearPlaceUse.
+-->
+<resources>
+    <string name="wear_place_button" comment="Button on the Wear screen. Opens the screen where the user allows the phone's location for the watch face">Location</string>
+    <string name="wear_place_used_for" comment="%1$s=a list of uses, made with wear_place_list_2 and the others. Example: Used now for: the sun and the moon on the watch face and the weather">Used now for: %1$s</string>
+    <string name="wear_place_used_for_nothing">Nothing on the watch uses the place now.</string>
+    <string name="wear_place_use_day_night" comment="One use of the place, part of a list: when the night face shows">day and night</string>
+    <string name="wear_place_use_sun_moon" comment="One use of the place, part of a list">the sun and the moon on the watch face</string>
+    <string name="wear_place_use_weather" comment="One use of the place, part of a list">the weather</string>
+    <string name="wear_place_use_asked" comment="One use of the place, part of a list: the design asks for the place for its own reason">what the watch face design asks it for</string>
+    <string name="wear_place_list_2" comment="A list of two uses. Example: day and night and the weather">%1$s and %2$s</string>
+    <string name="wear_place_list_3" comment="A list of three uses. Example: day and night, the sun and the moon on the watch face and the weather">%1$s, %2$s and %3$s</string>
+    <string name="wear_place_list_4" comment="A list of four uses">%1$s, %2$s, %3$s and %4$s</string>
+    <string name="wear_place_weather_phone">For the weather, the phone\'s rough place (rounded to 0.1 degree, about 10 km) goes to api.open-meteo.com, at most every 30 minutes.</string>
+    <string name="wear_place_weather_city">For the weather, the place of the chosen city goes to api.open-meteo.com, at most every 30 minutes. This also happens when \"Use the phone\'s location\" is off.</string>
+    <string name="wear_place_sends_weather_only">Leaves the phone for the watch: only the weather, not the place.</string>
+    <string name="wear_place_weather_none">Without a place there is no weather on the watch face. Turn on the phone\'s location, or choose a city.</string>
+    <string name="wear_place_sends_place">Leaves the phone: its rough place, rounded to 0.1 degree (about 10 km), each time the data goes to the watch. Only while the watch face needs it.</string>
+</resources>

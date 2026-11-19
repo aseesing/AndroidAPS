@@ -514,6 +514,7 @@ virtualpump_uploadstatus|BooleanKey|true
 wear_broadcast_data|BooleanKey|true
 wear_custom_watchface_autorization|BooleanKey|true
 wear_cwf_author_version|StringNonKey|true
+wear_cwf_design_import_last_picked|WearDesignImportKey|false
 wear_cwf_filename|StringNonKey|true
 wear_cwf_night_author_version|WearNightFaceKey|true
 wear_cwf_night_filename|WearNightFaceKey|true
@@ -527,6 +528,8 @@ wear_day_night_mode|WearDayNightStringKey|true
 wear_day_night_night_start|WearDayNightIntKey|true
 wear_day_night_use_phone_location|WearDayNightBooleanKey|false
 wear_notifySMB|BooleanKey|true
+wear_place_uses_main|WearPlaceUseKey|false
+wear_place_uses_night|WearPlaceUseKey|false
 wear_pushed_watchface|StringKey|true
 wearcontrol|BooleanKey|true
 wearwizard_bg|BooleanKey|true
