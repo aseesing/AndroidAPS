@@ -180,6 +180,8 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
           <li><a href="#functions">Functions</a></li>
           <li><a href="#variables">Variables</a></li>
           <li><a href="#let">Named formulas: <code>let</code></a></li>
+          <li><a href="#texts">Texts in formulas</a></li>
+          <li><a href="#own-functions">Your own functions: <code>functions</code></a></li>
         </ol>
       </li>
       <li><a href="#values">Values: <code>v_&lt;key&gt;</code></a></li>
@@ -393,7 +395,7 @@ test zip of this page are drawn by the page itself:</p>
 <!-- =================================================================================== 2 -->
 <h2 id="sources">2. Layer sources</h2>
 
-<p>Every layer has exactly one source: <code>image</code>, <code>shape</code> or <code>view</code>. A layer
+<p>Every layer has exactly one source: <code>image</code>, <code>shape</code>, <code>text</code> or <code>view</code>. A layer
 with none, or with two of them, is left out.</p>
 
 <h3 id="source-image">A picture of the zip: <code>image</code></h3>
@@ -457,6 +459,117 @@ out. The colour comes from <code>color</code>, or from the list <code>colors</co
 round its start point.</figcaption>
 </figure>
 
+<h3 id="source-text">A text: <code>text</code></h3>
+<p><code>"text": "clock()"</code> draws a text in one line. The value is a <a href="#texts">formula that gives a text</a>,
+so a fixed text needs quotes inside the JSON text: <code>"text": "'Hello'"</code>. A number is written as it is:
+<code>"text": 42</code> shows 42. An empty text draws nothing.</p>
+<p>The text is drawn at the exact place its formulas give, also at a part of a pixel. So two text layers with the same
+text, the same <code>x</code>, <code>y</code>, <code>align</code> and <code>fontSize</code> lie exactly on each other, also in
+two fonts whose signs are as wide. A view of the face cannot do that: it starts at a whole pixel.</p>
+<div class="scroll"><table>
+<thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>text</code></td><td>formula that gives a text</td><td></td><td>What is written. Worked out again only when a value it reads changes.</td></tr>
+<tr><td><code>font</code></td><td>text</td><td>the default font</td><td>A font file of the zip (<code>"font": "Snow"</code> for <code>Snow.ttf</code> or <code>Snow.otf</code>), or a font of the app: <code>sans_serif</code>, <code>default</code>, <code>default_bold</code>, <code>monospace</code>, <code>serif</code>, <code>roboto_condensed_bold</code>, <code>roboto_condensed_light</code>, <code>roboto_condensed_regular</code>, <code>roboto_slab_light</code>. A font that is not there gives the default font.</td></tr>
+<tr><td><code>fontSize</code></td><td>number</td><td>24</td><td>The height of the font in design pixels, cut to 1 to 400. Not a formula: make a text grow and shrink with <code>scale</code>.</td></tr>
+<tr><td><code>align</code></td><td><code>left</code>, <code>center</code>, <code>right</code></td><td><code>left</code></td><td>Which point of the line is at <code>x</code>: its left end, its middle or its right end.</td></tr>
+<tr><td><code>valign</code></td><td><code>baseline</code>, <code>top</code>, <code>middle</code>, <code>bottom</code></td><td><code>baseline</code></td><td>Which height of the line is at <code>y</code>: the line the letters stand on, the top of the font, the middle, or the bottom of the font. Top and bottom come from the font, not from the signs shown, so the line does not jump when the text changes.</td></tr>
+<tr><td><code>letterSpacing</code></td><td>number</td><td>0</td><td>Extra room between the signs, in parts of the font size (0.1 is a tenth). Cut to -0.5 to 2.</td></tr>
+<tr><td><code>color</code>, <code>colors</code> + <code>colorIndex</code></td><td></td><td>white</td><td>As for a <a href="#key-color">shape</a>.</td></tr>
+<tr><td><code>gradient</code></td><td>object</td><td>none</td><td><code>linear</code> fades from the left end of the line to its right end, <code>radial</code> in a circle from the middle of the line to its ends. See <a href="#key-gradient"><code>gradient</code></a>.</td></tr>
+<tr><td><code>glow</code> + <code>glowAlpha</code></td><td></td><td>none</td><td>A soft glow round the signs, see <a href="#key-glow"><code>glow</code></a>.</td></tr>
+</tbody></table></div>
+<p>A text layer takes all the other layer keys too: <code>x</code>, <code>y</code>, <code>rotation</code>, <code>scale</code>,
+<code>alpha</code>, <code>visible</code>, the clip props, <code>clip</code>, <code>blend</code>, <code>group</code>,
+<code>slot</code>, <code>rest</code>, <code>let</code>, and copies with <code>count</code> or <code>points</code>. It turns and
+scales round <code>x</code>, <code>y</code>, unless you give <code>pivotX</code> and <code>pivotY</code>.</p>
+
+<figure class="ex" id="ex-text" data-face="off" data-controls="clock sgv">
+<pre>{
+  "animation": {
+    "durationMs": 4000,
+    "layers": [
+      {"text": "clock()", "font": "default_bold", "fontSize": 96, "rest": 0,
+       "align": "center", "x": 200, "y": 200, "color": "#FFFFFF"},
+      {"text": "glucose(v_sgv)", "fontSize": 48, "rest": 0,
+       "align": "center", "x": 200, "y": 270, "color": "#4CC9F0"},
+      {"text": "'hello'", "fontSize": 30, "color": "#FFD166",
+       "align": "center", "valign": "middle",
+       "x": "200 + 60 * sin(t * 2)", "y": 330,
+       "rotation": "10 * sin(t * 4)", "alpha": "env"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Three texts.</strong> The clock and the glucose stay on the face (<code>rest</code>) and follow the
+sliders. The word is a fixed text, so it stands in quotes; it swings and turns round its middle while the wake plays.</figcaption>
+</figure>
+
+<figure class="ex" id="ex-text-align" data-face="off" data-loop="still">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#E63946", "rest": 0, "x": 199, "y": 30, "width": 2, "height": 160},
+      {"text": "'left'", "fontSize": 36, "rest": 0, "align": "left", "x": 200, "y": 70},
+      {"text": "'center'", "fontSize": 36, "rest": 0, "align": "center", "x": 200, "y": 120},
+      {"text": "'right'", "fontSize": 36, "rest": 0, "align": "right", "x": 200, "y": 170},
+
+      {"shape": "rect", "color": "#E63946", "rest": 0, "x": 30, "y": 279, "width": 340, "height": 2},
+      {"text": "'Base'", "fontSize": 30, "rest": 0, "valign": "baseline", "x": 40, "y": 280},
+      {"text": "'Top'", "fontSize": 30, "rest": 0, "valign": "top", "x": 130, "y": 280},
+      {"text": "'Mid'", "fontSize": 30, "rest": 0, "valign": "middle", "x": 200, "y": 280},
+      {"text": "'Bottom'", "fontSize": 30, "rest": 0, "valign": "bottom", "x": 270, "y": 280}
+    ]
+  }
+}</pre>
+<figcaption><strong><code>align</code> and <code>valign</code>.</strong> Above: three texts with the same <code>x</code>
+(the red line). Below: four texts with the same <code>y</code> (the red line).</figcaption>
+</figure>
+
+<figure class="ex" id="ex-text-snow" data-face="off" data-controls="clock">
+<pre>{
+  "animation": {
+    "durationMs": 5000,
+    "layers": [
+      {"text": "clock()", "font": "default_bold", "fontSize": 120, "rest": 0,
+       "align": "center", "x": 200.37, "y": 240, "color": "#D62828"},
+      {"text": "clock()", "font": "default_bold", "fontSize": 120, "rest": 0,
+       "align": "center", "x": 200.37, "y": 240, "color": "#FFFFFF",
+       "clipBottom": "180 + 14 * sin(t * 2) * env"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Two texts on each other.</strong> The same text twice, at the same place: red digits, and white ones
+that are cut off below a line, like snow on top. No red edge shows beside the white, also not at this <code>x</code> that
+is not a whole pixel. With a second font that has only the snow of each digit, the second layer needs no cut.</figcaption>
+</figure>
+
+<figure class="ex" id="ex-text-copies" data-face="off">
+<pre>{
+  "animation": {
+    "durationMs": 6000,
+    "layers": [
+      {"text": "text(i + 1, '0')", "fontSize": 30, "count": 12, "rest": 0,
+       "align": "center", "valign": "middle",
+       "let": {"a": "2 * pi * (i + 1) / 12"},
+       "x": "200 + 150 * sin(a)", "y": "200 - 150 * cos(a)",
+       "colors": ["#FFFFFF", "#FFD166"],
+       "colorIndex": "floor(t * 4) % 12 == i",
+       "scale": "1 + 0.5 * env * (floor(t * 4) % 12 == i)"},
+      {"text": "'GLOW'", "fontSize": 54, "letterSpacing": 0.15,
+       "align": "center", "x": 200, "y": 190, "color": "#FFFFFF",
+       "glow": {"color": "#4CC9F0", "radius": 14},
+       "glowAlpha": "env * (0.5 + 0.5 * sin(t * 3))", "alpha": "env"},
+      {"text": "'fades away'", "font": "serif", "fontSize": 34,
+       "align": "center", "x": 200, "y": 250, "color": "#F72585", "alpha": "env",
+       "gradient": {"type": "linear", "stops": [[0, 1], [0.6, 1], [1, 0]]}}
+    ]
+  }
+}</pre>
+<figcaption><strong>Copies, glow and gradient.</strong> Twelve copies of one layer: each writes its own number
+(<code>i + 1</code>) at its own place. The one whose turn it is grows and takes the second colour. The word in the middle
+has a glow that beats, the line under it a colour that fades to the right.</figcaption>
+</figure>
+
 <h3 id="source-view">A view of the face: <code>view</code></h3>
 <p><code>"view": "sgv"</code> takes a view that the face already has and moves, turns,
 scales, fades or cuts it. The name is the view key of the design, for example <code>chart</code>, <code>sgv</code> or
@@ -485,17 +598,17 @@ written as a formula of fixed numbers, like <code>"maxScale": "1 + 0.2"</code>.<
 <div class="scroll"><table>
 <thead><tr><th>Prop</th><th>Default</th><th>For</th><th>Meaning</th></tr></thead>
 <tbody>
-<tr><td><code>x</code>, <code>y</code></td><td>0</td><td>all</td><td>Picture: how far it is moved from its <code>rect</code>. Shape: its place (corner, middle or start). View: how far it is moved from its own place. A value that is not a number (a missing <a href="#values">value</a>) draws nothing for that copy.</td></tr>
+<tr><td><code>x</code>, <code>y</code></td><td>0</td><td>all</td><td>Picture: how far it is moved from its <code>rect</code>. Shape: its place (corner, middle or start). Text: the point of <code>align</code> and <code>valign</code>. View: how far it is moved from its own place. A value that is not a number (a missing <a href="#values">value</a>) draws nothing for that copy.</td></tr>
 <tr><td><code>rotation</code></td><td>0</td><td>all</td><td>Turn in degrees, clockwise, round the pivot. A view is turned this much more than it is.</td></tr>
 <tr><td><code>scaleX</code>, <code>scaleY</code></td><td>1</td><td>all</td><td>Scale round the pivot. <code>scale</code> sets both, unless one is given itself. A view: its own scale times this.</td></tr>
-<tr><td><code>pivotX</code>, <code>pivotY</code></td><td>see text</td><td>picture, shape</td><td>The point the layer turns and scales round. Default: the middle of the picture (of the strip, with <code>slices</code>), the middle of a rectangle, <code>x</code>, <code>y</code> of a circle or a line. A view always turns round its own middle.</td></tr>
+<tr><td><code>pivotX</code>, <code>pivotY</code></td><td>see text</td><td>picture, shape, text</td><td>The point the layer turns and scales round. Default: the middle of the picture (of the strip, with <code>slices</code>), the middle of a rectangle, <code>x</code>, <code>y</code> of a circle, a line or a text. A view always turns round its own middle.</td></tr>
 <tr><td><code>alpha</code></td><td>1</td><td>all</td><td>0 is clear, 1 is solid. Cut to 0 to 1. At 0.002 or less nothing is drawn.</td></tr>
 <tr><td><code>visible</code></td><td>1</td><td>all</td><td>The layer (or the copy) is drawn only while this is true (not 0). Checked before anything is drawn, so it is the cheapest way to hide.</td></tr>
 <tr><td><code>width</code>, <code>height</code></td><td>10</td><td><code>rect</code></td><td>The size of the rectangle.</td></tr>
 <tr><td><code>radius</code></td><td>4</td><td><code>circle</code></td><td>The radius of the circle.</td></tr>
 <tr><td><code>length</code>, <code>angle</code>, <code>thickness</code></td><td>20, 0, 2</td><td><code>line</code></td><td>See the table of shapes.</td></tr>
-<tr><td><code>colorIndex</code></td><td>0</td><td>shape</td><td>Which colour of <code>colors</code>, 0 is the first. The part after the dot is dropped. It wraps round: with 3 colours, 3 is the first again.</td></tr>
-<tr><td><code>glowAlpha</code></td><td>0</td><td>picture</td><td>How strong the <code>glow</code> is, 0 to 1. It is multiplied by <code>alpha</code>.</td></tr>
+<tr><td><code>colorIndex</code></td><td>0</td><td>shape, text</td><td>Which colour of <code>colors</code>, 0 is the first. The part after the dot is dropped. It wraps round: with 3 colours, 3 is the first again.</td></tr>
+<tr><td><code>glowAlpha</code></td><td>0</td><td>picture, text</td><td>How strong the <code>glow</code> is, 0 to 1. It is multiplied by <code>alpha</code>.</td></tr>
 <tr><td><code>clipLeft</code>, <code>clipTop</code>, <code>clipRight</code>, <code>clipBottom</code></td><td>open</td><td>all</td><td>The layer is cut off left of, above, right of and below these lines (design pixels).</td></tr>
 </tbody></table></div>
 
@@ -503,15 +616,16 @@ written as a formula of fixed numbers, like <code>"maxScale": "1 + 0.2"</code>.<
 <div class="scroll"><table>
 <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Meaning</th></tr></thead>
 <tbody>
-<tr><td><code>image</code> / <code>shape</code> / <code>view</code></td><td>text</td><td></td><td>The source, exactly one. See <a href="#sources">sources</a>.</td></tr>
+<tr><td><code>image</code> / <code>shape</code> / <code>text</code> / <code>view</code></td><td>text</td><td></td><td>The source, exactly one. See <a href="#sources">sources</a>.</td></tr>
+<tr><td><code>font</code>, <code>fontSize</code>, <code>align</code>, <code>valign</code>, <code>letterSpacing</code></td><td></td><td></td><td>How a text is written, see <a href="#source-text"><code>text</code></a>.</td></tr>
 <tr><td><code>rect</code></td><td>object</td><td>the whole face</td><td>Where a picture lies: <code>left</code>, <code>top</code>, <code>width</code>, <code>height</code>.</td></tr>
-<tr><td><code>color</code></td><td>colour text</td><td>white</td><td>The colour of a shape: <code>#RRGGBB</code>, <code>#AARRGGBB</code> (AA is how solid it is), a colour name such as <code>red</code>, or the glucose colour key <code>bgColor</code>. A text that is not a colour gives white.</td></tr>
-<tr><td><code>colors</code></td><td>list of colour texts</td><td></td><td>Several colours for a shape; <code>colorIndex</code> picks one. Comes before <code>color</code>.</td></tr>
-<tr><td><code>gradient</code></td><td>object</td><td>none</td><td>Fades the colour over a rectangle or a circle, see below.</td></tr>
+<tr><td><code>color</code></td><td>colour text</td><td>white</td><td>The colour of a shape or a text: <code>#RRGGBB</code>, <code>#AARRGGBB</code> (AA is how solid it is), a colour name such as <code>red</code>, or the glucose colour key <code>bgColor</code>. A text that is not a colour gives white.</td></tr>
+<tr><td><code>colors</code></td><td>list of colour texts</td><td></td><td>Several colours for a shape or a text; <code>colorIndex</code> picks one. Comes before <code>color</code>.</td></tr>
+<tr><td><code>gradient</code></td><td>object</td><td>none</td><td>Fades the colour over a rectangle, a circle or a text, see below.</td></tr>
 <tr><td><code>slot</code></td><td><code>back</code>, <code>views</code>, <code>front</code></td><td><code>back</code></td><td>Where in the face the layer is drawn, see <a href="#frames">slots</a>.</td></tr>
 <tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code>, <code>erase</code>, <code>inside</code></td><td><code>normal</code></td><td>How the layer is laid over what is below it. <code>erase</code> and <code>inside</code> work only in a <a href="#key-group"><code>group</code></a>.</td></tr>
 <tr><td><code>group</code></td><td>text</td><td>none</td><td>The name of a group: layers that follow each other with the same name are drawn on a sheet of their own, see <a href="#key-group"><code>group</code></a>.</td></tr>
-<tr><td><code>glow</code></td><td>object</td><td>none</td><td>A soft glow round a picture: <code>color</code> (default white) and <code>radius</code> (default 10, cut to 0 to 40).</td></tr>
+<tr><td><code>glow</code></td><td>object</td><td>none</td><td>A soft glow round a picture or a text: <code>color</code> (default white) and <code>radius</code> (default 10, cut to 0 to 40).</td></tr>
 <tr><td><code>maxScale</code></td><td>number</td><td>1</td><td>The largest scale the picture is drawn at; it is made sharp for that size. Cut to 0.1 to 4.</td></tr>
 <tr><td><code>clip</code></td><td>object</td><td>the round screen</td><td>Where the layer may show, see below.</td></tr>
 <tr><td><code>count</code> + <code>seed</code>, <code>points</code>, <code>slices</code> + <code>slicesAlong</code></td><td></td><td>one copy</td><td>How many times the layer is drawn, see <a href="#copies">copies</a>.</td></tr>
@@ -713,10 +827,11 @@ none. A view layer is never in a group.</p>
 the group is not cut. Right: the picture is drawn <code>inside</code> the white circle, and nowhere else.</figcaption>
 </figure>
 
-<h3 id="key-glow">A glow round a picture: <code>glow</code>, <code>glowAlpha</code></h3>
+<h3 id="key-glow">A glow round a picture or a text: <code>glow</code>, <code>glowAlpha</code></h3>
 <p><code>glow</code> makes a soft shape of the picture in one colour, once, when the picture is made. The prop
 <code>glowAlpha</code> says how strong it shows; its default is 0, so a glow without <code>glowAlpha</code> shows nothing.
-A glow works only on pictures of the zip: not on <code>@moon</code>, not on shapes, and not together with <code>slices</code>.</p>
+A glow works on pictures of the zip and on texts: not on <code>@moon</code>, not on shapes, and not together with <code>slices</code>.
+Round a <a href="#source-text">text</a> the glow is a soft shadow of the signs, drawn with the text.</p>
 <figure class="ex" id="ex-glow" data-face="off">
 <pre>{
   "animation": {
@@ -741,7 +856,9 @@ stronger and weaker.</figcaption>
 out. <code>linear</code> runs along the width of a rectangle, from its left edge (0) to its right edge (1). On a circle it runs
 the same way, from the left edge of the circle to its right edge.
 <code>radial</code> runs from the middle of a circle (0) to its edge (1); on a rectangle it runs from the middle to the
-edges, stretched to the rectangle. A line has no gradient. A rectangle with a gradient needs a width above 0.</p>
+edges, stretched to the rectangle. A line has no gradient. A rectangle with a gradient needs a width above 0.
+Over a <a href="#source-text">text</a>, <code>linear</code> runs from the left end of the line to its right end, and
+<code>radial</code> in a circle from the middle of the line (0) to its ends (1).</p>
 <figure class="ex" id="ex-gradient-linear" data-face="off">
 <pre>{
   "animation": {
@@ -1065,8 +1182,9 @@ a picture seen in water.</figcaption>
 <!-- =================================================================================== 5 -->
 <h2 id="formulas">5. Formulas</h2>
 
-<p>A prop is a number, or a text with a formula: <code>"x": "200 + 110 * cos(t * 2)"</code>. A formula is math only: it
-gives one number. It is read once and then worked out for every frame and every copy.</p>
+<p>A prop is a number, or a text with a formula: <code>"x": "200 + 110 * cos(t * 2)"</code>. A formula is math: it
+gives one number. It is read once and then worked out for every frame and every copy. A formula can also give a text,
+for a <a href="#source-text">text layer</a>: see <a href="#texts">texts in formulas</a>.</p>
 
 <ul>
   <li><strong>Numbers</strong>: <code>12</code>, <code>0.5</code>, <code>.5</code>, <code>1e3</code>. And <code>pi</code>.</li>
@@ -1075,7 +1193,7 @@ gives one number. It is read once and then worked out for every frame and every 
     and <code>_</code>. An unknown name leaves the layer out.</li>
   <li><strong>Operators</strong> and brackets, see below.</li>
   <li><strong>Functions</strong>: <code>name(value, value)</code>, see below. An unknown function, or a wrong number of
-    values, leaves the layer out.</li>
+    values, leaves the layer out. A design can add <a href="#own-functions">its own functions</a>.</li>
 </ul>
 
 <p>True and false are numbers: a comparison gives 1 when it is true and 0 when it is not. Every number but 0 counts as
@@ -1090,8 +1208,9 @@ functions go at most 40 deep.</p>
 <tr><td><code>- a</code> &nbsp; <code>+ a</code> &nbsp; <code>! a</code></td><td>minus, plus, not</td><td><code>!a</code> is 1 when <code>a</code> is 0 or no number, else 0. These go first.</td></tr>
 <tr><td><code>a * b</code> &nbsp; <code>a / b</code> &nbsp; <code>a % b</code></td><td>times, divided by, rest of a division</td><td><code>%</code> is the same as <code>mod(a, b)</code>: never negative for a positive <code>b</code>.</td></tr>
 <tr><td><code>a + b</code> &nbsp; <code>a - b</code></td><td>plus, minus</td><td></td></tr>
+<tr><td><code>a &amp; b</code></td><td>joined as one text</td><td>See <a href="#texts">texts in formulas</a>. A number is written as a text first.</td></tr>
 <tr><td><code>a &lt; b</code> &nbsp; <code>a &lt;= b</code> &nbsp; <code>a &gt; b</code> &nbsp; <code>a &gt;= b</code></td><td>smaller, greater</td><td>1 or 0</td></tr>
-<tr><td><code>a == b</code> &nbsp; <code>a != b</code></td><td>the same, not the same</td><td>1 or 0</td></tr>
+<tr><td><code>a == b</code> &nbsp; <code>a != b</code></td><td>the same, not the same</td><td>1 or 0. Two numbers or two texts.</td></tr>
 <tr><td><code>a &amp;&amp; b</code></td><td>and</td><td>1 when both are true. When <code>a</code> is false, <code>b</code> is not worked out.</td></tr>
 <tr><td><code>a || b</code></td><td>or</td><td>1 when one of them is true. When <code>a</code> is true, <code>b</code> is not worked out.</td></tr>
 </tbody></table></div>
@@ -1371,8 +1490,8 @@ hand moves smoothly.</figcaption>
     <code>i</code>, <code>r1</code> or <code>px</code>.</li>
 </ul>
 <p>The names are worked out in the order you write them, and each may use the names before it. A name is made of
-letters, digits and <code>_</code> and does not start with a digit. It cannot be a variable, a function, <code>pi</code>
-or start with <code>v_</code>. A layer may use a name again that the animation has: the one of the layer counts. There are
+letters, digits and <code>_</code> and does not start with a digit. It cannot be a variable, a function (also not a
+<a href="#texts">text function</a>), <code>pi</code> or start with <code>v_</code>. A <code>let</code> holds a number, never a text. A layer may use a name again that the animation has: the one of the layer counts. There are
 at most 16 names in the animation and 16 in each layer. A name with a formula of fixed numbers costs nothing: the watch
 puts the number in its place.</p>
 
@@ -1402,6 +1521,154 @@ puts the number in its place.</p>
 <figcaption><strong>Shared names.</strong> <code>cx</code> and <code>cy</code> are the middle of the yellow circle, made
 once per frame. The six blue circles use them too, so they follow it. Each blue circle has its own angle <code>a</code>
 and distance <code>d</code> from the <code>let</code> of its layer.</figcaption>
+</figure>
+
+<h3 id="texts">Texts in formulas</h3>
+
+<p>A formula gives a number or a text. The watch knows which when it reads the formula, so a text where a number is
+needed is a mistake that leaves the layer out; it never shows up while a frame is drawn. The <code>text</code> of a
+<a href="#source-text">text layer</a> wants a text. Props and a <code>let</code> want a number, but they may use texts on the
+way: <code>"visible": "len(clock()) == 5"</code>.</p>
+<ul>
+  <li><strong>A fixed text</strong> stands between single quotes: <code>'hello'</code>. Double quotes work too, but in JSON
+    they need a backslash. The quote twice is one quote: <code>'it''s'</code>.</li>
+  <li><strong><code>a &amp; b</code> joins</strong> two texts: <code>'IOB ' &amp; fixed(v_iob, 2)</code>. It comes after
+    <code>+</code> and <code>-</code> and before the compares, as in a spreadsheet: <code>1 + 2 &amp; 3 + 4</code> is
+    <code>37</code>.</li>
+  <li><strong>A number where a text is wanted</strong> is written like a spreadsheet does by itself: a whole number
+    without decimals, else at most 6 decimals, with the decimal sign of the watch language. A value that is missing
+    gives an empty text. Use <code>fixed</code> or <code>text</code> to say how a number looks.</li>
+  <li><strong><code>==</code> and <code>!=</code></strong> compare two texts sign by sign; <code>'a' == 'A'</code> is 0.
+    <code>&lt;</code> and <code>&gt;</code> do not work on texts. A text and a number cannot be compared.</li>
+  <li><strong><code>if(c, a, b)</code></strong> takes two numbers or two texts.</li>
+  <li><strong><code>+</code> does not join texts.</strong> <code>'a' + 'b'</code> is a mistake.</li>
+</ul>
+<p>Places in a text count from 1, as in a spreadsheet. A text is at most 200 signs long; a longer one is cut.
+Every number is written with the signs of the language of the watch (a comma or a dot, its digits).</p>
+
+<h4>Text functions</h4>
+<div class="scroll"><table>
+<thead><tr><th>Function</th><th>Gives</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td><code>concat(a, b, ...)</code></td><td>2 to 8 values joined, the same as <code>&amp;</code>.</td><td><code>concat('a', 1, 'b')</code> is <code>a1b</code></td></tr>
+<tr><td><code>left(t, n)</code>, <code>right(t, n)</code></td><td>The first or the last <code>n</code> signs.</td><td><code>left('hello', 2)</code> is <code>he</code></td></tr>
+<tr><td><code>mid(t, start, n)</code></td><td><code>n</code> signs from place <code>start</code>.</td><td><code>mid('hello', 2, 3)</code> is <code>ell</code></td></tr>
+<tr><td><code>len(t)</code></td><td>The number of signs. (<code>len</code> without brackets is still the length of the wake.)</td><td><code>len('hello')</code> is 5</td></tr>
+<tr><td><code>upper(t)</code>, <code>lower(t)</code></td><td>In capital or small letters, by the rules of the watch language.</td><td><code>upper('Mon')</code> is <code>MON</code></td></tr>
+<tr><td><code>trim(t)</code></td><td>No spaces at the ends, one space where there were more.</td><td><code>trim(' a&nbsp;&nbsp;b ')</code> is <code>a b</code></td></tr>
+<tr><td><code>rept(t, n)</code></td><td><code>t</code> written <code>n</code> times.</td><td><code>rept('ab', 3)</code> is <code>ababab</code></td></tr>
+<tr><td><code>substitute(t, old, new)</code></td><td>Every <code>old</code> in <code>t</code> replaced by <code>new</code>. Use it on your own texts. Do not use it to change a number or a date the watch wrote: that goes wrong in another language.</td><td><code>substitute('a-b', '-', '+')</code> is <code>a+b</code></td></tr>
+<tr><td><code>find(part, t)</code>, <code>find(part, t, start)</code></td><td>The place of <code>part</code> in <code>t</code>, looking from <code>start</code>; 0 when it is not there.</td><td><code>find('l', 'hello')</code> is 3</td></tr>
+<tr><td><code>padLeft(t, n)</code>, <code>padLeft(t, n, fill)</code>, <code>padRight(...)</code></td><td><code>t</code> made <code>n</code> signs long with <code>fill</code> (default a space) before or after it. A longer text stays as it is.</td><td><code>padLeft('7', 3, '0')</code> is <code>007</code></td></tr>
+<tr><td><code>fixed(x, decimals)</code>, <code>fixed(x, decimals, 1)</code></td><td>The number with that many decimals (0 to 10), rounded. With a third value that is true, with the thousands sign.</td><td><code>fixed(3.14159, 2)</code> is <code>3.14</code></td></tr>
+<tr><td><code>text(x, format)</code></td><td>The number in a spreadsheet style format: <code>0</code> a digit that is always written, <code>#</code> a digit only when needed, <code>.</code> the decimal sign, <code>,</code> the thousands sign, <code>%</code> times 100 with a percent sign. A text before or after the digits is kept. A second format after <code>;</code> is for negative numbers. A fixed format that is wrong leaves the layer out.</td><td><code>text(5, '00')</code> is <code>05</code>, <code>text(2.5, '+0.0;-0.0')</code> is <code>+2.5</code></td></tr>
+<tr><td><code>value(t)</code></td><td>The number a text shows (with a dot, or with the decimal sign of the watch language); no number when it shows none.</td><td><code>value('12.5')</code> is 12.5</td></tr>
+<tr><td><code>missing(x)</code></td><td>1 when <code>x</code> is no number (a <a href="#values">value</a> the watch does not have), else 0.</td><td><code>if(missing(v_iob), '--', fixed(v_iob, 1))</code></td></tr>
+</tbody></table></div>
+<p><code>fixed</code>, <code>text</code> and <code>glucose</code> give an empty text for a value that is missing. A value
+that rounds to zero is written without a minus: <code>fixed(-0.04, 1)</code> is <code>0.0</code>.</p>
+
+<h4>Texts of the face</h4>
+<div class="scroll"><table>
+<thead><tr><th>Function</th><th>Gives</th></tr></thead>
+<tbody>
+<tr><td><code>clock()</code></td><td>Hours and minutes, <code>13:05</code>. With the watch set to 12 hours: <code>01:05</code>.</td></tr>
+<tr><td><code>clockHour()</code></td><td>The hour in two digits, like the hour view of a face: <code>13</code>, or <code>01</code> with 12 hours.</td></tr>
+<tr><td><code>clockMinute()</code></td><td>The minute in two digits: <code>05</code>.</td></tr>
+<tr><td><code>ampm()</code></td><td>The AM or PM mark of the watch language; an empty text when the watch shows 24 hours.</td></tr>
+<tr><td><code>date(pattern)</code></td><td>The clock time written with a date pattern, in the watch language: <code>date('EEE d MMM')</code> is <code>Thu 19 Nov</code>. The letters are those of Java: <code>y</code> year, <code>M</code> month (<code>MMM</code> short name, <code>MMMM</code> full name), <code>d</code> day, <code>E</code> day of the week (<code>EEEE</code> full name), <code>H</code> hour of 24, <code>h</code> hour of 12, <code>m</code> minute, <code>a</code> AM or PM. Other text goes between single quotes, written twice inside a formula text: <code>date('d ''of'' MMMM')</code>. The text changes once a minute, so seconds in a pattern do not run; use <code>sec</code> for those. A fixed pattern that is wrong leaves the layer out.</td></tr>
+<tr><td><code>glucose(mgdl)</code></td><td>A glucose value (always given in mg/dl, like <code>v_sgv</code>) in the unit the wearer uses: a whole number for mg/dl, one decimal for mmol/l. <code>glucose(v_sgv, 'mmol')</code> and <code>glucose(v_sgv, 'mgdl')</code> force a unit.</td></tr>
+</tbody></table></div>
+<p>The language, 12 or 24 hours and the glucose unit are read at the start of a wake, like the <a href="#values">values</a>.
+On this page the texts use the language of your browser, 24 hours and mg/dl, and a <code>date</code> pattern knows only the
+letters above.</p>
+
+<figure class="ex" id="ex-text-functions" data-face="off" data-controls="battery iob clock">
+<pre>{
+  "animation": {
+    "durationMs": 6000,
+    "layers": [
+      {"text": "upper(date('EEEE d MMMM'))", "fontSize": 22, "rest": 0,
+       "align": "center", "x": 200, "y": 80, "color": "#9AA5B1"},
+      {"text": "clockHour() &amp; ':' &amp; clockMinute() &amp; ampm()", "fontSize": 64, "rest": 0,
+       "align": "center", "x": 200, "y": 150},
+      {"text": "'Battery ' &amp; fixed(v_watch_battery, 0) &amp; '%'", "fontSize": 26, "rest": 0,
+       "x": 70, "y": 210},
+      {"text": "rept('|', round(v_watch_battery / 5))", "font": "monospace", "fontSize": 20, "rest": 0,
+       "x": 70, "y": 238, "colors": ["#2A9D8F", "#E63946"], "colorIndex": "v_watch_battery &lt;= 20"},
+      {"text": "if(v_watch_battery &lt;= 20, 'charge me', 'fine')", "fontSize": 20, "rest": 0,
+       "align": "right", "x": 330, "y": 210, "color": "#FFD166"},
+      {"text": "'IOB ' &amp; text(v_iob, '+0.00;-0.00') &amp; ' U'", "fontSize": 26, "rest": 0,
+       "x": 70, "y": 285, "color": "#4CC9F0"},
+      {"text": "padLeft(text(floor(t), '0'), 2, '0') &amp; ' s'", "fontSize": 26,
+       "align": "center", "x": 200, "y": 340, "alpha": "env", "color": "#F72585"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Texts from values.</strong> The date in capitals, the clock from its parts, the battery as a number,
+as a row of bars and as a word, the insulin with its sign, and the seconds of the wake in two digits. Move the sliders.
+The bar text is made again only when the battery changes, the seconds text once a second.</figcaption>
+</figure>
+
+<h3 id="own-functions">Your own functions: <code>functions</code></h3>
+
+<p><code>functions</code> in <code>animation</code> gives a formula a name and values, so you write it once and call it
+with other values each time. The key is the name with its values in brackets, the text is the formula:</p>
+<pre>"functions": {
+  "two(n)": "text(n, '00')",
+  "swing(a, speed)": "a * sin(t * speed) * env",
+  "bg()": "glucose(v_sgv)"
+}</pre>
+<ul>
+  <li>A function works in every formula of the animation: props, <code>text</code>, <code>let</code>, and other functions.</li>
+  <li>It gives a number or a text, as its formula does. One function can do both: <code>"pick(c, a, b)": "if(c, a, b)"</code>
+    works with two numbers and with two texts.</li>
+  <li>The formula may use its values, the <a href="#variables">variables</a>, the <a href="#values">values</a>
+    <code>v_</code>, the names of the <code>let</code> of the animation (those written before the formula that calls the
+    function) and other functions. It does not see the <code>let</code> of a layer: pass such a name as a value.</li>
+  <li>Inside the formula a value hides a variable of the same name: in <code>"two(n)"</code>, <code>n</code> is the value,
+    not the number of copies.</li>
+  <li>A function without values still needs its brackets: <code>bg()</code>. That is the way to give a text a name,
+    because a <code>let</code> holds numbers only.</li>
+  <li>The name follows the rules of a <a href="#let"><code>let</code></a> name, and cannot be the name of a function the
+    watch already has. A name that comes twice keeps the first.</li>
+  <li>A function may call other functions, at most 4 deep, and never itself, also not through another one.</li>
+  <li>There are at most 32 functions, with at most 8 values each. The formula is at most 600 characters long.</li>
+</ul>
+<p>A call costs nothing extra: when the watch reads a formula it puts the formula of the function in its place, with the
+values filled in. So the parts of the function count for the 300 parts of the formula that calls it, and the formula is
+worked out only as often as the values need (see <a href="#cost">what costs time</a>). A function with a wrong head is
+left out. A mistake in the formula of a function leaves out the layers that call it; a function nobody calls is not
+checked.</p>
+
+<figure class="ex" id="ex-functions" data-face="off" data-controls="battery">
+<pre>{
+  "animation": {
+    "durationMs": 6000,
+    "functions": {
+      "two(n)": "text(n, '00')",
+      "stopwatch(s)": "two(floor(s)) &amp; ':' &amp; two(floor(fract(s) * 100))",
+      "bar(v, most)": "rept('#', round(10 * v / most)) &amp; rept('-', 10 - round(10 * v / most))",
+      "swing(a, speed)": "a * sin(t * speed) * env",
+      "onRing(k, of)": "2 * pi * k / of + t"
+    },
+    "layers": [
+      {"text": "stopwatch(t)", "font": "monospace", "fontSize": 54,
+       "align": "center", "x": 200, "y": 170, "alpha": "env"},
+      {"text": "bar(v_watch_battery, 100)", "font": "monospace", "fontSize": 28, "rest": 0,
+       "align": "center", "x": 200, "y": 230, "color": "#2A9D8F"},
+      {"shape": "circle", "color": "#FFD166", "radius": 10,
+       "x": "200 + swing(120, 3)", "y": 280},
+      {"shape": "circle", "color": "#F72585", "radius": 10,
+       "x": "200 + swing(60, 5)", "y": 315},
+      {"shape": "circle", "color": "#4CC9F0", "radius": 5, "count": 8, "alpha": "env",
+       "x": "200 + 170 * sin(onRing(i, n))", "y": "200 - 170 * cos(onRing(i, n))"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Own functions.</strong> <code>two</code> writes two digits and <code>stopwatch</code> uses it twice.
+<code>bar</code> makes a row of ten signs from a value. <code>swing</code> gives a number: two circles call it with their own
+width and speed. <code>onRing</code> is called for every copy with its number <code>i</code>.</figcaption>
 </figure>
 
 <!-- =================================================================================== 6 -->
@@ -2645,7 +2912,10 @@ no copy is shown; with "Many" it is 2 and all 60 are. Try the buttons.</figcapti
 <tr><td>Copies of all layers together</td><td>1500</td><td>The layer that goes over it is left out.</td></tr>
 <tr><td>Names in a <code>let</code></td><td>16 in the animation, 16 per layer</td><td>The names after the 16th are not read.</td></tr>
 <tr><td>Different values <code>v_</code> in one animation</td><td>16</td><td>The layer that needs one more is left out.</td></tr>
-<tr><td>A formula</td><td>600 characters, 300 parts, 40 deep</td><td>The layer is left out.</td></tr>
+<tr><td>A formula</td><td>600 characters, 300 parts (with the parts of the own functions it calls), 40 deep</td><td>The layer is left out.</td></tr>
+<tr><td>A text</td><td>200 signs</td><td>Cut to the limit.</td></tr>
+<tr><td>Own functions</td><td>32, with 8 values each, 4 deep</td><td>The functions after the 32nd are not read. One with more values is left out. A call that goes deeper leaves the layer out.</td></tr>
+<tr><td><code>fontSize</code>, <code>letterSpacing</code></td><td>1 to 400, -0.5 to 2</td><td>Cut to the limit.</td></tr>
 <tr><td><code>durationMs</code>, <code>fps</code>, <code>fadeMs</code>, <code>fallbackBpm</code></td><td>500 to 30000, 1 to 30, 0 to half the length, 40 to 180</td><td>Cut to the limit.</td></tr>
 <tr><td><code>maxScale</code>, <code>glow.radius</code>, <code>rest</code></td><td>0.1 to 4, 0 to 40, 0 to 30</td><td>Cut to the limit.</td></tr>
 <tr><td>Extra numbers of a point</td><td>8 (<code>p0</code> to <code>p7</code>)</td><td>The others are not read.</td></tr>
@@ -2680,10 +2950,16 @@ picture say what was left out. Layers are counted from 0, after the templates ar
 <thead><tr><th>The formula reads</th><th>Worked out</th></tr></thead>
 <tbody>
 <tr><td>only numbers and <code>pi</code></td><td>once, when the design is read. Math with fixed numbers is free.</td></tr>
-<tr><td><code>v_</code> values, <code>bpm</code>, <code>len</code></td><td>once per wake</td></tr>
+<tr><td><code>v_</code> values, <code>bpm</code>, <code>len</code>, or the language, the hours or the glucose unit of the watch (a number written as a text, <code>fixed</code>, <code>glucose</code>, ...)</td><td>once per wake</td></tr>
 <tr><td><code>t</code>, <code>ms</code>, <code>env</code>, <code>sec</code>, <code>min</code>, <code>hour</code></td><td>once per frame, for all copies together</td></tr>
 <tr><td><code>i</code>, <code>n</code>, <code>u</code>, <code>px</code>, <code>py</code>, <code>p0</code>.., <code>r1</code>.., the place of a view</td><td>for every copy, in every frame</td></tr>
 </tbody></table></div>
+<p>A <a href="#texts">text</a> follows the same table, and goes one step further. The watch keeps the values a text
+formula read and the text they gave, for each copy. When the values are the same again it uses the kept text: nothing is
+worked out and no new text is made. Inside a formula each text function keeps its own result too, so
+<code>text(floor(t), '0')</code> makes a new text once a second, not in every frame, and <code>clock()</code> once a
+minute. The width of a line is measured only for a new text. So a text that does not change costs one draw call per
+frame.</p>
 <ul>
   <li><strong>Keep the per-copy formulas short.</strong> 300 copies at 24 frames per second are 7200 sums per second for
     each prop. Put the part that is the same for all copies in a <code>let</code>: a <code>let</code> that reads only
@@ -2722,6 +2998,15 @@ picture say what was left out. Layers are counted from 0, after the templates ar
   <li>The view key <code>image</code> works on text views only.</li>
   <li>The random numbers of a layer without <code>count</code> change when a layer is added before it.</li>
   <li>The values are read at the start of a wake. A value that changes while the wake plays shows in the next wake.</li>
+  <li>A text layer writes one line. For more lines use more layers.</li>
+  <li>A text that reads the clock (<code>clock()</code>, <code>date()</code>) in a template that is the
+    <a href="#view-image">picture of a view</a> does not follow the time: that picture is made again only when a value
+    changes.</li>
+  <li>When only the font file of a design changes and nothing else, the text layers keep the old font until the design
+    is loaded again.</li>
+  <li>On this page a font of a design zip is drawn in a font of your browser, <code>text(x, format)</code> knows only the
+    format signs of its table, and <code>date</code> only the letters of its table. The watch knows all of the Java
+    formats.</li>
   <li>The variable <code>ms</code> will go away later. Use <code>t * 1000</code> in new designs when you can.</li>
 </ul>
 
@@ -2753,6 +3038,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>fadeMs</code></td><td>whole number</td><td>600</td><td>0 to half of <code>durationMs</code></td></tr>
 <tr><td><code>fallbackBpm</code></td><td>whole number</td><td>60</td><td>40 to 180</td></tr>
 <tr><td><code>let</code></td><td>object: name to number or formula</td><td>none</td><td>16 names</td></tr>
+<tr><td><code>functions</code></td><td>object: <code>"name(a, b)"</code> to formula</td><td>none</td><td>32 functions, 8 values each. <a href="#own-functions">5</a></td></tr>
 <tr><td><code>templates</code></td><td>object: name to template</td><td>none</td><td></td></tr>
 <tr><td><code>layers</code></td><td>list of layers and <code>use</code> entries</td><td>empty</td><td>40 layers</td></tr>
 </tbody></table></div>
@@ -2763,20 +3049,26 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tbody>
 <tr><td><code>image</code></td><td>text: zip picture, or <code>@moon</code></td><td></td><td>one source per layer</td><td>no</td><td>source</td></tr>
 <tr><td><code>shape</code></td><td><code>rect</code>, <code>circle</code>, <code>line</code></td><td></td><td>one source per layer</td><td>no</td><td>source</td></tr>
+<tr><td><code>text</code></td><td>formula that gives a text</td><td></td><td>one source per layer; 200 signs</td><td>yes</td><td>source</td></tr>
 <tr><td><code>view</code></td><td>text: view key</td><td></td><td>one source per layer</td><td>no</td><td>source</td></tr>
+<tr><td><code>font</code></td><td>text: zip font, or a font of the app</td><td>the default font</td><td></td><td>no</td><td>text</td></tr>
+<tr><td><code>fontSize</code></td><td>number</td><td>24</td><td>1 to 400</td><td>no</td><td>text</td></tr>
+<tr><td><code>align</code></td><td><code>left</code>, <code>center</code>, <code>right</code></td><td><code>left</code></td><td></td><td>no</td><td>text</td></tr>
+<tr><td><code>valign</code></td><td><code>baseline</code>, <code>top</code>, <code>middle</code>, <code>bottom</code></td><td><code>baseline</code></td><td></td><td>no</td><td>text</td></tr>
+<tr><td><code>letterSpacing</code></td><td>number, parts of the font size</td><td>0</td><td>-0.5 to 2</td><td>no</td><td>text</td></tr>
 <tr><td><code>rect</code></td><td>object: <code>left</code>, <code>top</code>, <code>width</code>, <code>height</code></td><td>0, 0, 400, 400</td><td></td><td>no</td><td>picture</td></tr>
-<tr><td><code>color</code></td><td>colour text</td><td>white</td><td></td><td>no</td><td>shape</td></tr>
-<tr><td><code>colors</code></td><td>list of colour texts</td><td></td><td></td><td>no</td><td>shape</td></tr>
-<tr><td><code>gradient</code></td><td>object: <code>type</code> (<code>linear</code>, <code>radial</code>), <code>stops</code> (list of <code>[position, alpha]</code>)</td><td>none</td><td>2 stops or more, each 0 to 1</td><td>no</td><td><code>rect</code>, <code>circle</code></td></tr>
-<tr><td><code>slot</code></td><td><code>back</code>, <code>views</code>, <code>front</code></td><td><code>back</code></td><td>a view is always in <code>views</code></td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code>, <code>erase</code>, <code>inside</code></td><td><code>normal</code></td><td><code>erase</code> and <code>inside</code> only in a <code>group</code></td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>group</code></td><td>text: a name</td><td>none</td><td>layers that follow each other, in one slot</td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>glow</code></td><td>object: <code>color</code>, <code>radius</code></td><td>none; white, 10</td><td><code>radius</code> 0 to 40</td><td>no</td><td>zip picture</td></tr>
+<tr><td><code>color</code></td><td>colour text</td><td>white</td><td></td><td>no</td><td>shape, text</td></tr>
+<tr><td><code>colors</code></td><td>list of colour texts</td><td></td><td></td><td>no</td><td>shape, text</td></tr>
+<tr><td><code>gradient</code></td><td>object: <code>type</code> (<code>linear</code>, <code>radial</code>), <code>stops</code> (list of <code>[position, alpha]</code>)</td><td>none</td><td>2 stops or more, each 0 to 1</td><td>no</td><td><code>rect</code>, <code>circle</code>, text</td></tr>
+<tr><td><code>slot</code></td><td><code>back</code>, <code>views</code>, <code>front</code></td><td><code>back</code></td><td>a view is always in <code>views</code></td><td>no</td><td>picture, shape, text</td></tr>
+<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code>, <code>erase</code>, <code>inside</code></td><td><code>normal</code></td><td><code>erase</code> and <code>inside</code> only in a <code>group</code></td><td>no</td><td>picture, shape, text</td></tr>
+<tr><td><code>group</code></td><td>text: a name</td><td>none</td><td>layers that follow each other, in one slot</td><td>no</td><td>picture, shape, text</td></tr>
+<tr><td><code>glow</code></td><td>object: <code>color</code>, <code>radius</code></td><td>none; white, 10</td><td><code>radius</code> 0 to 40</td><td>no</td><td>zip picture, text</td></tr>
 <tr><td><code>maxScale</code></td><td>number</td><td>1</td><td>0.1 to 4</td><td>no</td><td>picture</td></tr>
-<tr><td><code>clip</code></td><td>object, see below</td><td>round screen</td><td></td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>count</code></td><td>whole number</td><td>one copy</td><td>0 to 400</td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>seed</code></td><td>whole number</td><td>1</td><td>with <code>count</code></td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>points</code></td><td>list of <code>[x, y, p0, ...]</code></td><td>one copy</td><td>400 points, 8 extras</td><td>no</td><td>picture, shape</td></tr>
+<tr><td><code>clip</code></td><td>object, see below</td><td>round screen</td><td></td><td>no</td><td>picture, shape, text</td></tr>
+<tr><td><code>count</code></td><td>whole number</td><td>one copy</td><td>0 to 400</td><td>no</td><td>picture, shape, text</td></tr>
+<tr><td><code>seed</code></td><td>whole number</td><td>1</td><td>with <code>count</code></td><td>no</td><td>picture, shape, text</td></tr>
+<tr><td><code>points</code></td><td>list of <code>[x, y, p0, ...]</code></td><td>one copy</td><td>400 points, 8 extras</td><td>no</td><td>picture, shape, text</td></tr>
 <tr><td><code>slices</code></td><td>whole number</td><td>one copy</td><td>1 to 200</td><td>no</td><td>picture</td></tr>
 <tr><td><code>slicesAlong</code></td><td><code>"y"</code> for flat strips</td><td>strips that stand up</td><td>with <code>slices</code></td><td>no</td><td>picture</td></tr>
 <tr><td><code>let</code></td><td>object: name to number or formula</td><td>none</td><td>16 names</td><td>yes</td><td>all</td></tr>
@@ -2785,7 +3077,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>rotation</code></td><td>degrees</td><td>0</td><td></td><td>yes</td><td>all</td></tr>
 <tr><td><code>scaleX</code>, <code>scaleY</code></td><td>number</td><td>1</td><td></td><td>yes</td><td>all</td></tr>
 <tr><td><code>scale</code></td><td>number</td><td></td><td>sets <code>scaleX</code> and <code>scaleY</code></td><td>yes</td><td>all</td></tr>
-<tr><td><code>pivotX</code>, <code>pivotY</code></td><td>number</td><td>the middle</td><td></td><td>yes</td><td>picture, shape</td></tr>
+<tr><td><code>pivotX</code>, <code>pivotY</code></td><td>number</td><td>the middle</td><td></td><td>yes</td><td>picture, shape, text</td></tr>
 <tr><td><code>alpha</code></td><td>number</td><td>1</td><td>0 to 1</td><td>yes</td><td>all</td></tr>
 <tr><td><code>visible</code></td><td>true or false as a number</td><td>1</td><td></td><td>yes</td><td>all</td></tr>
 <tr><td><code>width</code>, <code>height</code></td><td>number</td><td>10</td><td></td><td>yes</td><td><code>rect</code></td></tr>
@@ -2793,8 +3085,8 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>length</code></td><td>number</td><td>20</td><td></td><td>yes</td><td><code>line</code></td></tr>
 <tr><td><code>angle</code></td><td>degrees from straight down</td><td>0</td><td></td><td>yes</td><td><code>line</code></td></tr>
 <tr><td><code>thickness</code></td><td>number</td><td>2</td><td>0 or more</td><td>yes</td><td><code>line</code></td></tr>
-<tr><td><code>colorIndex</code></td><td>number</td><td>0</td><td>wraps round</td><td>yes</td><td>shape</td></tr>
-<tr><td><code>glowAlpha</code></td><td>number</td><td>0</td><td>0 to 1</td><td>yes</td><td>zip picture</td></tr>
+<tr><td><code>colorIndex</code></td><td>number</td><td>0</td><td>wraps round</td><td>yes</td><td>shape, text</td></tr>
+<tr><td><code>glowAlpha</code></td><td>number</td><td>0</td><td>0 to 1</td><td>yes</td><td>zip picture, text</td></tr>
 <tr><td><code>clipLeft</code>, <code>clipTop</code>, <code>clipRight</code>, <code>clipBottom</code></td><td>number</td><td>open</td><td></td><td>yes</td><td>all</td></tr>
 </tbody></table></div>
 
@@ -2837,8 +3129,9 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <h3>Names in formulas</h3>
 <div class="scroll"><table>
 <tbody>
-<tr><th>Operators</th><td class="wrap"><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> <code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>==</code> <code>!=</code> <code>&amp;&amp;</code> <code>||</code> <code>!</code> <code>( )</code></td></tr>
-<tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>window</code> <code>pingpong</code></td></tr>
+<tr><th>Operators</th><td class="wrap"><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> <code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>==</code> <code>!=</code> <code>&amp;&amp;</code> <code>||</code> <code>!</code> <code>&amp;</code> <code>( )</code></td></tr>
+<tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>window</code> <code>pingpong</code> <code>missing</code></td></tr>
+<tr><th>Text functions</th><td class="wrap"><code>concat</code> <code>left</code> <code>right</code> <code>mid</code> <code>len</code> <code>upper</code> <code>lower</code> <code>trim</code> <code>rept</code> <code>substitute</code> <code>find</code> <code>padLeft</code> <code>padRight</code> <code>text</code> <code>fixed</code> <code>value</code> <code>glucose</code> <code>clock</code> <code>clockHour</code> <code>clockMinute</code> <code>ampm</code> <code>date</code>, and the <a href="#own-functions">own functions</a> of the design</td></tr>
 <tr><th>Variables</th><td class="wrap"><code>t</code> <code>ms</code> <code>len</code> <code>env</code> <code>i</code> <code>n</code> <code>u</code> <code>px</code> <code>py</code> <code>p0</code> to <code>p7</code> <code>r1</code> to <code>r8</code> <code>bpm</code> <code>sec</code> <code>min</code> <code>hour</code> <code>rot0</code> <code>dx0</code> <code>cx0</code> <code>cy0</code> <code>pi</code></td></tr>
 <tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_iob</code> <code>v_iob_bolus</code> <code>v_iob_basal</code> <code>v_cob</code> <code>v_basalRate</code> <code>v_bgi</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_heart_rate</code> <code>v_steps</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_moon_lit</code> <code>v_moon_limb</code> <code>v_moon_north</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>. And <code>v_opt_&lt;name&gt;</code> for each option, see <a href="#options">10</a>.</td></tr>
 </tbody></table></div>
@@ -3107,6 +3400,8 @@ var MIN_DURATION_MS = 500, MAX_DURATION_MS = 30000, MAX_FPS = 30;
 var FORMULA_MAX_LENGTH = 600, FORMULA_MAX_NODES = 300, FORMULA_MAX_DEPTH = 40;
 var ALPHA_SHOWN = 0.002, OPEN = 100000, TEMPLATE_MAX_DEPTH = 4;
 var MIN_BPM = 40, MAX_BPM = 180, FALLBACK_BPM = 60;
+var TEXT_MAX = 200, FUNCTION_MAX = 32, FUNCTION_MAX_PARAMS = 8, FUNCTION_MAX_DEPTH = 4;
+var TEXT_DEFAULT_SIZE = 24, TEXT_MIN_SIZE = 1, TEXT_MAX_SIZE = 400;
 
 function has(object, key) { return object != null && Object.prototype.hasOwnProperty.call(object, key); }
 function isObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
@@ -3125,7 +3420,7 @@ var FUNCTIONS = {
   sqrt: [1, 1], exp: [1, 1], log: [1, 1], pow: [2, 2],
   floor: [1, 1], ceil: [1, 1], round: [1, 1], fract: [1, 1], mod: [2, 2],
   min: [2, 8], max: [2, 8], clamp: [3, 3], mix: [3, 3], step: [2, 2], smoothstep: [3, 3],
-  'if': [3, 3], noise: [1, 2], hash: [1, 3],
+  'if': [3, 3], noise: [1, 2], hash: [1, 3], missing: [1, 1],
   easeInOut: [1, 1],
   window: [3, 3], pingpong: [2, 2]
 };
@@ -3199,10 +3494,180 @@ var FN = {
   noise: function (a, b) { return b === undefined ? noise1(a) : noise2(a, b); },
   hash: hash,
   easeInOut: easeInOut,
+  missing: function (a) { return a !== a ? 1 : 0; },
   window: windowOf, pingpong: pingpong
 };
 
-/** Kinds: 'n' number, 'i' name, 'o' operator, '(' ')' ',' */
+// ---- texts (TextFunctions, FormulaSetting)
+
+/**
+ * What the text functions read of the watch (FormulaSetting). In this page: the language of the
+ * browser, 24 hours and mg/dL.
+ */
+var SETTING = { locale: undefined, is24Hour: true, unitsMgdl: true };
+
+/** The text functions, with the fewest and the most values each takes (TextFunctions.FUNCTIONS). */
+var TEXT_FUNCTIONS = {
+  concat: [2, 8], left: [2, 2], right: [2, 2], mid: [3, 3], len: [1, 1], upper: [1, 1], lower: [1, 1],
+  trim: [1, 1], rept: [2, 2], substitute: [3, 3], find: [2, 3], padLeft: [2, 3], padRight: [2, 3],
+  text: [2, 2], fixed: [2, 3], value: [1, 1], glucose: [1, 2],
+  clock: [0, 0], clockHour: [0, 0], clockMinute: [0, 0], ampm: [0, 0], date: [1, 1]
+};
+/** The kind of each value: t a text (a number is written as one), n a number (TextFunctions.PARAMS). */
+var TEXT_PARAMS = {
+  concat: 'tttttttt', left: 'tn', right: 'tn', mid: 'tnn', len: 't', upper: 't', lower: 't',
+  trim: 't', rept: 'tn', substitute: 'ttt', find: 'ttn', padLeft: 'tnt', padRight: 'tnt',
+  text: 'nt', fixed: 'nnn', value: 't', glucose: 'nt',
+  clock: '', clockHour: '', clockMinute: '', ampm: '', date: 't'
+};
+/** The functions that give a number, and those whose text depends on the setting of the watch. */
+var TEXT_GIVES_NUMBER = { len: 1, find: 1, value: 1 };
+var TEXT_USES_SETTING = { upper: 1, lower: 1, value: 1, text: 1, fixed: 1, glucose: 1, clock: 1, clockHour: 1, clockMinute: 1, ampm: 1, date: 1 };
+var MGDL_TO_MMOLL = 1 / 18.01559;
+
+/** The characters of a text: one Unicode code point each. */
+function chars(s) { return Array.from(s); }
+function cutText(s) { return s.length <= TEXT_MAX ? s : chars(s).slice(0, TEXT_MAX).join(''); }
+function whole(x) { return x !== x ? 0 : Math.trunc(clamp(x, -1000000, 1000000)); }
+
+/** A number with the signs of the language; a value that rounds to zero has no minus. */
+function writeNumber(x, least, most, grouping) {
+  if (!isFinite(x)) return '';
+  var f = new Intl.NumberFormat(SETTING.locale, { minimumFractionDigits: least, maximumFractionDigits: most, useGrouping: grouping });
+  if (x < 0 && f.format(-x) === f.format(0)) return f.format(0);
+  return f.format(x);
+}
+
+/**
+ * The parts of a spreadsheet style number format, or null when it is not one. This page knows
+ * `0 # , . %`, a text before and after the digits, and a second format for negative numbers after `;`.
+ */
+function readPattern(pattern) {
+  var halves = pattern.split(';');
+  if (halves.length > 2) return null;
+  var out = [];
+  for (var i = 0; i < halves.length; i++) {
+    var m = /^([^0#.,]*)([0#,]*)(?:\.([0#]*))?([^0#.,]*)$/.exec(halves[i]);
+    if (!m || !/[0#]/.test(m[2] + (m[3] || ''))) return null;
+    var frac = m[3] || '';
+    out.push({
+      prefix: m[1], suffix: m[4], percent: (m[1] + m[4]).indexOf('%') >= 0, grouping: m[2].indexOf(',') >= 0,
+      whole: Math.max(1, (m[2].match(/0/g) || []).length), least: (frac.match(/0/g) || []).length, most: frac.length
+    });
+  }
+  return out;
+}
+function writePattern(x, pattern) {
+  var parts = readPattern(pattern);
+  if (!parts || !isFinite(x)) return '';
+  function digits(p, value) {
+    return new Intl.NumberFormat(SETTING.locale, {
+      minimumIntegerDigits: p.whole, minimumFractionDigits: p.least, maximumFractionDigits: p.most, useGrouping: p.grouping
+    }).format(value * (p.percent ? 100 : 1));
+  }
+  var zero = digits(parts[0], 0);
+  var negative = x < 0 && digits(parts[0], -x) !== zero;
+  if (negative && parts.length > 1) return parts[1].prefix + digits(parts[1], -x) + parts[1].suffix;
+  return parts[0].prefix + (negative ? digits(parts[0], x) : digits(parts[0], Math.abs(x))) + parts[0].suffix;
+}
+
+/**
+ * The clock time as a text for a Java date pattern. This page knows the letters `y M d E H h m s a`
+ * and a text between single quotes; null for a pattern with another letter.
+ */
+function writeDate(epochMs, pattern) {
+  var d = new Date(epochMs), out = '', i = 0;
+  function two(n, count) { return count >= 2 ? pad2(n) : String(n); }
+  function named(options) { return new Intl.DateTimeFormat(SETTING.locale, options).format(d); }
+  while (i < pattern.length) {
+    var c = pattern.charAt(i);
+    if (c === "'") {
+      var end = pattern.indexOf("'", i + 1);
+      if (end < 0) return null;
+      out += end === i + 1 ? "'" : pattern.substring(i + 1, end);
+      i = end + 1;
+      continue;
+    }
+    if (!/[A-Za-z]/.test(c)) { out += c; i++; continue; }
+    var n = 1;
+    while (i + n < pattern.length && pattern.charAt(i + n) === c) n++;
+    i += n;
+    switch (c) {
+      case 'y': out += n === 2 ? pad2(d.getFullYear() % 100) : String(d.getFullYear()); break;
+      case 'M': out += n >= 4 ? named({ month: 'long' }) : (n === 3 ? named({ month: 'short' }) : two(d.getMonth() + 1, n)); break;
+      case 'd': out += two(d.getDate(), n); break;
+      case 'E': out += named({ weekday: n >= 4 ? 'long' : 'short' }); break;
+      case 'H': out += two(d.getHours(), n); break;
+      case 'h': out += two(d.getHours() % 12 || 12, n); break;
+      case 'm': out += two(d.getMinutes(), n); break;
+      case 's': out += two(d.getSeconds(), n); break;
+      case 'a':
+        var parts = new Intl.DateTimeFormat(SETTING.locale, { hour: 'numeric', hour12: true }).formatToParts(d);
+        for (var k = 0; k < parts.length; k++) if (parts[k].type === 'dayPeriod') out += parts[k].value;
+        break;
+      default: return null;
+    }
+  }
+  return out;
+}
+
+/** The work of each text function: `n` holds the numbers and `t` the texts, each at the place of its value. */
+var TEXT_FN = {
+  len: function (n, t) { return chars(t[0]).length; },
+  find: function (n, t, count) {
+    var all = chars(t[1]), first = Math.max(0, (count > 2 ? whole(n[2]) : 1) - 1);
+    if (first > all.length) return 0;
+    var at = t[1].indexOf(t[0], all.slice(0, first).join('').length);
+    return at < 0 ? 0 : chars(t[1].substring(0, at)).length + 1;
+  },
+  value: function (n, t) {
+    var s = t[0].trim();
+    if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s)) return Number(s);
+    // The decimal sign of the language
+    var sign = new Intl.NumberFormat(SETTING.locale).format(1.5).charAt(1);
+    if (sign !== '.' && /^[+-]?\d+(\D\d+)?$/.test(s) && (s.replace(/[+\-\d]/g, '') === sign || /^[+-]?\d+$/.test(s))) return Number(s.replace(sign, '.'));
+    return NaN;
+  },
+  upper: function (n, t) { return t[0].toLocaleUpperCase(SETTING.locale); },
+  lower: function (n, t) { return t[0].toLocaleLowerCase(SETTING.locale); },
+  concat: function (n, t) { return cutText(t.join('')); },
+  left: function (n, t) { var k = whole(n[1]); return k <= 0 ? '' : chars(t[0]).slice(0, k).join(''); },
+  right: function (n, t) { var k = whole(n[1]), all = chars(t[0]); return k <= 0 ? '' : all.slice(Math.max(0, all.length - k)).join(''); },
+  mid: function (n, t) { var first = Math.max(0, whole(n[1]) - 1), k = whole(n[2]); return k <= 0 ? '' : chars(t[0]).slice(first, first + k).join(''); },
+  trim: function (n, t) { return t[0].replace(/ +/g, ' ').replace(/^ | $/g, ''); },
+  rept: function (n, t) {
+    var k = whole(n[1]), out = '';
+    if (k <= 0 || !t[0]) return '';
+    for (var j = 0; j < k && out.length <= TEXT_MAX; j++) out += t[0];
+    return cutText(out);
+  },
+  substitute: function (n, t) { return t[1] ? cutText(t[0].split(t[1]).join(t[2])) : t[0]; },
+  padLeft: function (n, t, count) { return padText(t[0], whole(n[1]), count > 2 ? t[2] : ' ', true); },
+  padRight: function (n, t, count) { return padText(t[0], whole(n[1]), count > 2 ? t[2] : ' ', false); },
+  fixed: function (n, t, count) { var d = clamp(whole(n[1]), 0, 10); return writeNumber(n[0], d, d, count > 2 && truth(n[2])); },
+  text: function (n, t) { return cutText(writePattern(n[0], t[1])); },
+  glucose: function (n, t, count) {
+    var unit = count > 1 ? t[1].toLowerCase() : '';
+    var mgdl = unit.indexOf('mmol') === 0 ? false : (unit.indexOf('mg') === 0 ? true : SETTING.unitsMgdl);
+    return mgdl ? writeNumber(n[0], 0, 0, false) : writeNumber(n[0] * MGDL_TO_MMOLL, 1, 1, false);
+  }
+};
+function padText(s, n, fill, atStart) {
+  var missing = Math.min(n, TEXT_MAX) - chars(s).length;
+  if (missing <= 0 || !fill) return s;
+  var f = chars(fill), out = '';
+  for (var k = 0; k < missing; k++) out += f[k % f.length];
+  return atStart ? out + s : s + out;
+}
+/** The date pattern of each clock function (ClockText). */
+function clockPattern(name) {
+  if (name === 'clock') return SETTING.is24Hour ? 'HH:mm' : 'hh:mm';
+  if (name === 'clockHour') return SETTING.is24Hour ? 'HH' : 'hh';
+  if (name === 'clockMinute') return 'mm';
+  return SETTING.is24Hour ? '' : 'a';
+}
+
+/** Kinds: 'n' number, 'i' name, 's' text, 'o' operator, '(' ')' ',' */
 function tokenize(text) {
   var tokens = [], i = 0, n = text.length;
   function isDigit(c) { return c >= '0' && c <= '9'; }
@@ -3225,6 +3690,20 @@ function tokenize(text) {
       var from = i;
       while (i < n && (isLetter(text.charAt(i)) || isDigit(text.charAt(i)))) i++;
       tokens.push({ kind: 'i', text: text.substring(from, i) });
+    } else if (c === "'" || c === '"') {
+      // A text between two of the same quotes; the quote twice inside it is one quote
+      var content = '';
+      i++;
+      for (;;) {
+        if (i >= n) throw new FormulaError('a text has no closing ' + c + " in '" + text + "'");
+        if (text.charAt(i) === c) {
+          if (i + 1 < n && text.charAt(i + 1) === c) { content += c; i += 2; continue; }
+          i++;
+          break;
+        }
+        content += text.charAt(i++);
+      }
+      tokens.push({ kind: 's', text: content });
     } else if (c === '(' || c === ')' || c === ',') {
       tokens.push({ kind: c, text: c });
       i++;
@@ -3232,7 +3711,7 @@ function tokenize(text) {
       var two = i + 1 < n ? text.substring(i, i + 2) : '';
       var op;
       if (['<=', '>=', '==', '!=', '&&', '||'].indexOf(two) >= 0) op = two;
-      else if ('+-*/%<>!'.indexOf(c) >= 0) op = c;
+      else if ('+-*/%<>!&'.indexOf(c) >= 0) op = c;
       else throw new FormulaError("unexpected '" + c + "' in '" + text + "'");
       tokens.push({ kind: 'o', text: op });
       i += op.length;
@@ -3243,20 +3722,52 @@ function tokenize(text) {
 
 /**
  * Reads a formula. `names(name)` gives the index of a variable (or null), `constants(name)` the value
- * of a name that is a fixed number (or null). Gives {text, ev(values), isConstant, value, variables}.
+ * of a name that is a fixed number (or null). `own` holds the own functions of the design and what a
+ * body may read: {functions: Map, names, constants, clock: {nowMs}}, or null. With `wantText` the
+ * formula gives a text (a number is written as one); else a formula that gives a text is a mistake.
+ * Gives {text, ev(values), isConstant, value, variables}.
  */
-function parseFormula(text, constants, names) {
-  if (text.length > FORMULA_MAX_LENGTH) throw new FormulaError('formula longer than ' + FORMULA_MAX_LENGTH + ' characters');
-  var tokens = tokenize(text), pos = 0, nodes = 0, depth = 0, used = {};
+function parseFormula(text, constants, names, own, wantText) {
+  var used = {}, root;
+  try {
+    root = readFormula(text, constants, names, own, { params: null, using: [], counter: { nodes: 0 }, used: used });
+  } catch (e) {
+    // The most likely mistake in a text: a fixed text without its quotes
+    if (wantText && e instanceof FormulaError && e.message.indexOf('unknown name') === 0) throw new FormulaError(e.message + ' (a fixed text needs quotes)');
+    throw e;
+  }
+  if (wantText) root = textOf(root);
+  else if (root.tx) throw new FormulaError("'" + text + "' gives a text, not a number");
+  var variables = Object.keys(used).map(Number).sort(function (a, b) { return a - b; });
+  return { text: text, ev: root.ev, isConstant: root.k === true, value: root.k ? root.v : undefined, variables: variables };
+}
 
-  function konst(value) { return { k: true, v: value, ev: function () { return value; } }; }
+/** A part as a text: a number is written like a spreadsheet does by itself. */
+function textOf(node) {
+  if (node.tx) return node;
+  var A = node.ev;
+  return { k: false, tx: true, ev: function (v) { return writeNumber(A(v), 0, 6, false); } };
+}
+
+/** The parts of `text`: a number part or a text part (`tx`). `state` is shared with the own functions it calls. */
+function readFormula(text, constants, names, own, state) {
+  if (text.length > FORMULA_MAX_LENGTH) throw new FormulaError('formula longer than ' + FORMULA_MAX_LENGTH + ' characters');
+  var tokens = tokenize(text), pos = 0, depth = 0, used = state.used;
+
+  function konst(value, isText) { return { k: true, tx: !!isText, v: value, ev: function () { return value; } }; }
   function count(node) {
-    if (++nodes > FORMULA_MAX_NODES) throw new FormulaError('formula has more than ' + FORMULA_MAX_NODES + ' parts');
+    if (++state.counter.nodes > FORMULA_MAX_NODES) throw new FormulaError('formula has more than ' + FORMULA_MAX_NODES + ' parts');
     return node;
   }
+  /** A part made only of fixed numbers and texts is worked out once, here; not one that reads the setting (`s`). */
   function fold(node, kids) {
+    if (node.s) return node;
     for (var i = 0; i < kids.length; i++) if (!kids[i].k) return node;
-    return konst(node.ev(null));
+    return konst(node.ev(null), node.tx);
+  }
+  function num(node, what) {
+    if (node.tx) throw new FormulaError("'" + what + "' needs a number, not a text" + (what === '+' ? ' (join texts with &)' : ''));
+    return node;
   }
   function isOp() {
     if (pos >= tokens.length || tokens[pos].kind !== 'o') return false;
@@ -3270,7 +3781,7 @@ function parseFormula(text, constants, names) {
     pos++;
   }
   function binary(op, a, b) {
-    var A = a.ev, Bv = b.ev, f;
+    var A = num(a, op).ev, Bv = num(b, op).ev, f;
     switch (op) {
       case '&&': f = function (v) { return truth(A(v)) && truth(Bv(v)) ? 1 : 0; }; break;
       case '||': f = function (v) { return truth(A(v)) || truth(Bv(v)) ? 1 : 0; }; break;
@@ -3287,6 +3798,11 @@ function parseFormula(text, constants, names) {
       default: f = function (v) { var x = A(v), y = Bv(v); return x !== y && x === x && y === y ? 1 : 0; };
     }
     return fold(count({ k: false, ev: f }), [a, b]);
+  }
+  /** The texts of `parts` one after the other (`&` and `concat`). */
+  function join(parts) {
+    var kids = parts.map(textOf);
+    return fold(count({ k: false, tx: true, ev: function (v) { return cutText(kids.map(function (kid) { return kid.ev(v); }).join('')); } }), kids);
   }
   function expression() {
     if (++depth > FORMULA_MAX_DEPTH) throw new FormulaError('formula is nested too deep');
@@ -3306,12 +3822,27 @@ function parseFormula(text, constants, names) {
   }
   function equality() {
     var left = comparison();
-    while (isOp('==', '!=')) { var op = tokens[pos++].text; left = binary(op, left, comparison()); }
+    while (isOp('==', '!=')) {
+      var op = tokens[pos++].text, right = comparison();
+      if (left.tx && right.tx) left = textCompare(left, right, op === '==');
+      else if (!left.tx && !right.tx) left = binary(op, left, right);
+      else throw new FormulaError("'" + op + "' cannot compare a text with a number");
+    }
     return left;
   }
+  function textCompare(a, b, equal) {
+    var A = a.ev, Bv = b.ev;
+    return fold(count({ k: false, ev: function (v) { return (A(v) === Bv(v)) === equal ? 1 : 0; } }), [a, b]);
+  }
   function comparison() {
+    var left = joined();
+    while (isOp('<', '<=', '>', '>=')) { var op = tokens[pos++].text; left = binary(op, left, joined()); }
+    return left;
+  }
+  /** `a & b`: the two as one text. After `+` and `-`, before the compares. */
+  function joined() {
     var left = additive();
-    while (isOp('<', '<=', '>', '>=')) { var op = tokens[pos++].text; left = binary(op, left, additive()); }
+    while (isOp('&')) { pos++; left = join([left, additive()]); }
     return left;
   }
   function additive() {
@@ -3327,13 +3858,13 @@ function parseFormula(text, constants, names) {
   function unary() {
     if (isOp('-')) {
       pos++;
-      var a = unary(), A = a.ev;
+      var a = num(unary(), '-'), A = a.ev;
       return fold(count({ k: false, ev: function (v) { return -A(v); } }), [a]);
     }
-    if (isOp('+')) { pos++; return unary(); }
+    if (isOp('+')) { pos++; return num(unary(), '+'); }
     if (isOp('!')) {
       pos++;
-      var b = unary(), Bv = b.ev;
+      var b = num(unary(), '!'), Bv = b.ev;
       return fold(count({ k: false, ev: function (v) { return truth(Bv(v)) ? 0 : 1; } }), [b]);
     }
     return primary();
@@ -3342,6 +3873,7 @@ function parseFormula(text, constants, names) {
     if (pos >= tokens.length) throw new FormulaError('formula ends too early');
     var token = tokens[pos];
     if (token.kind === 'n') { pos++; return count(konst(token.number)); }
+    if (token.kind === 's') { pos++; return count(konst(cutText(token.text), true)); }
     if (token.kind === '(') {
       pos++;
       var inner = expression();
@@ -3351,6 +3883,8 @@ function parseFormula(text, constants, names) {
     if (token.kind === 'i') {
       pos++;
       if (isKind('(')) return call(token.text);
+      // A value of the own function this is the body of: the part the caller gave
+      if (state.params && has(state.params, token.text)) return count(state.params[token.text]);
       if (token.text === 'pi') return count(konst(Math.PI));
       var fixed = constants ? constants(token.text) : null;
       if (fixed !== null && fixed !== undefined) return count(konst(fixed));
@@ -3362,8 +3896,6 @@ function parseFormula(text, constants, names) {
     throw new FormulaError("unexpected '" + token.text + "'");
   }
   function call(name) {
-    if (!has(FUNCTIONS, name)) throw new FormulaError("unknown function '" + name + "'");
-    var arity = FUNCTIONS[name];
     expect('(');
     var args = [];
     if (!isKind(')')) {
@@ -3371,26 +3903,96 @@ function parseFormula(text, constants, names) {
       while (isKind(',')) { pos++; args.push(expression()); }
     }
     expect(')');
+    if (own && own.functions && own.functions.has(name)) return ownCall(own.functions.get(name), args);
+    if (has(TEXT_FUNCTIONS, name)) return fold(count(textCall(name, args)), args);
+    if (!has(FUNCTIONS, name)) throw new FormulaError("unknown function '" + name + "'");
+    var arity = FUNCTIONS[name];
     if (args.length < arity[0] || args.length > arity[1])
       throw new FormulaError("'" + name + "' takes " + arity[0] + '..' + arity[1] + ' values, not ' + args.length);
-    var f;
+    var f, isText = false;
     if (name === 'if') {
-      var C = args[0].ev, T = args[1].ev, E = args[2].ev;
+      var C = num(args[0], name).ev, T = args[1].ev, E = args[2].ev;
+      if (!!args[1].tx !== !!args[2].tx) throw new FormulaError("'if' needs two numbers or two texts to choose from");
+      isText = !!args[1].tx;
       f = function (v) { return truth(C(v)) ? T(v) : E(v); };
     } else {
+      args.forEach(function (arg) { num(arg, name); });
       var work = FN[name], a0 = args[0].ev, a1 = args.length > 1 ? args[1].ev : null, a2 = args.length > 2 ? args[2].ev : null;
       if (args.length === 1) f = function (v) { return work(a0(v)); };
       else if (args.length === 2) f = function (v) { return work(a0(v), a1(v)); };
       else if (args.length === 3) f = function (v) { return work(a0(v), a1(v), a2(v)); };
       else f = function (v) { var list = []; for (var i = 0; i < args.length; i++) list.push(args[i].ev(v)); return work.apply(null, list); };
     }
-    return fold(count({ k: false, ev: f }), args);
+    return fold(count({ k: false, tx: isText, ev: f }), args);
+  }
+  /** A text function (TextFunctions.call). */
+  function textCall(name, given) {
+    var arity = TEXT_FUNCTIONS[name], params = TEXT_PARAMS[name];
+    if (given.length < arity[0] || given.length > arity[1])
+      throw new FormulaError("'" + name + "' takes " + arity[0] + '..' + arity[1] + ' values, not ' + given.length);
+    var args = given.map(function (arg, i) {
+      if (params.charAt(i) === 't') return textOf(arg);
+      if (arg.tx) throw new FormulaError("'" + name + "' needs a number as value " + (i + 1) + ', not a text');
+      return arg;
+    });
+    var isNumber = has(TEXT_GIVES_NUMBER, name), usesSetting = has(TEXT_USES_SETTING, name);
+    if (name === 'clock' || name === 'clockHour' || name === 'clockMinute' || name === 'ampm' || name === 'date') {
+      var hour = names ? names('hour') : null, minute = names ? names('min') : null;
+      if (hour === null || hour === undefined || minute === null || minute === undefined || !own || !own.clock)
+        throw new FormulaError("'" + name + "' cannot be used here: there is no clock");
+      used[hour] = true;
+      used[minute] = true;
+      var clock = own.clock;
+      if (name === 'date') {
+        var P = args[0].ev;
+        if (args[0].k && writeDate(0, args[0].v) === null) throw new FormulaError("'" + args[0].v + "' is not a format");
+        return { k: false, tx: true, s: true, ev: function (v) { var out = writeDate(clock.nowMs, P(v)); return out === null ? '' : cutText(out); } };
+      }
+      return { k: false, tx: true, s: true, ev: function () { var p = clockPattern(name); return p ? writeDate(clock.nowMs, p) : ''; } };
+    }
+    if (name === 'text' && args[1].k && !readPattern(args[1].v)) throw new FormulaError("'" + args[1].v + "' is not a format");
+    var work = TEXT_FN[name], n = [], t = [], size = args.length;
+    return {
+      k: false, tx: !isNumber, s: usesSetting,
+      ev: function (v) {
+        for (var i = 0; i < size; i++) { if (args[i].tx) t[i] = args[i].ev(v); else n[i] = args[i].ev(v); }
+        return work(n, t, size);
+      }
+    };
+  }
+  /** The body of an own function with `args` as its values (DesignFunctions). */
+  function ownCall(fn, args) {
+    if (state.using.indexOf(fn.name) >= 0) throw new FormulaError("function '" + fn.name + "' uses itself");
+    if (state.using.length >= FUNCTION_MAX_DEPTH) throw new FormulaError('functions nested more than ' + FUNCTION_MAX_DEPTH + ' deep');
+    if (args.length !== fn.params.length) throw new FormulaError("'" + fn.name + "' takes " + fn.params.length + ' values, not ' + args.length);
+    var values = {};
+    fn.params.forEach(function (param, i) { values[param] = args[i]; });
+    try {
+      return readFormula(fn.body, own.constants, own.names, own, { params: values, using: state.using.concat([fn.name]), counter: state.counter, used: used });
+    } catch (e) {
+      if (!(e instanceof FormulaError) || state.using.length) throw e;
+      throw new FormulaError("in function '" + fn.name + "': " + e.message);
+    }
   }
 
   var root = expression();
   if (pos < tokens.length) throw new FormulaError("unexpected '" + peekText() + "' in '" + text + "'");
-  var variables = Object.keys(used).map(Number).sort(function (a, b) { return a - b; });
-  return { text: text, ev: root.ev, isConstant: root.k === true, value: root.k ? root.v : undefined, variables: variables };
+  return root;
+}
+
+/** One own function from its json entry `"name(a, b)": "formula"` (DesignFunction.read). */
+function readFunction(head, body) {
+  var m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*$/.exec(head);
+  if (!m) throw new FormulaError("'" + head + "' is not a function head like 'name(a, b)'");
+  var name = m[1];
+  if (!isLetName(name)) throw new FormulaError("'" + name + "' cannot be the name of a function");
+  var params = m[2].trim() === '' ? [] : m[2].split(',').map(function (p) { return p.trim(); });
+  if (params.length > FUNCTION_MAX_PARAMS) throw new FormulaError("function '" + name + "' takes more than " + FUNCTION_MAX_PARAMS + ' values');
+  params.forEach(function (param, i) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(param) || params.indexOf(param) !== i) throw new FormulaError("'" + param + "' cannot be a value of function '" + name + "'");
+  });
+  if (body.length > FORMULA_MAX_LENGTH) throw new FormulaError("function '" + name + "' is longer than " + FORMULA_MAX_LENGTH + ' characters');
+  return { name: name, params: params, body: body };
 }
 
 /** The value of a text that is a formula of fixed numbers, or null. */
@@ -3405,6 +4007,8 @@ function constantOf(text) {
 }
 
 // ---- the names a formula may use (LayerVariables)
+// The watch has one more name, a hidden count of the days: its clock texts are kept until the day, the hour or
+// the minute changes. This page makes a text again every frame and needs none.
 
 var FIXED = ['t', 'ms', 'len', 'env', 'i', 'n', 'u', 'px', 'py', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'bpm', 'sec', 'min', 'hour',
   'rot0', 'dx0', 'cx0', 'cy0', 'p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
@@ -3413,7 +4017,7 @@ var TIMED_NAMES = { t: 1, ms: 1, env: 1, sec: 1, min: 1, hour: 1 };
 
 function isLetName(name) {
   return /^[A-Za-z_ª-￿][A-Za-z0-9_ª-￿]*$/.test(name) && name !== 'pi' && FIXED.indexOf(name) < 0 &&
-    name.indexOf('v_') !== 0 && !has(FUNCTIONS, name);
+    name.indexOf('v_') !== 0 && !has(FUNCTIONS, name) && !has(TEXT_FUNCTIONS, name);
 }
 
 function Variables() {
@@ -3681,7 +4285,7 @@ function propText(value) {
 }
 
 function readSource(json, env) {
-  var present = ['image', 'shape', 'view'].filter(function (key) { return has(json, key); });
+  var present = ['image', 'shape', 'text', 'view'].filter(function (key) { return has(json, key); });
   if (present.length !== 1) return null;
   var rect = isObj(json.rect) ? rectOf(json.rect, FULL_RECT) : FULL_RECT;
   if (has(json, 'image')) {
@@ -3692,16 +4296,52 @@ function readSource(json, env) {
   if (has(json, 'shape')) {
     var kind = enumOf(optString(json.shape), ['line', 'rect', 'circle'], null);
     if (!kind) return null;
-    var colors = Array.isArray(json.colors) ? json.colors.map(function (c) { return env.color(optString(c), WHITE); }) : [];
-    if (!colors.length) colors = [env.color(optString(json.color), WHITE)];
     var gradient = null;
     if (has(json, 'gradient')) {
       gradient = readGradient(json.gradient);
       if (!gradient) return null;
     }
-    return { type: 'shape', kind: kind, colors: colors, gradient: gradient };
+    return { type: 'shape', kind: kind, colors: readColors(json, env), gradient: gradient };
+  }
+  if (has(json, 'text')) {
+    var formula = propText(json.text);
+    if (formula === null) return null;
+    var fade = null;
+    if (has(json, 'gradient')) {
+      fade = readGradient(json.gradient);
+      if (!fade) return null;
+    }
+    return {
+      type: 'text', text: formula, font: optString(json.font), size: floatOf(json, 'fontSize', TEXT_DEFAULT_SIZE),
+      align: enumOf(optString(json.align), ['left', 'center', 'right'], 'left'),
+      anchor: enumOf(optString(json.valign), ['baseline', 'top', 'middle', 'bottom'], 'baseline'),
+      letterSpacing: floatOf(json, 'letterSpacing', 0), colors: readColors(json, env), gradient: fade
+    };
   }
   return { type: 'view', key: optString(json.view) };
+}
+
+/** The `colors` of a shape or a text, or its one `color`; white when it gives none. */
+function readColors(json, env) {
+  var colors = Array.isArray(json.colors) ? json.colors.map(function (c) { return env.color(optString(c), WHITE); }) : [];
+  return colors.length ? colors : [env.color(optString(json.color), WHITE)];
+}
+
+/** The own `functions` of an animation, in their order; one with a wrong head is left out and said in `errors`. */
+function readFunctions(animation, errors) {
+  var list = [];
+  if (!isObj(animation.functions)) return list;
+  Object.keys(animation.functions).forEach(function (head) {
+    try {
+      var body = propText(animation.functions[head]);
+      if (body === null) throw new FormulaError("function '" + head + "' has no formula");
+      list.push(readFunction(head, body));
+    } catch (e) {
+      if (!(e instanceof FormulaError)) throw e;
+      errors.push('functions: ' + e.message);
+    }
+  });
+  return list;
 }
 
 function readGradient(json) {
@@ -3808,6 +4448,11 @@ function normalizeLayer(layer, notes, index) {
   if (s.type === 'view' && !s.key) return drop('no view key');
   if ((layer.blend === 'erase' || layer.blend === 'inside') && !layer.group) return drop("blend '" + layer.blend + "' works only in a group");
   if (s.type === 'dynamic' && !(s.rect.width > 0 && s.rect.height > 0)) return drop('the rect has no size');
+  if (s.type === 'text') {
+    if (s.text.length > FORMULA_MAX_LENGTH) return drop('a formula is longer than ' + FORMULA_MAX_LENGTH + ' characters');
+    s.size = clamp(s.size, TEXT_MIN_SIZE, TEXT_MAX_SIZE);
+    s.letterSpacing = clamp(s.letterSpacing, -0.5, 2);
+  }
   var tooLong = Object.keys(layer.props).some(function (k) { return layer.props[k].length > FORMULA_MAX_LENGTH; }) ||
     layer.lets.some(function (l) { return l[1].length > FORMULA_MAX_LENGTH; });
   if (tooLong) return drop('a formula is longer than ' + FORMULA_MAX_LENGTH + ' characters');
@@ -3838,7 +4483,7 @@ function readAnimation(design, env) {
   expanded.forEach(function (json, index) {
     var layer = null;
     try { layer = readLayer(json, env); } catch (e) { layer = null; }
-    if (!layer) errors.push('layer ' + index + ': no single source (image, shape or view), or a wrong copy, shape or gradient');
+    if (!layer) errors.push('layer ' + index + ': no single source (image, shape, text or view), or a wrong copy, shape or gradient');
     else { layer.origin = index; layers.push(layer); }
   });
   var durationMs = clamp(optWhole(animation.durationMs, 6000), MIN_DURATION_MS, MAX_DURATION_MS);
@@ -3853,6 +4498,7 @@ function readAnimation(design, env) {
     fadeMs: clamp(optWhole(animation.fadeMs, 600), 0, Math.floor(durationMs / 2)),
     fallbackBpm: clamp(optWhole(animation.fallbackBpm, FALLBACK_BPM), MIN_BPM, MAX_BPM),
     lets: readLets(animation).slice(0, MAX_LETS),
+    functions: readFunctions(animation, errors).slice(0, FUNCTION_MAX),
     layers: normal.slice(0, MAX_LAYERS),
     expanded: expanded,
     errors: errors, notes: notes
@@ -3923,11 +4569,16 @@ function Animator(spec) {
   this.usesClock = false;
   this.shared = [];
   var sharedConstants = new Map();
+  // The own functions of the design: a body sees the names every layer knows; the first of a name counts
+  var functions = new Map();
+  (spec.functions || []).forEach(function (fn) { if (!functions.has(fn.name)) functions.set(fn.name, fn); });
+  this.own = { functions: functions, names: function (n) { return self.vars.index(n); }, constants: function (n) { return sharedConstants.get(n); }, clock: this };
+  this.nowMs = 0;
   spec.lets.slice(0, MAX_LETS).forEach(function (pair) {
     var name = pair[0];
     try {
       if (!isLetName(name) || sharedConstants.has(name)) throw new FormulaError("'" + name + "' cannot be the name of a let");
-      var formula = parseFormula(pair[1], function (n) { return sharedConstants.get(n); }, function (n) { return self.vars.index(n); });
+      var formula = parseFormula(pair[1], function (n) { return sharedConstants.get(n); }, function (n) { return self.vars.index(n); }, self.own);
       if (formula.isConstant) sharedConstants.set(name, formula.value);
       else {
         var slot = self.vars.addShared(name, formula);
@@ -4011,7 +4662,7 @@ Animator.prototype.compile = function (spec, index, sharedConstants) {
     return scope.has(name) ? null : sharedConstants.get(name);
   }
   function parse(text) {
-    var formula = parseFormula(text, constant, function (n) { return self.vars.index(n, scope); });
+    var formula = parseFormula(text, constant, function (n) { return self.vars.index(n, scope); }, self.own);
     self.noteClock(formula);
     return formula;
   }
@@ -4033,6 +4684,12 @@ Animator.prototype.compile = function (spec, index, sharedConstants) {
     all.push(props[key]);
   });
   lets.forEach(function (l) { all.push(l.formula); });
+  var textFormula = null;
+  if (spec.source.type === 'text') {
+    textFormula = parseFormula(spec.source.text, constant, function (n) { return self.vars.index(n, scope); }, self.own, true);
+    self.noteClock(textFormula);
+    all.push(textFormula);
+  }
   var randomCount = 0;
   all.forEach(function (formula) {
     formula.variables.forEach(function (i) {
@@ -4047,7 +4704,7 @@ Animator.prototype.compile = function (spec, index, sharedConstants) {
   var readsTime = all.some(function (formula) { return self.vars.readsTime(formula); });
   var points = spec.copies.type === 'points' ? spec.copies.points : null;
   return {
-    spec: spec, props: props, lets: lets, randoms: randoms, randomCount: randomCount, readsTime: readsTime,
+    spec: spec, props: props, lets: lets, text: textFormula, randoms: randoms, randomCount: randomCount, readsTime: readsTime,
     points: points,
     hasExtras: !!points && points.some(function (p) { return p.extras.length > 0; }),
     hasTransform: has(props, 'rotation') || has(props, 'scaleX') || has(props, 'scaleY'),
@@ -4373,6 +5030,7 @@ Animator.prototype.drawLayer = function (R, layer) {
     ctx.save();
     if (!layer.hasClipProps || this.clipProps(ctx, layer)) {
       if (source.type === 'shape') this.drawShape(ctx, layer, source, alpha, R);
+      else if (source.type === 'text') this.drawText(ctx, layer, source, alpha, R);
       else if (source.type === 'image') this.drawPicture(ctx, layer, source.rect, picture, glow, i, alpha, R);
       else if (source.type === 'dynamic') {
         var r = source.rect, sq = Math.min(r.width, r.height);
@@ -4495,6 +5153,65 @@ Animator.prototype.drawShape = function (ctx, layer, source, alpha, R) {
     insideBox(ctx, layer);
     ctx.fill();
   }
+};
+
+/**
+ * The browser font for a font key of a design. The fonts of a design zip are not in this page: a key
+ * that is not a font of the app is drawn in the default font.
+ */
+function fontOf(key) {
+  switch (key.toLowerCase()) {
+    case 'default_bold': return 'bold SIZE sans-serif';
+    case 'monospace': return 'SIZE monospace';
+    case 'serif': return 'SIZE serif';
+    case 'roboto_slab_light': return '300 SIZE "Roboto Slab", serif';
+    case 'roboto_condensed_bold': return 'bold SIZE "Roboto Condensed", "Arial Narrow", sans-serif';
+    case 'roboto_condensed_light': return '300 SIZE "Roboto Condensed", "Arial Narrow", sans-serif';
+    case 'roboto_condensed_regular': return 'SIZE "Roboto Condensed", "Arial Narrow", sans-serif';
+    default: return 'SIZE Roboto, sans-serif';
+  }
+}
+
+/** Draws the text of one copy of a text layer: one line, at the exact place of `x`,`y` (LayerAnimator.drawText). */
+Animator.prototype.drawText = function (ctx, layer, source, alpha, R) {
+  var text = layer.text.ev(this.values);
+  if (!text) return;
+  var x = this.val(layer, 'x', 0), y = this.val(layer, 'y', 0);
+  if (!isFinite(x) || !isFinite(y)) return;
+  var index = Math.trunc(this.val(layer, 'colorIndex', 0));
+  if (index !== index) index = 0;
+  var color = source.colors[((index % source.colors.length) + source.colors.length) % source.colors.length];
+  var a = clamp(alpha, 0, 1);
+  var gradient = source.gradient;
+  if (Math.round((gradient ? 1 : color.a) * 255 * a) === 0) return;
+  ctx.font = fontOf(source.font).replace('SIZE', source.size + 'px');
+  if ('letterSpacing' in ctx) ctx.letterSpacing = (source.letterSpacing * source.size) + 'px';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  var m = ctx.measureText(text), width = m.width;
+  // The measures of the font, not of the signs shown
+  var ascent = m.fontBoundingBoxAscent === undefined ? source.size * 0.93 : m.fontBoundingBoxAscent;
+  var descent = m.fontBoundingBoxDescent === undefined ? source.size * 0.24 : m.fontBoundingBoxDescent;
+  var left = x - (source.align === 'center' ? width / 2 : (source.align === 'right' ? width : 0));
+  var baseline = y + (source.anchor === 'top' ? ascent : (source.anchor === 'middle' ? (ascent - descent) / 2 : (source.anchor === 'bottom' ? -descent : 0)));
+  this.transform(ctx, layer, x, y);
+  ctx.globalAlpha = a;
+  if (!gradient) ctx.fillStyle = rgba(color);
+  else if (gradient.type === 'linear') ctx.fillStyle = shader(ctx.createLinearGradient(left, 0, left + width, 0), color, gradient);
+  else {
+    // A circle from the middle of the line to its ends
+    var cx = left + width / 2, cy = baseline - (ascent - descent) / 2;
+    ctx.fillStyle = shader(ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width / 2, 0.001)), color, gradient);
+  }
+  var glow = layer.spec.glow, strength = glow ? clamp(this.val(layer, 'glowAlpha', 0) * a, 0, 1) : 0;
+  if (glow && strength > 0) {
+    ctx.shadowColor = rgba(glow.color, strength);
+    ctx.shadowBlur = glow.radius * R.s;
+  }
+  ctx.beginPath();
+  ctx.rect(left, baseline - ascent, width, ascent + descent);
+  insideBox(ctx, layer);
+  ctx.fillText(text, left, baseline);
 };
 
 /** A gradient that fades the alpha of `color` by the stops. */
@@ -5433,6 +6150,7 @@ var CONTROLS = {
 
 var api = {
   parseFormula: parseFormula, FormulaError: FormulaError, FUNCTIONS: FUNCTIONS, FN: FN, FIXED: FIXED, PROPS: PROPS,
+  TEXT_FUNCTIONS: TEXT_FUNCTIONS, SETTING: SETTING, readFunction: readFunction,
   expandTemplates: expandTemplates, readAnimation: readAnimation, Animator: Animator,
   applyLooks: applyLooks, colourLook: colourLook, merge: merge, Scene: Scene, makeSurface: makeSurface, ZIP: ZIP,
   BASE_DESIGN: BASE_DESIGN, FACE_VIEWS: FACE_VIEWS, numberText: numberText, plainDecimal: plainDecimal, SeededRandom: SeededRandom,

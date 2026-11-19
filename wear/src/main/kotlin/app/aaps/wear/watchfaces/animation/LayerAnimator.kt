@@ -9,6 +9,7 @@ import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
@@ -17,6 +18,7 @@ import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.PictureDrawable
 import androidx.core.graphics.createBitmap
@@ -172,6 +174,9 @@ data class ViewRest(val dx: Double, val dy: Double, val rotation: Float, val sca
  * @param specs the layers, in paint order inside each slot
  * @param lets the named formulas of the animation, worked out once per frame (the `let` of the animation)
  * @param zone the time zone of `sec`, `min` and `hour`
+ * @param functions the own functions of the design (the `functions` of the animation)
+ * @param texts the fonts of the design and what the watch is set to, for the text layers and the text
+ *   functions; read once per wake
  * @param images a picture the app draws itself, by its name (for example `moon`), at a clock time
  *   (epoch ms), in a square of so many pixels, for a [LayerSource.Dynamic] layer; null when there is
  *   none. The caller keeps the picture (see `DynamicImages`): it is asked again only once a minute or
@@ -181,6 +186,8 @@ class LayerAnimator(
     specs: List<AnimLayerSpec>,
     lets: List<Pair<String, String>> = emptyList(),
     private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+    functions: List<DesignFunction> = emptyList(),
+    private val texts: FaceTexts = object : FaceTexts {},
     private val images: (String, Long, Int) -> Bitmap? = { _, _, _ -> null }
 ) {
 
@@ -196,8 +203,24 @@ class LayerAnimator(
         val randoms: DoubleArray,
         val randomCount: Int,
         /** True when some formula reads the time of the frame. */
-        val readsTime: Boolean
+        val readsTime: Boolean,
+        /** For a text layer: its text, kept per copy when it differs per copy ([textRate]), else once. */
+        val text: KeptText? = null,
+        val textRate: Int = NONE,
+        /** For a text layer: the paint with its font. */
+        val textPaint: Paint? = null
     ) {
+
+        /** The text of a text layer whose text is the same for all copies, from [beginLayer]. */
+        var textNow: String? = null
+
+        /** The scale [textPaint] and the measures below are made for. */
+        var textScale = 0f
+        val textMetrics = Paint.FontMetrics()
+
+        /** Per kept text: its width in screen pixels, and the text that was measured (the very object). */
+        val textWidths = FloatArray(if (textRate == Rate.COPY) spec.copies.size else 1)
+        val textMeasured = arrayOfNulls<String>(textWidths.size)
 
         /** The value of each property that is not worked out per copy, from [beginLayer]. */
         val kept = DoubleArray(props.size)
@@ -250,8 +273,20 @@ class LayerAnimator(
 
     private val variables = LayerVariables()
 
+    /** What the text functions read of the watch, set once per wake from [texts]. */
+    private val setting = FormulaSetting()
+
+    /** The fixed numbers of the `let` of the animation, by name: folded into the formulas that use them. */
+    private val sharedConstants = HashMap<String, Double>()
+
+    /** The own functions of the design. A body sees the names every layer knows. */
+    private val designFunctions = DesignFunctions(functions, { variables.index(it) }, { sharedConstants[it] })
+
     /** True when a formula reads `sec`, `min` or `hour`: only then the clock time is worked out per frame. */
     private var usesClock = false
+
+    /** True when a formula reads the setting of the watch (see [FormulaSetting]): only then it is asked once per wake. */
+    private var usesSetting = false
 
     /** The clock time of the frame, from [setTime]: a [LayerSource.Dynamic] picture is the one of then. */
     private var nowMs = 0L
@@ -282,19 +317,19 @@ class LayerAnimator(
     init {
         val errorList = ArrayList<String>()
         // The let of the animation: a fixed number is folded into the formulas that use it
-        val sharedConstants = HashMap<String, Double>()
         val slots = ArrayList<Int>()
         val formulas = ArrayList<Formula>()
         for ((name, text) in lets.take(AnimLayerSpec.MAX_LETS)) {
             try {
                 if (!LayerVariables.isName(name) || name in sharedConstants) throw FormulaException("'$name' cannot be the name of a let")
-                val formula = Formula.parse(text, { sharedConstants[it] }) { variables.index(it) }
+                val formula = Formula.parse(text, { sharedConstants[it] }, setting, designFunctions) { variables.index(it) }
+                if (formula.readsSetting) usesSetting = true
                 if (formula.isConstant) sharedConstants[name] = formula.eval(NO_VARIABLES)
                 else {
                     slots += variables.addShared(name, formula) ?: throw FormulaException("'$name' cannot be the name of a let")
                     formulas += formula
                 }
-                noteClock(formula)
+                noteClock(formula.variables)
             } catch (e: FormulaException) {
                 errorList += "let $name: ${e.message}"
             }
@@ -318,7 +353,7 @@ class LayerAnimator(
             // The value keys this layer adds are taken back when one of its formulas cannot be read
             val valueKeysBefore = variables.valueKeys.size
             try {
-                compiled += compile(spec, index, sharedConstants)
+                compiled += compile(spec, index)
                 copies += spec.copies.size
             } catch (e: FormulaException) {
                 variables.forgetValueKeysFrom(valueKeysBefore)
@@ -336,11 +371,14 @@ class LayerAnimator(
     }
 
     /** Reads the formulas of [spec], the layer at [index] of the list. */
-    private fun compile(spec: AnimLayerSpec, index: Int, sharedConstants: Map<String, Double>): Compiled {
+    private fun compile(spec: AnimLayerSpec, index: Int): Compiled {
         val scope = HashMap<String, Int>()
         val localConstants = HashMap<String, Double>()
         fun constantOf(name: String): Double? = localConstants[name] ?: if (name in scope) null else sharedConstants[name]
-        fun parse(text: String) = Formula.parse(text, ::constantOf) { variables.index(it, scope) }.also(::noteClock)
+        fun parse(text: String) = Formula.parse(text, ::constantOf, setting, designFunctions) { variables.index(it, scope) }.also {
+            noteClock(it.variables)
+            if (it.readsSetting) usesSetting = true
+        }
         val letSlots = ArrayList<Int>()
         val letFormulas = ArrayList<Formula>()
         for ((name, text) in spec.lets) {
@@ -356,9 +394,18 @@ class LayerAnimator(
         }
         val formulas = arrayOfNulls<Formula>(LayerProp.entries.size)
         for ((prop, text) in spec.props) formulas[prop.ordinal] = parse(text)
-        val all = formulas.filterNotNull() + letFormulas
+        val source = spec.source
+        val textFormula = (source as? LayerSource.Text)?.let { text ->
+            TextFormula.parse(text.text, ::constantOf, setting, designFunctions) { variables.index(it, scope) }.also {
+                noteClock(it.variables)
+                if (it.readsSetting) usesSetting = true
+            }
+        }
+        val textRate = textFormula?.let { variables.rateOf(it.variables, it.readsSetting) } ?: NONE
+        // The variables every formula of the layer reads
+        val all = (formulas.filterNotNull() + letFormulas).map { it.variables } + listOfNotNull(textFormula?.variables)
         var randomCount = 0
-        for (formula in all) for (i in formula.variables) if (i >= LayerVariables.R1 && i < LayerVariables.R1 + LayerVariables.RANDOMS) randomCount = max(randomCount, i - LayerVariables.R1 + 1)
+        for (read in all) for (i in read) if (i >= LayerVariables.R1 && i < LayerVariables.R1 + LayerVariables.RANDOMS) randomCount = max(randomCount, i - LayerVariables.R1 + 1)
         val randoms = DoubleArray(spec.copies.size * randomCount)
         if (randomCount > 0) {
             val random = Random((spec.copies as? LayerCopies.Count)?.seed ?: index.toLong())
@@ -373,12 +420,21 @@ class LayerAnimator(
             letRates = IntArray(letFormulas.size) { variables.rateOf(letFormulas[it]) },
             randoms = randoms,
             randomCount = randomCount,
-            readsTime = all.any(variables::readsTime)
+            readsTime = all.any(variables::readsTime),
+            text = textFormula?.let { KeptText(it, if (textRate == Rate.COPY) spec.copies.size else 1, setting) },
+            textRate = textRate,
+            textPaint = (source as? LayerSource.Text)?.let { text ->
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.LINEAR_TEXT_FLAG).apply {
+                    typeface = text.font.takeIf { it.isNotEmpty() }?.let(texts::font) ?: Typeface.DEFAULT
+                    letterSpacing = text.letterSpacing
+                }
+            }
         )
     }
 
-    private fun noteClock(formula: Formula) {
-        for (i in formula.variables) if (i == LayerVariables.SEC || i == LayerVariables.MIN || i == LayerVariables.HOUR) usesClock = true
+    /** Notes when a formula that reads [read] needs the clock time. */
+    private fun noteClock(read: IntArray) {
+        for (i in read) if (i == LayerVariables.SEC || i == LayerVariables.MIN || i == LayerVariables.HOUR || i == LayerVariables.DAY) usesClock = true
     }
 
     /** True when there is a layer to draw at all. */
@@ -448,6 +504,7 @@ class LayerAnimator(
         val keys = variables.valueKeys
         for (i in keys.indices) values[variables.valueIndices[i]] = value(keys[i]) ?: Double.NaN
         values[LayerVariables.BPM] = bpm.toDouble()
+        if (usesSetting) setting.set(texts.locale, texts.is24Hour, texts.unitsMgdl)
         wakeGeneration++
         // The zone is read again with the next time: it can change between wakes (a journey)
         clock.zone = null
@@ -485,13 +542,15 @@ class LayerAnimator(
     /** Sets the clock time [nowMs], and `sec`, `min` and `hour` once per clock time. */
     private fun setClock(nowMs: Long) {
         this.nowMs = nowMs
+        setting.nowMs = nowMs
         if (!usesClock || nowMs == clockMs) return
         clockMs = nowMs
-        if (clock.zone == null) clock.zone = zone()
+        if (clock.zone == null) clock.zone = zone().also(setting::setZone)
         clock.set(nowMs)
         values[LayerVariables.SEC] = clock.second
         values[LayerVariables.MIN] = clock.minute
         values[LayerVariables.HOUR] = clock.hour
+        values[LayerVariables.DAY] = clock.day
     }
 
     /**
@@ -685,6 +744,18 @@ class LayerAnimator(
         return compiled.value(prop, 0.0).toFloat()
     }
 
+    /** The text of copy [copy] of the text layer [layer] for the time set by [setTime]; null for another layer. For the tests. */
+    fun textOf(layer: Int, copy: Int): String? {
+        val compiled = layers[layer]
+        val kept = compiled.text ?: return null
+        beginLayer(compiled)
+        setCopy(compiled, copy)
+        return if (compiled.textRate == Rate.COPY) kept.text(values, copy) else compiled.textNow
+    }
+
+    /** How many times the text of the text layer [layer] was worked out so far; 0 for another layer. For the tests. */
+    fun textEvals(layer: Int): Int = layers[layer].text?.evals ?: 0
+
     /**
      * Makes the pictures and masks of all layers for [scale] now, when they are not made yet, so the
      * first frame of a wake does not stop to make them.
@@ -740,6 +811,10 @@ class LayerAnimator(
             val rate = layer.rates[i]
             if (rate == Rate.FRAME || (wake && rate == Rate.WAKE)) layer.kept[i] = layer.props[i]!!.eval(values)
         }
+        // A text that is the same for all copies: asked as often as its rate says, and made new only when an input changed
+        val text = layer.text
+        if (text != null && layer.textRate != Rate.COPY && (layer.textNow == null || layer.textRate == Rate.FRAME || (wake && layer.textRate == Rate.WAKE)))
+            layer.textNow = text.text(values, 0)
         layer.keptWake = wakeGeneration
     }
 
@@ -894,6 +969,7 @@ class LayerAnimator(
                 is LayerSource.Image   -> drawPicture(canvas, layer, source.rect, picture!!, i, alpha, scale)
                 is LayerSource.Dynamic -> drawPicture(canvas, layer, source.square, picture!!, i, alpha, scale)
                 is LayerSource.Shape   -> drawShape(canvas, layer, source, alpha, scale)
+                is LayerSource.Text    -> drawText(canvas, layer, source, i, alpha, scale)
                 is LayerSource.View    -> Unit
             }
             restore(canvas, copySave)
@@ -1071,13 +1147,85 @@ class LayerAnimator(
     private fun shaded(layer: Compiled, color: Int, alpha: Float, gradient: LayerGradient) {
         paint.color = Color.WHITE
         paint.alpha = (255 * alpha.coerceIn(0f, 1f)).roundToInt()
-        paint.shader = layer.shaders.getOrPut(color) {
+        paint.shader = shaderOf(layer, color, gradient)
+    }
+
+    /** The shader of [gradient] in [color] for [layer], made once for [SHADER_SIZE]. */
+    private fun shaderOf(layer: Compiled, color: Int, gradient: LayerGradient): Shader =
+        layer.shaders.getOrPut(color) {
             val colors = IntArray(gradient.stops.size) { k -> faded(color, gradient.stops[k].alpha) }
             val evenly = gradient.stops.indices.all { k -> gradient.stops[k].position == k.toFloat() / (gradient.stops.size - 1) }
             val positions = if (evenly) null else FloatArray(gradient.stops.size) { k -> gradient.stops[k].position }
             if (gradient.type == LayerGradient.Type.LINEAR) LinearGradient(-SHADER_SIZE, 0f, SHADER_SIZE, 0f, colors, positions, Shader.TileMode.CLAMP)
             else RadialGradient(0f, 0f, SHADER_SIZE, colors, positions, Shader.TileMode.CLAMP)
         }
+
+    private val shaderMatrix = Matrix()
+
+    /**
+     * Draws the text of copy [i] of a text layer: one line, at the exact place of `x`,`y`. The width of
+     * the line is measured only for a new text (or a new scale); the same text again costs one draw call.
+     */
+    private fun drawText(canvas: Canvas, layer: Compiled, source: LayerSource.Text, i: Int, alpha: Float, scale: Float) {
+        val kept = layer.text ?: return
+        val textPaint = layer.textPaint ?: return
+        val perCopy = layer.textRate == Rate.COPY
+        val slot = if (perCopy) i else 0
+        val text = (if (perCopy) kept.text(values, i) else layer.textNow) ?: return
+        if (text.isEmpty()) return
+        val x = layer.valueF(LayerProp.X, 0f)
+        val y = layer.valueF(LayerProp.Y, 0f)
+        // A formula that reads a missing value gives NaN: then this copy is not drawn
+        if (!x.isFinite() || !y.isFinite()) return
+        val color = source.colors[layer.valueF(LayerProp.COLOR, 0f).toInt().mod(source.colors.size)]
+        if (layer.textScale != scale) {
+            textPaint.textSize = source.size * scale
+            textPaint.getFontMetrics(layer.textMetrics)
+            layer.textScale = scale
+            layer.textMeasured.fill(null)
+        }
+        if (layer.textMeasured[slot] !== text) {
+            layer.textWidths[slot] = textPaint.measureText(text)
+            layer.textMeasured[slot] = text
+        }
+        val width = layer.textWidths[slot]
+        val metrics = layer.textMetrics
+        val left = x * scale - when (source.align) {
+            TextAlign.LEFT   -> 0f
+            TextAlign.CENTER -> width / 2
+            TextAlign.RIGHT  -> width
+        }
+        val baseline = y * scale - when (source.anchor) {
+            TextAnchor.BASELINE -> 0f
+            TextAnchor.TOP      -> metrics.ascent
+            TextAnchor.MIDDLE   -> (metrics.ascent + metrics.descent) / 2
+            TextAnchor.BOTTOM   -> metrics.descent
+        }
+        textPaint.xfermode = paint.xfermode
+        val gradient = source.gradient
+        if (gradient == null) {
+            textPaint.shader = null
+            textPaint.color = color
+            textPaint.alpha = (Color.alpha(color) * alpha.coerceIn(0f, 1f)).roundToInt()
+        } else {
+            // The shader is made for SHADER_SIZE: laid over the line from end to end, a round one as a circle from the middle to the ends
+            val shader = shaderOf(layer, color, gradient)
+            val reach = (width / 2 / SHADER_SIZE).coerceAtLeast(MIN_SHADER_SCALE)
+            shaderMatrix.setScale(reach, reach)
+            shaderMatrix.postTranslate(left + width / 2, baseline + (metrics.ascent + metrics.descent) / 2)
+            shader.setLocalMatrix(shaderMatrix)
+            textPaint.shader = shader
+            textPaint.color = Color.WHITE
+            textPaint.alpha = (255 * alpha.coerceIn(0f, 1f)).roundToInt()
+        }
+        if (textPaint.alpha == 0) return
+        val glow = layer.spec.glow
+        val glowStrength = if (glow == null) 0f else (layer.valueF(LayerProp.GLOW, 0f) * alpha).coerceIn(0f, 1f)
+        if (glow != null && glowStrength > 0f) textPaint.setShadowLayer(glow.radius * scale, 0f, 0f, faded(glow.color, glowStrength))
+        else textPaint.clearShadowLayer()
+        val save = transform(canvas, layer, x, y, scale)
+        canvas.drawText(text, left, baseline, textPaint)
+        restore(canvas, save)
     }
 
     /**
@@ -1287,6 +1435,9 @@ class LayerAnimator(
 
         /** The size, in screen pixels, the gradient shaders are made for. */
         const val SHADER_SIZE = 100f
+
+        /** The smallest scale of a gradient over a text, so a text of no width does not make a shader of no size. */
+        const val MIN_SHADER_SCALE = 0.001f
 
         /**
          * The largest side of a dynamic picture, so a mistake in a design cannot ask for a huge one.

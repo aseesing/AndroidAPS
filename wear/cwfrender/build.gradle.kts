@@ -57,11 +57,16 @@ val wearShared = listOf(
     "watchfaces/CustomWatchface.kt",
     "watchfaces/FaceFrame.kt", // PERSONAL PATCH
     "watchfaces/animation/AnimLayerSpec.kt", // PERSONAL PATCH
+    "watchfaces/animation/DesignFunctions.kt", // PERSONAL PATCH
+    "watchfaces/animation/FaceTexts.kt", // PERSONAL PATCH
     "watchfaces/animation/Formula.kt", // PERSONAL PATCH
+    "watchfaces/animation/FormulaParts.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerAnimator.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerVariables.kt", // PERSONAL PATCH
     "watchfaces/animation/PulseCurve.kt", // PERSONAL PATCH
     "watchfaces/animation/Templates.kt", // PERSONAL PATCH
+    "watchfaces/animation/TextFormula.kt", // PERSONAL PATCH
+    "watchfaces/animation/TextFunctions.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeAnimationJson.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeAnimationSpec.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeAnimator.kt", // PERSONAL PATCH
@@ -109,6 +114,7 @@ val wearShared = listOf(
     "watchfaces/utils/ViewTemplates.kt", // PERSONAL PATCH
     "watchfaces/utils/WatchShape.kt",
     "watchfaces/utils/WatchBatteryLevel.kt", // PERSONAL PATCH
+    "watchfaces/utils/WatchFaceTexts.kt", // PERSONAL PATCH
     "watchfaces/utils/WatchfaceViewAdapter.kt",
     "watchfaces/values/FaceValues.kt", // PERSONAL PATCH
     "watchfaces/values/StatusValues.kt", // PERSONAL PATCH

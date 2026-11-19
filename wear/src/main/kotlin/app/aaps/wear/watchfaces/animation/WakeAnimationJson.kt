@@ -17,6 +17,7 @@ import java.math.BigDecimal
  * "animation": {
  *   "durationMs": 6000, "fps": 24, "fadeMs": 600, "fallbackBpm": 60,
  *   "let": {"mx": "200 + 120 * cos(2 * pi * v_moon_cycle)"},
+ *   "functions": {"two(x)": "text(x, '00')"},
  *   "templates": {"snow": {"params": {...}, "layers": [...]}},
  *   "layers": [{"use": "snow", "count": 90}, {"image": "Halo", "x": "mx", ...}]
  * }
@@ -48,7 +49,7 @@ class WakeAnimationJson(
         val expanded = Templates(own = animation.optJSONObject(TEMPLATES)).expand(animation.optJSONArray(LAYERS) ?: JSONArray(), errors)
         val layers = expanded.mapIndexedNotNull { index, layer ->
             runCatching { layer(layer) }.getOrNull() ?: run {
-                errors += "layer $index: no single source (image, shape or view), or a wrong copy, shape or gradient"
+                errors += "layer $index: no single source (image, shape, text or view), or a wrong copy, shape or gradient"
                 null
             }
         }
@@ -58,6 +59,7 @@ class WakeAnimationJson(
             fadeMs = animation.optLong("fadeMs", spec.fadeMs),
             fallbackBpm = animation.optInt("fallbackBpm", spec.fallbackBpm),
             lets = lets(animation),
+            functions = functions(animation, errors),
             layers = layers,
             errors = errors
         )
@@ -90,7 +92,7 @@ class WakeAnimationJson(
     }
 
     /**
-     * Exactly one of `image`, `shape` and `view`; null when none or more than one is given, or the shape
+     * Exactly one of `image`, `shape`, `text` and `view`; null when none or more than one is given, or the shape
      * is unknown. An `image` that starts with `@` is a picture the app draws itself (`@moon`).
      */
     private fun source(json: JSONObject): LayerSource? {
@@ -104,16 +106,44 @@ class WakeAnimationJson(
 
             json.has("shape") -> {
                 val kind = ShapeKind.entries.firstOrNull { it.name.equals(json.optString("shape"), ignoreCase = true) } ?: return null
-                val colors = json.optJSONArray("colors")?.let { list -> (0 until list.length()).map { color(list.optString(it), Color.WHITE) } }
-                    ?.takeIf { it.isNotEmpty() }
-                    ?: listOf(color(json.optString("color"), Color.WHITE))
                 val gradient = if (json.has("gradient")) gradient(json.optJSONObject("gradient")) ?: return null else null
-                LayerSource.Shape(kind, colors, gradient)
+                LayerSource.Shape(kind, colors(json), gradient)
             }
+
+            json.has("text")  -> LayerSource.Text(
+                text = propText(json.opt("text")) ?: return null,
+                font = json.optString("font"),
+                size = json.float("fontSize", LayerSource.Text.DEFAULT_SIZE),
+                align = enumOf(json.optString("align"), TextAlign.LEFT),
+                anchor = enumOf(json.optString("valign"), TextAnchor.BASELINE),
+                letterSpacing = json.float("letterSpacing", 0f),
+                colors = colors(json),
+                gradient = if (json.has("gradient")) gradient(json.optJSONObject("gradient")) ?: return null else null
+            )
 
             else              -> LayerSource.View(json.optString("view"))
         }
     }
+
+    /** The `colors` of a shape or a text, or its one `color`; white when it gives none. */
+    private fun colors(json: JSONObject): List<Int> =
+        json.optJSONArray("colors")?.let { list -> (0 until list.length()).map { color(list.optString(it), Color.WHITE) } }?.takeIf { it.isNotEmpty() }
+            ?: listOf(color(json.optString("color"), Color.WHITE))
+
+    /**
+     * The own `functions` of [json], in their order: `"name(a, b)": "formula"`. One with a wrong head is
+     * left out and said in [errors]; a wrong body is said by the layer that calls it.
+     */
+    private fun functions(json: JSONObject, errors: MutableList<String>): List<DesignFunction> = json.optJSONObject(FUNCTIONS)?.let { all ->
+        all.keys().asSequence().mapNotNull { head ->
+            try {
+                DesignFunction.read(head, propText(all.opt(head)) ?: throw FormulaException("function '$head' has no formula"))
+            } catch (e: FormulaException) {
+                errors += "functions: ${e.message}"
+                null
+            }
+        }.toList()
+    } ?: emptyList()
 
     /** `{"type": "linear" | "radial", "stops": [[position, alpha], ...]}`; null when it is not that. */
     private fun gradient(json: JSONObject?): LayerGradient? {
@@ -216,6 +246,9 @@ class WakeAnimationJson(
         /** The key of the named formulas of the animation and of a layer. */
         const val LET = "let"
 
+        /** The key of the design's own functions inside the `animation` object. */
+        const val FUNCTIONS = "functions"
+
         /** The key of the design's own templates inside the `animation` object. */
         const val TEMPLATES = "templates"
 
@@ -225,7 +258,7 @@ class WakeAnimationJson(
         /** An image key that starts with this is a picture the app draws itself, like `@moon`. */
         const val DYNAMIC_PREFIX = "@"
 
-        private val SOURCES = listOf("image", "shape", "view")
+        private val SOURCES = listOf("image", "shape", "text", "view")
         private val COPIES = listOf("count", "slices", "points")
     }
 }

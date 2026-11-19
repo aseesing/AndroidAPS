@@ -27,10 +27,13 @@ class FormulaException(message: String) : IllegalArgumentException(message)
  * A small formula of an animated layer, for example `sin(t * 0.3) * 8`, read once and then worked
  * out for every frame and every copy of the layer.
  *
- * The language is math only, so a design can never hang the watch or reach anything else:
+ * The language is math and texts only, so a design can never hang the watch or reach anything else:
  * - numbers, `pi`, and the variables the layer offers (see [LayerVariables])
  * - `+ - * / %` (`%` is [mod]), `< <= > >= == !=` (1 when true, else 0), `&& || !`, brackets
  * - the functions in [FUNCTIONS], for example `sin`, `clamp`, `noise` and `if(c, a, b)`
+ * - texts: `'hello'`, `a & b` (joined), `==` and `!=` of two texts, and the text functions (see
+ *   `TextFunctions`), for example `len('abc')`. A formula that gives a text is a [TextFormula].
+ * - the own functions of the design (see [DesignFunctions])
  *
  * A comparison with a missing value (NaN) is false, so `v_watch_battery <= 20` is false when the
  * watch does not know its battery.
@@ -47,6 +50,9 @@ class Formula private constructor(private val root: Node, val text: String) {
 
     /** The index of every variable the formula reads, each once, in rising order; empty for a fixed number. */
     val variables: IntArray = root.indices(HashSet()).sorted().toIntArray()
+
+    /** True when the formula reads the [FormulaSetting] (through a text function): its value can change from wake to wake. */
+    val readsSetting: Boolean = root.readsSetting()
 
     /** The value for the variables in [vars], indexed as the name lookup of [parse] gave them. */
     fun eval(vars: DoubleArray): Double = root.eval(vars)
@@ -67,7 +73,7 @@ class Formula private constructor(private val root: Node, val text: String) {
         /** The longest formula text. */
         const val MAX_LENGTH = 600
 
-        /** The most parts (numbers, names, operations) in one formula. */
+        /** The most parts (numbers, names, operations) in one formula, with the parts of the own functions it calls. */
         const val MAX_NODES = 300
 
         /** A formula that is always [value]. */
@@ -78,24 +84,25 @@ class Formula private constructor(private val root: Node, val text: String) {
          * when the name is not known. [constants] gives the value of a name that is a fixed number (a
          * `let` of fixed numbers only), or null: such a name is folded into the formula like a number.
          *
-         * @throws FormulaException when the text is not a valid formula
+         * @param setting what the text functions read of the watch
+         * @param functions the own functions of the design, or null
+         * @throws FormulaException when the text is not a valid formula, or it gives a text
          */
-        fun parse(text: String, constants: (String) -> Double? = { null }, names: (String) -> Int?): Formula {
-            if (text.length > MAX_LENGTH) throw FormulaException("formula longer than $MAX_LENGTH characters")
-            val parser = Parser(tokenize(text), names, constants)
-            val root = parser.expression()
-            if (!parser.atEnd()) throw FormulaException("unexpected '${parser.peekText()}' in '$text'")
-            if (parser.nodes > MAX_NODES) throw FormulaException("formula has more than $MAX_NODES parts")
+        fun parse(
+            text: String, constants: (String) -> Double? = { null }, setting: FormulaSetting = FormulaSetting(), functions: DesignFunctions? = null,
+            names: (String) -> Int?
+        ): Formula {
+            val root = read(text, constants, setting, functions, names) as? Node ?: throw FormulaException("'$text' gives a text, not a number")
             return Formula(root, text)
         }
 
-        /** The names of all functions, with the number of values each takes. */
+        /** The names of the number functions, with the number of values each takes. The text functions are in `TextFunctions`. */
         val FUNCTIONS: Map<String, IntRange> = mapOf(
             "sin" to 1..1, "cos" to 1..1, "tan" to 1..1, "atan2" to 2..2, "abs" to 1..1, "sign" to 1..1,
             "sqrt" to 1..1, "exp" to 1..1, "log" to 1..1, "pow" to 2..2,
             "floor" to 1..1, "ceil" to 1..1, "round" to 1..1, "fract" to 1..1, "mod" to 2..2,
             "min" to 2..8, "max" to 2..8, "clamp" to 3..3, "mix" to 3..3, "step" to 2..2, "smoothstep" to 3..3,
-            "if" to 3..3, "noise" to 1..2, "hash" to 1..3,
+            "if" to 3..3, "noise" to 1..2, "hash" to 1..3, "missing" to 1..1,
             "easeInOut" to 1..1,
             "window" to 3..3, "pingpong" to 2..2
         )
@@ -203,7 +210,8 @@ class Formula private constructor(private val root: Node, val text: String) {
             "fract" to Fn1 { a -> a - floor(a) },
             "noise" to Fn1 { a -> noise(a) },
             "hash" to Fn1 { a -> hash(a) },
-            "easeInOut" to Fn1 { a -> easeInOut(a) }
+            "easeInOut" to Fn1 { a -> easeInOut(a) },
+            "missing" to Fn1 { a -> if (a.isNaN()) 1.0 else 0.0 }
         )
 
         private val FN2: Map<String, Fn2> = mapOf(
@@ -272,7 +280,7 @@ class Formula private constructor(private val root: Node, val text: String) {
 
         private class Token(val kind: Char, val text: String, val number: Double = 0.0)
 
-        /** Kinds: 'n' number, 'i' name, 'o' operator, '(' ')' ',' */
+        /** Kinds: 'n' number, 'i' name, 's' text, 'o' operator, '(' ')' ',' */
         private fun tokenize(text: String): List<Token> {
             val tokens = ArrayList<Token>()
             var i = 0
@@ -298,6 +306,25 @@ class Formula private constructor(private val root: Node, val text: String) {
                         tokens += Token('i', text.substring(start, i))
                     }
 
+                    c == '\'' || c == '"'                                           -> {
+                        // A text between two of the same quotes; the quote twice inside it is one quote
+                        val content = StringBuilder()
+                        i++
+                        while (true) {
+                            if (i >= text.length) throw FormulaException("a text has no closing $c in '$text'")
+                            if (text[i] == c) {
+                                if (i + 1 < text.length && text[i + 1] == c) {
+                                    content.append(c); i += 2
+                                    continue
+                                }
+                                i++
+                                break
+                            }
+                            content.append(text[i++])
+                        }
+                        tokens += Token('s', content.toString())
+                    }
+
                     c == '(' || c == ')' || c == ','                                -> {
                         tokens += Token(c, c.toString()); i++
                     }
@@ -306,7 +333,7 @@ class Formula private constructor(private val root: Node, val text: String) {
                         val two = if (i + 1 < text.length) text.substring(i, i + 2) else ""
                         val op = when {
                             two in setOf("<=", ">=", "==", "!=", "&&", "||") -> two
-                            c in "+-*/%<>!"                                  -> c.toString()
+                            c in "+-*/%<>!&"                                 -> c.toString()
                             else                                             -> throw FormulaException("unexpected '$c' in '$text'")
                         }
                         tokens += Token('o', op)
@@ -317,11 +344,41 @@ class Formula private constructor(private val root: Node, val text: String) {
             return tokens
         }
 
-        private class Parser(private val tokens: List<Token>, private val names: (String) -> Int?, private val constants: (String) -> Double?) {
+        /** Counts the parts of a formula, also those of the own functions it calls. */
+        private class Counter {
 
-            private var pos = 0
             var nodes = 0
-                private set
+        }
+
+        /**
+         * Reads [text] into its parts, a number or a text.
+         *
+         * @param params the values of the own function whose body [text] is, by name
+         * @param using the own functions that are being read now, the outer one first
+         */
+        private fun read(
+            text: String, names: (String) -> Int?, constants: (String) -> Double?, setting: FormulaSetting, functions: DesignFunctions?,
+            params: Map<String, Part>, using: List<String>, counter: Counter
+        ): Part {
+            if (text.length > MAX_LENGTH) throw FormulaException("formula longer than $MAX_LENGTH characters")
+            val parser = Parser(tokenize(text), names, constants, setting, functions, params, using, counter)
+            val root = parser.expression()
+            if (!parser.atEnd()) throw FormulaException("unexpected '${parser.peekText()}' in '$text'")
+            return root
+        }
+
+        /** The parts of the formula [text], for [parse] and [TextFormula.parse]. */
+        internal fun read(text: String, constants: (String) -> Double?, setting: FormulaSetting, functions: DesignFunctions?, names: (String) -> Int?): Part =
+            read(text, names, constants, setting, functions, emptyMap(), emptyList(), Counter())
+
+        private class Parser(
+            private val tokens: List<Token>, private val names: (String) -> Int?, private val constants: (String) -> Double?,
+            private val setting: FormulaSetting, private val functions: DesignFunctions?,
+            private val params: Map<String, Part>, private val using: List<String>, private val counter: Counter
+        ) {
+
+            private val texts = TextFunctions(setting, names)
+            private var pos = 0
             private var depth = 0
 
             fun atEnd() = pos >= tokens.size
@@ -333,19 +390,23 @@ class Formula private constructor(private val root: Node, val text: String) {
                 pos++
             }
 
-            private fun count(node: Node): Node {
-                if (++nodes > MAX_NODES) throw FormulaException("formula has more than $MAX_NODES parts")
+            private fun <P : Part> count(node: P): P {
+                if (++counter.nodes > MAX_NODES) throw FormulaException("formula has more than $MAX_NODES parts")
                 return node
             }
 
-            fun expression(): Node {
+            /** [part] as a number, for [what]; a text there is a mistake. */
+            private fun number(part: Part, what: String): Node =
+                part as? Node ?: throw FormulaException("'$what' needs a number, not a text" + if (what == "+") " (join texts with &)" else "")
+
+            fun expression(): Part {
                 if (++depth > 40) throw FormulaException("formula is nested too deep")
                 val node = or()
                 depth--
                 return node
             }
 
-            private fun or(): Node {
+            private fun or(): Part {
                 var left = and()
                 while (isOp("||")) {
                     pos++; left = binary("||", left, and())
@@ -353,7 +414,7 @@ class Formula private constructor(private val root: Node, val text: String) {
                 return left
             }
 
-            private fun and(): Node {
+            private fun and(): Part {
                 var left = equality()
                 while (isOp("&&")) {
                     pos++; left = binary("&&", left, equality())
@@ -361,23 +422,40 @@ class Formula private constructor(private val root: Node, val text: String) {
                 return left
             }
 
-            private fun equality(): Node {
+            private fun equality(): Part {
                 var left = comparison()
                 while (isOp("==", "!=")) {
-                    val op = tokens[pos++].text; left = binary(op, left, comparison())
+                    val op = tokens[pos++].text
+                    val right = comparison()
+                    val a = left
+                    left = when {
+                        a is TextNode && right is TextNode -> fold(count(TextCompare(a, right, equal = op == "==")))
+                        a is Node && right is Node         -> binary(op, a, right)
+                        else                               -> throw FormulaException("'$op' cannot compare a text with a number")
+                    }
                 }
                 return left
             }
 
-            private fun comparison(): Node {
-                var left = additive()
+            private fun comparison(): Part {
+                var left = joined()
                 while (isOp("<", "<=", ">", ">=")) {
-                    val op = tokens[pos++].text; left = binary(op, left, additive())
+                    val op = tokens[pos++].text; left = binary(op, left, joined())
                 }
                 return left
             }
 
-            private fun additive(): Node {
+            /** `a & b`: the two as one text. Like in a spreadsheet, after `+` and `-` and before the compares. */
+            private fun joined(): Part {
+                var left = additive()
+                while (isOp("&")) {
+                    pos++
+                    left = fold(count(texts.join(arrayOf(texts.asText(left), texts.asText(additive())))))
+                }
+                return left
+            }
+
+            private fun additive(): Part {
                 var left = multiplicative()
                 while (isOp("+", "-")) {
                     val op = tokens[pos++].text; left = binary(op, left, multiplicative())
@@ -385,7 +463,7 @@ class Formula private constructor(private val root: Node, val text: String) {
                 return left
             }
 
-            private fun multiplicative(): Node {
+            private fun multiplicative(): Part {
                 var left = unary()
                 while (isOp("*", "/", "%")) {
                     val op = tokens[pos++].text; left = binary(op, left, unary())
@@ -393,24 +471,28 @@ class Formula private constructor(private val root: Node, val text: String) {
                 return left
             }
 
-            private fun unary(): Node {
+            private fun unary(): Part {
                 if (isOp("-")) {
-                    pos++; return fold(count(Negate(unary())))
+                    pos++; return fold(count(Negate(number(unary(), "-"))))
                 }
                 if (isOp("+")) {
-                    pos++; return unary()
+                    pos++; return number(unary(), "+")
                 }
                 if (isOp("!")) {
-                    pos++; return fold(count(Not(unary())))
+                    pos++; return fold(count(Not(number(unary(), "!"))))
                 }
                 return primary()
             }
 
-            private fun primary(): Node {
+            private fun primary(): Part {
                 val token = tokens.getOrNull(pos) ?: throw FormulaException("formula ends too early")
                 return when (token.kind) {
                     'n'  -> {
                         pos++; count(Const(token.number))
+                    }
+
+                    's'  -> {
+                        pos++; count(TextConst(TextFunctions.cut(token.text)))
                     }
 
                     '('  -> {
@@ -423,6 +505,8 @@ class Formula private constructor(private val root: Node, val text: String) {
                     'i'  -> {
                         pos++
                         if (isKind('(')) return call(token.text)
+                        // A value of the own function this is the body of: the part the caller gave
+                        params[token.text]?.let { return count(it) }
                         if (token.text == "pi") return count(Const(PI))
                         constants(token.text)?.let { return count(Const(it)) }
                         val index = names(token.text) ?: throw FormulaException("unknown name '${token.text}'")
@@ -433,10 +517,9 @@ class Formula private constructor(private val root: Node, val text: String) {
                 }
             }
 
-            private fun call(name: String): Node {
-                val arity = FUNCTIONS[name] ?: throw FormulaException("unknown function '$name'")
+            private fun call(name: String): Part {
                 expect('(')
-                val args = ArrayList<Node>()
+                val args = ArrayList<Part>()
                 if (!isKind(')')) {
                     args += expression()
                     while (isKind(',')) {
@@ -444,16 +527,52 @@ class Formula private constructor(private val root: Node, val text: String) {
                     }
                 }
                 expect(')')
+                functions?.get(name)?.let { return own(it, args) }
+                texts.call(name, args)?.let { return fold(count(it)) }
+                val arity = FUNCTIONS[name] ?: throw FormulaException("unknown function '$name'")
                 if (args.size !in arity) throw FormulaException("'$name' takes ${arity.first}..${arity.last} values, not ${args.size}")
-                val node = if (name == "if") If(args[0], args[1], args[2]) else callOf(name, args)
-                return fold(count(node))
+                if (name == "if") {
+                    val condition = number(args[0], name)
+                    val a = args[1]
+                    val b = args[2]
+                    val choice: Part = when {
+                        a is Node && b is Node         -> If(condition, a, b)
+                        a is TextNode && b is TextNode -> TextIf(condition, a, b)
+                        else                           -> throw FormulaException("'if' needs two numbers or two texts to choose from")
+                    }
+                    return fold(count(choice))
+                }
+                return fold(count(callOf(name, args.map { number(it, name) })))
             }
 
-            private fun binary(op: String, left: Node, right: Node): Node = fold(count(Binary(op, left, right)))
+            /** The body of the own function [function] with [args] as its values. */
+            private fun own(function: DesignFunction, args: List<Part>): Part {
+                val name = function.name
+                if (name in using) throw FormulaException("function '$name' uses itself")
+                if (using.size >= DesignFunction.MAX_DEPTH) throw FormulaException("functions nested more than ${DesignFunction.MAX_DEPTH} deep")
+                if (args.size != function.params.size) throw FormulaException("'$name' takes ${function.params.size} values, not ${args.size}")
+                val all = functions ?: throw IllegalStateException(name)
+                val values = HashMap<String, Part>()
+                function.params.forEachIndexed { index, param -> values[param] = args[index] }
+                return try {
+                    read(function.body, all.names, all.constants, setting, all, values, using + name, counter)
+                } catch (e: FormulaException) {
+                    throw FormulaException(if (using.isEmpty()) "in function '$name': ${e.message}" else e.message ?: "")
+                }
+            }
 
-            /** A part made only of fixed numbers is worked out once, here. */
-            private fun fold(node: Node): Node = if (node.children().all { it is Const }) Const(node.eval(DoubleArray(0))) else node
+            private fun binary(op: String, left: Part, right: Part): Part = fold(count(Binary(op, number(left, op), number(right, op))))
+
+            /** A part made only of fixed numbers and texts is worked out once, here; not one that reads the watch setting. */
+            private fun fold(node: Part): Part = when {
+                node.usesSetting || !node.children().all { it.isFixed } -> node
+                node is Node                                            -> Const(node.eval(NO_VALUES))
+                node is TextNode                                        -> TextConst(node.text(NO_VALUES))
+                else                                                    -> node
+            }
         }
+
+        private val NO_VALUES = DoubleArray(0)
 
         /** The part that works out the function [name] for [args], with the work for that many values. */
         private fun callOf(name: String, args: List<Node>): Node {
@@ -466,42 +585,18 @@ class Formula private constructor(private val root: Node, val text: String) {
             }
         }
 
-        // ---- the parts of a formula ----
-
-        private abstract class Node {
-
-            abstract fun eval(v: DoubleArray): Double
-            open fun children(): List<Node> = emptyList()
-
-            /** The variables this part reads, see [Formula.reads]. Only used when a formula is read. */
-            open fun reads(): Long = children().fold(0L) { mask, child -> mask or child.reads() }
-
-            /** Adds the index of every variable this part reads to [into], see [Formula.variables]. */
-            open fun indices(into: MutableSet<Int>): MutableSet<Int> = into.also { children().forEach { child -> child.indices(it) } }
-        }
-
-        private class Const(val value: Double) : Node() {
-
-            override fun eval(v: DoubleArray) = value
-        }
-
-        private class Var(val index: Int) : Node() {
-
-            override fun eval(v: DoubleArray) = v[index]
-            override fun reads(): Long = 1L shl min(index, 63)
-            override fun indices(into: MutableSet<Int>): MutableSet<Int> = into.also { it.add(index) }
-        }
+        // ---- the number parts of a formula (the shared ones are in FormulaParts.kt) ----
 
         private class Negate(val a: Node) : Node() {
 
             override fun eval(v: DoubleArray) = -a.eval(v)
-            override fun children() = listOf(a)
+            override fun children(): List<Part> = listOf(a)
         }
 
         private class Not(val a: Node) : Node() {
 
             override fun eval(v: DoubleArray) = if (truth(a.eval(v))) 0.0 else 1.0
-            override fun children() = listOf(a)
+            override fun children(): List<Part> = listOf(a)
         }
 
         private class If(val c: Node, val a: Node, val b: Node) : Node() {
@@ -511,7 +606,7 @@ class Formula private constructor(private val root: Node, val text: String) {
                 return if (cond != 0.0 && !cond.isNaN()) a.eval(v) else b.eval(v)
             }
 
-            override fun children() = listOf(c, a, b)
+            override fun children(): List<Part> = listOf(c, a, b)
         }
 
         private class Binary(op: String, val a: Node, val b: Node) : Node() {
@@ -542,25 +637,25 @@ class Formula private constructor(private val root: Node, val text: String) {
                 }
             }
 
-            override fun children() = listOf(a, b)
+            override fun children(): List<Part> = listOf(a, b)
         }
 
         private class Call1(val work: Fn1, val a: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v))
-            override fun children() = listOf(a)
+            override fun children(): List<Part> = listOf(a)
         }
 
         private class Call2(val work: Fn2, val a: Node, val b: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v), b.eval(v))
-            override fun children() = listOf(a, b)
+            override fun children(): List<Part> = listOf(a, b)
         }
 
         private class Call3(val work: Fn3, val a: Node, val b: Node, val c: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v), b.eval(v), c.eval(v))
-            override fun children() = listOf(a, b, c)
+            override fun children(): List<Part> = listOf(a, b, c)
         }
 
         private class CallN(val work: FnN, val args: Array<Node>) : Node() {
@@ -573,7 +668,7 @@ class Formula private constructor(private val root: Node, val text: String) {
                 return work.apply(values)
             }
 
-            override fun children() = args.toList()
+            override fun children(): List<Part> = args.asList()
         }
 
         private fun truth(x: Double) = x != 0.0 && !x.isNaN()

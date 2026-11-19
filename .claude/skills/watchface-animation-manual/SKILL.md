@@ -39,6 +39,9 @@ in the code may be missing in the page, and nothing in the page may be missing i
 | Keys the parser reads (`WakeAnimationJson`), with type, default and limit | The chapter of the key and the key table in chapter 12 | `readAnimation`, `readLayer`, `readSource`, `readGradient`, `readCopies`, `readLets` |
 | `LayerProp` (the props that take a formula) and `LayerProp.CLIPS` | Chapter 3 and chapter 12 | `PROPS`, `CLIP_PROPS` |
 | `Formula.FUNCTIONS` and the operators of the parser | Chapter 5, with a curve for a function that shapes time | `FUNCTIONS`, `FN`, `parseFormula` |
+| `TextFunctions.FUNCTIONS` and `PARAMS` (the text functions), `FormulaSetting` (language, hours, unit), the joins and compares of texts in the parser | Chapter 5, "Texts in formulas" | `TEXT_FUNCTIONS`, `TEXT_PARAMS`, `TEXT_FN`, `SETTING`, `writeNumber`, `writePattern`, `writeDate`, `readFormula` |
+| `DesignFunction` (the head, the limits) and how the parser puts a body in (`own` in `Formula`) | Chapter 5, "Your own functions" | `readFunction`, `readFunctions`, `ownCall` |
+| `LayerSource.Text` and how `LayerAnimator.drawText` places a line | Chapter 2, "A text" | `readSource`, `drawText`, `fontOf` |
 | `LayerVariables.FIXED` and the `v_` prefix | Chapter 5, "Variables" | `FIXED`, `V` |
 | The limits (`AnimLayerSpec.MAX_*`, `WakeAnimationSpec.MIN_DURATION_MS` and so on, `Formula.MAX_*`) | Chapter 11 and the tables | The `MAX_*` and `MIN_*` lines at the top of the script |
 | The rules of `Templates` (the app has no templates of its own) | Chapter 7 | `expandTemplates` |

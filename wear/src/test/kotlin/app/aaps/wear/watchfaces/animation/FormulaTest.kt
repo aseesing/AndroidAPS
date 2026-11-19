@@ -209,6 +209,7 @@ class FormulaTest {
         "hash" to listOf("hash(1)" to Formula.hash(1.0), "hash(1, 2)" to Formula.hash(1.0, 2.0), "hash(1, 2, 3)" to Formula.hash(1.0, 2.0, 3.0)),
         "easeInOut" to listOf("easeInOut(0)" to 0.0, "easeInOut(0.5)" to 0.5, "easeInOut(1)" to 1.0),
         "window" to listOf("window(3, 2, 4)" to 0.25, "window(1, 2, 0)" to 0.0, "window(2, 2, 0)" to 1.0),
+        "missing" to listOf("missing(nan)" to 1.0, "missing(3)" to 0.0, "missing(0 / 0)" to 1.0, "missing(1 / 0)" to 0.0),
         "pingpong" to listOf("pingpong(3, 2)" to 1.0, "pingpong(4, 2)" to 0.0, "pingpong(1, 0)" to 0.0)
     )
 

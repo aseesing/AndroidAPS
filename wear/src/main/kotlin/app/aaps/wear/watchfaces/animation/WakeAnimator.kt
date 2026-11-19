@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
  * @param images a picture the app draws itself, by its name, at a clock time (epoch ms), in a square of
  *   so many pixels, for a [LayerSource.Dynamic] layer (`@moon`); null when there is none. The caller
  *   keeps the picture, see [LayerAnimator].
+ * @param texts the fonts of the design and what the watch is set to, for the text layers (see [FaceTexts])
  * @param layers the kept pictures of the frame; the watch face shares them with its normal frames
  */
 class WakeAnimator(
@@ -48,6 +49,7 @@ class WakeAnimator(
     chosenLengthMs: () -> Long? = { null },
     private val value: (String) -> Double? = { null },
     private val images: (String, Long, Int) -> Bitmap? = { _, _, _ -> null },
+    private val texts: FaceTexts = object : FaceTexts {},
     private val timer: WakeTimer = WakeTimer(chosenLengthMs) { SystemClock.elapsedRealtime() },
     private val layers: FrameLayers = FrameLayers(),
     private val newScope: () -> CoroutineScope = { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
@@ -85,7 +87,7 @@ class WakeAnimator(
         val sameValues = s?.withoutImage() == spec?.withoutImage()
         if (!sameValues || !sameDrawables(s, spec)) {
             animator?.release()
-            animator = s?.let { LayerAnimator(it.layers, it.lets, images = images) }
+            animator = s?.let { LayerAnimator(it.layers, it.lets, images = images, functions = it.functions, texts = texts) }
             hasWakeValues = false
             layers.invalidate()
         }

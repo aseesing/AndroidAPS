@@ -34,6 +34,7 @@ data class WakeAnimationSpec(
     val fadeMs: Long = 600,
     val fallbackBpm: Int = PulseCurve.FALLBACK_BPM,
     val lets: List<Pair<String, String>> = emptyList(),
+    val functions: List<DesignFunction> = emptyList(),
     val layers: List<AnimLayerSpec> = emptyList(),
     val errors: List<String> = emptyList()
 ) {
@@ -45,6 +46,7 @@ data class WakeAnimationSpec(
         fadeMs = fadeMs.coerceIn(0, durationMs.coerceIn(MIN_DURATION_MS, MAX_DURATION_MS) / 2),
         fallbackBpm = PulseCurve.clampBpm(fallbackBpm),
         lets = lets.take(AnimLayerSpec.MAX_LETS),
+        functions = functions.take(DesignFunction.MAX_FUNCTIONS),
         layers = layers.mapNotNull { it.normalized() }.take(AnimLayerSpec.MAX_LAYERS)
     )
 

@@ -32,7 +32,7 @@ internal fun use(name: String, vararg params: Pair<String, Any?>): JSONObject =
 internal fun animatorOf(animation: JSONObject, images: Map<String, Drawable> = emptyMap()): LayerAnimator {
     val spec = readAnimation(animation, images).normalized()
     check(spec.errors.isEmpty()) { "${spec.errors}" }
-    return LayerAnimator(spec.layers, spec.lets).also { check(it.errors.isEmpty()) { "${it.errors}" } }
+    return LayerAnimator(spec.layers, spec.lets, functions = spec.functions).also { check(it.errors.isEmpty()) { "${it.errors}" } }
 }
 
 /** [color] as a colour text of a design. */
