@@ -1609,6 +1609,7 @@ class DataHandlerMobile(
         var cobValue = -1.0
         var currentBasal = ""
         var bgiString = ""
+        var numbers = StatusNumbers() // PERSONAL PATCH: the numbers of the value keys, see StatusNumbers.kt
         if (config.appInitialized && profile != null) {
             val bolusIob = iobCobCalculator.calculateIobFromBolus().round()
             val basalIob = iobCobCalculator.calculateIobFromTempBasalsIncludingConvertedExtended().round()
@@ -1626,6 +1627,7 @@ class DataHandlerMobile(
                 bgiString = "" + (if (bgi >= 0) "+" else "") + decimalFormatter.to1Decimal(bgi)
             }
             status = generateStatusString(profile)
+            numbers = StatusNumbers.of(bolusIob, basalIob, processedTbrEbData.getTempBasalIncludingConvertedExtended(System.currentTimeMillis())?.convertedToAbsolute(System.currentTimeMillis(), profile) ?: profile.getBasal(), if (glucoseStatusProvider.glucoseStatusData != null) profile.getIsfMgdl("DataHandlerMobile $caller") else null) // PERSONAL PATCH
         }
 
         //batteries
@@ -1715,7 +1717,8 @@ class DataHandlerMobile(
                 modeFromScene = runningModeRecord.id == activeSceneSync.getActiveState()?.scopedRecords?.rmId,
                 eatReminderStartedAt = eatReminderState?.startedAt,
                 eatReminderEndsAt = eatReminderState?.endsAt,
-                sensorEndsAt = sensorEndsAt, pumpEndsAt = pumpEndsAt // PERSONAL PATCH
+                sensorEndsAt = sensorEndsAt, pumpEndsAt = pumpEndsAt, // PERSONAL PATCH
+                iobValue = numbers.iob, iobBolusValue = numbers.iobBolus, iobBasalValue = numbers.iobBasal, basalRateValue = numbers.basalRate, bgiMgdl = numbers.bgiMgdl // PERSONAL PATCH
             )
         )
     }

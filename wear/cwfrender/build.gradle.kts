@@ -110,6 +110,7 @@ val wearShared = listOf(
     "watchfaces/utils/WatchBatteryLevel.kt", // PERSONAL PATCH
     "watchfaces/utils/WatchfaceViewAdapter.kt",
     "watchfaces/values/FaceValues.kt", // PERSONAL PATCH
+    "watchfaces/values/StatusValues.kt", // PERSONAL PATCH
 )
 
 val sharedKotlinDir = layout.buildDirectory.dir("generated/wearShared/kotlin")
