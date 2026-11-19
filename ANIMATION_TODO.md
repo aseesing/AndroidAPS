@@ -104,6 +104,8 @@ from the `key_location_*` preferences. The engine reads it (`skyRule`, `skyPlace
 example (a small JavaScript copy of the rules draws them). A change to the engine's logic changes the
 page in the same commit: the text, the key table at its end and, when a drawing rule changed, the
 page's own player (the built-in templates are copied into it).
+There is no test for the page: the check is an instruction for the agent, the skill
+`watchface-animation-manual` (`.claude/skills/`).
 
 Found while the manual was written, by reading the code, not tried:
 - [ ] `FaceFrame.clockText` and `secondHand` take no set of views to leave out. So a wake view layer on
