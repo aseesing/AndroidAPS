@@ -73,6 +73,7 @@ val wearShared = listOf(
     "watchfaces/animation/WakeLength.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeTimer.kt", // PERSONAL PATCH
     "watchfaces/animation/WallClock.kt", // PERSONAL PATCH
+    "watchfaces/animation/WffSources.kt", // PERSONAL PATCH
     "watchfaces/colour/ColourLooks.kt", // PERSONAL PATCH
     "watchfaces/daynight/DayNightChoice.kt",
     "watchfaces/daynight/DayNightClock.kt",

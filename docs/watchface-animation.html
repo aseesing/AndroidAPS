@@ -182,6 +182,7 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
           <li><a href="#let">Named formulas: <code>let</code></a></li>
           <li><a href="#texts">Texts in formulas</a></li>
           <li><a href="#own-functions">Your own functions: <code>functions</code></a></li>
+          <li><a href="#wff">Names of the Watch Face Format</a></li>
         </ol>
       </li>
       <li><a href="#values">Values: <code>v_&lt;key&gt;</code></a></li>
@@ -767,6 +768,10 @@ clear.</figcaption>
 <h3 id="key-blend">Mixing with what is below: <code>blend</code></h3>
 <p><code>add</code> and <code>screen</code> only make things lighter. Use them for light: a glow, an aurora, a lamp.
 <code>add</code> adds the colours and soon becomes white. <code>screen</code> is softer.</p>
+<p>Each blend also has the name it has in the Watch Face Format, and is drawn in exactly that way:
+<code>normal</code> is <code>SRC_OVER</code>, <code>add</code> is <code>PLUS</code>, <code>screen</code> is
+<code>SCREEN</code>, <code>erase</code> is <code>DST_OUT</code> and <code>inside</code> is <code>SRC_IN</code> (these two
+need a <a href="#key-group">group</a>). Both names work, in small or capital letters.</p>
 <figure class="ex" id="ex-blend" data-face="off">
 <pre>{
   "animation": {
@@ -1191,6 +1196,8 @@ for a <a href="#source-text">text layer</a>: see <a href="#texts">texts in formu
   <li><strong>Names</strong>: the <a href="#variables">variables</a>, the <a href="#values">values</a>
     <code>v_&lt;key&gt;</code> and the names of a <a href="#let"><code>let</code></a>. A name is made of letters, digits
     and <code>_</code>. An unknown name leaves the layer out.</li>
+  <li><strong>Data sources</strong> of the Watch Face Format between square brackets: <code>[HOUR_0_23]</code>,
+    <code>[BATTERY_PERCENT]</code>. See <a href="#wff">names of the Watch Face Format</a>.</li>
   <li><strong>Operators</strong> and brackets, see below.</li>
   <li><strong>Functions</strong>: <code>name(value, value)</code>, see below. An unknown function, or a wrong number of
     values, leaves the layer out. A design can add <a href="#own-functions">its own functions</a>.</li>
@@ -1206,16 +1213,18 @@ functions go at most 40 deep.</p>
 <thead><tr><th>Operator</th><th>Meaning</th><th>Notes</th></tr></thead>
 <tbody>
 <tr><td><code>- a</code> &nbsp; <code>+ a</code> &nbsp; <code>! a</code></td><td>minus, plus, not</td><td><code>!a</code> is 1 when <code>a</code> is 0 or no number, else 0. These go first.</td></tr>
-<tr><td><code>a * b</code> &nbsp; <code>a / b</code> &nbsp; <code>a % b</code></td><td>times, divided by, rest of a division</td><td><code>%</code> is the same as <code>mod(a, b)</code>: never negative for a positive <code>b</code>.</td></tr>
+<tr><td><code>a * b</code> &nbsp; <code>a / b</code> &nbsp; <code>a % b</code></td><td>times, divided by, rest of a division</td><td><code>%</code> is the same as <code>mod(a, b)</code>: never negative for a positive <code>b</code>. Not as in the Watch Face Format: there <code>-1 % 4</code> is -1 and <code>x / 0</code> is 0. Here <code>-1 % 4</code> is 3, and <code>x / 0</code> is no number.</td></tr>
 <tr><td><code>a + b</code> &nbsp; <code>a - b</code></td><td>plus, minus</td><td></td></tr>
-<tr><td><code>a &amp; b</code></td><td>joined as one text</td><td>See <a href="#texts">texts in formulas</a>. A number is written as a text first.</td></tr>
+<tr><td><code>a &amp; b</code></td><td>joined as one text</td><td>See <a href="#texts">texts in formulas</a>. A number is written as a text first. In the Watch Face Format <code>&amp;</code> is a bitwise "and"; here it joins.</td></tr>
 <tr><td><code>a &lt; b</code> &nbsp; <code>a &lt;= b</code> &nbsp; <code>a &gt; b</code> &nbsp; <code>a &gt;= b</code></td><td>smaller, greater</td><td>1 or 0</td></tr>
 <tr><td><code>a == b</code> &nbsp; <code>a != b</code></td><td>the same, not the same</td><td>1 or 0. Two numbers or two texts.</td></tr>
 <tr><td><code>a &amp;&amp; b</code></td><td>and</td><td>1 when both are true. When <code>a</code> is false, <code>b</code> is not worked out.</td></tr>
 <tr><td><code>a || b</code></td><td>or</td><td>1 when one of them is true. When <code>a</code> is true, <code>b</code> is not worked out.</td></tr>
+<tr><td><code>c ? a : b</code></td><td>choose</td><td><code>a</code> when <code>c</code> is true, else <code>b</code>: the same as <code>if(c, a, b)</code>, and the way the Watch Face Format writes it. Two numbers or two texts. Only the chosen side is worked out.</td></tr>
 </tbody></table></div>
 <p>The table is in the order of strength: the top row is worked out first, the bottom row last. Inside one row a formula
-goes from left to right. Use brackets when you are not sure.</p>
+goes from left to right, but <code>?</code> goes from the right: <code>a ? b : c ? d : e</code> is
+<code>a ? b : (c ? d : e)</code>. Use brackets when you are not sure.</p>
 
 <figure class="ex" id="ex-if" data-face="off">
 <pre>{
@@ -1272,7 +1281,7 @@ goes from left to right. Use brackets when you are not sure.</p>
   <td><span class="curve" data-f="fract(x)" data-x0="0" data-x1="4"></span><br><code>fract(x)</code></td></tr>
 <tr><td><code>mod(a, b)</code></td><td>The rest of <code>a</code> divided by <code>b</code>, never negative for a positive <code>b</code>: <code>mod(-1, 4)</code> is 3. With <code>b</code> = 0 it is no number.</td>
   <td><span class="curve" data-f="mod(x, 2)" data-x0="-2" data-x1="6"></span><br><code>mod(x, 2)</code></td></tr>
-<tr><td><code>if(c, a, b)</code></td><td><code>a</code> when <code>c</code> is true (not 0 and not missing), else <code>b</code>. Only the chosen side is worked out.</td>
+<tr><td><code>if(c, a, b)</code></td><td><code>a</code> when <code>c</code> is true (not 0 and not missing), else <code>b</code>. Only the chosen side is worked out. <code>c ? a : b</code> is the same, and the spelling of the Watch Face Format.</td>
   <td><span class="curve" data-f="if(x &lt; 2, 1, 0.25)" data-x0="0" data-x1="4" data-y0="0" data-y1="1"></span><br><code>if(x &lt; 2, 1, 0.25)</code></td></tr>
 </tbody></table></div>
 
@@ -1292,12 +1301,23 @@ goes from left to right. Use brackets when you are not sure.</p>
 <tbody>
 <tr><td><code>abs(x)</code></td><td><code>x</code> without its sign.</td><td><span class="curve" data-f="abs(x)" data-x0="-2" data-x1="2"></span></td></tr>
 <tr><td><code>sign(x)</code></td><td>-1, 0 or 1.</td><td><span class="curve" data-f="sign(x)" data-x0="-2" data-x1="2"></span></td></tr>
-<tr><td><code>floor(x)</code>, <code>ceil(x)</code>, <code>round(x)</code></td><td>The whole number below, above, and nearest. A half goes up: <code>round(2.5)</code> is 3.</td><td><span class="curve" data-f="floor(x)" data-x0="0" data-x1="4"></span><br><code>floor(x)</code></td></tr>
+<tr><td><code>floor(x)</code>, <code>ceil(x)</code>, <code>round(x)</code></td><td>The whole number below, above, and nearest. A half goes up: <code>round(2.5)</code> is 3, and <code>round(-2.5)</code> is -2, the same as in the Watch Face Format.</td><td><span class="curve" data-f="floor(x)" data-x0="0" data-x1="4"></span><br><code>floor(x)</code></td></tr>
 <tr><td><code>min(a, b, ...)</code>, <code>max(a, b, ...)</code></td><td>The smallest and the largest of 2 to 8 values.</td><td><span class="curve" data-f="min(x, 1)" data-x0="0" data-x1="3" data-y0="0" data-y1="3"></span><br><code>min(x, 1)</code></td></tr>
 <tr><td><code>sqrt(x)</code>, <code>pow(x, y)</code></td><td>The square root, and <code>x</code> to the power <code>y</code>.</td><td><span class="curve" data-f="pow(x, 2)" data-x0="0" data-x1="2"></span><br><code>pow(x, 2)</code></td></tr>
 <tr><td><code>exp(x)</code>, <code>log(x)</code></td><td>e to the power <code>x</code>, and the natural logarithm. <code>exp(-t * 3)</code> falls fast towards 0.</td><td><span class="curve" data-f="exp(-x * 3)" data-x0="0" data-x1="2"></span><br><code>exp(-x * 3)</code></td></tr>
 <tr><td><code>tan(x)</code></td><td>The tangent, <code>x</code> in radians.</td><td><span class="curve" data-f="tan(x)" data-x0="-1.2" data-x1="1.2"></span></td></tr>
 <tr><td><code>atan2(y, x)</code></td><td>The angle of the point <code>x</code>, <code>y</code> seen from 0, 0, in radians, from -pi to pi.</td><td><span class="curve" data-f="atan2(x, 1)" data-x0="-5" data-x1="5"></span><br><code>atan2(x, 1)</code></td></tr>
+</tbody></table></div>
+
+<h4>More math, with the names of the Watch Face Format</h4>
+<div class="scroll"><table>
+<thead><tr><th>Function</th><th>Gives</th></tr></thead>
+<tbody>
+<tr><td><code>asin(x)</code>, <code>acos(x)</code>, <code>atan(x)</code></td><td>The angle of a sine, a cosine and a tangent, in radians.</td></tr>
+<tr><td><code>deg(x)</code>, <code>rad(x)</code></td><td>Radians to degrees, and degrees to radians: <code>deg(pi)</code> is 180. Handy for <code>rotation</code>, which is in degrees.</td></tr>
+<tr><td><code>log2(x)</code>, <code>log10(x)</code></td><td>The logarithm with base 2 and with base 10.</td></tr>
+<tr><td><code>cbrt(x)</code></td><td>The cube root: <code>cbrt(27)</code> is 3, <code>cbrt(-8)</code> is -2.</td></tr>
+<tr><td><code>expm1(x)</code></td><td><code>exp(x) - 1</code>, exact also for a very small <code>x</code>.</td></tr>
 </tbody></table></div>
 
 <figure class="ex" id="ex-window" data-face="off">
@@ -1426,8 +1446,8 @@ second beat. Move the slider: a higher rate gives shorter beats.</figcaption>
 <tr><td><code>p0</code> to <code>p7</code></td><td>The extra numbers of the point.</td><td>every copy</td></tr>
 <tr><td><code>r1</code> to <code>r8</code></td><td>Random numbers of the copy, 0 to 1. The same at every frame and every wake.</td><td>every copy</td></tr>
 <tr><td><code>bpm</code></td><td>The heart rate: the last one the watch measured, else <code>fallbackBpm</code>. Always 40 to 180.</td><td>once per wake</td></tr>
-<tr><td><code>sec</code></td><td>The seconds of the clock, 0 to below 60, with a part after the dot.</td><td>every frame</td></tr>
-<tr><td><code>min</code>, <code>hour</code></td><td>The minute (0 to 59) and the hour (0 to 23) of the clock, in the time zone of the watch.</td><td>every frame</td></tr>
+<tr><td><code>sec</code></td><td>The seconds of the clock, 0 to below 60, with a part after the dot. In the Watch Face Format: <code>[SECOND_MILLISECOND]</code>; <code>[SECOND]</code> is the whole seconds.</td><td>every frame</td></tr>
+<tr><td><code>min</code>, <code>hour</code></td><td>The minute (0 to 59) and the hour (0 to 23) of the clock, in the time zone of the watch. In the Watch Face Format: <code>[MINUTE]</code> and <code>[HOUR_0_23]</code>.</td><td>every frame</td></tr>
 <tr><td><code>rot0</code>, <code>dx0</code>, <code>cx0</code>, <code>cy0</code></td><td>Only for <a href="#views">view layers</a>: the own turn of the view, how far it is moved sideways by its value, and the middle where the design puts it.</td><td>every frame</td></tr>
 <tr><td><code>v_&lt;key&gt;</code></td><td>A <a href="#values">value</a> of the face, like <code>v_watch_battery</code>.</td><td>once per wake</td></tr>
 <tr><td><code>pi</code></td><td>3.14159...</td><td>never</td></tr>
@@ -1554,6 +1574,8 @@ Every number is written with the signs of the language of the watch (a comma or 
 <tr><td><code>left(t, n)</code>, <code>right(t, n)</code></td><td>The first or the last <code>n</code> signs.</td><td><code>left('hello', 2)</code> is <code>he</code></td></tr>
 <tr><td><code>mid(t, start, n)</code></td><td><code>n</code> signs from place <code>start</code>.</td><td><code>mid('hello', 2, 3)</code> is <code>ell</code></td></tr>
 <tr><td><code>len(t)</code></td><td>The number of signs. (<code>len</code> without brackets is still the length of the wake.)</td><td><code>len('hello')</code> is 5</td></tr>
+<tr><td><code>textLength(t)</code></td><td>The same as <code>len(t)</code>, with the name of the Watch Face Format.</td><td><code>textLength('hello')</code> is 5</td></tr>
+<tr><td><code>subText(t, start, end)</code></td><td>The signs from place <code>start</code> up to, not with, place <code>end</code>, as in the Watch Face Format: here places count from 0. Places outside the text count as its start or its end.</td><td><code>subText('abc def', 2, 5)</code> is <code>c d</code></td></tr>
 <tr><td><code>upper(t)</code>, <code>lower(t)</code></td><td>In capital or small letters, by the rules of the watch language.</td><td><code>upper('Mon')</code> is <code>MON</code></td></tr>
 <tr><td><code>trim(t)</code></td><td>No spaces at the ends, one space where there were more.</td><td><code>trim(' a&nbsp;&nbsp;b ')</code> is <code>a b</code></td></tr>
 <tr><td><code>rept(t, n)</code></td><td><code>t</code> written <code>n</code> times.</td><td><code>rept('ab', 3)</code> is <code>ababab</code></td></tr>
@@ -1562,6 +1584,7 @@ Every number is written with the signs of the language of the watch (a comma or 
 <tr><td><code>padLeft(t, n)</code>, <code>padLeft(t, n, fill)</code>, <code>padRight(...)</code></td><td><code>t</code> made <code>n</code> signs long with <code>fill</code> (default a space) before or after it. A longer text stays as it is.</td><td><code>padLeft('7', 3, '0')</code> is <code>007</code></td></tr>
 <tr><td><code>fixed(x, decimals)</code>, <code>fixed(x, decimals, 1)</code></td><td>The number with that many decimals (0 to 10), rounded. With a third value that is true, with the thousands sign.</td><td><code>fixed(3.14159, 2)</code> is <code>3.14</code></td></tr>
 <tr><td><code>text(x, format)</code></td><td>The number in a spreadsheet style format: <code>0</code> a digit that is always written, <code>#</code> a digit only when needed, <code>.</code> the decimal sign, <code>,</code> the thousands sign, <code>%</code> times 100 with a percent sign. A text before or after the digits is kept. A second format after <code>;</code> is for negative numbers. A fixed format that is wrong leaves the layer out.</td><td><code>text(5, '00')</code> is <code>05</code>, <code>text(2.5, '+0.0;-0.0')</code> is <code>+2.5</code></td></tr>
+<tr><td><code>numberFormat(format, x)</code></td><td>The <code>numberFormat</code> of the Watch Face Format: <code>text(x, format)</code> with the values the other way round. One more difference: a half goes to the even digit, as in Java. <code>text(2.5, '0')</code> is <code>3</code>, but <code>numberFormat('0', 2.5)</code> is <code>2</code>.</td><td><code>numberFormat('#,##0.0', 1234.56)</code> is <code>1,234.6</code></td></tr>
 <tr><td><code>value(t)</code></td><td>The number a text shows (with a dot, or with the decimal sign of the watch language); no number when it shows none.</td><td><code>value('12.5')</code> is 12.5</td></tr>
 <tr><td><code>missing(x)</code></td><td>1 when <code>x</code> is no number (a <a href="#values">value</a> the watch does not have), else 0.</td><td><code>if(missing(v_iob), '--', fixed(v_iob, 1))</code></td></tr>
 </tbody></table></div>
@@ -1577,6 +1600,7 @@ that rounds to zero is written without a minus: <code>fixed(-0.04, 1)</code> is 
 <tr><td><code>clockMinute()</code></td><td>The minute in two digits: <code>05</code>.</td></tr>
 <tr><td><code>ampm()</code></td><td>The AM or PM mark of the watch language; an empty text when the watch shows 24 hours.</td></tr>
 <tr><td><code>date(pattern)</code></td><td>The clock time written with a date pattern, in the watch language: <code>date('EEE d MMM')</code> is <code>Thu 19 Nov</code>. The letters are those of Java: <code>y</code> year, <code>M</code> month (<code>MMM</code> short name, <code>MMMM</code> full name), <code>d</code> day, <code>E</code> day of the week (<code>EEEE</code> full name), <code>H</code> hour of 24, <code>h</code> hour of 12, <code>m</code> minute, <code>a</code> AM or PM. Other text goes between single quotes, written twice inside a formula text: <code>date('d ''of'' MMMM')</code>. The text changes once a minute, so seconds in a pattern do not run; use <code>sec</code> for those. A fixed pattern that is wrong leaves the layer out.</td></tr>
+<tr><td><code>icuText(pattern)</code></td><td>The <code>icuText</code> of the Watch Face Format: <code>date(pattern)</code>, for the letters that the Watch Face Format (ICU) and the watch (Java) read the same way: <code>G y M d E a h H k K m s S z</code>. A fixed pattern with another letter (like <code>u</code>, <code>e</code>, <code>c</code>, <code>L</code>, <code>w</code>) leaves the layer out. Like <code>date</code>, the text changes once a minute.</td></tr>
 <tr><td><code>glucose(mgdl)</code></td><td>A glucose value (always given in mg/dl, like <code>v_sgv</code>) in the unit the wearer uses: a whole number for mg/dl, one decimal for mmol/l. <code>glucose(v_sgv, 'mmol')</code> and <code>glucose(v_sgv, 'mgdl')</code> force a unit.</td></tr>
 </tbody></table></div>
 <p>The language, 12 or 24 hours and the glucose unit are read at the start of a wake, like the <a href="#values">values</a>.
@@ -1671,6 +1695,103 @@ checked.</p>
 width and speed. <code>onRing</code> is called for every copy with its number <code>i</code>.</figcaption>
 </figure>
 
+<h3 id="wff">Names of the Watch Face Format</h3>
+
+<p>Google moves Wear OS watch faces to the
+<a href="https://developer.android.com/reference/wear-os/wff/watch-face">Watch Face Format</a> (WFF). Where WFF and
+this engine have the same thing, a formula can use the WFF name, and it means exactly what it means in WFF. Use the
+WFF name for those: a design written that way is easier to turn into a WFF face later. The names of this engine keep
+working.</p>
+
+<p><strong>Operators and functions.</strong> <code>c ? a : b</code>, <code>round</code>, <code>floor</code>,
+<code>ceil</code>, <code>fract</code>, <code>abs</code>, <code>clamp(x, low, high)</code>, <code>sqrt</code>,
+<code>cbrt</code>, <code>pow</code>, <code>exp</code>, <code>expm1</code>, <code>log</code>, <code>log2</code>,
+<code>log10</code>, <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>asin</code>, <code>acos</code>,
+<code>atan</code>, <code>deg</code>, <code>rad</code>, <code>textLength</code>, <code>subText</code>,
+<code>numberFormat</code> and <code>icuText</code> are the same as in WFF. The angles of the wave functions are in
+radians in both.</p>
+
+<p><strong>Data sources</strong> stand between square brackets. They change while a wake plays, like <code>sec</code>,
+<code>min</code> and <code>hour</code>. Like in WFF they are whole numbers, except the ones with a part of a minute or
+an hour.</p>
+<div class="scroll"><table>
+<thead><tr><th>Source</th><th>Gives</th></tr></thead>
+<tbody>
+<tr><td><code>[SECOND]</code>, <code>[MINUTE]</code>, <code>[HOUR_0_23]</code></td><td>The seconds (0 to 59), the minute (0 to 59) and the hour (0 to 23) of the clock.</td></tr>
+<tr><td><code>[MILLISECOND]</code></td><td>The thousandths of the second, 0 to 999.</td></tr>
+<tr><td><code>[SECOND_MILLISECOND]</code></td><td>The seconds with their part: the same as <code>sec</code>.</td></tr>
+<tr><td><code>[MINUTE_SECOND]</code></td><td>The minute and its whole seconds: 30.25 at 30 minutes and 15 seconds.</td></tr>
+<tr><td><code>[SECONDS_IN_DAY]</code></td><td>The seconds since midnight, 0 to 86399.</td></tr>
+<tr><td><code>[HOUR_0_11]</code>, <code>[HOUR_1_12]</code>, <code>[HOUR_1_24]</code></td><td>The hour counted from 0 to 11, from 1 to 12 (12 at midnight and at noon) and from 1 to 24 (24 at midnight).</td></tr>
+<tr><td><code>[HOUR_0_23_MINUTE]</code>, <code>[HOUR_0_11_MINUTE]</code>, <code>[HOUR_1_12_MINUTE]</code>, <code>[HOUR_1_24_MINUTE]</code></td><td>The same hours with the part of the hour: 12.5 at half past twelve. Good for a hand.</td></tr>
+<tr><td><code>[AMPM_STATE]</code></td><td>0 before noon, 1 after.</td></tr>
+<tr><td><code>[DAY]</code>, <code>[DAY_0_30]</code></td><td>The day of the month, from 1 or from 0.</td></tr>
+<tr><td><code>[MONTH]</code>, <code>[MONTH_0_11]</code></td><td>The month, from 1 or from 0 (January).</td></tr>
+<tr><td><code>[YEAR]</code>, <code>[DAY_OF_YEAR]</code>, <code>[DAYS_IN_MONTH]</code></td><td>The year, the day of the year (1 to 366) and the number of days of this month.</td></tr>
+<tr><td><code>[DAY_OF_WEEK]</code></td><td>The day of the week, <strong>1 is Sunday</strong> and 7 is Saturday. (<code>v_day_name</code> starts on Monday.)</td></tr>
+<tr><td><code>[IS_24_HOUR_MODE]</code></td><td>1 when the watch shows 24 hours, else 0.</td></tr>
+<tr><td><code>[BATTERY_PERCENT]</code>, <code>[STEP_COUNT]</code>, <code>[HEART_RATE]</code></td><td>The values <code>v_watch_battery</code>, <code>v_steps</code> and <code>v_heart_rate</code>. No number when the watch does not know them.</td></tr>
+<tr><td><code>[MOON_PHASE_POSITION]</code></td><td>The days since the last new moon that have started, 0 to 28. From <code>v_moon_phase</code>.</td></tr>
+<tr><td><code>[WEATHER.IS_AVAILABLE]</code></td><td>1 when there is weather, else 0.</td></tr>
+<tr><td><code>[WEATHER.CONDITION]</code></td><td>The weather in the codes of WFF: 1 clear, 14 partly cloudy, 2 cloudy, 6 rain, 0 when there is no weather.</td></tr>
+<tr><td><code>[WEATHER.TEMPERATURE]</code>, <code>[WEATHER.TEMPERATURE_UNIT]</code></td><td>The temperature as a whole number, in the unit the second one gives. The phone sends degrees Celsius, so the unit is always 1 (Celsius).</td></tr>
+<tr><td><code>[CONFIGURATION.&lt;name&gt;]</code></td><td>The choice of an <a href="#options">option</a> as a text: <code>"0"</code>, <code>"1"</code>, ...</td></tr>
+</tbody></table></div>
+<figure class="ex" id="ex-wff" data-face="off" data-controls="clock battery">
+<pre>{
+  "animation": {
+    "durationMs": 8000,
+    "fadeMs": 0,
+    "layers": [
+      {"shape": "line", "color": "#FFFFFF", "x": 200, "y": 200, "length": 90, "thickness": 10, "rest": 0,
+       "angle": "180 - [HOUR_0_11_MINUTE] * 30"},
+      {"shape": "line", "color": "#C8D0E0", "x": 200, "y": 200, "length": 140, "thickness": 6, "rest": 0,
+       "angle": "180 - [MINUTE] * 6"},
+      {"shape": "line", "color": "#FF5A5A", "x": 200, "y": 200, "length": 160, "thickness": 2, "rest": 0,
+       "angle": "180 - [SECOND] * 6"},
+      {"text": "[DAY_OF_WEEK] == 1 || [DAY_OF_WEEK] == 7 ? 'weekend' : 'work day'", "fontSize": 22, "rest": 0,
+       "align": "center", "x": 200, "y": 290, "color": "#9AA5B1"},
+      {"text": "[BATTERY_PERCENT] &amp; '%'", "fontSize": 22, "rest": 0, "align": "center", "x": 200, "y": 330,
+       "colors": ["#2A9D8F", "#E63946"], "colorIndex": "[BATTERY_PERCENT] &lt;= 20 ? 1 : 0"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Written with WFF names.</strong> The clock of <a href="#variables">the variables</a> again, now from data
+sources. <code>[SECOND]</code> is a whole number, so the red hand jumps once a second, as on a WFF face. The text below
+uses <code>? :</code>; Sunday is day 1. The battery turns red at 20 percent or less.</figcaption>
+</figure>
+
+<p>Any other source, for example a week number or a sensor of the watch, is not known here: the formula is a mistake
+and the layer is left out. Inside a <a href="#looks">look</a> there is no clock, so the time and the date sources and
+<code>[IS_24_HOUR_MODE]</code> cannot be used there; the sources of values can.</p>
+
+<p><strong>The same word, another meaning.</strong> These stay as they are in this engine. Watch out when you copy a
+formula from a WFF face:</p>
+<ul>
+  <li><code>x / 0</code> is 0 in WFF and no number here.</li>
+  <li><code>-1 % 4</code> is -1 in WFF and 3 here (<code>%</code> is <code>mod</code>).</li>
+  <li><code>&amp;</code> is a bitwise "and" in WFF and joins texts here. WFF also has <code>|</code> and
+    <code>~</code>; this engine does not.</li>
+  <li><code>alpha</code> is 0 to 255 in WFF and 0 to 1 here.</li>
+  <li><code>pivotX</code> and <code>pivotY</code> are parts of the size (0 to 1) in WFF and design pixels here.</li>
+  <li><code>angle</code> turns a part in WFF. Here <code>rotation</code> does that; <code>angle</code> is the
+    direction of a line.</li>
+  <li>The positions of a WFF part count from its group. Layers here have no such groups, so <code>x</code> and
+    <code>y</code> count from the top left of the face.</li>
+  <li>A gradient here changes the alpha of the layer colour; a WFF gradient has colours of its own.</li>
+</ul>
+
+<p><strong>What WFF does not have.</strong> Everything else of this engine is an extension. A tool that turns a
+design into a WFF face has to handle each one in one of three ways:</p>
+<div class="scroll"><table>
+<thead><tr><th>How</th><th>Names</th></tr></thead>
+<tbody>
+<tr><td>Live: the same in WFF</td><td>The operators but <code>/</code>, <code>%</code> and <code>&amp;</code>, the functions listed above, the data sources, <code>sec</code>, <code>min</code>, <code>hour</code>, <code>pi</code>, and the values that have a source.</td></tr>
+<tr><td>Written out: made into plain WFF math or fixed numbers when the face is made</td><td><code>let</code>, <a href="#own-functions">own functions</a>, <a href="#templates">templates</a>, the copies (<code>count</code>, <code>seed</code>, <code>points</code>, <code>i</code>, <code>n</code>, <code>u</code>, <code>px</code>, <code>py</code>, <code>p0</code> to <code>p7</code>, <code>r1</code> to <code>r8</code>), <code>if</code>, <code>min</code>, <code>max</code>, <code>mix</code>, <code>step</code>, <code>smoothstep</code>, <code>sign</code>, <code>atan2</code>, <code>mod</code>, <code>%</code>, <code>missing</code>, <code>easeInOut</code>, <code>window</code>, <code>pingpong</code>, <code>hash</code> and <code>noise</code> of fixed numbers, <code>bpm</code>, the text functions that WFF does not have.</td></tr>
+<tr><td>Baked: drawn as frames, because WFF has no time of a wake</td><td><code>t</code>, <code>ms</code>, <code>len</code>, <code>env</code>, and everything that reads them (also <code>noise(t)</code>), <code>slices</code>, <code>glow</code>, <code>clip</code> rings and masks.</td></tr>
+</tbody></table></div>
+<p>This is the plan for such a tool; the tool does not exist yet.</p>
+
 <!-- =================================================================================== 6 -->
 <h2 id="values">6. Values: <code>v_&lt;key&gt;</code></h2>
 
@@ -1705,13 +1826,13 @@ width and speed. <code>onRing</code> is called for every copy with its number <c
 <tr><td><code>bgi</code></td><td>The blood glucose impact: how much the insulin moves the glucose in 5 minutes, in mg/dl. Below 0 when it lowers the glucose. No value while there is no glucose reading.</td><td>-25 to 25</td></tr>
 <tr><td><code>uploader_battery</code></td><td>The battery of the phone, in percent.</td><td>0 to 100</td></tr>
 <tr><td><code>rig_battery</code></td><td>The battery of the rig or pump, in percent.</td><td>0 to 100</td></tr>
-<tr><td><code>watch_battery</code></td><td>The battery of the watch itself, in percent.</td><td>0 to 100</td></tr>
-<tr><td><code>heart_rate</code></td><td>The heart rate the watch measured, in beats per minute. No value when there is none, or when it is too old to show. In a formula, <code>bpm</code> is mostly the better choice: it always has a number.</td><td>40 to 180</td></tr>
-<tr><td><code>steps</code></td><td>The steps of today that the watch counted. No value before the first count.</td><td>0 to 20000</td></tr>
+<tr><td><code>watch_battery</code></td><td>The battery of the watch itself, in percent. In the Watch Face Format: <code>[BATTERY_PERCENT]</code>.</td><td>0 to 100</td></tr>
+<tr><td><code>heart_rate</code></td><td>The heart rate the watch measured, in beats per minute. No value when there is none, or when it is too old to show. In a formula, <code>bpm</code> is mostly the better choice: it always has a number. In the Watch Face Format: <code>[HEART_RATE]</code>.</td><td>40 to 180</td></tr>
+<tr><td><code>steps</code></td><td>The steps of today that the watch counted. No value before the first count. In the Watch Face Format: <code>[STEP_COUNT]</code>.</td><td>0 to 20000</td></tr>
 <tr><td><code>sensor_left</code>, <code>pump_left</code></td><td>Hours until the sensor, and the pod or cannula, must be changed. Below 0 when that time has passed. No value when the end is not known.</td><td>0 to 72</td></tr>
-<tr><td><code>day</code>, <code>day_name</code>, <code>month</code>, <code>week_number</code></td><td>The day of the month, the day of the week (1 is Monday), the month and the week of the year.</td><td>1 to 31, 1 to 7, 1 to 12, 1 to 53</td></tr>
+<tr><td><code>day</code>, <code>day_name</code>, <code>month</code>, <code>week_number</code></td><td>The day of the month, the day of the week (1 is Monday), the month and the week of the year. For the day and the month the Watch Face Format has <code>[DAY]</code>, <code>[MONTH]</code> and <code>[DAY_OF_WEEK]</code>, but there 1 is Sunday, see <a href="#wff">its names</a>.</td><td>1 to 31, 1 to 7, 1 to 12, 1 to 53</td></tr>
 <tr><td class="wrap"><code>sgv_Ext1</code>, <code>sgvLevel_Ext1</code>, <code>direction_Ext1</code>, <code>delta_Ext1</code>, <code>avg_delta_Ext1</code>, <code>timestamp_Ext1</code>, <code>loop_Ext1</code>, <code>tempTarget_Ext1</code>, <code>reservoir_Ext1</code>, <code>reservoirLevel_Ext1</code>, <code>rig_battery_Ext1</code>, <code>iob_Ext1</code>, <code>iob_bolus_Ext1</code>, <code>iob_basal_Ext1</code>, <code>cob_Ext1</code>, <code>basalRate_Ext1</code>, <code>bgi_Ext1</code></td><td>The same values of the first followed person. With <code>_Ext2</code> in place of <code>_Ext1</code>: of the second.</td><td>as above</td></tr>
-<tr><td><code>moon_phase</code></td><td>Where the moon is in its month: 0 new moon, 0.25 first quarter, 0.5 full moon, 0.75 last quarter. From the date alone, the same all over the world.</td><td>0 to below 1</td></tr>
+<tr><td><code>moon_phase</code></td><td>Where the moon is in its month: 0 new moon, 0.25 first quarter, 0.5 full moon, 0.75 last quarter. From the date alone, the same all over the world. <code>[MOON_PHASE_POSITION]</code> is the same moon in whole days, 0 to 28.</td><td>0 to below 1</td></tr>
 <tr><td><code>sun_progress</code></td><td>How far the day is: 0 at sunrise, 0.5 around noon, 1 at sunset. At night: 1 after sunset until midnight, then 0.</td><td>0 to 1</td></tr>
 <tr><td><code>night_progress</code></td><td>How far the night is: 0 at sunset, 0.5 in the middle of the night, 1 at sunrise. In the day 0.</td><td>0 to 1</td></tr>
 <tr><td><code>sun_cycle</code></td><td>One round of the sun: 0 at sunrise, 0.25 half way the day, 0.5 at sunset, 0.75 half way the night, 1 at the next sunrise.</td><td>0 to 1</td></tr>
@@ -1721,7 +1842,7 @@ width and speed. <code>onRing</code> is called for every copy with its number <c
 <tr><td><code>moon_north</code></td><td>The direction the north of the moon points to in the sky of the wearer, in degrees with the clock from straight up. It is the <code>rotation</code> for the photo <code>@moon</code>. Without a place it is 0: north up.</td><td>-180 to 180</td></tr>
 <tr><td><code>sun_next_time</code></td><td>The moment of the next sunrise or sunset, as a clock time in milliseconds. Made to show as a text with <a href="#time-token"><code>@time</code></a>. No value without a place, and where the sun does not rise or set in the next days.</td><td>a moment</td></tr>
 <tr><td><code>is_day</code></td><td>1 while the face shows the day, 0 while it shows the night. It follows the sun, or the watch settings "Day / night look" and "Always-on look" when the wearer chose day or night there.</td><td>0 or 1</td></tr>
-<tr><td><code>weather_kind</code></td><td>The weather the phone sent: 0 clear, 1 partly cloudy, 2 cloudy, 3 rain. No value when the phone sent none, or when it is older than 3 hours.</td><td>0 to 3</td></tr>
+<tr><td><code>weather_kind</code></td><td>The weather the phone sent: 0 clear, 1 partly cloudy, 2 cloudy, 3 rain. No value when the phone sent none, or when it is older than 3 hours. <code>[WEATHER.CONDITION]</code> gives it in the codes of the Watch Face Format.</td><td>0 to 3</td></tr>
 <tr><td><code>weather_temperature</code></td><td>The temperature that came with the weather, in degrees Celsius. No value without weather.</td><td>-50 to 50</td></tr>
 </tbody></table></div>
 
@@ -2862,6 +2983,9 @@ the wearer chooses. Try the buttons.</figcaption>
 title and the choices of the design. A formula and the <code>when</code> of a look read the choice as
 <code>v_opt_</code> and the name: the number of the chosen choice, from 0. While the wearer has not chosen, it is the
 <code>default</code>.</p>
+<p><code>[CONFIGURATION.&lt;name&gt;]</code> is the choice as the Watch Face Format gives it: a text, <code>"0"</code> for
+the first choice, <code>"1"</code> for the second. So it is compared with a text: <code>[CONFIGURATION.stars] == "2"</code>.
+Compared with a number it is a mistake.</p>
 <table>
 <tr><th>Key of an option</th><th>Type</th><th>Meaning</th></tr>
 <tr><td><code>name</code></td><td>text</td><td>Letters, digits and <code>_</code>. The formulas read <code>v_opt_&lt;name&gt;</code>.</td></tr>
@@ -3129,10 +3253,11 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <h3>Names in formulas</h3>
 <div class="scroll"><table>
 <tbody>
-<tr><th>Operators</th><td class="wrap"><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> <code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>==</code> <code>!=</code> <code>&amp;&amp;</code> <code>||</code> <code>!</code> <code>&amp;</code> <code>( )</code></td></tr>
-<tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>window</code> <code>pingpong</code> <code>missing</code></td></tr>
-<tr><th>Text functions</th><td class="wrap"><code>concat</code> <code>left</code> <code>right</code> <code>mid</code> <code>len</code> <code>upper</code> <code>lower</code> <code>trim</code> <code>rept</code> <code>substitute</code> <code>find</code> <code>padLeft</code> <code>padRight</code> <code>text</code> <code>fixed</code> <code>value</code> <code>glucose</code> <code>clock</code> <code>clockHour</code> <code>clockMinute</code> <code>ampm</code> <code>date</code>, and the <a href="#own-functions">own functions</a> of the design</td></tr>
+<tr><th>Operators</th><td class="wrap"><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> <code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>==</code> <code>!=</code> <code>&amp;&amp;</code> <code>||</code> <code>!</code> <code>&amp;</code> <code>? :</code> <code>( )</code></td></tr>
+<tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>window</code> <code>pingpong</code> <code>missing</code> <code>asin</code> <code>acos</code> <code>atan</code> <code>deg</code> <code>rad</code> <code>log2</code> <code>log10</code> <code>cbrt</code> <code>expm1</code></td></tr>
+<tr><th>Text functions</th><td class="wrap"><code>concat</code> <code>left</code> <code>right</code> <code>mid</code> <code>len</code> <code>upper</code> <code>lower</code> <code>trim</code> <code>rept</code> <code>substitute</code> <code>find</code> <code>padLeft</code> <code>padRight</code> <code>text</code> <code>fixed</code> <code>value</code> <code>glucose</code> <code>clock</code> <code>clockHour</code> <code>clockMinute</code> <code>ampm</code> <code>date</code> <code>textLength</code> <code>subText</code> <code>numberFormat</code> <code>icuText</code>, and the <a href="#own-functions">own functions</a> of the design</td></tr>
 <tr><th>Variables</th><td class="wrap"><code>t</code> <code>ms</code> <code>len</code> <code>env</code> <code>i</code> <code>n</code> <code>u</code> <code>px</code> <code>py</code> <code>p0</code> to <code>p7</code> <code>r1</code> to <code>r8</code> <code>bpm</code> <code>sec</code> <code>min</code> <code>hour</code> <code>rot0</code> <code>dx0</code> <code>cx0</code> <code>cy0</code> <code>pi</code></td></tr>
+<tr><th>Data sources</th><td class="wrap">The names of the Watch Face Format between <code>[ ]</code>, see <a href="#wff">5</a>.</td></tr>
 <tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_iob</code> <code>v_iob_bolus</code> <code>v_iob_basal</code> <code>v_cob</code> <code>v_basalRate</code> <code>v_bgi</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_heart_rate</code> <code>v_steps</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_moon_lit</code> <code>v_moon_limb</code> <code>v_moon_north</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>. And <code>v_opt_&lt;name&gt;</code> for each option, see <a href="#options">10</a>.</td></tr>
 </tbody></table></div>
 
@@ -3418,6 +3543,7 @@ FormulaError.prototype = Object.create(Error.prototype);
 var FUNCTIONS = {
   sin: [1, 1], cos: [1, 1], tan: [1, 1], atan2: [2, 2], abs: [1, 1], sign: [1, 1],
   sqrt: [1, 1], exp: [1, 1], log: [1, 1], pow: [2, 2],
+  asin: [1, 1], acos: [1, 1], atan: [1, 1], log2: [1, 1], log10: [1, 1], cbrt: [1, 1], expm1: [1, 1], deg: [1, 1], rad: [1, 1],
   floor: [1, 1], ceil: [1, 1], round: [1, 1], fract: [1, 1], mod: [2, 2],
   min: [2, 8], max: [2, 8], clamp: [3, 3], mix: [3, 3], step: [2, 2], smoothstep: [3, 3],
   'if': [3, 3], noise: [1, 2], hash: [1, 3], missing: [1, 1],
@@ -3479,6 +3605,11 @@ function noise2(x, y) {
 var FN = {
   sin: Math.sin, cos: Math.cos, tan: Math.tan, atan2: Math.atan2, abs: Math.abs, sign: Math.sign,
   sqrt: Math.sqrt, exp: Math.exp, log: Math.log, pow: Math.pow,
+  asin: Math.asin, acos: Math.acos, atan: Math.atan, log10: Math.log10, cbrt: Math.cbrt, expm1: Math.expm1,
+  // As the Watch Face Format works it out
+  log2: function (a) { return Math.log10(a) / Math.log10(2); },
+  deg: function (a) { return a * (180 / Math.PI); },
+  rad: function (a) { return a * (Math.PI / 180); },
   floor: Math.floor, ceil: Math.ceil,
   round: function (a) { return Math.floor(a + 0.5); },
   fract: function (a) { return a - Math.floor(a); },
@@ -3511,18 +3642,22 @@ var TEXT_FUNCTIONS = {
   concat: [2, 8], left: [2, 2], right: [2, 2], mid: [3, 3], len: [1, 1], upper: [1, 1], lower: [1, 1],
   trim: [1, 1], rept: [2, 2], substitute: [3, 3], find: [2, 3], padLeft: [2, 3], padRight: [2, 3],
   text: [2, 2], fixed: [2, 3], value: [1, 1], glucose: [1, 2],
-  clock: [0, 0], clockHour: [0, 0], clockMinute: [0, 0], ampm: [0, 0], date: [1, 1]
+  clock: [0, 0], clockHour: [0, 0], clockMinute: [0, 0], ampm: [0, 0], date: [1, 1],
+  textLength: [1, 1], subText: [3, 3], numberFormat: [2, 2], icuText: [1, 1]
 };
 /** The kind of each value: t a text (a number is written as one), n a number (TextFunctions.PARAMS). */
 var TEXT_PARAMS = {
   concat: 'tttttttt', left: 'tn', right: 'tn', mid: 'tnn', len: 't', upper: 't', lower: 't',
   trim: 't', rept: 'tn', substitute: 'ttt', find: 'ttn', padLeft: 'tnt', padRight: 'tnt',
   text: 'nt', fixed: 'nnn', value: 't', glucose: 'nt',
-  clock: '', clockHour: '', clockMinute: '', ampm: '', date: 't'
+  clock: '', clockHour: '', clockMinute: '', ampm: '', date: 't',
+  textLength: 't', subText: 'tnn', numberFormat: 'tn', icuText: 't'
 };
 /** The functions that give a number, and those whose text depends on the setting of the watch. */
-var TEXT_GIVES_NUMBER = { len: 1, find: 1, value: 1 };
-var TEXT_USES_SETTING = { upper: 1, lower: 1, value: 1, text: 1, fixed: 1, glucose: 1, clock: 1, clockHour: 1, clockMinute: 1, ampm: 1, date: 1 };
+var TEXT_GIVES_NUMBER = { len: 1, find: 1, value: 1, textLength: 1 };
+var TEXT_USES_SETTING = {
+  upper: 1, lower: 1, value: 1, text: 1, fixed: 1, glucose: 1, clock: 1, clockHour: 1, clockMinute: 1, ampm: 1, date: 1, numberFormat: 1, icuText: 1
+};
 var MGDL_TO_MMOLL = 1 / 18.01559;
 
 /** The characters of a text: one Unicode code point each. */
@@ -3557,12 +3692,14 @@ function readPattern(pattern) {
   }
   return out;
 }
-function writePattern(x, pattern) {
+/** `rounding` is how a half is rounded: 'halfEven' for numberFormat, else away from 0 (Java HALF_UP). */
+function writePattern(x, pattern, rounding) {
   var parts = readPattern(pattern);
   if (!parts || !isFinite(x)) return '';
   function digits(p, value) {
     return new Intl.NumberFormat(SETTING.locale, {
-      minimumIntegerDigits: p.whole, minimumFractionDigits: p.least, maximumFractionDigits: p.most, useGrouping: p.grouping
+      minimumIntegerDigits: p.whole, minimumFractionDigits: p.least, maximumFractionDigits: p.most, useGrouping: p.grouping,
+      roundingMode: rounding || 'halfExpand'
     }).format(value * (p.percent ? 100 : 1));
   }
   var zero = digits(parts[0], 0);
@@ -3646,6 +3783,13 @@ var TEXT_FN = {
   padRight: function (n, t, count) { return padText(t[0], whole(n[1]), count > 2 ? t[2] : ' ', false); },
   fixed: function (n, t, count) { var d = clamp(whole(n[1]), 0, 10); return writeNumber(n[0], d, d, count > 2 && truth(n[2])); },
   text: function (n, t) { return cutText(writePattern(n[0], t[1])); },
+  // The text functions of the Watch Face Format
+  textLength: function (n, t) { return chars(t[0]).length; },
+  subText: function (n, t) {
+    var all = chars(t[0]), from = clamp(whole(n[1]), 0, all.length), to = clamp(whole(n[2]), 0, all.length);
+    return to <= from ? '' : all.slice(from, to).join('');
+  },
+  numberFormat: function (n, t) { return cutText(writePattern(n[1], t[0], 'halfEven')); },
   glucose: function (n, t, count) {
     var unit = count > 1 ? t[1].toLowerCase() : '';
     var mgdl = unit.indexOf('mmol') === 0 ? false : (unit.indexOf('mg') === 0 ? true : SETTING.unitsMgdl);
@@ -3659,6 +3803,46 @@ function padText(s, n, fill, atStart) {
   for (var k = 0; k < missing; k++) out += f[k % f.length];
   return atStart ? out + s : s + out;
 }
+/**
+ * The data sources of the Watch Face Format that are a formula of our variables (WffSources.FORMULAS).
+ * The same table as the watch.
+ */
+var WFF_FORMULAS = {
+  MILLISECOND: 'round(fract(sec) * 1000)', SECOND: 'floor(sec)', SECOND_MILLISECOND: 'sec', MINUTE: 'min',
+  MINUTE_SECOND: 'min + floor(sec) / 60', SECONDS_IN_DAY: 'hour * 3600 + min * 60 + floor(sec)',
+  HOUR_0_23: 'hour', HOUR_0_11: 'mod(hour, 12)', HOUR_1_12: 'mod(hour + 11, 12) + 1', HOUR_1_24: 'if(hour == 0, 24, hour)',
+  HOUR_0_23_MINUTE: 'hour + min / 60', HOUR_0_11_MINUTE: 'mod(hour, 12) + min / 60', HOUR_1_12_MINUTE: 'mod(hour + 11, 12) + 1 + min / 60',
+  HOUR_1_24_MINUTE: 'if(hour == 0, 24, hour) + min / 60', AMPM_STATE: 'hour >= 12',
+  BATTERY_PERCENT: 'v_watch_battery', STEP_COUNT: 'v_steps', HEART_RATE: 'v_heart_rate',
+  MOON_PHASE_POSITION: 'min(floor(v_moon_phase * 29.530588853), 28)',
+  'WEATHER.IS_AVAILABLE': '!missing(v_weather_kind)',
+  'WEATHER.CONDITION': 'missing(v_weather_kind) ? 0 : v_weather_kind == 0 ? 1 : v_weather_kind == 1 ? 14 : v_weather_kind == 2 ? 2 : v_weather_kind == 3 ? 6 : 0',
+  'WEATHER.TEMPERATURE': 'round(v_weather_temperature)', 'WEATHER.TEMPERATURE_UNIT': '1'
+};
+/** The date sources (DatePart), from the clock time of the frame in the zone of this browser. */
+var WFF_DATE_PARTS = {
+  DAY: function (d) { return d.getDate(); },
+  DAY_0_30: function (d) { return d.getDate() - 1; },
+  MONTH: function (d) { return d.getMonth() + 1; },
+  MONTH_0_11: function (d) { return d.getMonth(); },
+  YEAR: function (d) { return clamp(d.getFullYear(), 1902, 2100); },
+  DAY_OF_YEAR: function (d) { return Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 1)) / 86400000) + 1; },
+  DAYS_IN_MONTH: function (d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); },
+  // 1 is Sunday, 7 is Saturday
+  DAY_OF_WEEK: function (d) { return d.getDay() + 1; }
+};
+
+/** True when an icuText pattern uses only the letters ICU and java.time read the same (TextFunctions.isIcuPattern). */
+function isIcuPattern(pattern) {
+  var quoted = false;
+  for (var i = 0; i < pattern.length; i++) {
+    var c = pattern.charAt(i);
+    if (c === "'") quoted = !quoted;
+    else if (!quoted && /[A-Za-z]/.test(c) && 'GyMdEahHkKmsSz'.indexOf(c) < 0) return false;
+  }
+  return true;
+}
+
 /** The date pattern of each clock function (ClockText). */
 function clockPattern(name) {
   if (name === 'clock') return SETTING.is24Hour ? 'HH:mm' : 'hh:mm';
@@ -3667,7 +3851,7 @@ function clockPattern(name) {
   return SETTING.is24Hour ? '' : 'a';
 }
 
-/** Kinds: 'n' number, 'i' name, 's' text, 'o' operator, '(' ')' ',' */
+/** Kinds: 'n' number, 'i' name, 's' text, 'd' data source (the name between [ and ]), 'o' operator, '(' ')' ',' */
 function tokenize(text) {
   var tokens = [], i = 0, n = text.length;
   function isDigit(c) { return c >= '0' && c <= '9'; }
@@ -3707,11 +3891,17 @@ function tokenize(text) {
     } else if (c === '(' || c === ')' || c === ',') {
       tokens.push({ kind: c, text: c });
       i++;
+    } else if (c === '[') {
+      // A data source of the Watch Face Format, like [HOUR_0_23]
+      var close = text.indexOf(']', i);
+      if (close < 0) throw new FormulaError("a '[' has no closing ']' in '" + text + "'");
+      tokens.push({ kind: 'd', text: text.substring(i + 1, close).trim() });
+      i = close + 1;
     } else {
       var two = i + 1 < n ? text.substring(i, i + 2) : '';
       var op;
       if (['<=', '>=', '==', '!=', '&&', '||'].indexOf(two) >= 0) op = two;
-      else if ('+-*/%<>!&'.indexOf(c) >= 0) op = c;
+      else if ('+-*/%<>!&?:'.indexOf(c) >= 0) op = c;
       else throw new FormulaError("unexpected '" + c + "' in '" + text + "'");
       tokens.push({ kind: 'o', text: op });
       i += op.length;
@@ -3806,9 +3996,54 @@ function readFormula(text, constants, names, own, state) {
   }
   function expression() {
     if (++depth > FORMULA_MAX_DEPTH) throw new FormulaError('formula is nested too deep');
-    var node = or();
+    var node = conditional();
     depth--;
     return node;
+  }
+  /** `c ? a : b`, the same as if(c, a, b): the weakest operator, and `a ? b : c ? d : e` is `a ? b : (c ? d : e)`. */
+  function conditional() {
+    var condition = or();
+    if (!isOp('?')) return condition;
+    pos++;
+    var a = expression();
+    if (!isOp(':')) throw new FormulaError("'?' needs a ':' but found '" + peekText() + "'");
+    pos++;
+    var b = expression();
+    return choose(num(condition, '?'), a, b, '?');
+  }
+  /** `a` when `condition` is true, else `b`: two numbers or two texts. */
+  function choose(condition, a, b, what) {
+    if (!!a.tx !== !!b.tx) throw new FormulaError("'" + what + "' needs two numbers or two texts to choose from");
+    var C = condition.ev, T = a.ev, E = b.ev;
+    return fold(count({ k: false, tx: !!a.tx, ev: function (v) { return truth(C(v)) ? T(v) : E(v); } }), [condition, a, b]);
+  }
+  /** A data source of the Watch Face Format (WffSources). */
+  function source(name) {
+    if (has(WFF_FORMULAS, name)) {
+      try {
+        return readFormula(WFF_FORMULAS[name], null, names, null, { params: null, using: state.using, counter: state.counter, used: used });
+      } catch (e) {
+        if (!(e instanceof FormulaError)) throw e;
+        throw new FormulaError('[' + name + '] cannot be used here: ' + e.message);
+      }
+    }
+    if (has(WFF_DATE_PARTS, name)) {
+      if (!own || !own.clock) throw new FormulaError('[' + name + '] cannot be used here: there is no clock');
+      var clock = own.clock, part = WFF_DATE_PARTS[name];
+      return count({ k: false, s: true, ev: function () { return part(new Date(clock.nowMs)); } });
+    }
+    if (name === 'IS_24_HOUR_MODE') {
+      if (!own || !own.clock) throw new FormulaError('[' + name + '] cannot be used here: there is no clock');
+      return count({ k: false, s: true, ev: function () { return SETTING.is24Hour ? 1 : 0; } });
+    }
+    var option = /^CONFIGURATION\.([A-Za-z0-9_]+)$/.exec(name);
+    if (option) {
+      var index = names ? names('v_opt_' + option[1]) : null;
+      if (index === null || index === undefined) throw new FormulaError('[' + name + '] cannot be used here');
+      used[index] = true;
+      return count({ k: false, tx: true, ev: function (v) { var x = v[index]; return x !== x ? '' : String(Math.trunc(x)); } });
+    }
+    throw new FormulaError("unknown data source '[" + name + "]'");
   }
   function or() {
     var left = and();
@@ -3874,6 +4109,7 @@ function readFormula(text, constants, names, own, state) {
     var token = tokens[pos];
     if (token.kind === 'n') { pos++; return count(konst(token.number)); }
     if (token.kind === 's') { pos++; return count(konst(cutText(token.text), true)); }
+    if (token.kind === 'd') { pos++; return source(token.text); }
     if (token.kind === '(') {
       pos++;
       var inner = expression();
@@ -3909,21 +4145,14 @@ function readFormula(text, constants, names, own, state) {
     var arity = FUNCTIONS[name];
     if (args.length < arity[0] || args.length > arity[1])
       throw new FormulaError("'" + name + "' takes " + arity[0] + '..' + arity[1] + ' values, not ' + args.length);
-    var f, isText = false;
-    if (name === 'if') {
-      var C = num(args[0], name).ev, T = args[1].ev, E = args[2].ev;
-      if (!!args[1].tx !== !!args[2].tx) throw new FormulaError("'if' needs two numbers or two texts to choose from");
-      isText = !!args[1].tx;
-      f = function (v) { return truth(C(v)) ? T(v) : E(v); };
-    } else {
-      args.forEach(function (arg) { num(arg, name); });
-      var work = FN[name], a0 = args[0].ev, a1 = args.length > 1 ? args[1].ev : null, a2 = args.length > 2 ? args[2].ev : null;
-      if (args.length === 1) f = function (v) { return work(a0(v)); };
-      else if (args.length === 2) f = function (v) { return work(a0(v), a1(v)); };
-      else if (args.length === 3) f = function (v) { return work(a0(v), a1(v), a2(v)); };
-      else f = function (v) { var list = []; for (var i = 0; i < args.length; i++) list.push(args[i].ev(v)); return work.apply(null, list); };
-    }
-    return fold(count({ k: false, tx: isText, ev: f }), args);
+    if (name === 'if') return choose(num(args[0], name), args[1], args[2], name);
+    args.forEach(function (arg) { num(arg, name); });
+    var f, work = FN[name], a0 = args[0].ev, a1 = args.length > 1 ? args[1].ev : null, a2 = args.length > 2 ? args[2].ev : null;
+    if (args.length === 1) f = function (v) { return work(a0(v)); };
+    else if (args.length === 2) f = function (v) { return work(a0(v), a1(v)); };
+    else if (args.length === 3) f = function (v) { return work(a0(v), a1(v), a2(v)); };
+    else f = function (v) { var list = []; for (var i = 0; i < args.length; i++) list.push(args[i].ev(v)); return work.apply(null, list); };
+    return fold(count({ k: false, ev: f }), args);
   }
   /** A text function (TextFunctions.call). */
   function textCall(name, given) {
@@ -3936,21 +4165,25 @@ function readFormula(text, constants, names, own, state) {
       return arg;
     });
     var isNumber = has(TEXT_GIVES_NUMBER, name), usesSetting = has(TEXT_USES_SETTING, name);
-    if (name === 'clock' || name === 'clockHour' || name === 'clockMinute' || name === 'ampm' || name === 'date') {
+    if (name === 'clock' || name === 'clockHour' || name === 'clockMinute' || name === 'ampm' || name === 'date' || name === 'icuText') {
       var hour = names ? names('hour') : null, minute = names ? names('min') : null;
       if (hour === null || hour === undefined || minute === null || minute === undefined || !own || !own.clock)
         throw new FormulaError("'" + name + "' cannot be used here: there is no clock");
       used[hour] = true;
       used[minute] = true;
       var clock = own.clock;
-      if (name === 'date') {
-        var P = args[0].ev;
-        if (args[0].k && writeDate(0, args[0].v) === null) throw new FormulaError("'" + args[0].v + "' is not a format");
-        return { k: false, tx: true, s: true, ev: function (v) { var out = writeDate(clock.nowMs, P(v)); return out === null ? '' : cutText(out); } };
+      if (name === 'date' || name === 'icuText') {
+        var P = args[0].ev, icu = name === 'icuText';
+        if (args[0].k && (writeDate(0, args[0].v) === null || (icu && !isIcuPattern(args[0].v)))) throw new FormulaError("'" + args[0].v + "' is not a format");
+        return {
+          k: false, tx: true, s: true,
+          ev: function (v) { var p = P(v), out = icu && !isIcuPattern(p) ? null : writeDate(clock.nowMs, p); return out === null ? '' : cutText(out); }
+        };
       }
       return { k: false, tx: true, s: true, ev: function () { var p = clockPattern(name); return p ? writeDate(clock.nowMs, p) : ''; } };
     }
     if (name === 'text' && args[1].k && !readPattern(args[1].v)) throw new FormulaError("'" + args[1].v + "' is not a format");
+    if (name === 'numberFormat' && args[0].k && !readPattern(args[0].v)) throw new FormulaError("'" + args[0].v + "' is not a format");
     var work = TEXT_FN[name], n = [], t = [], size = args.length;
     return {
       k: false, tx: !isNumber, s: usesSetting,
@@ -4257,6 +4490,12 @@ function enumOf(name, names, fallback) {
   var lower = String(name).toLowerCase();
   return names.indexOf(lower) >= 0 ? lower : fallback;
 }
+/** LayerBlend.of: a blend by our name or by its name in the Watch Face Format, in any case; else normal. */
+var BLEND_NAMES = { normal: 'normal', add: 'add', screen: 'screen', erase: 'erase', inside: 'inside', src_over: 'normal', plus: 'add', dst_out: 'erase', src_in: 'inside' };
+function blendOf(name) {
+  var lower = String(name).toLowerCase();
+  return has(BLEND_NAMES, lower) ? BLEND_NAMES[lower] : 'normal';
+}
 /** WakeAnimationJson.number: a number, or a formula of fixed numbers; null when it is neither. */
 function numberOf(json, key) {
   var value = json[key];
@@ -4430,7 +4669,7 @@ function readLayer(json, env) {
   return {
     source: source,
     slot: source.type === 'view' ? 'views' : enumOf(optString(json.slot), ['back', 'views', 'front'], 'back'),
-    blend: enumOf(optString(json.blend), ['normal', 'add', 'screen', 'erase', 'inside'], 'normal'),
+    blend: blendOf(optString(json.blend)),
     group: source.type === 'view' ? null : (optString(json.group) || null),
     copies: copies, props: props, lets: readLets(json), clip: clip,
     glow: isObj(json.glow) ? { color: env.color(optString(json.glow.color), WHITE), radius: floatOf(json.glow, 'radius', 10) } : null,

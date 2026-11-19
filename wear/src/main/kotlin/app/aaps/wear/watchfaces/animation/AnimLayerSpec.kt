@@ -217,7 +217,8 @@ enum class LayerSlot { BACK, VIEWS, FRONT }
 
 /**
  * How a layer is laid over what is below it. [ADD] and [SCREEN] only make things lighter: for light,
- * like an aurora or a glow.
+ * like an aurora or a glow. Each also has its name in the Watch Face Format ([wff]): they are drawn with
+ * exactly those modes.
  *
  * [ERASE] and [INSIDE] work on the group of the layer (see [AnimLayerSpec.group]) and need one:
  * - [ERASE]: the layer is not drawn; it takes away what the group has drawn so far, as much as the
@@ -226,7 +227,16 @@ enum class LayerSlot { BACK, VIEWS, FRONT }
  *   is, and it replaces it there. Only inside the box of the layer itself (the rectangle of a picture,
  *   the outline of a shape): keep what was drawn before inside that box.
  */
-enum class LayerBlend(val needsGroup: Boolean = false) { NORMAL, ADD, SCREEN, ERASE(true), INSIDE(true) }
+enum class LayerBlend(val wff: String, val needsGroup: Boolean = false) {
+
+    NORMAL("SRC_OVER"), ADD("PLUS"), SCREEN("SCREEN"), ERASE("DST_OUT", true), INSIDE("SRC_IN", true);
+
+    companion object {
+
+        /** The blend called [name], by our name or by its name in the Watch Face Format ([wff]), in any case; null when there is none. */
+        fun of(name: String): LayerBlend? = entries.firstOrNull { it.name.equals(name, ignoreCase = true) || it.wff.equals(name, ignoreCase = true) }
+    }
+}
 
 /** How many times a layer is drawn. Each copy has its own number `i` (from 0) of `n`, and `u` = i / (n - 1). */
 sealed interface LayerCopies {

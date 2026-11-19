@@ -82,29 +82,36 @@ internal class TextFunctions(private val setting: FormulaSetting, private val na
             else args[i] as? Node ?: throw FormulaException("'$name' needs a number as value ${i + 1}, not a text")
         }
         return when (name) {
-            "len"         -> TextNumber(parts) { _, t -> count(t[0]!!).toDouble() }
-            "find"        -> TextNumber(parts) { n, t -> find(t[0]!!, t[1]!!, if (parts.size > 2) whole(n[2]) else 1).toDouble() }
-            "value"       -> TextNumber(parts, usesSetting = true) { _, t -> value(t[0]!!) }
-            "upper"       -> TextCall(parts, setting, usesSetting = true) { _, t, s -> t[0]!!.uppercase(s.locale) }
-            "lower"       -> TextCall(parts, setting, usesSetting = true) { _, t, s -> t[0]!!.lowercase(s.locale) }
-            "concat"      -> join(parts)
-            "left"        -> TextCall(parts, setting) { n, t, _ -> left(t[0]!!, whole(n[1])) }
-            "right"       -> TextCall(parts, setting) { n, t, _ -> right(t[0]!!, whole(n[1])) }
-            "mid"         -> TextCall(parts, setting) { n, t, _ -> mid(t[0]!!, whole(n[1]), whole(n[2])) }
-            "trim"        -> TextCall(parts, setting) { _, t, _ -> trim(t[0]!!) }
-            "rept"        -> TextCall(parts, setting) { n, t, _ -> rept(t[0]!!, whole(n[1])) }
-            "substitute"  -> TextCall(parts, setting) { _, t, _ -> if (t[1]!!.isEmpty()) t[0]!! else cut(t[0]!!.replace(t[1]!!, t[2]!!)) }
-            "padLeft"     -> TextCall(parts, setting) { n, t, _ -> pad(t[0]!!, whole(n[1]), if (parts.size > 2) t[2]!! else " ", atStart = true) }
-            "padRight"    -> TextCall(parts, setting) { n, t, _ -> pad(t[0]!!, whole(n[1]), if (parts.size > 2) t[2]!! else " ", atStart = false) }
-            "fixed"       -> NumberText(NumberText.FIXED, parts, setting)
-            "text"        -> NumberText(NumberText.PATTERN, parts, setting).also { checkPattern(parts[1]) { p -> DecimalFormat(p) } }
-            "glucose"     -> NumberText(NumberText.GLUCOSE, parts, setting)
-            "clock"       -> ClockText(ClockText.CLOCK, clockParts(name, null), setting)
-            "clockHour"   -> ClockText(ClockText.HOUR, clockParts(name, null), setting)
-            "clockMinute" -> ClockText(ClockText.MINUTE, clockParts(name, null), setting)
-            "ampm"        -> ClockText(ClockText.AM_PM, clockParts(name, null), setting)
-            "date"        -> ClockText(ClockText.PATTERN, clockParts(name, parts[0]), setting).also { checkPattern(parts[0]) { p -> DateTimeFormatter.ofPattern(p) } }
-            else          -> throw IllegalStateException(name)
+            "len"          -> TextNumber(parts) { _, t -> count(t[0]!!).toDouble() }
+            "find"         -> TextNumber(parts) { n, t -> find(t[0]!!, t[1]!!, if (parts.size > 2) whole(n[2]) else 1).toDouble() }
+            "value"        -> TextNumber(parts, usesSetting = true) { _, t -> value(t[0]!!) }
+            "upper"        -> TextCall(parts, setting, usesSetting = true) { _, t, s -> t[0]!!.uppercase(s.locale) }
+            "lower"        -> TextCall(parts, setting, usesSetting = true) { _, t, s -> t[0]!!.lowercase(s.locale) }
+            "concat"       -> join(parts)
+            "left"         -> TextCall(parts, setting) { n, t, _ -> left(t[0]!!, whole(n[1])) }
+            "right"        -> TextCall(parts, setting) { n, t, _ -> right(t[0]!!, whole(n[1])) }
+            "mid"          -> TextCall(parts, setting) { n, t, _ -> mid(t[0]!!, whole(n[1]), whole(n[2])) }
+            "trim"         -> TextCall(parts, setting) { _, t, _ -> trim(t[0]!!) }
+            "rept"         -> TextCall(parts, setting) { n, t, _ -> rept(t[0]!!, whole(n[1])) }
+            "substitute"   -> TextCall(parts, setting) { _, t, _ -> if (t[1]!!.isEmpty()) t[0]!! else cut(t[0]!!.replace(t[1]!!, t[2]!!)) }
+            "padLeft"      -> TextCall(parts, setting) { n, t, _ -> pad(t[0]!!, whole(n[1]), if (parts.size > 2) t[2]!! else " ", atStart = true) }
+            "padRight"     -> TextCall(parts, setting) { n, t, _ -> pad(t[0]!!, whole(n[1]), if (parts.size > 2) t[2]!! else " ", atStart = false) }
+            "fixed"        -> NumberText(NumberText.FIXED, parts, setting)
+            "text"         -> NumberText(NumberText.PATTERN, parts, setting).also { checkPattern(parts[1]) { p -> DecimalFormat(p) } }
+            "glucose"      -> NumberText(NumberText.GLUCOSE, parts, setting)
+            "clock"        -> ClockText(ClockText.CLOCK, clockParts(name, null), setting)
+            "clockHour"    -> ClockText(ClockText.HOUR, clockParts(name, null), setting)
+            "clockMinute"  -> ClockText(ClockText.MINUTE, clockParts(name, null), setting)
+            "ampm"         -> ClockText(ClockText.AM_PM, clockParts(name, null), setting)
+            "date"         -> ClockText(ClockText.PATTERN, clockParts(name, parts[0]), setting).also { checkPattern(parts[0]) { p -> DateTimeFormatter.ofPattern(p) } }
+            // The same names as in the Watch Face Format, with the same meaning
+            "textLength"   -> TextNumber(parts) { _, t -> count(t[0]!!).toDouble() }
+            "subText"      -> TextCall(parts, setting) { n, t, _ -> subText(t[0]!!, whole(n[1]), whole(n[2])) }
+            "numberFormat" -> NumberText(NumberText.NUMBER_FORMAT, parts, setting).also { checkPattern(parts[0]) { p -> DecimalFormat(p) } }
+            "icuText"      -> ClockText(ClockText.ICU, clockParts(name, parts[0]), setting).also {
+                checkPattern(parts[0]) { p -> require(isIcuPattern(p)) { p }; DateTimeFormatter.ofPattern(p) }
+            }
+            else           -> throw IllegalStateException(name)
         }
     }
 
@@ -155,7 +162,8 @@ internal class TextFunctions(private val setting: FormulaSetting, private val na
             "concat" to "tttttttt", "left" to "tn", "right" to "tn", "mid" to "tnn", "len" to "t", "upper" to "t", "lower" to "t",
             "trim" to "t", "rept" to "tn", "substitute" to "ttt", "find" to "ttn", "padLeft" to "tnt", "padRight" to "tnt",
             "text" to "nt", "fixed" to "nnn", "value" to "t", "glucose" to "nt",
-            "clock" to "", "clockHour" to "", "clockMinute" to "", "ampm" to "", "date" to "t"
+            "clock" to "", "clockHour" to "", "clockMinute" to "", "ampm" to "", "date" to "t",
+            "textLength" to "t", "subText" to "tnn", "numberFormat" to "tn", "icuText" to "t"
         )
 
         /** The names of the text functions, with the number of values each takes. */
@@ -163,7 +171,8 @@ internal class TextFunctions(private val setting: FormulaSetting, private val na
             "concat" to 2..8, "left" to 2..2, "right" to 2..2, "mid" to 3..3, "len" to 1..1, "upper" to 1..1, "lower" to 1..1,
             "trim" to 1..1, "rept" to 2..2, "substitute" to 3..3, "find" to 2..3, "padLeft" to 2..3, "padRight" to 2..3,
             "text" to 2..2, "fixed" to 2..3, "value" to 1..1, "glucose" to 1..2,
-            "clock" to 0..0, "clockHour" to 0..0, "clockMinute" to 0..0, "ampm" to 0..0, "date" to 1..1
+            "clock" to 0..0, "clockHour" to 0..0, "clockMinute" to 0..0, "ampm" to 0..0, "date" to 1..1,
+            "textLength" to 1..1, "subText" to 3..3, "numberFormat" to 2..2, "icuText" to 1..1
         )
 
         /** [x] as a whole number for a count or a position: cut towards 0, a missing value is 0. */
@@ -196,6 +205,37 @@ internal class TextFunctions(private val setting: FormulaSetting, private val na
             if (n <= 0 || first >= size) return ""
             val from = text.offsetByCodePoints(0, first)
             return if (first + n >= size) text.substring(from) else text.substring(from, text.offsetByCodePoints(from, n))
+        }
+
+        /**
+         * The characters of [text] from position [start] up to, not with, position [end], counted from 0,
+         * as `subText` of the Watch Face Format: `subText('abc def', 2, 5)` is "c d". Positions outside the
+         * text count as its start or its end.
+         */
+        fun subText(text: String, start: Int, end: Int): String {
+            val size = count(text)
+            val from = start.coerceIn(0, size)
+            val to = end.coerceIn(0, size)
+            if (to <= from) return ""
+            val first = text.offsetByCodePoints(0, from)
+            return text.substring(first, text.offsetByCodePoints(first, to - from))
+        }
+
+        /**
+         * The pattern letters of `icuText` that ICU (the Watch Face Format) and java.time read the same:
+         * era, year, month, day, day of the week, am/pm, the hours, minutes, seconds, part of a second
+         * and the name of the zone.
+         */
+        private const val ICU_LETTERS = "GyMdEahHkKmsSz"
+
+        /** True when [pattern] uses only [ICU_LETTERS]; text between quotes does not count. */
+        fun isIcuPattern(pattern: String): Boolean {
+            var quoted = false
+            for (c in pattern) {
+                if (c == '\'') quoted = !quoted
+                else if (!quoted && c.isLetter() && c !in ICU_LETTERS) return false
+            }
+            return true
         }
 
         /** No spaces at the ends, and one space where there were more. */
@@ -297,12 +337,15 @@ internal class NumberText(private val kind: Int, args: Array<Part>, setting: For
     private var formatPattern: String? = null
 
     override fun make(n: DoubleArray, t: Array<String?>): String {
-        val x = n[0]
+        // numberFormat(pattern, x) has the number second
+        val x = if (kind == NUMBER_FORMAT) n[1] else n[0]
         if (!x.isFinite()) return ""
         return when (kind) {
-            GENERAL -> write(x, format(MAX_GENERAL_DECIMALS, 0, false))
-            FIXED   -> TextFunctions.whole(n[1]).coerceIn(0, MAX_DECIMALS).let { write(x, format(it, it, args.size > 2 && n[2] != 0.0 && !n[2].isNaN())) }
-            PATTERN -> pattern(t[1]!!)?.let { write(x, it) } ?: ""
+            GENERAL       -> write(x, format(MAX_GENERAL_DECIMALS, 0, false))
+            FIXED         -> TextFunctions.whole(n[1]).coerceIn(0, MAX_DECIMALS).let { write(x, format(it, it, args.size > 2 && n[2] != 0.0 && !n[2].isNaN())) }
+            PATTERN       -> pattern(t[1]!!, RoundingMode.HALF_UP)?.let { write(x, it) } ?: ""
+            // As java.text.DecimalFormat does by itself, which the Watch Face Format refers to: a half goes to the even digit
+            NUMBER_FORMAT -> pattern(t[0]!!, RoundingMode.HALF_EVEN)?.let { write(x, it) } ?: ""
             else    -> {
                 val unit = if (args.size > 1) t[1]!!.lowercase(Locale.ROOT) else ""
                 val mgdl = if (unit.startsWith("mmol")) false else if (unit.startsWith("mg")) true else setting.unitsMgdl
@@ -330,12 +373,12 @@ internal class NumberText(private val kind: Int, args: Array<Part>, setting: For
         }
     }
 
-    /** The format of the spreadsheet style [pattern], or null when it is not one. */
-    private fun pattern(pattern: String): DecimalFormat? {
+    /** The format of the spreadsheet style [pattern] that rounds a half by [rounding], or null when it is not one. */
+    private fun pattern(pattern: String, rounding: RoundingMode): DecimalFormat? {
         format?.let { if (formatPattern === pattern && formatGeneration == setting.generation) return it }
         return try {
             DecimalFormat(pattern, setting.symbols).also {
-                it.roundingMode = RoundingMode.HALF_UP
+                it.roundingMode = rounding
                 keep(it, -1, false, pattern)
             }
         } catch (_: IllegalArgumentException) {
@@ -365,6 +408,9 @@ internal class NumberText(private val kind: Int, args: Array<Part>, setting: For
         /** `glucose(mgdl [, unit])`. */
         const val GLUCOSE = 3
 
+        /** `numberFormat(format, x)` of the Watch Face Format: `text(x, format)` with the values the other way round. */
+        const val NUMBER_FORMAT = 4
+
         const val MAX_GENERAL_DECIMALS = 6
         const val MAX_DECIMALS = 10
     }
@@ -389,6 +435,7 @@ internal class ClockText(private val kind: Int, args: Array<Part>, setting: Form
             HOUR   -> if (setting.is24Hour) "HH" else "hh"
             MINUTE -> "mm"
             AM_PM  -> if (setting.is24Hour) return "" else "a"
+            ICU    -> t[0]!!.takeIf { TextFunctions.isIcuPattern(it) } ?: return ""
             else   -> t[0]!!
         }
         val format = formatter?.takeIf { formatterPattern === pattern && formatterGeneration == setting.generation } ?: try {
@@ -415,5 +462,8 @@ internal class ClockText(private val kind: Int, args: Array<Part>, setting: Form
         const val MINUTE = 2
         const val AM_PM = 3
         const val PATTERN = 4
+
+        /** `icuText(format)` of the Watch Face Format: `date(format)`, for the letters ICU and java.time read the same. */
+        const val ICU = 5
     }
 }
