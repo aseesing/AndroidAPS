@@ -3,16 +3,19 @@
 Cut on 2026-11-18 to finish the refactor sooner. The plan and the new design format are in
 `ANIMATION_REFACTOR_PLAN.md` (section 7). Items are in the order that makes sense to pick them up.
 
-## 1. Port the designs, then delete the old keys
+## 1. The old design keys are gone from the watch
 
-The engine core only knows the new generic model. A translator (`watchfaces/design/LegacyDesign.kt`)
-rewrites the older design keys at load time, so every existing zip keeps working unchanged.
+Done on 2026-11-19. The generators in `aaps-watchfaces` still write their short keys (`rain`, `dayLook`,
+`orbit` and so on), and `DesignShorthand` there rewrites a design into the form the watch reads when a
+zip is made. All zips in `cwf-designs` are in that form (a test checks it), with the same pixels as
+before (175 snapshot frames). The watch code no longer has the translator (`LegacyDesign`).
 
-- [ ] Port the generators in `aaps-watchfaces` to emit the new keys: presets as `{"use": ...}` layers,
-      `"image": "@moon"` for `moon: true` and `moonLight`, view layers with `rest` for `orbit`, `looks`
-      for `dayLook` / `weatherLooks`. Regenerate the zips; compare pixels with `cwf-snapshots/baseline`.
-- [ ] A test in the design repo that no zip in `cwf-designs/` holds an old key.
-- [ ] Delete `LegacyDesign.kt` and its tests. Zips on the watch must then be sent again.
+- [ ] A zip made before 2026-11-19 that is still on a watch or a phone loses its animation, its looks and
+      its moon with this build, without an error: send the new zip again. A night face is a zip too.
+- [ ] `CwfPlaceNeeds` (phone) still knows the old keys next to the new ones. Take the old ones out, with
+      their tests, once no old zip is in use.
+- [ ] Write the generators in the new keys directly, and drop `DesignShorthand`, when a design needs
+      something the short keys cannot say.
 - [ ] Update the TypeScript designer (`aaps-watchfaces/designer`) to the new model.
 
 ## 2. Generic features not built yet (no current design needs them)
@@ -74,8 +77,8 @@ Must be checked on real devices (reasoned out, not tested):
       `FrameHandOff` has no unit test.
 
 Tests: none ignored. `DayOverlayTest` and `OrbitTest` were removed; their cases moved to `LooksTest`
-and `LegacyDesignTest`. `MoonPictureTest` lost its `moonLight` test (the key is read by the translator
-now). Not added: a unit test for `FrameHandOff`; the light-path test of section 4.
+and the test of the translator, which now lives in the design repository (`DesignShorthandTest`).
+`MoonPictureTest` lost its `moonLight` test (the key is read by the translator). Not added: a unit test for `FrameHandOff`; the light-path test of section 4.
 
 The snapshot harness now renders each design in its own JVM (`-PsnapshotOut`), which seems to remove the
 font flake; the item in section 4 can be dropped if it stays away.

@@ -87,7 +87,6 @@ import app.aaps.wear.watchfaces.daynight.MoonPicture
 import app.aaps.wear.watchfaces.daynight.NightFace
 import app.aaps.wear.watchfaces.daynight.SkyTimes
 import app.aaps.wear.watchfaces.daynight.StoredWeather
-import app.aaps.wear.watchfaces.design.LegacyDesign
 import app.aaps.wear.watchfaces.design.Looks
 import app.aaps.wear.watchfaces.daynight.placeOf
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
@@ -352,7 +351,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 if (json == null || json.has(WakeAnimationSpec.JSON_KEY)) add(WakeLength.row())
                 // Day face and night face: only when there is a night face to choose
                 // PERSONAL PATCH: also for a design with a look of the day, and with no design read
-                if (hasNightFace || json == null || Looks.reads(LegacyDesign.translate(json), ValueMap.IS_DAY.key)) {
+                if (hasNightFace || json == null || Looks.reads(json, ValueMap.IS_DAY.key)) {
                     add(DayNightChoice.activeRow())
                     add(DayNightChoice.alwaysOnRow())
                 }
@@ -1072,7 +1071,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     }
 
     /** Reads the optional `animation` key of the design [json]; [image] finds a picture of the zip by its key. See [WakeAnimationJson]. */
-    internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = WakeAnimationJson(::getColor, image).read(LegacyDesign.translate(json)) // PERSONAL PATCH: old keys too, see LegacyDesign
+    internal fun readWakeAnimation(json: JSONObject, image: (String) -> Drawable?): WakeAnimationSpec? = WakeAnimationJson(::getColor, image).read(json)
 
     override fun onTimeChanged(oldTime: app.aaps.wear.watchfaces.utils.WatchFaceTime, newTime: app.aaps.wear.watchfaces.utils.WatchFaceTime) {
         super.onTimeChanged(oldTime, newTime)
@@ -1238,7 +1237,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 val daySwap = showsNightFace != styleShowsNightFace
                 styleShowsNightFace = showsNightFace
                 val colours = ColourLooks.choices { key, default -> sp.getString(key, default) } // PERSONAL PATCH
-                val parsed = (if (showsNightFace) parsedNightJson else parsedJson).parse(face.json, face.resData.keys) { LegacyDesign.translate(it, face.resData.keys) } // PERSONAL PATCH: old keys, see LegacyDesign
+                val parsed = (if (showsNightFace) parsedNightJson else parsedJson).parse(face.json)
                 val design = colourLooks.apply(parsed, colours) // PERSONAL PATCH: colours
                 // PERSONAL PATCH: the looks whose conditions are true now (day, weather), see Looks
                 val look = (if (showsNightFace) nightLooks else looks).apply(design) { key -> if (key == ValueMap.IS_DAY.key) (if (showDay) 1.0 else 0.0) else designValue(key) }

@@ -57,7 +57,7 @@ class WakeAnimationJsonTest {
         val dayNight = listOf(R.string.key_day_night_look, R.string.key_day_night_always_on)
         assertThat(keys("""{"looks": [{"when": "v_is_day == 1", "patch": {}}]}""")).containsAtLeastElementsIn(dayNight)
         // the old day look too, through the translation
-        assertThat(keys("""{"dayLook": {}}""")).containsAtLeastElementsIn(dayNight)
+        assertThat(keys("""{"looks": [{"when": "v_is_day == 1", "patch": {}}]}""")).containsAtLeastElementsIn(dayNight)
         // a look of the weather only, and "day", the view of the day of the month, are not a day look
         assertThat(keys("""{"looks": [{"when": "v_weather_kind == 3", "patch": {}}]}""")).containsNoneIn(dayNight)
         assertThat(keys("""{"day": {}}""")).containsNoneIn(dayNight)

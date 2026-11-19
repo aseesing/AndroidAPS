@@ -46,7 +46,8 @@ as before.
 | `local/wear-design-manage` | Phone: a delete button for each design in the list of watch face designs; a loading indicator while a new face goes to the watch; the watch face settings button on the night face card too |
 | `local/wear-start-after-unlock` | The watch app waits for the unlock of the watch before it starts: Android may start it earlier after a boot, and it then crashed again and again until the unlock |
 | `local/wear-log-download` | Phone: a "Download watch log" page on the Wear screen saves the log of the watch app as a zip in Downloads, over Wi-Fi (all files) or Bluetooth (the newest 10); it reuses the Wi-Fi path of the watch app update |
-| `local/wear-anim-generic` | Watch: one generic layer engine for the wake-up animation and the drawing of the personal designs. A layer is an image, a named app picture (`@moon`), a shape or a view, with formulas for every number; the old effects (rain, glitch, pulse and so on) are built-in templates; day and weather looks are one list of `looks`. Old design keys are still read (`LegacyDesign`). What is left is in `ANIMATION_TODO.md` |
+| `local/wear-anim-generic` | Watch: one generic layer engine for the wake-up animation and the drawing of the personal designs. A layer is an image, a named app picture (`@moon`), a shape or a view, with formulas for every number; the old effects (rain, glitch, pulse and so on) are built-in templates; day and weather looks are one list of `looks`. What is left is in `ANIMATION_TODO.md` |
+| `local/wear-anim-no-old-keys` | Watch: the old design keys (`rain`, `dayLook`, `orbit`, `moonLight` and so on) are no longer read. The zips of `aaps-watchfaces` from 2026-11-19 on are written in the new form; an older zip must be sent to the watch again |
 
 `master` of this fork is a plain copy of upstream `master`.
 

@@ -82,7 +82,6 @@ val wearShared = listOf(
     "watchfaces/daynight/SkyTimes.kt", // PERSONAL PATCH
     "watchfaces/daynight/StoredWeather.kt", // PERSONAL PATCH
     "watchfaces/daynight/SunTimes.kt",
-    "watchfaces/design/LegacyDesign.kt", // PERSONAL PATCH
     "watchfaces/design/Looks.kt", // PERSONAL PATCH
     "watchfaces/settingsync/CwfSettingNames.kt", // PERSONAL PATCH
     "watchfaces/settingsync/CwfSyncedSettings.kt", // PERSONAL PATCH
