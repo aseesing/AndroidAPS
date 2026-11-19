@@ -8,9 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import androidx.core.graphics.createBitmap
-import app.aaps.shared.impl.weardata.CwfPlaceNeeds
 import app.aaps.wear.R
-import app.aaps.wear.watchfaces.animation.WakeAnimationJson
 import app.aaps.wear.watchfaces.utils.DynamicImages
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
@@ -134,12 +132,6 @@ class MoonPictureTest {
         val last = images.bitmap(MoonPicture.NAME, now + 2 * MoonPicture.REDRAW_MS, size)!!
         images.release()
         assertThat(last.isRecycled).isTrue()
-    }
-
-    @Test
-    fun thePhoneKnowsTheMoonPictureByTheSameName() {
-        // The phone reads the place only for a design that needs it, and finds the moon by this name
-        assertThat(WakeAnimationJson.DYNAMIC_PREFIX + MoonPicture.NAME).isEqualTo(CwfPlaceNeeds.MOON_IMAGE)
     }
 
     @Test

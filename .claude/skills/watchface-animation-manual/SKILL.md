@@ -86,5 +86,6 @@ Then:
 ## What the player does not copy
 
 Known, and said on the page: the face is a stand-in (simple views, no complications), `@moon` is a
-drawn moon with north up, the sun is fixed at 06:00 to 18:00, rest layers are redrawn each frame, the
+drawn full moon and the moon values come from two sliders (the page has no place), a group opens its
+sheet at its first layer (the watch: at the first one that is drawn), the sun is fixed at 06:00 to 18:00, rest layers are redrawn each frame, the
 glow is a canvas shadow, and there is no picture memory limit. Do not "fix" the watch to match these.

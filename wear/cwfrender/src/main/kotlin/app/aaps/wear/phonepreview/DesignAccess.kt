@@ -12,7 +12,7 @@ import androidx.wear.watchface.complications.rendering.ComplicationDrawable
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import app.aaps.wear.watchfaces.colour.ColourLooks
-import app.aaps.wear.watchfaces.daynight.MoonPicture
+import app.aaps.wear.watchfaces.daynight.MoonPhoto
 import app.aaps.wear.watchfaces.daynight.StoredWeather
 import app.aaps.wear.watchfaces.design.LegacyDesign
 import app.aaps.wear.watchfaces.design.Looks
@@ -35,8 +35,8 @@ object DesignAccess {
     /** The parts of [face] that a wake frame draws: the real views, with a clock of your own. */
     fun wakeParts(face: CustomWatchface): FrameParts = face.wakeParts
 
-    /** The moon of a `@moon` layer of [face] at [epochMs], in a square of [size] pixels, as the watch draws it. */
-    fun wakeMoon(face: CustomWatchface, epochMs: Long, size: Int): Bitmap? = face.dynamicImage(MoonPicture.NAME, epochMs, size)
+    /** The picture of a `@moon` layer of [face] (the photo of the full moon), in a square of [size] pixels, as the watch draws it. */
+    fun wakeMoon(face: CustomWatchface, epochMs: Long, size: Int): Bitmap? = face.dynamicImage(MoonPhoto.NAME, epochMs, size)
 
     /**
      * [design] in the new form, as the watch reads it: the old keys rewritten (see [LegacyDesign]);

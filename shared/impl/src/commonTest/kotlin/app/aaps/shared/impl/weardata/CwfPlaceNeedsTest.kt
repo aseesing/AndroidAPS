@@ -200,12 +200,20 @@ class CwfPlaceNeedsTest {
     }
 
     @Test
-    fun theMoonPictureNeedsThePlace() {
-        // The moon as a picture of a view, and of a layer of the animation
-        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"moon": {"width": 40, "height": 40, "textvalue": "", "image": "@moon"}}"""))
-        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"animation": {"layers": [{"image": "@moon", "x": 200, "y": 90, "rest": 0}]}}"""))
-        // Another picture is only a picture
-        assertTrue(uses("""{"animation": {"layers": [{"image": "moon"}, {"image": "@other"}]}}""").isEmpty())
+    fun theMoonTemplateNeedsThePlace() {
+        // The moon as the picture of a view, and as a layer of the animation
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"moon": {"width": 40, "height": 40, "textvalue": "", "image": {"use": "moon"}}}"""))
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"animation": {"layers": [{"use": "moon", "left": 180, "top": 70, "size": 40}]}}"""))
+        // The plain photo of the full moon is the same everywhere, and another template is only a template
+        assertTrue(uses("""{"moon": {"image": "@moon"}, "animation": {"layers": [{"image": "@moon"}, {"use": "rain"}]}}""").isEmpty())
+    }
+
+    @Test
+    fun theTurnOfTheMoonNeedsThePlaceButNotHowMuchIsLit() {
+        for (value in listOf("v_moon_limb", "v_moon_north"))
+            assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"animation": {"layers": [{"image": "@moon", "rotation": "$value"}]}}"""), value)
+        assertEquals(setOf(CwfPlaceUse.SUN_AND_MOON), uses("""{"hand": {"rotationOffset": {"valueKey": "moon_north"}}}"""))
+        assertTrue(uses("""{"animation": {"layers": [{"shape": "circle", "alpha": "v_moon_lit"}]}}""").isEmpty())
     }
 
     @Test

@@ -20,11 +20,19 @@ import org.json.JSONObject
  * - `wobble`: a hand that shakes round its value
  * - `trace`: a view that draws itself in from the left, with a bright line at the edge
  * - `glint`: a light that slides once over the shiny parts (rings and boxes)
+ * - `moon`: the moon as it is in the sky now, made from the photo `@moon` and a few shapes
  *
  * The times are in ms of the wake (`ms`), the sizes in design pixels, the alphas 0 to 255.
  *
  * The formulas give exactly the numbers of the effects these templates replace (`f32` where those
  * worked in 32-bit floats), so a design looks the same pixel for pixel.
+ *
+ * The `moon` is built in four steps. First what the dark part shows: a black disc and the photo, both
+ * faint, so the sky shows through (`dark` is how bright the dark part is, `cover` how much it covers).
+ * Then a group draws the lit part on a sheet of its own: a half disc on the lit side with a soft edge
+ * (a circle with a gradient, turned to `v_moon_limb`), widened by an ellipse when more than half is lit
+ * or cut by one (`erase`) when less, and last the photo `inside` that shape. The photo is asked for at
+ * twice its size (`maxScale`), so it stays sharp when it is turned.
  */
 object BuiltInTemplates {
 
@@ -243,6 +251,53 @@ object BuiltInTemplates {
       "height": "f32(2 * diagonal)",
       "alpha": "if(w >= 0 && w <= $durationMs, f32($alpha / 255), 0)",
       "clip": {"round": false, "rings": "$rings", "boxes": "$boxes", "cornerRadius": "$cornerRadius"}
+    }]
+  },
+  "moon": {
+    "params": {
+      "left": 0, "top": 0,
+      "size": {"default": 400, "min": 1, "max": 400},
+      "slot": "back",
+      "rest": 0,
+      "dark": {"default": 0.3, "min": 0, "max": 1},
+      "cover": {"default": 0.45, "min": 0, "max": 1}
+    },
+    "layers": [{
+      "shape": "circle", "color": "#000000", "slot": "$slot", "rest": "$rest",
+      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+      "alpha": "1 - (1 - $cover) / (1 - $dark * $cover)",
+      "clip": {"round": false}
+    }, {
+      "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+      "slot": "$slot", "rest": "$rest",
+      "rotation": "v_moon_north", "maxScale": 2,
+      "alpha": "$dark * $cover",
+      "clip": {"round": false}
+    }, {
+      "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+      "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+      "rotation": "v_moon_limb - 90",
+      "clip": {"rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"}, "round": false}
+    }, {
+      "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+      "rotation": "v_moon_limb - 90",
+      "scaleX": "2 * v_moon_lit - 1",
+      "visible": "v_moon_lit > 0.5",
+      "clip": {"round": false}
+    }, {
+      "shape": "circle", "group": "moon", "blend": "erase", "slot": "$slot", "rest": "$rest",
+      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+      "rotation": "v_moon_limb - 90",
+      "scaleX": "1 - 2 * v_moon_lit",
+      "visible": "v_moon_lit < 0.5",
+      "clip": {"round": false}
+    }, {
+      "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+      "group": "moon", "blend": "inside", "slot": "$slot", "rest": "$rest",
+      "rotation": "v_moon_north", "maxScale": 2,
+      "clip": {"round": false}
     }]
   }
 }

@@ -134,7 +134,8 @@ class LegacyDesignTest {
                    ]}}"""
             )
         )
-        assertSameJson(layers[0], JSONObject("""{"image": "@moon", "rect": {"left": 316, "top": 78, "width": 44, "height": 44}, "rest": 0}"""))
+        // The moon is the built-in template, in the square of the old rect
+        assertSameJson(layers[0], JSONObject("""{"use": "moon", "left": 316, "top": 78, "size": 44, "rest": 0}"""))
         assertSameJson(layers[1], JSONObject("""{"shape": "circle"}"""))
         // The old band had its middle at x
         assertSameJson(
@@ -146,15 +147,18 @@ class LegacyDesignTest {
         // clipRight is the same key, now for any layer
         assertSameJson(layers[5], JSONObject("""{"view": "chart", "clipRight": "200"}"""))
         val spec = WakeAnimationJson(::testColor) { null }.read(JSONObject().put(WakeAnimationSpec.JSON_KEY, JSONObject().put("layers", JSONArray(layers))))!!
-        assertThat(spec.layers[0].source).isInstanceOf(LayerSource.Dynamic::class.java)
-        assertThat((spec.layers[2].source as LayerSource.Shape).let { it.kind to it.gradient?.type }).isEqualTo(ShapeKind.RECT to LayerGradient.Type.LINEAR)
-        assertThat((spec.layers[4].source as LayerSource.Shape).colors).containsExactly(Color.WHITE)
+        assertThat(spec.errors).isEmpty()
+        // The template of the moon gives several plain layers, the photo of the app among them; the other layers follow
+        val own = spec.layers.size - 5
+        assertThat(spec.layers.take(own).map { it.source }.filterIsInstance<LayerSource.Dynamic>().map { it.name }.distinct()).containsExactly("moon")
+        assertThat((spec.layers[own + 1].source as LayerSource.Shape).let { it.kind to it.gradient?.type }).isEqualTo(ShapeKind.RECT to LayerGradient.Type.LINEAR)
+        assertThat((spec.layers[own + 3].source as LayerSource.Shape).colors).containsExactly(Color.WHITE)
     }
 
     @Test
-    fun aViewWithTheMoonShowsThePictureOfTheApp() {
+    fun aViewWithTheMoonShowsTheTemplateOfTheMoon() {
         val new = translate("""{"freetext1": {"width": 20, "moonLight": true}, "freetext2": {"moonLight": false}}""")
-        assertSameJson(new, JSONObject("""{"freetext1": {"width": 20, "image": "@moon"}, "freetext2": {}}"""))
+        assertSameJson(new, JSONObject("""{"freetext1": {"width": 20, "image": {"use": "moon"}}, "freetext2": {}}"""))
     }
 
     @Test

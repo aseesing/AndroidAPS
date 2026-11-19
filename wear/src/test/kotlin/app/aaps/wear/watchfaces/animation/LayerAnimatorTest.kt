@@ -871,4 +871,73 @@ class LayerAnimatorTest {
         animator.drawRest(Canvas(bitmap), 1f, now + 60_000) { null }
         assertThat(asked).isEqualTo(2)
     }
+
+    // ---- groups ----
+
+    @Test
+    fun eraseTakesAwayOnlyWhatItsGroupDrew() {
+        val below = rect("0", "0", "100", "100", colors = listOf(Color.BLUE))
+        val red = rect("20", "20", "60", "60").copy(group = "g")
+        val hole = rect("40", "40", "20", "20").copy(group = "g", blend = LayerBlend.ERASE)
+        val bitmap = draw(animator(below, red, hole))
+        assertThat(pixel(bitmap, 30, 30)).isEqualTo(Color.RED)
+        // The hole shows the layer below the group, which is not cut
+        assertThat(pixel(bitmap, 50, 50)).isEqualTo(Color.BLUE)
+        assertThat(pixel(bitmap, 10, 10)).isEqualTo(Color.BLUE)
+    }
+
+    @Test
+    fun insideIsDrawnOnlyWhereItsGroupDrewBefore() {
+        val below = rect("0", "0", "100", "100", colors = listOf(Color.BLUE))
+        val shape = rect("20", "20", "30", "60", colors = listOf(Color.WHITE)).copy(group = "g")
+        val fill = rect("20", "20", "60", "60", colors = listOf(Color.GREEN)).copy(group = "g", blend = LayerBlend.INSIDE)
+        val bitmap = draw(animator(below, shape, fill))
+        // Green where the white shape was, and nothing of the fill beside it
+        assertThat(pixel(bitmap, 30, 50)).isEqualTo(Color.GREEN)
+        assertThat(pixel(bitmap, 60, 50)).isEqualTo(Color.BLUE)
+    }
+
+    @Test
+    fun aGroupEndsWhereALayerOfAnotherGroupOrOfNoneFollows() {
+        val red = rect("20", "20", "60", "60").copy(group = "a")
+        val between = rect("0", "0", "10", "10", colors = listOf(Color.GREEN))
+        // Another group: its erase does not reach the red of the first one
+        val other = rect("30", "30", "10", "10", colors = listOf(Color.WHITE)).copy(group = "b")
+        val hole = rect("20", "20", "60", "60").copy(group = "b", blend = LayerBlend.ERASE)
+        val bitmap = draw(animator(red, between, other, hole))
+        assertThat(pixel(bitmap, 35, 35)).isEqualTo(Color.RED)
+        assertThat(pixel(bitmap, 60, 60)).isEqualTo(Color.RED)
+        assertThat(pixel(bitmap, 5, 5)).isEqualTo(Color.GREEN)
+        // The same without the layer between, with the same name: one group, the erase cuts the red too
+        val one = draw(animator(red, other.copy(group = "a"), hole.copy(group = "a")))
+        assertThat(isClear(one)).isTrue()
+    }
+
+    @Test
+    fun aGroupIsAsBigAsTheClipRectOfItsFirstLayer() {
+        val first = rect("20", "20", "10", "10", clip = LayerClip(rect = DesignRect(0f, 0f, 50f, 50f), round = false)).copy(group = "g")
+        val second = rect("40", "40", "40", "40", colors = listOf(Color.GREEN)).copy(group = "g")
+        val bitmap = draw(animator(first, second))
+        assertThat(pixel(bitmap, 25, 25)).isEqualTo(Color.RED)
+        assertThat(pixel(bitmap, 45, 45)).isEqualTo(Color.GREEN)
+        // Outside the sheet of the group nothing of it shows
+        assertThat(Color.alpha(pixel(bitmap, 60, 60))).isEqualTo(0)
+    }
+
+    @Test
+    fun eraseAndInsideNeedAGroup() {
+        assertThat(rect("0", "0").copy(blend = LayerBlend.ERASE).normalized()).isNull()
+        assertThat(rect("0", "0").copy(blend = LayerBlend.INSIDE).normalized()).isNull()
+        assertThat(rect("0", "0").copy(blend = LayerBlend.ERASE, group = "g").normalized()).isNotNull()
+    }
+
+    @Test
+    fun aRestGroupStaysOnTheFace() {
+        val red = rect("20", "20", "60", "60", restSeconds = 0f).copy(group = "g")
+        val hole = rect("40", "40", "20", "20", restSeconds = 0f).copy(group = "g", blend = LayerBlend.ERASE)
+        val bitmap = createBitmap(size, size).apply { eraseColor(Color.BLUE) }
+        animator(red, hole).drawRest(Canvas(bitmap), 1f, 0) { null }
+        assertThat(pixel(bitmap, 30, 30)).isEqualTo(Color.RED)
+        assertThat(pixel(bitmap, 50, 50)).isEqualTo(Color.BLUE)
+    }
 }

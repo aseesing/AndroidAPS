@@ -25,9 +25,10 @@ import kotlin.math.sin
  * - the effects of the `animation` (`rain`, `glitch`, `trace`, `blink`, `sweep`, `slide`, `wobble`,
  *   `pulse`, `glint`) become `{"use": "<name>", ...}` entries at the start of `layers`, in that order
  *   (a list effect gives one entry per view); the `fallbackBpm` of `pulse` goes to the animation;
- * - a layer `"moon": true` becomes `"image": "@moon"`; `"shape": "band"` a rectangle with a linear
+ * - a layer `"moon": true` becomes `{"use": "moon", ...}` in the square in the middle of its `rect`, with
+ *   its `slot` and `rest` (its other keys are dropped: no design used them); `"shape": "band"` a rectangle with a linear
  *   gradient (its `x` was the middle, now the left edge), `"shape": "dot"` a circle with a radial one;
- * - a view with `"moonLight": true` gets `"image": "@moon"`; a view with an `orbit` gets a view layer
+ * - a view with `"moonLight": true` gets `"image": {"use": "moon"}`; a view with an `orbit` gets a view layer
  *   with `rest: 0` at the end of `layers` that moves its middle onto the arc;
  * - `dayLook` (with the `XDay` pictures) and `weatherLooks` become `looks`, in the order they were laid
  *   over the design: the day look first, then the weather look. A look that changed the animation
@@ -67,8 +68,11 @@ object LegacyDesign {
     /** The weathers the phone sends, in the order of their number in `v_weather_kind`. */
     val WEATHERS = StoredWeather.KINDS
 
-    /** The new name of the moon picture of a view or a layer. */
-    private const val MOON_IMAGE = "@moon"
+    /** The built-in template that draws the moon, in a view or as a layer. */
+    private const val MOON_TEMPLATE = CwfPlaceNeeds.MOON_TEMPLATE
+
+    /** The new picture of a view that showed the moon: the template, filling the view. */
+    private fun moonImage(): JSONObject = JSONObject().put(Templates.USE, MOON_TEMPLATE)
 
     /**
      * A view that moved along an arc, from the old `orbit` key of a view:
@@ -185,7 +189,7 @@ object LegacyDesign {
             if (view.has(MOON_LIGHT_KEY)) {
                 val on = view.optBoolean(MOON_LIGHT_KEY)
                 view.remove(MOON_LIGHT_KEY)
-                view.put(VIEW_IMAGE, if (on) MOON_IMAGE else JSONObject.NULL)
+                view.put(VIEW_IMAGE, if (on) moonImage() else JSONObject.NULL)
             }
         }
         if (changesAnimation(overlay)) {
@@ -212,7 +216,7 @@ object LegacyDesign {
 
     // ---- views ----
 
-    /** The key of a view that shows a picture: of the zip, or one the app draws (`@moon`). */
+    /** The key of a view that shows a picture: of the zip, of the app (`@moon`), or a template (`{"use": "moon"}`). */
     const val VIEW_IMAGE = "image"
 
     private fun hasOldViewKeys(design: JSONObject): Boolean =
@@ -228,7 +232,7 @@ object LegacyDesign {
             if (view.has(MOON_LIGHT_KEY)) {
                 val on = view.optBoolean(MOON_LIGHT_KEY)
                 view.remove(MOON_LIGHT_KEY)
-                if (on) view.put(VIEW_IMAGE, MOON_IMAGE)
+                if (on) view.put(VIEW_IMAGE, moonImage())
             }
         }
         return result
@@ -293,13 +297,30 @@ object LegacyDesign {
         return views.mapNotNull { view -> use(effect, JSONObject(rest.toString()).put("view", view)) }
     }
 
+    /**
+     * The built-in moon in place of the old moon layer [old]: in the square in the middle of its `rect`
+     * (the whole face without one), in its slot. Without a `rest` it shows only while a wake plays.
+     */
+    private fun moonUse(old: JSONObject): JSONObject {
+        val rect = old.optJSONObject("rect")
+        val left = rect?.optDouble("left", 0.0) ?: 0.0
+        val top = rect?.optDouble("top", 0.0) ?: 0.0
+        val width = rect?.optDouble("width", 400.0) ?: 400.0
+        val height = rect?.optDouble("height", 400.0) ?: 400.0
+        val size = minOf(width, height)
+        return JSONObject().put(Templates.USE, MOON_TEMPLATE)
+            .put("left", left + (width - size) / 2).put("top", top + (height - size) / 2).put("size", size)
+            .put("rest", if (old.has("rest")) old.opt("rest") else "")
+            .apply { if (old.has("slot")) put("slot", old.opt("slot")) }
+    }
+
     /** An own layer of the old animation in the new form. */
     private fun newLayer(old: JSONObject): JSONObject {
         val layer = JSONObject(old.toString())
         if (layer.has(MOON_KEY)) {
             val on = layer.optBoolean(MOON_KEY)
             layer.remove(MOON_KEY)
-            if (on) layer.put(VIEW_IMAGE, MOON_IMAGE)
+            if (on) return moonUse(layer)
         }
         when (layer.optString("shape").lowercase()) {
             "band" -> {

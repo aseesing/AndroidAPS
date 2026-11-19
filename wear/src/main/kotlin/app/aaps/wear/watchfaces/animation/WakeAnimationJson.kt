@@ -71,6 +71,7 @@ class WakeAnimationJson(
             // A view is always drawn with the views
             slot = if (source is LayerSource.View) LayerSlot.VIEWS else enumOf(json.optString("slot"), LayerSlot.BACK),
             blend = enumOf(json.optString("blend"), LayerBlend.NORMAL),
+            group = json.optString("group").takeIf { it.isNotEmpty() },
             copies = copies,
             props = props(json),
             lets = lets(json),

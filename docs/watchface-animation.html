@@ -183,6 +183,7 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
       <li><a href="#view-keys">Keys outside <code>animation</code></a></li>
       <li><a href="#limits">Limits and tips</a></li>
       <li><a href="#reference">Key reference</a></li>
+      <li><a href="#moon">Example: the moon from plain layers</a></li>
     </ol>
   </nav>
 
@@ -417,32 +418,12 @@ fills the whole face. A side that is not given takes the side of the whole face.
 <code>x</code> moves it 60 design pixels to the left and to the right.</figcaption>
 </figure>
 
-<h3 id="source-moon">A picture the watch draws: <code>"image": "@moon"</code></h3>
-<p>An <code>image</code> name that starts with <code>@</code> is a picture the watch draws itself. There is one now:
-<code>@moon</code>, the moon as it is in the sky at this moment. The watch makes it from one photo of the full moon: the
-part that is not lit is made dark, and the moon is turned the way it stands in the sky at the place of the wearer (north is up when
-the watch has no place). It is drawn in the middle of <code>rect</code>, as a square of the shorter side. It is asked for
-again once a minute, and the watch draws a new moon every 15 minutes. It has no <code>glow</code>. A design with
-<code>@moon</code> needs the place, see <a href="#needs-place"><code>needsPlace</code></a>.</p>
-
-<figure class="ex" id="ex-moon" data-face="off" data-controls="moon">
-<pre>{
-  "animation": {
-    "durationMs": 4000,
-    "layers": [
-      {"shape": "rect", "color": "#33415C", "x": 60, "y": 110, "width": 280, "height": 180, "rest": 0},
-      {
-        "image": "@moon",
-        "rect": {"left": 60, "top": 110, "width": 280, "height": 180},
-        "rest": 0,
-        "rotation": "env * 10 * sin(t * 2)"
-      }
-    ]
-  }
-}</pre>
-<figcaption><strong>The moon.</strong> The grey box shows the <code>rect</code>. The moon is a square in its middle. Move the
-slider to see other phases. The page draws a simple moon; the watch uses a photo and turns it for your sky.</figcaption>
-</figure>
+<h3 id="source-app">A picture of the app: <code>"image": "@moon"</code></h3>
+<p>An <code>image</code> name that starts with <code>@</code> is a picture that comes with the watch app, so the zip does
+not need it. There is one now: <code>@moon</code>, a photo of the full moon, cut round, with north up. It is only the
+photo: it shows no phase and it does not turn by itself. It is drawn in the middle of <code>rect</code>, as a square of
+the shorter side. It has no <code>glow</code>. For the moon as it is in the sky now, use the template
+<a href="#t-moon"><code>moon</code></a>. <a href="#moon">Chapter 13</a> builds that moon from this photo, step by step.</p>
 
 <h3 id="source-shape">A shape: <code>shape</code></h3>
 <p><code>shape</code> is <code>"rect"</code>, <code>"circle"</code> or <code>"line"</code>. Another word leaves the layer
@@ -526,7 +507,8 @@ written as a formula of fixed numbers, like <code>"maxScale": "1 + 0.2"</code>.<
 <tr><td><code>colors</code></td><td>list of colour texts</td><td></td><td>Several colours for a shape; <code>colorIndex</code> picks one. Comes before <code>color</code>.</td></tr>
 <tr><td><code>gradient</code></td><td>object</td><td>none</td><td>Fades the colour over a rectangle or a circle, see below.</td></tr>
 <tr><td><code>slot</code></td><td><code>back</code>, <code>views</code>, <code>front</code></td><td><code>back</code></td><td>Where in the face the layer is drawn, see <a href="#frames">slots</a>.</td></tr>
-<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code></td><td><code>normal</code></td><td>How the layer is laid over what is below it.</td></tr>
+<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code>, <code>erase</code>, <code>inside</code></td><td><code>normal</code></td><td>How the layer is laid over what is below it. <code>erase</code> and <code>inside</code> work only in a <a href="#key-group"><code>group</code></a>.</td></tr>
+<tr><td><code>group</code></td><td>text</td><td>none</td><td>The name of a group: layers that follow each other with the same name are drawn on a sheet of their own, see <a href="#key-group"><code>group</code></a>.</td></tr>
 <tr><td><code>glow</code></td><td>object</td><td>none</td><td>A soft glow round a picture: <code>color</code> (default white) and <code>radius</code> (default 10, cut to 0 to 40).</td></tr>
 <tr><td><code>maxScale</code></td><td>number</td><td>1</td><td>The largest scale the picture is drawn at; it is made sharp for that size. Cut to 0.1 to 4.</td></tr>
 <tr><td><code>clip</code></td><td>object</td><td>the round screen</td><td>Where the layer may show, see below.</td></tr>
@@ -689,6 +671,46 @@ circle covers the band. Middle <code>add</code>: the colours are added. Right <c
 softer.</figcaption>
 </figure>
 
+<h3 id="key-group">Layers on a sheet of their own: <code>group</code></h3>
+<p><code>"group": "name"</code> puts a layer in a group. Layers of one slot that follow each other with the same name are
+drawn together on a clear sheet of their own. Then the sheet is laid over the face. In a group two more values of
+<code>blend</code> work:</p>
+<ul>
+  <li><code>erase</code>: the layer is not drawn. It takes away what the group has drawn so far, as much as the layer is
+    solid. Its colour does not count.</li>
+  <li><code>inside</code>: the layer is drawn only where the group has drawn something so far, as solid as that is, and it
+    takes the place of what was there. It changes only the pixels in its own box: the <code>rect</code> of a picture, the
+    outline of a rectangle or a circle.</li>
+</ul>
+<p>Both change only the sheet of the group. The face below the group is never cut. A layer with <code>erase</code> or
+<code>inside</code> and no <code>group</code> is left out. A group ends at the first layer with another name or with
+none. A view layer is never in a group.</p>
+<p>The sheet is as big as the <code>clip.rect</code> of the first layer of the group that is drawn. Without a
+<code>clip.rect</code> there it is as big as the face. A small sheet costs less, so give the first layer a
+<code>clip.rect</code> when the group is small. Nothing of the group shows outside its sheet.</p>
+<figure class="ex" id="ex-group" data-face="off">
+<pre>{
+  "animation": {
+    "durationMs": 4000,
+    "layers": [
+      {"shape": "rect", "color": "#35507A", "x": 0, "y": 120, "width": 400, "height": 160},
+      {"shape": "circle", "color": "#C97B2A", "radius": 60, "x": 110, "y": 200,
+       "group": "ring"},
+      {"shape": "circle", "radius": 40, "x": "110 + 30 * sin(t * 2)", "y": 200,
+       "group": "ring", "blend": "erase"},
+      {"shape": "circle", "radius": 60, "x": 290, "y": 200,
+       "group": "window"},
+      {"image": "Background",
+       "rect": {"left": 190, "top": 100, "width": 200, "height": 200},
+       "x": "30 * sin(t * 2)",
+       "group": "window", "blend": "inside"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Two groups.</strong> Left: the second circle erases a hole in the first one. The blue band below
+the group is not cut. Right: the picture is drawn <code>inside</code> the white circle, and nowhere else.</figcaption>
+</figure>
+
 <h3 id="key-glow">A glow round a picture: <code>glow</code>, <code>glowAlpha</code></h3>
 <p><code>glow</code> makes a soft shape of the picture in one colour, once, when the picture is made. The prop
 <code>glowAlpha</code> says how strong it shows; its default is 0, so a glow without <code>glowAlpha</code> shows nothing.
@@ -714,7 +736,8 @@ stronger and weaker.</figcaption>
 <h3 id="key-gradient">A colour that fades: <code>gradient</code></h3>
 <p><code>"gradient": {"type": "linear" | "radial", "stops": [[position, alpha], ...]}</code>. A stop says: at this position
 (0 to 1) the colour is this solid (0 to 1). There must be at least two stops, each a pair of numbers, or the layer is left
-out. <code>linear</code> runs along the width of a rectangle, from its left edge (0) to its right edge (1).
+out. <code>linear</code> runs along the width of a rectangle, from its left edge (0) to its right edge (1). On a circle it runs
+the same way, from the left edge of the circle to its right edge.
 <code>radial</code> runs from the middle of a circle (0) to its edge (1); on a rectangle it runs from the middle to the
 edges, stretched to the rectangle. A line has no gradient. A rectangle with a gradient needs a width above 0.</p>
 <figure class="ex" id="ex-gradient-linear" data-face="off">
@@ -1411,6 +1434,9 @@ and distance <code>d</code> from the <code>let</code> of its layer.</figcaption>
 <tr><td><code>night_progress</code></td><td>How far the night is: 0 at sunset, 0.5 in the middle of the night, 1 at sunrise. In the day 0.</td><td>0 to 1</td></tr>
 <tr><td><code>sun_cycle</code></td><td>One round of the sun: 0 at sunrise, 0.25 half way the day, 0.5 at sunset, 0.75 half way the night, 1 at the next sunrise.</td><td>0 to 1</td></tr>
 <tr><td><code>moon_cycle</code></td><td>One round of the moon: 0 at moonrise, 0.5 at moonset, 1 at the next moonrise. 0.25 when the moon does not set for two days, 0.75 when it does not rise.</td><td>0 to 1</td></tr>
+<tr><td><code>moon_lit</code></td><td>How much of the moon is lit: 0 at new moon, 0.5 at a quarter, 1 at full moon. The same all over the world.</td><td>0 to 1</td></tr>
+<tr><td><code>moon_limb</code></td><td>The direction the lit side of the moon points to, as the moon stands in the sky of the wearer. In degrees with the clock from straight up, like <code>rotation</code>: 90 is to the right. Without a place: as seen with north up.</td><td>-180 to 180</td></tr>
+<tr><td><code>moon_north</code></td><td>The direction the north of the moon points to in the sky of the wearer, in degrees with the clock from straight up. It is the <code>rotation</code> for the photo <code>@moon</code>. Without a place it is 0: north up.</td><td>-180 to 180</td></tr>
 <tr><td><code>sun_next_time</code></td><td>The moment of the next sunrise or sunset, as a clock time in milliseconds. Made to show as a text with <a href="#time-token"><code>@time</code></a>. No value without a place, and where the sun does not rise or set in the next days.</td><td>a moment</td></tr>
 <tr><td><code>is_day</code></td><td>1 while the face shows the day, 0 while it shows the night. It follows the sun, or the watch settings "Day / night look" and "Always-on look" when the wearer chose day or night there.</td><td>0 or 1</td></tr>
 <tr><td><code>weather_kind</code></td><td>The weather the phone sent: 0 clear, 1 partly cloudy, 2 cloudy, 3 rain. No value when the phone sent none, or when it is older than 3 hours.</td><td>0 to 3</td></tr>
@@ -1495,9 +1521,10 @@ A design needs the place when it has one of these:</p>
 <ul>
   <li>a formula anywhere in the JSON (a prop, a <code>let</code>, the <code>when</code> of a look) that reads
     <code>v_sun_progress</code>, <code>v_night_progress</code>, <code>v_sun_cycle</code>, <code>v_moon_cycle</code>,
-    <code>v_sun_next_time</code> or <code>v_is_day</code> (the sun and the moon);</li>
+    <code>v_moon_limb</code>, <code>v_moon_north</code>, <code>v_sun_next_time</code> or <code>v_is_day</code> (the sun
+    and the moon);</li>
   <li>a <code>valueKey</code> that is one of those keys (without <code>is_day</code>);</li>
-  <li><code>"image": "@moon"</code> on a layer or on a view;</li>
+  <li>the template <code>moon</code>: <code>"use": "moon"</code>, as a layer or as the <code>image</code> of a view;</li>
   <li>a formula that reads <code>v_weather_kind</code> or <code>v_weather_temperature</code>, or a
     <code>valueKey</code> <code>weather_temperature</code> (the weather: the phone looks it up and sends only the
     weather);</li>
@@ -1507,8 +1534,8 @@ A design needs the place when it has one of these:</p>
   "needsPlace": true
 }</pre>
 <p>Without a place a design must still look right: the day is then from 07:00 to 19:00 (or the fixed times of the
-wearer), the moon stands north up, and <code>sun_next_time</code> has no value. <code>moon_phase</code> never needs the
-place.</p>
+wearer), the moon stands north up, and <code>sun_next_time</code> has no value. <code>moon_phase</code>,
+<code>moon_lit</code> and the photo <code>@moon</code> never need the place.</p>
 
 <!-- =================================================================================== 7 -->
 <h2 id="templates">7. Templates: <code>use</code></h2>
@@ -1521,7 +1548,7 @@ number parameter is cut to its limits. A key that the template does not know is 
 used. So you cannot add layer keys such as <code>slot</code> or <code>rest</code> to a <code>use</code> entry: write your
 own template for that. A <code>use</code> of a template that does not exist is left out.</p>
 
-<p>The watch has nine built-in templates. Times are in milliseconds of the wake, sizes in design pixels, and the
+<p>The watch has ten built-in templates. Times are in milliseconds of the wake, sizes in design pixels, and the
 <code>alpha</code> parameters of the templates go from 0 to 255.</p>
 
 <h3 id="t-rain"><code>rain</code>: falling streaks</h3>
@@ -1779,6 +1806,37 @@ width.</figcaption>
 <tr><td><code>angle</code></td><td>30</td><td></td><td>The turn of the band, in degrees.</td></tr>
 <tr><td><code>width</code></td><td>60</td><td>1 to 400</td><td>The width of the band.</td></tr>
 <tr><td><code>color</code>, <code>alpha</code></td><td><code>#FFFFFF</code>, 90</td><td><code>alpha</code> 0 to 255, whole</td><td>The light. With <code>alpha</code> 0 there is no layer.</td></tr>
+</tbody></table></div>
+
+<h3 id="t-moon"><code>moon</code>: the moon as it is in the sky now</h3>
+<p>The moon of this moment. As much of it is lit as of the real moon, the lit side points to the sun, and the moon is
+turned the way it stands in the sky of the wearer (north is up when the watch has no place). The template is made of
+plain layers: the photo <code>@moon</code> and a few shapes. <a href="#moon">Chapter 13</a> builds it step by step. It
+reads the values <code>moon_lit</code>, <code>moon_limb</code> and <code>moon_north</code>, so a design with it needs the
+place, see <a href="#needs-place"><code>needsPlace</code></a>. It stays on the face (<code>rest</code> 0) unless you say
+otherwise.</p>
+<figure class="ex" id="ex-t-moon" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"use": "moon", "left": 110, "top": 110, "size": 180}
+    ]
+  }
+}</pre>
+<figcaption><strong>The moon.</strong> Move the sliders to see other phases and turns. The dark part lets the blue behind
+it through. The page has no place and no photo: it draws a simple full moon, lit from the right while the moon grows, and
+the slider "Turn in the sky" turns it as a place and a time of day do on the watch.</figcaption>
+</figure>
+<div class="scroll"><table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>left</code>, <code>top</code></td><td>0, 0</td><td></td><td>The top left corner of the square of the moon.</td></tr>
+<tr><td><code>size</code></td><td>400</td><td>1 to 400</td><td>The side of the square: the moon is as wide as this. The default fills the face, or a view (see <a href="#view-image"><code>image</code> on a view</a>).</td></tr>
+<tr><td><code>slot</code></td><td><code>back</code></td><td></td><td>The slot of all its layers.</td></tr>
+<tr><td><code>rest</code></td><td>0</td><td>0 to 30</td><td>The <code>rest</code> of all its layers. Give <code>""</code> for a moon that shows only while a wake plays.</td></tr>
+<tr><td><code>dark</code></td><td>0.3</td><td>0 to 1</td><td>How bright the dark part is, against the lit part. Not 0, so the moon can be found at new moon.</td></tr>
+<tr><td><code>cover</code></td><td>0.45</td><td>0 to 1</td><td>How much the dark part covers what is behind it. Below 1 a day sky shows through it; with 1 it covers all.</td></tr>
 </tbody></table></div>
 
 <h3 id="own-templates">Your own templates: <code>templates</code></h3>
@@ -2121,15 +2179,21 @@ Custom watch face (<code>width</code>, <code>topmargin</code>, <code>fontColor</
 part of this manual.</p>
 
 <h3 id="view-image">A picture on a view: <code>image</code></h3>
-<p>A view can show a picture with the view key <code>image</code>: the name of a zip picture, or <code>"@moon"</code>.
-The picture is the background of the view, stretched to its size, and it is coloured like the key
-<code>background</code>. Looks can swap it. For <code>@moon</code> make the view a square. It works on text views (such
-as <code>freetext1</code> to <code>freetext4</code>), not on picture views.</p>
-<figure class="ex" id="ex-view-image" data-face="on" data-loop="still" data-controls="moon">
+<p>A view can show a picture with the view key <code>image</code>. It is one of three things: the name of a zip picture,
+an app picture (<code>"@moon"</code>, the photo of the full moon), or a template with its parameters:
+<code>{"use": "moon"}</code>. The picture is the background of the view, stretched to its size, and it is coloured like
+the key <code>background</code>. Looks can swap it. It works on text views (such as <code>freetext1</code> to
+<code>freetext4</code>), not on picture views.</p>
+<p>The layers of a template are drawn on a square picture as big as the shorter side of the view. The whole 400 x 400
+design space of the layers is that square, so a template that fills the design space, like <code>moon</code> without
+<code>left</code>, <code>top</code> and <code>size</code>, fills the view. Make the view a square. The layers are drawn
+still, as layers with <code>rest</code> 0 are, with the values of now. The picture is made again only when one of the
+values it reads changes. View layers of the template are left out, and a picture is at most 512 pixels a side.</p>
+<figure class="ex" id="ex-view-image" data-face="on" data-loop="still" data-controls="moon turn">
 <pre>{
   "freetext1": {
     "width": 44, "height": 44, "topmargin": 3, "leftmargin": 178,
-    "image": "@moon"
+    "image": {"use": "moon"}
   }
 }</pre>
 <figcaption><strong>The moon on a view.</strong> The view <code>freetext1</code> shows the moon of now. Because it is a
@@ -2230,7 +2294,7 @@ the wearer chooses. Try the buttons.</figcaption>
 <tr><td>Extra numbers of a point</td><td>8 (<code>p0</code> to <code>p7</code>)</td><td>The others are not read.</td></tr>
 <tr><td>Templates inside templates</td><td>4 deep</td><td>The entry is left out.</td></tr>
 <tr><td>A kept picture</td><td>2048 pixels a side; all pictures, glows and masks together 16 MB</td><td>A picture that does not fit is made smaller (and softer).</td></tr>
-<tr><td><code>@moon</code></td><td>512 pixels a side</td><td>Made at 512.</td></tr>
+<tr><td>An app picture (<code>@moon</code>), and the picture of a view from a template</td><td>512 pixels a side</td><td>Made at 512.</td></tr>
 </tbody></table></div>
 
 <h3 id="broken">What happens with a mistake</h3>
@@ -2286,8 +2350,8 @@ picture say what was left out. Layers are counted from 0, after the templates ar
     slot <code>front</code>).</li>
   <li><strong>Move few views.</strong> A view with a view layer is drawn again in every frame of the wake. A big view,
     like the graph, costs the most.</li>
-  <li><strong>The moon</strong> is made pixel by pixel, but only once per 15 minutes and size. Do not make it bigger
-    than you need.</li>
+  <li><strong>A group</strong> is drawn on a sheet of its own first, in every frame it shows. Keep the sheet small with a
+    <code>clip.rect</code> on its first layer. The template <code>moon</code> does that.</li>
 </ul>
 
 <h3 id="known-limits">Known limits</h3>
@@ -2301,8 +2365,6 @@ picture say what was left out. Layers are counted from 0, after the templates ar
   <li>The view key <code>image</code> works on text views only.</li>
   <li>The random numbers of a layer without <code>count</code> change when a layer is added before it.</li>
   <li>The values are read at the start of a wake. A value that changes while the wake plays shows in the next wake.</li>
-  <li>There are no values for the lit part or the tilt of the moon. For the lit part use
-    <code>(1 - cos(2 * pi * v_moon_phase)) / 2</code>: 0 at new moon, 1 at full moon.</li>
   <li>The variable <code>ms</code> and the function <code>f32</code> will go away later. Use <code>t * 1000</code> in new
     designs when you can.</li>
 </ul>
@@ -2350,7 +2412,8 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>colors</code></td><td>list of colour texts</td><td></td><td></td><td>no</td><td>shape</td></tr>
 <tr><td><code>gradient</code></td><td>object: <code>type</code> (<code>linear</code>, <code>radial</code>), <code>stops</code> (list of <code>[position, alpha]</code>)</td><td>none</td><td>2 stops or more, each 0 to 1</td><td>no</td><td><code>rect</code>, <code>circle</code></td></tr>
 <tr><td><code>slot</code></td><td><code>back</code>, <code>views</code>, <code>front</code></td><td><code>back</code></td><td>a view is always in <code>views</code></td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code></td><td><code>normal</code></td><td></td><td>no</td><td>picture, shape</td></tr>
+<tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code>, <code>erase</code>, <code>inside</code></td><td><code>normal</code></td><td><code>erase</code> and <code>inside</code> only in a <code>group</code></td><td>no</td><td>picture, shape</td></tr>
+<tr><td><code>group</code></td><td>text: a name</td><td>none</td><td>layers that follow each other, in one slot</td><td>no</td><td>picture, shape</td></tr>
 <tr><td><code>glow</code></td><td>object: <code>color</code>, <code>radius</code></td><td>none; white, 10</td><td><code>radius</code> 0 to 40</td><td>no</td><td>zip picture</td></tr>
 <tr><td><code>maxScale</code></td><td>number</td><td>1</td><td>0.1 to 4</td><td>no</td><td>picture</td></tr>
 <tr><td><code>clip</code></td><td>object, see below</td><td>round screen</td><td></td><td>no</td><td>picture, shape</td></tr>
@@ -2399,7 +2462,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td>a template</td><td><code>params</code></td><td>Parameter name to default, or to <code>{"default", "min", "max", "int"}</code>.</td></tr>
 <tr><td>a template</td><td><code>layers</code></td><td>The layers, with <code>$name</code> and <code>$name.key</code>.</td></tr>
 <tr><td>a layer of a template</td><td><code>if</code></td><td>A formula of the parameters; the layer is left out when it is 0.</td></tr>
-<tr><td>built in</td><td colspan="2"><code>rain</code>, <code>glitch</code>, <code>pulse</code>, <code>blink</code>, <code>sweep</code>, <code>slide</code>, <code>wobble</code>, <code>trace</code>, <code>glint</code>. See <a href="#templates">7</a>.</td></tr>
+<tr><td>built in</td><td colspan="2"><code>rain</code>, <code>glitch</code>, <code>pulse</code>, <code>blink</code>, <code>sweep</code>, <code>slide</code>, <code>wobble</code>, <code>trace</code>, <code>glint</code>, <code>moon</code>. See <a href="#templates">7</a>.</td></tr>
 </tbody></table></div>
 
 <h3>Looks, colours and views</h3>
@@ -2410,7 +2473,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td>a look</td><td><code>patch</code></td><td>Merged into the design; <code>null</code> removes a key.</td></tr>
 <tr><td>a look</td><td><code>images</code></td><td>Picture swaps: shown name to zip picture.</td></tr>
 <tr><td><code>colourLooks</code></td><td><code>colour1</code>, <code>colour2</code></td><td>A patch each; a text that ends with <code>@colour</code> becomes the chosen colour.</td></tr>
-<tr><td>a text view</td><td><code>image</code></td><td>A zip picture or <code>@moon</code> as the background of the view.</td></tr>
+<tr><td>a text view</td><td><code>image</code></td><td>A zip picture, <code>@moon</code> or a template (<code>{"use": "moon"}</code>) as the background of the view.</td></tr>
 <tr><td>a text of a view or of a <code>dynData</code></td><td><code>@time</code></td><td>The value as a clock time.</td></tr>
 </tbody></table></div>
 
@@ -2420,8 +2483,168 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><th>Operators</th><td class="wrap"><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> <code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>==</code> <code>!=</code> <code>&amp;&amp;</code> <code>||</code> <code>!</code> <code>( )</code></td></tr>
 <tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>settle</code> <code>pulse</code> <code>window</code> <code>pingpong</code> <code>f32</code></td></tr>
 <tr><th>Variables</th><td class="wrap"><code>t</code> <code>ms</code> <code>len</code> <code>env</code> <code>i</code> <code>n</code> <code>u</code> <code>px</code> <code>py</code> <code>p0</code> to <code>p7</code> <code>r1</code> to <code>r8</code> <code>bpm</code> <code>sec</code> <code>min</code> <code>hour</code> <code>rot0</code> <code>dx0</code> <code>cx0</code> <code>cy0</code> <code>pi</code></td></tr>
-<tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>.</td></tr>
+<tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_moon_lit</code> <code>v_moon_limb</code> <code>v_moon_north</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>.</td></tr>
 </tbody></table></div>
+
+
+<!-- =================================================================================== 13 -->
+<h2 id="moon">13. Example: the moon from plain layers</h2>
+
+<p>The watch has no drawing code for the moon. The template <a href="#t-moon"><code>moon</code></a> is six plain layers:
+the photo <code>@moon</code> two times, and four circles. This chapter builds them one by one, so you can make such a
+thing yourself. Three values say how the moon looks now: <code>v_moon_lit</code> (how much is lit),
+<code>v_moon_limb</code> (where the lit side points) and <code>v_moon_north</code> (how the moon is turned), see
+<a href="#values">chapter 6</a>.</p>
+<p>Every picture has two sliders. "Moon phase" sets how much is lit, and on which side. "Turn in the sky" turns the moon,
+as the place and the time of day do on the watch. The page has no photo: it draws a simple full moon with a white spot at
+its north.</p>
+
+<h3 id="moon-photo">Step 1: the photo, turned</h3>
+<p><code>@moon</code> is the full moon with north up. The value <code>v_moon_north</code> is the turn of the moon in the
+sky, in the same degrees as <code>rotation</code>.</p>
+<figure class="ex" id="ex-moon-1" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
+       "rotation": "v_moon_north"}
+    ]
+  }
+}</pre>
+<figcaption><strong>The photo.</strong> Always the full moon. Only the slider "Turn in the sky" changes it.</figcaption>
+</figure>
+
+<h3 id="moon-half">Step 2: the lit half</h3>
+<p>Now the shape of the lit part, in white, without the photo. Start with the half of the disc on the side of the sun. A
+<a href="#key-gradient">linear gradient</a> on a circle runs from its left edge to its right edge. With these stops the left
+half is clear and the right half is solid, with a soft line between them. <code>v_moon_limb</code> is the direction of the
+lit side, counted from straight up, and the solid half points to the right. So the circle is turned by
+<code>v_moon_limb - 90</code>.</p>
+<figure class="ex" id="ex-moon-2" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+       "rotation": "v_moon_limb - 90"}
+    ]
+  }
+}</pre>
+<figcaption><strong>Half a disc.</strong> It points to the right while the moon grows and to the left while it shrinks. It does not follow how much is lit yet.</figcaption>
+</figure>
+
+<h3 id="moon-shape">Step 3: more than half, or less</h3>
+<p>The line between light and dark on a ball looks like half an ellipse. A circle with a <code>scaleX</code> is an ellipse.
+At full moon and at new moon it is as wide as the disc, at a quarter it has no width: its half width is the radius times
+<code>2 * v_moon_lit - 1</code>, without the sign. When more than half is lit, the ellipse is added to the half disc. When
+less than half is lit, it is taken away from it, with <code>"blend": "erase"</code>. That needs a
+<a href="#key-group"><code>group</code></a>, so the three shapes get one. The key <code>visible</code> picks which of the
+two ellipses is used. The first layer of the group gives a <code>clip.rect</code>, so the sheet of the group is only as
+big as the moon.</p>
+<figure class="ex" id="ex-moon-3" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+       "rotation": "v_moon_limb - 90",
+       "group": "lit",
+       "clip": {"rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "round": false}},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "2 * v_moon_lit - 1",
+       "visible": "v_moon_lit > 0.5",
+       "group": "lit"},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "1 - 2 * v_moon_lit",
+       "visible": "v_moon_lit < 0.5",
+       "group": "lit", "blend": "erase"}
+    ]
+  }
+}</pre>
+<figcaption><strong>The lit shape.</strong> Move "Moon phase": a thin sickle, a half, a nearly full disc. The blue below the group is not cut by the <code>erase</code>.</figcaption>
+</figure>
+
+<h3 id="moon-inside">Step 4: the photo inside the shape</h3>
+<p>The last layer of the group is the photo with <code>"blend": "inside"</code>. It is drawn only where the group has
+drawn the white shape, and it takes the place of the white. <code>maxScale</code> 2 asks for the photo at twice its size,
+so it stays sharp when it is turned.</p>
+<figure class="ex" id="ex-moon-4" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+       "rotation": "v_moon_limb - 90",
+       "group": "lit",
+       "clip": {"rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "round": false}},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "2 * v_moon_lit - 1",
+       "visible": "v_moon_lit > 0.5",
+       "group": "lit"},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "1 - 2 * v_moon_lit",
+       "visible": "v_moon_lit < 0.5",
+       "group": "lit", "blend": "erase"},
+      {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
+       "rotation": "v_moon_north", "maxScale": 2,
+       "group": "lit", "blend": "inside"}
+    ]
+  }
+}</pre>
+<figcaption><strong>The lit part of the moon.</strong> The dark part is still missing: there the sky shows.</figcaption>
+</figure>
+
+<h3 id="moon-dark">Step 5: the dark part</h3>
+<p>The dark part of the real moon is not black. You can still see it at night, and by day the blue of the sky shows
+through it. So below the group come two faint layers that fill the whole disc: a black circle and the photo. With how
+bright the dark part is (<code>dark</code>, 0.3) and how much it covers (<code>cover</code>, 0.45), the photo gets the
+<code>alpha</code> <code>dark * cover</code> and the black circle <code>1 - (1 - cover) / (1 - dark * cover)</code>. The lit
+part of step 4 is drawn over them and covers them.</p>
+<figure class="ex" id="ex-moon-5" data-face="off" data-loop="still" data-controls="moon turn">
+<pre>{
+  "animation": {
+    "layers": [
+      {"shape": "rect", "color": "#3F6FA8", "x": 0, "y": 0, "width": 400, "height": 400, "rest": 0},
+      {"shape": "circle", "color": "#000000", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "alpha": "1 - (1 - 0.45) / (1 - 0.3 * 0.45)"},
+      {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
+       "rotation": "v_moon_north", "maxScale": 2,
+       "alpha": "0.3 * 0.45"},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+       "rotation": "v_moon_limb - 90",
+       "group": "lit",
+       "clip": {"rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "round": false}},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "2 * v_moon_lit - 1",
+       "visible": "v_moon_lit > 0.5",
+       "group": "lit"},
+      {"shape": "circle", "x": 200, "y": 200, "radius": 90, "rest": 0,
+       "rotation": "v_moon_limb - 90",
+       "scaleX": "1 - 2 * v_moon_lit",
+       "visible": "v_moon_lit < 0.5",
+       "group": "lit", "blend": "erase"},
+      {"image": "@moon", "rect": {"left": 110, "top": 110, "width": 180, "height": 180}, "rest": 0,
+       "rotation": "v_moon_north", "maxScale": 2,
+       "group": "lit", "blend": "inside"}
+    ]
+  }
+}</pre>
+<figcaption><strong>The whole moon.</strong> These are the six layers of the template <code>moon</code>, with numbers where the template has its parameters <code>left</code>, <code>top</code>, <code>size</code>, <code>dark</code> and <code>cover</code>.</figcaption>
+</figure>
+
+<p>The same in one line: <code>{"use": "moon", "left": 110, "top": 110, "size": 180}</code>. The layers of the
+template also have <code>"clip": {"round": false}</code>, so the moon is not cut to the round screen when it is the
+picture of a view.</p>
 
 </main>
 
@@ -3050,6 +3273,53 @@ var BUILT_IN_TEMPLATES = {
       "alpha": "if(w >= 0 && w <= $durationMs, f32($alpha / 255), 0)",
       "clip": {"round": false, "rings": "$rings", "boxes": "$boxes", "cornerRadius": "$cornerRadius"}
     }]
+  },
+  "moon": {
+    "params": {
+      "left": 0, "top": 0,
+      "size": {"default": 400, "min": 1, "max": 400},
+      "slot": "back",
+      "rest": 0,
+      "dark": {"default": 0.3, "min": 0, "max": 1},
+      "cover": {"default": 0.45, "min": 0, "max": 1}
+    },
+    "layers": [{
+      "shape": "circle", "color": "#000000", "slot": "$slot", "rest": "$rest",
+      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+      "alpha": "1 - (1 - $cover) / (1 - $dark * $cover)",
+      "clip": {"round": false}
+    }, {
+      "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+      "slot": "$slot", "rest": "$rest",
+      "rotation": "v_moon_north", "maxScale": 2,
+      "alpha": "$dark * $cover",
+      "clip": {"round": false}
+    }, {
+      "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+      "gradient": {"type": "linear", "stops": [[0, 0], [0.49, 0], [0.51, 1], [1, 1]]},
+      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+      "rotation": "v_moon_limb - 90",
+      "clip": {"rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"}, "round": false}
+    }, {
+      "shape": "circle", "group": "moon", "slot": "$slot", "rest": "$rest",
+      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+      "rotation": "v_moon_limb - 90",
+      "scaleX": "2 * v_moon_lit - 1",
+      "visible": "v_moon_lit > 0.5",
+      "clip": {"round": false}
+    }, {
+      "shape": "circle", "group": "moon", "blend": "erase", "slot": "$slot", "rest": "$rest",
+      "x": "$left + $size / 2", "y": "$top + $size / 2", "radius": "$size / 2",
+      "rotation": "v_moon_limb - 90",
+      "scaleX": "1 - 2 * v_moon_lit",
+      "visible": "v_moon_lit < 0.5",
+      "clip": {"round": false}
+    }, {
+      "image": "@moon", "rect": {"left": "$left", "top": "$top", "width": "$size", "height": "$size"},
+      "group": "moon", "blend": "inside", "slot": "$slot", "rest": "$rest",
+      "rotation": "v_moon_north", "maxScale": 2,
+      "clip": {"round": false}
+    }]
   }
 };
 
@@ -3380,7 +3650,8 @@ function readLayer(json, env) {
   return {
     source: source,
     slot: source.type === 'view' ? 'views' : enumOf(optString(json.slot), ['back', 'views', 'front'], 'back'),
-    blend: enumOf(optString(json.blend), ['normal', 'add', 'screen'], 'normal'),
+    blend: enumOf(optString(json.blend), ['normal', 'add', 'screen', 'erase', 'inside'], 'normal'),
+    group: source.type === 'view' ? null : (optString(json.group) || null),
     copies: copies, props: props, lets: readLets(json), clip: clip,
     glow: isObj(json.glow) ? { color: env.color(optString(json.glow.color), WHITE), radius: floatOf(json.glow, 'radius', 10) } : null,
     maxScale: floatOf(json, 'maxScale', 1),
@@ -3395,6 +3666,7 @@ function normalizeLayer(layer, notes, index) {
   if (s.type === 'image' && !s.exists) return drop("picture '" + s.key + "' is not in the zip");
   if (layer.clip.mask && !layer.clip.mask.exists) return drop("mask '" + layer.clip.mask.key + "' is not in the zip");
   if (s.type === 'view' && !s.key) return drop('no view key');
+  if ((layer.blend === 'erase' || layer.blend === 'inside') && !layer.group) return drop("blend '" + layer.blend + "' works only in a group");
   if (s.type === 'dynamic' && !(s.rect.width > 0 && s.rect.height > 0)) return drop('the rect has no size');
   var tooLong = Object.keys(layer.props).some(function (k) { return layer.props[k].length > FORMULA_MAX_LENGTH; }) ||
     layer.lets.some(function (l) { return l[1].length > FORMULA_MAX_LENGTH; });
@@ -3869,6 +4141,49 @@ Animator.prototype.transform = function (ctx, layer, pivotX, pivotY) {
   ctx.translate(-px, -py);
 };
 
+/** The canvas name of each blend. `inside` also cuts the canvas to the box of the layer first, see `insideBox`. */
+var BLENDS = { add: 'lighter', screen: 'screen', erase: 'destination-out', inside: 'source-in' };
+
+/**
+ * For a layer with the blend `inside`: cuts the canvas to the path made last (the box of the layer), so
+ * the layer changes only the pixels in its own box, as on the watch. A browser would clear all the rest.
+ */
+function insideBox(ctx, layer) {
+  if (layer.spec.blend === 'inside') ctx.clip();
+}
+
+/**
+ * Makes `layer` (or null: no layer) draw on the right sheet: closes the group that is open when the layer
+ * is not in it (its sheet is laid over the face), and opens the sheet of the group of the layer.
+ * The watch opens the sheet at the first layer of the group that is drawn; the page at the first one.
+ */
+Animator.prototype.enterGroup = function (R, layer) {
+  var name = layer ? layer.spec.group : null;
+  if (name === this.groupName) return;
+  if (this.groupName !== null && this.groupName !== undefined) {
+    var sheetCtx = R.ctx, outer = this.groupOuter;
+    sheetCtx.restore();
+    R.ctx = outer;
+    outer.save();
+    outer.setTransform(1, 0, 0, 1, 0, 0);
+    outer.globalCompositeOperation = 'source-over';
+    outer.drawImage(sheetCtx.canvas, 0, 0);
+    outer.restore();
+  }
+  this.groupName = name;
+  if (name === null) return;
+  var sheet = R.sheet(R.ctx), rect = layer.spec.clip.rect;
+  sheet.ctx.save();
+  if (rect) {
+    // The sheet is as big as the clip.rect of the first layer of the group
+    sheet.ctx.beginPath();
+    sheet.ctx.rect(rect.left, rect.top, rect.width, rect.height);
+    sheet.ctx.clip();
+  }
+  this.groupOuter = R.ctx;
+  R.ctx = sheet.ctx;
+};
+
 /** Draws all copies of one layer; false when nothing of it can show. */
 Animator.prototype.drawLayer = function (R, layer) {
   var spec = layer.spec, source = spec.source, clip = spec.clip;
@@ -3890,7 +4205,7 @@ Animator.prototype.drawLayer = function (R, layer) {
   var n = spec.copies.size;
   if (n <= 0) return false;
 
-  var blend = spec.blend === 'add' ? 'lighter' : (spec.blend === 'screen' ? 'screen' : 'source-over');
+  var blend = BLENDS[spec.blend] || 'source-over';
   var main = R.ctx, ctx = main, scratch = null;
   if (clip.mask) {
     // A layer with a mask is drawn on its own first, then cut by the mask, then laid over the face
@@ -3974,6 +4289,9 @@ Animator.prototype.drawPicture = function (ctx, layer, rect, picture, glow, i, a
   }
   if (sw <= 0 || sh <= 0 || right === left || bottom === top) return;
   ctx.globalAlpha = a;
+  ctx.beginPath();
+  ctx.rect(left, top, right - left, bottom - top);
+  insideBox(ctx, layer);
   ctx.drawImage(picture, sx, sy, sw, sh, left, top, right - left, bottom - top);
 };
 
@@ -4005,6 +4323,9 @@ Animator.prototype.drawShape = function (ctx, layer, source, alpha, R) {
       this.transform(ctx, layer, x + width / 2, y + height / 2);
       ctx.globalAlpha = a;
       ctx.fillStyle = rgba(color);
+      ctx.beginPath();
+      ctx.rect(x, y, width, height);
+      insideBox(ctx, layer);
       ctx.fillRect(x, y, width, height);
     } else {
       if (!(width > 0)) return;
@@ -4026,9 +4347,12 @@ Animator.prototype.drawShape = function (ctx, layer, source, alpha, R) {
     if (!(radius > 0) || !isFinite(radius)) return;
     this.transform(ctx, layer, x, y);
     ctx.globalAlpha = a;
-    ctx.fillStyle = gradient ? shader(ctx.createRadialGradient(x, y, 0, x, y, radius), color, gradient) : rgba(color);
+    // On a circle a linear gradient runs from its left edge to its right edge
+    var fade = !gradient ? null : (gradient.type === 'linear' ? ctx.createLinearGradient(x - radius, 0, x + radius, 0) : ctx.createRadialGradient(x, y, 0, x, y, radius));
+    ctx.fillStyle = fade ? shader(fade, color, gradient) : rgba(color);
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
+    insideBox(ctx, layer);
     ctx.fill();
   }
 };
@@ -4044,12 +4368,20 @@ Animator.prototype.drawSlot = function (R, slot, views) {
   var self = this;
   if (slot === 'views') {
     this.viewSteps.forEach(function (step) {
-      if (step >= 0) self.drawLayer(R, self.layers[step]);
-      else if (views) views(self.viewGroups[-step - 1]);
+      if (step >= 0) {
+        self.enterGroup(R, self.layers[step]);
+        self.drawLayer(R, self.layers[step]);
+      } else {
+        self.enterGroup(R, null);
+        if (views) views(self.viewGroups[-step - 1]);
+      }
     });
   } else this.layers.forEach(function (layer) {
-    if (layer.spec.slot === slot && layer.spec.source.type !== 'view') self.drawLayer(R, layer);
+    if (layer.spec.slot !== slot || layer.spec.source.type === 'view') return;
+    self.enterGroup(R, layer);
+    self.drawLayer(R, layer);
   });
+  this.enterGroup(R, null);
 };
 
 /** Draws the layers of a slot that stay on the face while no animation plays. */
@@ -4061,8 +4393,10 @@ Animator.prototype.drawRest = function (R, nowMs, slot, value) {
     if (layer.spec.slot !== slot || layer.spec.source.type === 'view' || layer.spec.rest === null) continue;
     this.setElapsed(Math.trunc(layer.spec.rest * 1000));
     this.refreshLets();
+    this.enterGroup(R, layer);
     this.drawLayer(R, layer);
   }
+  this.enterGroup(R, null);
 };
 
 // ========================================================================== 5. stand-in pictures
@@ -4239,12 +4573,12 @@ var ZIP = {
   }
 };
 
-/** The moon as a drawing: lit from the right while it grows, north up. Not the photo of the watch. */
-function drawMoon(ctx, size, phase) {
+/** The full moon as a drawing, north up, cut round: the stand-in for the photo `@moon` of the watch. */
+function drawMoon(ctx, size) {
   var r = size / 2;
   ctx.save();
   ctx.beginPath();
-  ctx.arc(r, r, r * 0.985, 0, Math.PI * 2);
+  ctx.arc(r, r, r, 0, Math.PI * 2);
   ctx.clip();
   ctx.fillStyle = '#E9E6DC';
   ctx.fillRect(0, 0, size, size);
@@ -4254,19 +4588,10 @@ function drawMoon(ctx, size, phase) {
     ctx.arc(size * c[0], size * c[1], size * c[2], 0, Math.PI * 2);
     ctx.fill();
   });
-  // The dark part: half a disc on the dark side, made wider or narrower by the phase
-  var k = Math.cos(2 * Math.PI * phase);        // 1 new moon, 0 half, -1 full moon
-  var waxing = phase < 0.5;
-  ctx.fillStyle = 'rgba(8,10,22,0.82)';
-  // top to bottom along the dark rim, then back along the line between light and dark (half an ellipse)
+  // A light spot near the top, so a turn of the photo can be seen
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.beginPath();
-  ctx.arc(r, r, r, -Math.PI / 2, Math.PI / 2, waxing);
-  var steps = 24;
-  for (var i = 0; i <= steps; i++) {
-    var a = Math.PI / 2 - Math.PI * i / steps;
-    ctx.lineTo(r + (waxing ? k : -k) * r * Math.cos(a), r + r * Math.sin(a));
-  }
-  ctx.closePath();
+  ctx.arc(size * 0.5, size * 0.12, size * 0.04, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -4277,7 +4602,6 @@ function Pictures(make, s) {
   this.s = s;
   this.kept = new Map();
   this.swaps = {};
-  this.moonPhase = null;
 }
 Pictures.prototype.bitmap = function (id, w, h, draw) {
   var pw = clamp(Math.ceil(w * this.s), 1, 2048), ph = clamp(Math.ceil(h * this.s), 1, 2048);
@@ -4301,9 +4625,7 @@ Pictures.prototype.zip = function (key, w, h) {
 };
 Pictures.prototype.dynamic = function (name, side, nowMs) {
   if (name !== 'moon') return null;
-  var phase = this.moonPhase === null ? moonPhaseAt(nowMs) : this.moonPhase;
-  var step = Math.round(phase * 200) / 200;
-  return this.bitmap('moon:' + step, clamp(side, 1, 512 / this.s), clamp(side, 1, 512 / this.s), function (ctx, w) { drawMoon(ctx, w, step); });
+  return this.bitmap('moon', clamp(side, 1, 512 / this.s), clamp(side, 1, 512 / this.s), function (ctx, w) { drawMoon(ctx, w); });
 };
 /** The soft glow of a picture: its shape, blurred, in the colour of the glow. */
 Pictures.prototype.glow = function (picture, glow, maxScale) {
@@ -4463,6 +4785,7 @@ function Scene(example, options) {
     weather: null,          // 0 to 3, or null: not known
     bpm: 72, noBpm: false,
     moon: null,             // the moon phase of the control, or null: the real one
+    moonTurn: 0,            // how far the control turns the moon in the sky, in degrees with the clock
     colours: ['design', 'design'],
     over: {}                // values set by a control or by the example: key to number
   };
@@ -4474,6 +4797,7 @@ function Scene(example, options) {
   this.spec = null;
   this.json = this.design0;
   this.swaps = {};
+  this.viewTemplates = {};
 }
 
 Scene.prototype.nowMs = function () {
@@ -4483,6 +4807,12 @@ Scene.prototype.nowMs = function () {
   d.setHours(0, 0, 0, 0);
   return d.getTime() + Math.floor(this.inputs.clockHours * 60) * 60000 + real % 60000;
 };
+
+/** Degrees as a turn from -180 to 180. */
+function halfTurn(degrees) {
+  var turn = mod(degrees, 360);
+  return turn > 180 ? turn - 360 : turn;
+}
 
 /** The values of the test face now: what `v_<key>` reads. A key that is not here has no value. */
 Scene.prototype.refreshValues = function (nowMs) {
@@ -4501,6 +4831,9 @@ Scene.prototype.refreshValues = function (nowMs) {
     uploader_battery: 85, rig_battery: 60, timestamp: 2, loop: 3,
     day: d.getDate(), day_name: ((d.getDay() + 6) % 7) + 1, month: d.getMonth() + 1, week_number: week,
     watch_battery: 64, moon_phase: phase,
+    // The page has no place: the lit side is right while the moon grows, and the control turns the moon
+    moon_lit: (1 - Math.cos(2 * Math.PI * phase)) / 2,
+    moon_limb: halfTurn((phase < 0.5 ? 90 : -90) + inputs.moonTurn), moon_north: halfTurn(inputs.moonTurn),
     sun_progress: skyNow.sunProgress, night_progress: skyNow.nightProgress, sun_cycle: skyNow.sunCycle,
     moon_cycle: skyAt(mod(h - phase * 24, 24)).sunCycle,
     sun_next_time: next.getTime(), sensor_left: 50, pump_left: 30,
@@ -4688,10 +5021,41 @@ Scene.prototype.drawView = function (R, key, fx, nowMs) {
   ctx.restore();
 };
 
+/**
+ * The picture of a view that shows a template, `"image": {"use": "moon"}` (ViewTemplates): the layers
+ * of the template, drawn still with the values of now, where the whole design space is the view.
+ */
+Scene.prototype.drawViewTemplate = function (R, st, use, nowMs) {
+  var self = this, text = JSON.stringify(use);
+  if (!has(this.viewTemplates, text)) {
+    var swaps = this.swaps, animator = null;
+    var spec = readAnimation({ animation: { layers: [use] } }, {
+      color: function (c, fallback) { return self.color(c, fallback); },
+      hasImage: function (name) { return has(ZIP, has(swaps, name) ? swaps[name] : name); }
+    });
+    if (spec) {
+      spec.layers = spec.layers.filter(function (layer) { return layer.source.type !== 'view'; });
+      if (spec.layers.length) animator = new Animator(spec);
+      if (animator && !animator.layers.length) animator = null;
+    }
+    this.viewTemplates[text] = animator;
+  }
+  var anim = this.viewTemplates[text];
+  if (!anim) return;
+  var ctx = R.ctx;
+  ctx.save();
+  ctx.scale(st.w / DESIGN_SIZE, st.h / DESIGN_SIZE);
+  anim.setWakeValues(function (key) { return self.value(key); }, FALLBACK_BPM);
+  anim.setTime(0, MAX_DURATION_MS, 0, nowMs);
+  ['back', 'views', 'front'].forEach(function (slot) { anim.drawSlot(R, slot); });
+  ctx.restore();
+};
+
 /** A text view: its picture or colour behind, its text in the middle. */
 Scene.prototype.drawTextView = function (R, st, nowMs) {
   var ctx = R.ctx, json = st.json, picture = null;
-  var image = has(json, 'image') ? optString(json.image) : '';
+  var image = has(json, 'image') && !isObj(json.image) ? optString(json.image) : '';
+  if (isObj(json.image)) this.drawViewTemplate(R, st, json.image, nowMs);
   if (image.charAt(0) === '@') picture = R.pictures.dynamic(image.substring(1), Math.min(st.w, st.h), nowMs);
   else if (image) picture = R.pictures.zip(image, st.w, st.h);
   if (!picture && has(json, 'background')) picture = R.pictures.zip(optString(json.background), st.w, st.h);
@@ -4781,7 +5145,6 @@ Scene.prototype.drawPart = function (R, part, leaveOut, nowMs) {
 function beginFrame(R, scene) {
   var ctx = R.ctx;
   R.pictures.swaps = scene.swaps;
-  R.pictures.moonPhase = scene.inputs.moon;
   ctx.setTransform(R.s, 0, 0, R.s, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
@@ -4856,7 +5219,7 @@ Scene.prototype.drawNormal = function (R) {
 
 /** A surface to draw on: a canvas of `size` x `size` pixels. `make(w, h)` gives a new canvas. */
 function makeSurface(canvas, size, make) {
-  var s = size / DESIGN_SIZE, scratch = null;
+  var s = size / DESIGN_SIZE, scratch = null, sheet = null;
   return {
     canvas: canvas, ctx: canvas.getContext('2d'), s: s, size: size,
     pictures: new Pictures(make, s),
@@ -4868,6 +5231,19 @@ function makeSurface(canvas, size, make) {
       scratch.ctx.setTransform(s, 0, 0, s, 0, 0);
       scratch.ctx.globalAlpha = 1;
       return scratch;
+    },
+    /** The clear sheet of a group, drawn on in the same place as `from` draws now. */
+    sheet: function (from) {
+      if (!sheet) {
+        var c = make(size, size);
+        sheet = { canvas: c, ctx: c.getContext('2d') };
+      }
+      sheet.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      sheet.ctx.globalAlpha = 1;
+      sheet.ctx.globalCompositeOperation = 'source-over';
+      sheet.ctx.clearRect(0, 0, size, size);
+      sheet.ctx.setTransform(from.getTransform());
+      return sheet;
     }
   };
 }
@@ -4885,6 +5261,7 @@ var CONTROLS = {
   phone: { label: 'Phone battery', type: 'range', min: 0, max: 100, step: 1, start: 85, set: function (s, v) { s.inputs.over.uploader_battery = v; }, show: function (v) { return v + ' %'; } },
   sgv: { label: 'Glucose', type: 'range', min: 40, max: 300, step: 1, start: 115, set: function (s, v) { s.inputs.over.sgv = v; }, show: function (v) { return v + ' mg/dl'; } },
   moon: { label: 'Moon phase', type: 'range', min: 0, max: 0.99, step: 0.01, start: 0.3, set: function (s, v) { s.inputs.moon = v; }, show: function (v) { return v.toFixed(2); } },
+  turn: { label: 'Turn in the sky', type: 'range', min: -180, max: 180, step: 5, start: 0, set: function (s, v) { s.inputs.moonTurn = v; }, show: function (v) { return v + ' degrees'; } },
   colour: { label: 'Main colour', type: 'choice', options: [['as designed', 'design'], ['cyan', '#00E5FF'], ['orange', '#FF9F1C']], start: 'design',
     set: function (s, v) { s.inputs.colours = [v, 'design']; } }
 };

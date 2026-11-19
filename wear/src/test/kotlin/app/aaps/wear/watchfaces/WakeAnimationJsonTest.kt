@@ -205,6 +205,36 @@ class WakeAnimationJsonTest {
     }
 
     @Test
+    fun aGroupAndItsBlendsAreRead() {
+        val spec = layer("""{"shape": "circle", "group": "moon", "blend": "erase"}""")
+        assertThat(spec.group).isEqualTo("moon")
+        assertThat(spec.blend).isEqualTo(LayerBlend.ERASE)
+        assertThat(layer("""{"shape": "circle", "group": "moon", "blend": "inside"}""").blend).isEqualTo(LayerBlend.INSIDE)
+        assertThat(layer("""{"shape": "circle"}""").group).isNull()
+        // Without a group these two would cut the face: the layer is left out
+        assertThat(layer("""{"shape": "circle", "blend": "erase"}""").normalized()).isNull()
+        // A view is drawn with the views, never in a group
+        assertThat(layer("""{"view": "chart", "group": "moon"}""").normalized()!!.group).isNull()
+    }
+
+    @Test
+    fun theBuiltInMoonGivesPlainLayersWithoutErrors() {
+        val spec = read("""{"animation": {"layers": [{"use": "moon", "left": 316, "top": 78, "size": 44}]}}""")!!
+        assertThat(spec.errors).isEmpty()
+        val layers = spec.normalized().layers
+        assertThat(layers).hasSize(6)
+        // All stay on the face, in the back slot, and the photo of the app is in its square
+        assertThat(layers.map { it.restSeconds }.distinct()).containsExactly(0f)
+        assertThat(layers.map { it.slot }.distinct()).containsExactly(LayerSlot.BACK)
+        assertThat(layers.map { it.source }.filterIsInstance<LayerSource.Dynamic>().distinct()).containsExactly(LayerSource.Dynamic("moon", DesignRect(316f, 78f, 44f, 44f)))
+        assertThat(layers.map { it.group }).containsExactly(null, null, "moon", "moon", "moon", "moon").inOrder()
+        // Only in the wake, and in front
+        val wake = read("""{"animation": {"layers": [{"use": "moon", "rest": "", "slot": "front"}]}}""")!!.normalized().layers
+        assertThat(wake.map { it.restSeconds }.distinct()).containsExactly(null)
+        assertThat(wake.map { it.slot }.distinct()).containsExactly(LayerSlot.FRONT)
+    }
+
+    @Test
     fun aPictureOfTheAppIsReadWithItsRect() {
         val spec = layer("""{"image": "@moon", "rect": {"left": 316, "top": 78, "width": 44, "height": 44}, "rest": 0, "blend": "screen", "x": 2}""")
         assertThat(spec.source).isEqualTo(LayerSource.Dynamic("moon", DesignRect(316f, 78f, 44f, 44f)))
