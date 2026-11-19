@@ -71,6 +71,13 @@ class Formula private constructor(private val root: Node, val text: String) {
     /** True when the formula is one fixed number. */
     val isConstant: Boolean get() = root is Const
 
+    /**
+     * Walks the parts of the formula from the leaves up and gives [visitor]'s result for the whole.
+     * For a reader outside the engine, like the converter to the Watch Face Format. Drawing never
+     * uses it.
+     */
+    fun <R> visit(visitor: FormulaVisitor<R>): R = walk(root, visitor)
+
     override fun toString(): String = text
 
     override fun equals(other: Any?): Boolean = other is Formula && other.text == text
@@ -644,11 +651,28 @@ class Formula private constructor(private val root: Node, val text: String) {
         private fun callOf(name: String, args: List<Node>): Node {
             fun missing(): Nothing = throw IllegalStateException("$name/${args.size}")
             return when (args.size) {
-                1    -> Call1(FN1[name] ?: missing(), args[0])
-                2    -> Call2(FN2[name] ?: missing(), args[0], args[1])
-                3    -> Call3(FN3[name] ?: missing(), args[0], args[1], args[2])
-                else -> CallN(FNN[name] ?: missing(), args.toTypedArray())
+                1    -> Call1(name, FN1[name] ?: missing(), args[0])
+                2    -> Call2(name, FN2[name] ?: missing(), args[0], args[1])
+                3    -> Call3(name, FN3[name] ?: missing(), args[0], args[1], args[2])
+                else -> CallN(name, FNN[name] ?: missing(), args.toTypedArray())
             }
+        }
+
+        /** The parts of [part] for [visitor], see [visit]. */
+        private fun <R> walk(part: Part, visitor: FormulaVisitor<R>): R = when (part) {
+            is Const      -> visitor.number(part.value)
+            is Var        -> visitor.variable(part.index)
+            is Negate     -> visitor.negate(walk(part.a, visitor))
+            is Not        -> visitor.not(walk(part.a, visitor))
+            is If         -> visitor.choose(walk(part.c, visitor), walk(part.a, visitor), walk(part.b, visitor))
+            is Binary     -> visitor.operator(part.op, walk(part.a, visitor), walk(part.b, visitor))
+            is Call1      -> visitor.function(part.name, listOf(walk(part.a, visitor)))
+            is Call2      -> visitor.function(part.name, listOf(walk(part.a, visitor), walk(part.b, visitor)))
+            is Call3      -> visitor.function(part.name, listOf(walk(part.a, visitor), walk(part.b, visitor), walk(part.c, visitor)))
+            is CallN      -> visitor.function(part.name, part.args.map { walk(it, visitor) })
+            is DatePart   -> visitor.source(part.sourceName)
+            is Is24Hour   -> visitor.source("IS_24_HOUR_MODE")
+            else          -> visitor.other(part.javaClass.simpleName)
         }
 
         // ---- the number parts of a formula (the shared ones are in FormulaParts.kt) ----
@@ -675,7 +699,7 @@ class Formula private constructor(private val root: Node, val text: String) {
             override fun children(): List<Part> = listOf(c, a, b)
         }
 
-        private class Binary(op: String, val a: Node, val b: Node) : Node() {
+        private class Binary(val op: String, val a: Node, val b: Node) : Node() {
 
             private val code = OPERATORS[op] ?: throw IllegalStateException(op)
 
@@ -706,25 +730,25 @@ class Formula private constructor(private val root: Node, val text: String) {
             override fun children(): List<Part> = listOf(a, b)
         }
 
-        private class Call1(val work: Fn1, val a: Node) : Node() {
+        private class Call1(val name: String, val work: Fn1, val a: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v))
             override fun children(): List<Part> = listOf(a)
         }
 
-        private class Call2(val work: Fn2, val a: Node, val b: Node) : Node() {
+        private class Call2(val name: String, val work: Fn2, val a: Node, val b: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v), b.eval(v))
             override fun children(): List<Part> = listOf(a, b)
         }
 
-        private class Call3(val work: Fn3, val a: Node, val b: Node, val c: Node) : Node() {
+        private class Call3(val name: String, val work: Fn3, val a: Node, val b: Node, val c: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v), b.eval(v), c.eval(v))
             override fun children(): List<Part> = listOf(a, b, c)
         }
 
-        private class CallN(val work: FnN, val args: Array<Node>) : Node() {
+        private class CallN(val name: String, val work: FnN, val args: Array<Node>) : Node() {
 
             private val values = DoubleArray(args.size)
             override fun eval(v: DoubleArray): Double {
@@ -740,4 +764,38 @@ class Formula private constructor(private val root: Node, val text: String) {
         private fun truth(x: Double) = x != 0.0 && !x.isNaN()
         private fun bool(b: Boolean) = if (b) 1.0 else 0.0
     }
+}
+
+/**
+ * Reads the parts of a [Formula], see [Formula.visit]. Each call gets the results of the parts
+ * inside it. Texts are not shown part by part: a part that gives or reads a text comes as [other].
+ */
+interface FormulaVisitor<R> {
+
+    /** A fixed number. */
+    fun number(value: Double): R
+
+    /** The variable at [index] of the name lookup the formula was read with. */
+    fun variable(index: Int): R
+
+    /** `-a` */
+    fun negate(a: R): R
+
+    /** `!a` */
+    fun not(a: R): R
+
+    /** `if(c, a, b)` and `c ? a : b` with two numbers. */
+    fun choose(c: R, a: R, b: R): R
+
+    /** One of `&& || + - * / % < <= > >= == !=`; `%` is [Formula.mod]. */
+    fun operator(op: String, a: R, b: R): R
+
+    /** A number function of [Formula.FUNCTIONS] by its name. */
+    fun function(name: String, args: List<R>): R
+
+    /** A data source of the Watch Face Format that is not made from our variables, like `DAY_OF_WEEK`. */
+    fun source(name: String): R
+
+    /** Any other part; [kind] says which. */
+    fun other(kind: String): R
 }

@@ -76,7 +76,7 @@ object WffSources {
      * @param index the index of one of our variables; throws when the formula cannot read it here
      */
     internal fun part(name: String, setting: FormulaSetting, index: (String) -> Int): Part? {
-        DATE_PARTS[name]?.let { return DatePart(it, Var(index(LayerVariables.DAY_NAME))) }
+        DATE_PARTS[name]?.let { return DatePart(it, Var(index(LayerVariables.DAY_NAME)), name) }
         if (name == "IS_24_HOUR_MODE") {
             // Only where there is a clock: there the setting is the one of the watch (in a look it is not set)
             index(LayerVariables.DAY_NAME)
@@ -93,9 +93,9 @@ object WffSources {
 
 /**
  * A part of the date of [day], the day count of the clock (days since 1970 in the zone of the watch).
- * The date is worked out again only on another day.
+ * The date is worked out again only on another day. [sourceName] is the WFF name, like `DAY_OF_WEEK`.
  */
-internal class DatePart(private val kind: Int, private val day: Node) : Node() {
+internal class DatePart(private val kind: Int, private val day: Node, val sourceName: String) : Node() {
 
     private var lastDay = Double.NaN
     private var last = Double.NaN
