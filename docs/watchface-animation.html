@@ -142,16 +142,16 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
 <header class="top">
   <h1>Watch face layer engine: the design format</h1>
   <p class="lead">A manual for people (and AI sessions) who write Custom watch face designs for the personal build of AAPS.
-  A design is a zip with one JSON file and some pictures. The watch reads the JSON. This page tells what the layer engine
-  reads from it: the <code>animation</code>, the <code>looks</code> and a few view keys.</p>
+  A design is a zip with one JSON file and some pictures. This page tells what the layer engine of the watch reads from
+  the JSON: the <code>animation</code>, the <code>looks</code> and a few view keys.</p>
 
   <div class="note" id="pictures">
     <strong>About the pictures on this page.</strong>
-    Every example has a small round picture. The pictures are drawn in your browser by a small copy of the rules of the
-    engine. The copy reads the same JSON text that you see beside the picture. So the pictures show the idea, not the exact
-    pixels. The watch and the phone preview are the truth. The pictures of the zip, the moon and the views of the face are
-    stand-ins, and they look different on the watch. Do not count on the random numbers (<code>r1</code> to
-    <code>r8</code>) being the same as on the watch. Click a picture to play it again.
+    Every example has a small round picture. Your browser draws it with a small copy of the rules of the engine. The copy
+    reads the same JSON text that you see beside the picture. A picture shows the idea. For the exact pixels, look at the
+    watch or the phone preview. The pictures of the zip, the moon and the views of the face are drawn by the page itself
+    and look different on the watch. The random numbers (<code>r1</code> to <code>r8</code>) can differ from those on the
+    watch. Click a picture to play it again.
   </div>
 
   <nav class="toc" aria-label="Table of contents">
@@ -198,15 +198,15 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
 <!-- =================================================================================== 1 -->
 <h2 id="overview">1. Overview</h2>
 
-<p>A design can have a <strong>wake animation</strong>. It plays for a few seconds each time the watch wakes: when the face
+<p>A design can have a wake animation. It plays for a few seconds each time the watch wakes: when the face
 starts, when the watch comes out of the always-on screen, when the face becomes visible again, and when you tap the face
 (only while no animation plays). After that the face is still again and costs no extra battery.</p>
 
-<p>The animation is the key <code>animation</code> at the top of the design JSON. It holds a list of <strong>layers</strong>.
+<p>The animation is the key <code>animation</code> at the top of the design JSON. It holds the list <code>layers</code>.
 A layer draws one thing: a picture, a simple shape, or a view of the face. Almost every number of a layer can be a
-<strong>formula</strong> of the time, so the thing moves, turns, grows or fades.</p>
+formula of the time, so the thing moves, turns, grows or fades.</p>
 
-<p>All places and sizes are in the <strong>design space</strong> of 400 x 400. The point 0, 0 is the top left corner,
+<p>All places and sizes are in the design space of 400 x 400. The point 0, 0 is the top left corner,
 <code>x</code> goes right and <code>y</code> goes down. The middle of the face is 200, 200. The watch scales the design
 space to its own screen.</p>
 
@@ -241,14 +241,14 @@ so the circle fades in and out. After the wake the face is empty again: this lay
 <tr><td><code>fps</code></td><td>whole number</td><td>24</td><td>1 to 30</td><td>Frames per second while the wake plays.</td></tr>
 <tr><td><code>fadeMs</code></td><td>whole number</td><td>600</td><td>0 to half of the length</td><td>The variable <code>env</code> rises from 0 to 1 over this time at the start and falls back over it at the end. With 0, <code>env</code> is always 1.</td></tr>
 <tr><td><code>fallbackBpm</code></td><td>whole number</td><td>60</td><td>40 to 180</td><td>The heart rate (<code>bpm</code>) when the watch has measured none.</td></tr>
-<tr><td><code>let</code></td><td>object</td><td>none</td><td>16 names</td><td>Named formulas for all layers, see <a href="#let">let</a>.</td></tr>
+<tr><td><code>let</code></td><td>object</td><td>none</td><td>16 names</td><td>Named formulas for all layers, see <a href="#let"><code>let</code></a>.</td></tr>
 <tr><td><code>templates</code></td><td>object</td><td>none</td><td></td><td>The design's own templates, see <a href="#templates">templates</a>.</td></tr>
 <tr><td><code>layers</code></td><td>list</td><td>empty</td><td>40 layers, 1500 copies in all</td><td>The layers, in paint order inside each slot. An entry is a plain layer or <code>{"use": ...}</code>.</td></tr>
 </tbody></table></div>
 
 <p>A wake ends when its length is over, or after <code>length x fps / 1000</code> frames, whichever comes first. The
 animation never plays on the always-on screen, in the simple face, or in a still picture of the face. A broken layer is
-left out and the other layers still play. A broken <code>animation</code> never costs the rest of the design.</p>
+left out and the other layers still play. A broken <code>animation</code> does not break the rest of the design.</p>
 
 <figure class="ex" id="ex-fps" data-face="off">
 <pre>{
@@ -354,16 +354,16 @@ star is gone until the next wake.</figcaption>
 </figure>
 
 <div class="note">
-  A rest layer is a still picture. While seconds are shown, the face keeps its drawn parts for a whole minute (the top
-  part for 10 seconds). So a rest layer that reads <code>sec</code> or <code>min</code> only moves once a minute. Rest
-  layers of pictures and shapes are not drawn on the always-on screen and not in the simple face. A
+  A <code>rest</code> layer is a still picture. While seconds are shown, the face keeps its drawn parts for a whole minute
+  (the top part for 10 seconds). So a <code>rest</code> layer that reads <code>sec</code> or <code>min</code> only moves
+  once a minute. <code>rest</code> layers of pictures and shapes are not drawn on the always-on screen and not in the simple face. A
   <a href="#views">view layer</a> with <code>rest</code> places its view in every frame, also on the always-on screen.
 </div>
 
 <h3 id="test-face">The test face and the test zip of this page</h3>
 
 <p>Some examples need a face to show what is in front and what is behind, or need a view to move. For those the pictures
-use one small <strong>test face</strong>. The example JSON is laid over it, so an example only shows the keys it adds.
+use one small test face. The example JSON is laid over it, so an example only shows the keys it adds.
 The test face has these views:</p>
 
 <div class="facebox">
@@ -385,13 +385,13 @@ The test face has these views:</p>
 </div>
 
 <p>A real zip holds pictures as files. A layer names a picture by its file name without the extension. The pictures of the
-<strong>test zip</strong> of this page are drawn by the page itself:</p>
+test zip of this page are drawn by the page itself:</p>
 <div id="zip-gallery" aria-label="The pictures of the test zip"></div>
 
 <!-- =================================================================================== 2 -->
 <h2 id="sources">2. Layer sources</h2>
 
-<p>Every layer has <strong>exactly one</strong> source: <code>image</code>, <code>shape</code> or <code>view</code>. A layer
+<p>Every layer has exactly one source: <code>image</code>, <code>shape</code> or <code>view</code>. A layer
 with none, or with two of them, is left out.</p>
 
 <h3 id="source-image">A picture of the zip: <code>image</code></h3>
@@ -420,10 +420,10 @@ fills the whole face. A side that is not given takes the side of the whole face.
 <h3 id="source-moon">A picture the watch draws: <code>"image": "@moon"</code></h3>
 <p>An <code>image</code> name that starts with <code>@</code> is a picture the watch draws itself. There is one now:
 <code>@moon</code>, the moon as it is in the sky at this moment. The watch makes it from one photo of the full moon: the
-dark part is made dark, and the moon is turned the way it stands in the sky at the place of the wearer (north is up when
+part that is not lit is made dark, and the moon is turned the way it stands in the sky at the place of the wearer (north is up when
 the watch has no place). It is drawn in the middle of <code>rect</code>, as a square of the shorter side. It is asked for
 again once a minute, and the watch draws a new moon every 15 minutes. It has no <code>glow</code>. A design with
-<code>@moon</code> needs the place, see <a href="#needs-place">needsPlace</a>.</p>
+<code>@moon</code> needs the place, see <a href="#needs-place"><code>needsPlace</code></a>.</p>
 
 <figure class="ex" id="ex-moon" data-face="off" data-controls="moon">
 <pre>{
@@ -475,7 +475,7 @@ round its start point.</figcaption>
 </figure>
 
 <h3 id="source-view">A view of the face: <code>view</code></h3>
-<p><code>"view": "sgv"</code> does not draw something new. It takes a view that the face already has and moves, turns,
+<p><code>"view": "sgv"</code> takes a view that the face already has and moves, turns,
 scales, fades or cuts it. The name is the view key of the design, for example <code>chart</code>, <code>sgv</code> or
 <code>freetext1</code>. See <a href="#views">view layers</a>.</p>
 
@@ -488,15 +488,14 @@ scales, fades or cuts it. The name is the view key of the design, for example <c
     ]
   }
 }</pre>
-<figcaption><strong>A view layer.</strong> The glucose number of the test face hops. Nothing new is drawn: the view itself
-moves.</figcaption>
+<figcaption><strong>A view layer.</strong> The glucose number of the test face hops. The layer draws nothing new.</figcaption>
 </figure>
 
 <!-- =================================================================================== 3 -->
 <h2 id="layer-keys">3. Layer keys</h2>
 
-<p>A layer has two kinds of keys. <strong>Props</strong> take a number or a formula text, and are worked out again for
-every frame and every copy. <strong>Fixed keys</strong> are read once, when the design is read. A fixed number may also be
+<p>A layer has two kinds of keys. Props take a number or a formula text, and are worked out again for
+every frame and every copy. Fixed keys are read once, when the design is read. A fixed number may also be
 written as a formula of fixed numbers, like <code>"maxScale": "1 + 0.2"</code>.</p>
 
 <h3 id="props">The props (number or formula)</h3>
@@ -532,8 +531,8 @@ written as a formula of fixed numbers, like <code>"maxScale": "1 + 0.2"</code>.<
 <tr><td><code>maxScale</code></td><td>number</td><td>1</td><td>The largest scale the picture is drawn at; it is made sharp for that size. Cut to 0.1 to 4.</td></tr>
 <tr><td><code>clip</code></td><td>object</td><td>the round screen</td><td>Where the layer may show, see below.</td></tr>
 <tr><td><code>count</code> + <code>seed</code>, <code>points</code>, <code>slices</code> + <code>slicesAlong</code></td><td></td><td>one copy</td><td>How many times the layer is drawn, see <a href="#copies">copies</a>.</td></tr>
-<tr><td><code>let</code></td><td>object</td><td>none</td><td>Named formulas of this layer, see <a href="#let">let</a>.</td></tr>
-<tr><td><code>rest</code></td><td>number (seconds)</td><td>none</td><td>The layer also shows while no wake plays, see <a href="#rest">rest</a>.</td></tr>
+<tr><td><code>let</code></td><td>object</td><td>none</td><td>Named formulas of this layer, see <a href="#let"><code>let</code></a>.</td></tr>
+<tr><td><code>rest</code></td><td>number (seconds)</td><td>none</td><td>The layer also shows while no wake plays, see <a href="#rest"><code>rest</code></a>.</td></tr>
 </tbody></table></div>
 
 <h3 id="key-place">Place: <code>rect</code>, <code>x</code>, <code>y</code></h3>
@@ -598,7 +597,7 @@ straight down. Each next line has 45 degrees more: its end turns towards the rig
   }
 }</pre>
 <figcaption><strong>The pivot.</strong> The blue rectangle turns round its own middle (the default). The yellow one has a
-pivot at its top, so it swings like a pendulum. The pivot is a point of the design space, not of the shape.</figcaption>
+pivot at its top, so it swings like a pendulum. The pivot is a point of the design space.</figcaption>
 </figure>
 
 <figure class="ex" id="ex-scale" data-face="off">
@@ -693,7 +692,7 @@ softer.</figcaption>
 <h3 id="key-glow">A glow round a picture: <code>glow</code>, <code>glowAlpha</code></h3>
 <p><code>glow</code> makes a soft shape of the picture in one colour, once, when the picture is made. The prop
 <code>glowAlpha</code> says how strong it shows; its default is 0, so a glow without <code>glowAlpha</code> shows nothing.
-Only for pictures of the zip, not for <code>@moon</code>, not for shapes, and not together with <code>slices</code>.</p>
+A glow works only on pictures of the zip: not on <code>@moon</code>, not on shapes, and not together with <code>slices</code>.</p>
 <figure class="ex" id="ex-glow" data-face="off">
 <pre>{
   "animation": {
@@ -888,10 +887,10 @@ memory, so do not give more than needed.</p>
 <!-- =================================================================================== 4 -->
 <h2 id="copies">4. Copies</h2>
 
-<p>A layer can be drawn many times. Give <strong>at most one</strong> of <code>count</code>, <code>points</code> and
+<p>A layer can be drawn many times. Give at most one of <code>count</code>, <code>points</code> and
 <code>slices</code>; with two of them the layer is left out. Every copy works out the formulas again with its own numbers:
 <code>i</code> (the number of the copy, from 0), <code>n</code> (how many copies) and <code>u</code> =
-<code>i / (n - 1)</code>, which goes from 0 for the first copy to 1 for the last. One layer has at most 400 copies, all
+<code>i / (n - 1)</code> (0 for the first copy, 1 for the last). One layer has at most 400 copies, all
 layers together 1500.</p>
 
 <h3 id="copies-count"><code>count</code> and <code>seed</code></h3>
@@ -998,7 +997,7 @@ put each copy on its point. <code>i</code> gives each light its own moment to sh
 <p><code>"slices": 80</code> cuts a picture into 80 strips, and each strip is a copy that can move on its own. Use it for
 a picture that waves, like an aurora or a flag. By default the strips stand up, side by side. With
 <code>"slicesAlong": "y"</code> they lie flat, one above the other. <code>slices</code> is cut to 1 to 200 and is only
-for pictures. A layer with <code>slices</code> has no glow.</p>
+for pictures. A layer with <code>slices</code> has no <code>glow</code>.</p>
 <figure class="ex" id="ex-slices" data-face="off">
 <pre>{
   "animation": {
@@ -1049,7 +1048,7 @@ gives one number. It is read once and then worked out for every frame and every 
   <li><strong>Names</strong>: the <a href="#variables">variables</a>, the <a href="#values">values</a>
     <code>v_&lt;key&gt;</code> and the names of a <a href="#let"><code>let</code></a>. A name is made of letters, digits
     and <code>_</code>. An unknown name leaves the layer out.</li>
-  <li><strong>Operators</strong> and <strong>brackets</strong>, see below.</li>
+  <li><strong>Operators</strong> and brackets, see below.</li>
   <li><strong>Functions</strong>: <code>name(value, value)</code>, see below. An unknown function, or a wrong number of
     values, leaves the layer out.</li>
 </ul>
@@ -1115,7 +1114,7 @@ goes from left to right. Use brackets when you are not sure.</p>
   <td><span class="curve" data-f="easeInOut(x)" data-x0="0" data-x1="1"></span><br><code>easeInOut(x)</code></td></tr>
 <tr><td><code>settle(u)</code></td><td>From 0 to 1 like a spring: it goes past 1 by about a fifth, swings back a little, and is exactly 1 at the end. For a hand that stops on its value.</td>
   <td><span class="curve" data-f="settle(x)" data-x0="0" data-x1="1"></span><br><code>settle(x)</code></td></tr>
-<tr><td><code>pingpong(x, length)</code></td><td>Goes from 0 up to <code>length</code> and back to 0 while <code>x</code> runs from 0 to 2 x <code>length</code>, and again and again. 0 for a length of 0 or less.</td>
+<tr><td><code>pingpong(x, length)</code></td><td>Goes from 0 up to <code>length</code> and back to 0 while <code>x</code> runs from 0 to 2 x <code>length</code>, then starts again. 0 for a length of 0 or less.</td>
   <td><span class="curve" data-f="pingpong(x, 1)" data-x0="0" data-x1="4"></span><br><code>pingpong(x, 1)</code></td></tr>
 <tr><td><code>pulse(ms, bpm, secondBeat)</code></td><td>One heart beat after another, from 0 (rest) to 1 (top of the beat): a quick rise, a slower fall, and a small second beat of size <code>secondBeat</code> (0 to 1). <code>ms</code> is a time in milliseconds, <code>bpm</code> is cut to 40 to 180.</td>
   <td><span class="curve" data-f="pulse(x, 60, 0.35)" data-x0="0" data-x1="2000"></span><br><code>pulse(x, 60, 0.35)</code></td></tr>
@@ -1156,7 +1155,7 @@ goes from left to right. Use brackets when you are not sure.</p>
 <tr><td><code>floor(x)</code>, <code>ceil(x)</code>, <code>round(x)</code></td><td>The whole number below, above, and nearest. A half goes up: <code>round(2.5)</code> is 3.</td><td><span class="curve" data-f="floor(x)" data-x0="0" data-x1="4"></span><br><code>floor(x)</code></td></tr>
 <tr><td><code>min(a, b, ...)</code>, <code>max(a, b, ...)</code></td><td>The smallest and the largest of 2 to 8 values.</td><td><span class="curve" data-f="min(x, 1)" data-x0="0" data-x1="3" data-y0="0" data-y1="3"></span><br><code>min(x, 1)</code></td></tr>
 <tr><td><code>sqrt(x)</code>, <code>pow(x, y)</code></td><td>The square root, and <code>x</code> to the power <code>y</code>.</td><td><span class="curve" data-f="pow(x, 2)" data-x0="0" data-x1="2"></span><br><code>pow(x, 2)</code></td></tr>
-<tr><td><code>exp(x)</code>, <code>log(x)</code></td><td>e to the power <code>x</code>, and the natural logarithm. <code>exp(-t * 3)</code> dies away fast.</td><td><span class="curve" data-f="exp(-x * 3)" data-x0="0" data-x1="2"></span><br><code>exp(-x * 3)</code></td></tr>
+<tr><td><code>exp(x)</code>, <code>log(x)</code></td><td>e to the power <code>x</code>, and the natural logarithm. <code>exp(-t * 3)</code> falls fast towards 0.</td><td><span class="curve" data-f="exp(-x * 3)" data-x0="0" data-x1="2"></span><br><code>exp(-x * 3)</code></td></tr>
 <tr><td><code>tan(x)</code></td><td>The tangent, <code>x</code> in radians.</td><td><span class="curve" data-f="tan(x)" data-x0="-1.2" data-x1="1.2"></span></td></tr>
 <tr><td><code>atan2(y, x)</code></td><td>The angle of the point <code>x</code>, <code>y</code> seen from 0, 0, in radians, from -pi to pi.</td><td><span class="curve" data-f="atan2(x, 1)" data-x0="-5" data-x1="5"></span><br><code>atan2(x, 1)</code></td></tr>
 <tr><td><code>f32(x)</code></td><td><code>x</code> rounded as a 32-bit number. Only the built-in templates use it, to give the same pixels as older versions. Do not use it in a design: it will go away.</td><td></td></tr>
@@ -1383,10 +1382,10 @@ and distance <code>d</code> from the <code>let</code> of its layer.</figcaption>
 <ul>
   <li>In a wake, the values are read <strong>once, at the start of the wake</strong>. In normal frames (layers with
     <code>rest</code>) and in <a href="#looks">looks</a> they are read again each time the face is drawn new.</li>
-  <li>A value that the face does not know (no reading yet, no weather, an unknown key) is <strong>no number</strong>.
+  <li>A value that the face does not know (no reading yet, no weather, an unknown key) is no number.
     Math with it gives no number, and a comparison with it is false. A layer whose <code>x</code> or <code>y</code> is no
     number is not drawn.</li>
-  <li>One animation can read at most <strong>16</strong> different values. A layer that needs one more is left out.</li>
+  <li>One animation can read at most 16 different values. A layer that needs one more is left out.</li>
 </ul>
 
 <div class="scroll"><table>
@@ -1421,9 +1420,9 @@ and distance <code>d</code> from the <code>let</code> of its layer.</figcaption>
 <p>The range is what a design can expect. A formula gets the value as it is; it is not cut to the range.</p>
 
 <h4>The sun and the moon</h4>
-<p>The sky values follow the day and night rule of the watch. With a <strong>place</strong> they follow the real sun and
+<p>The sky values follow the day and night rule of the watch. With a place they follow the real sun and
 moon there. For example in Amsterdam (52.37, 4.90) on a day in June the sun is up from about 05:20 to 22:00, so
-<code>sun_progress</code> is 0.5 at about 13:40. With <strong>fixed times</strong> (the wearer chose a day start and a
+<code>sun_progress</code> is 0.5 at about 13:40. With fixed times (the wearer chose a day start and a
 night start) the day is between those times, and the moon follows the sun, late by its phase. With no rule the day is
 from 07:00 to 19:00.</p>
 
@@ -1485,7 +1484,7 @@ stays after the wake. The test face counts below 70 as low and above 180 as high
   }
 }</pre>
 <figcaption><strong>A value that is missing.</strong> While the weather is not known, <code>x</code> of the circle is no
-number, so the circle is not drawn. The grey bar shows only then: a missing value is not even the same as itself, so
+number, so the circle is not drawn. The grey bar shows only then: a missing value is not the same as itself, so
 <code>v == v</code> is the test for "there is a value". Choose a weather to see the circle.</figcaption>
 </figure>
 
@@ -1517,7 +1516,7 @@ place.</p>
 <p>A template is a ready-made effect: one or more layers with some parameters. An entry of <code>layers</code> with
 <code>use</code> is replaced by the layers of the template when the design is read:</p>
 <pre>{"use": "rain", "count": 120, "color": "#7FB6FF"}</pre>
-<p>The other keys of the entry are the <strong>parameters</strong>. A parameter that you do not give has its default. A
+<p>The other keys of the entry are the parameters. A parameter that you do not give has its default. A
 number parameter is cut to its limits. A key that the template does not know is an error in the design tests, and is not
 used. So you cannot add layer keys such as <code>slot</code> or <code>rest</code> to a <code>use</code> entry: write your
 own template for that. A <code>use</code> of a template that does not exist is left out.</p>
@@ -1711,8 +1710,8 @@ settles where its value puts it. The view of the test face does not move by a va
     ]
   }
 }</pre>
-<figcaption><strong>A shake that dies away.</strong> The trend arrow shakes 35 degrees to both sides, 3 times per second,
-and comes to rest. After 5 times <code>decayMs</code> it stands still.</figcaption>
+<figcaption><strong>A shake that dies away.</strong> The trend arrow shakes 35 degrees to both sides, 3 times per second.
+After 5 times <code>decayMs</code> it stands still.</figcaption>
 </figure>
 <div class="scroll"><table>
 <thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
@@ -1748,7 +1747,7 @@ width.</figcaption>
 <tr><td><code>rect</code></td><td>the whole face</td><td></td><td>The place of the view: <code>left</code>, <code>top</code>, <code>width</code>, <code>height</code>.</td></tr>
 <tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>The view is hidden until then.</td></tr>
 <tr><td><code>durationMs</code></td><td>1000</td><td>50 to 5000, whole</td><td>The time to draw the whole view.</td></tr>
-<tr><td><code>color</code>, <code>alpha</code>, <code>width</code></td><td><code>#FFFFFF</code>, 140, 8</td><td>alpha 0 to 255 whole, width 0 to 40</td><td>The bright line at the edge. With <code>width</code> or <code>alpha</code> 0 there is no line.</td></tr>
+<tr><td><code>color</code>, <code>alpha</code>, <code>width</code></td><td><code>#FFFFFF</code>, 140, 8</td><td><code>alpha</code> 0 to 255 whole, <code>width</code> 0 to 40</td><td>The bright line at the edge. With <code>width</code> or <code>alpha</code> 0 there is no line.</td></tr>
 </tbody></table></div>
 
 <h3 id="t-glint"><code>glint</code>: a light over the shiny parts</h3>
@@ -1767,19 +1766,19 @@ width.</figcaption>
   }
 }</pre>
 <figcaption><strong>A glint.</strong> A band of light slides once over the face, but it shows only in the
-<code>rings</code> and <code>boxes</code> you give: here a ring at the edge and the frame of the graph. Without rings and
-boxes nothing shows.</figcaption>
+<code>rings</code> and <code>boxes</code> you give: here a ring at the edge and the frame of the graph. Without <code>rings</code> and
+<code>boxes</code> nothing shows.</figcaption>
 </figure>
 <div class="scroll"><table>
 <thead><tr><th>Parameter</th><th>Default</th><th>Limits</th><th>Meaning</th></tr></thead>
 <tbody>
 <tr><td><code>rings</code>, <code>boxes</code></td><td>empty</td><td></td><td>Where the light shows, as in <a href="#key-clip"><code>clip</code></a>.</td></tr>
-<tr><td><code>cornerRadius</code></td><td>0</td><td>0 to 200</td><td>Rounds the corners of the boxes.</td></tr>
+<tr><td><code>cornerRadius</code></td><td>0</td><td>0 to 200</td><td>Rounds the corners of the <code>boxes</code>.</td></tr>
 <tr><td><code>delayMs</code></td><td>0</td><td>0 to 5000, whole</td><td>When the light starts.</td></tr>
 <tr><td><code>durationMs</code></td><td>900</td><td>50 to 5000, whole</td><td>The time to cross the face.</td></tr>
 <tr><td><code>angle</code></td><td>30</td><td></td><td>The turn of the band, in degrees.</td></tr>
 <tr><td><code>width</code></td><td>60</td><td>1 to 400</td><td>The width of the band.</td></tr>
-<tr><td><code>color</code>, <code>alpha</code></td><td><code>#FFFFFF</code>, 90</td><td>alpha 0 to 255, whole</td><td>The light. With <code>alpha</code> 0 there is no layer.</td></tr>
+<tr><td><code>color</code>, <code>alpha</code></td><td><code>#FFFFFF</code>, 90</td><td><code>alpha</code> 0 to 255, whole</td><td>The light. With <code>alpha</code> 0 there is no layer.</td></tr>
 </tbody></table></div>
 
 <h3 id="own-templates">Your own templates: <code>templates</code></h3>
@@ -1795,10 +1794,10 @@ boxes nothing shows.</figcaption>
 </ul>
 <p>How <code>$name</code> is filled in:</p>
 <ul>
-  <li>A text that is <strong>exactly</strong> <code>"$name"</code> becomes the value itself, of any type:
+  <li>A text that is exactly <code>"$name"</code> becomes the value itself, of any type:
     <code>"count": "$count"</code> becomes <code>"count": 40</code>, and <code>"rect": "$area"</code> becomes the whole
     object.</li>
-  <li><code>$name</code> <strong>inside a longer text</strong> becomes the value as text. A number is written plain, and
+  <li><code>$name</code> inside a longer text becomes the value as text. A number is written plain, and
     in brackets when it is negative, so it can stand anywhere in a formula: <code>"$size * (0.5 + r5)"</code> becomes
     <code>"3 * (0.5 + r5)"</code>.</li>
   <li><code>$name.key</code> is one entry of an object parameter: <code>$area.left</code>.</li>
@@ -1910,7 +1909,7 @@ add up: moves and turns are added, scales and alphas are multiplied, cuts are la
     ]
   }
 }</pre>
-<figcaption><strong>Scale, turn, fade and move.</strong> The glucose number breathes, the arrow turns round once, the
+<figcaption><strong>Scale, turn, fade and move.</strong> The glucose number grows and shrinks, the arrow turns round once, the
 change fades in and out, and the battery number hops from side to side.</figcaption>
 </figure>
 
@@ -1924,7 +1923,7 @@ change fades in and out, and the battery number hops from side to side.</figcapt
   }
 }</pre>
 <figcaption><strong>Cut a view.</strong> The graph is cut off right of a line that moves from its left edge (70) to its
-right edge (330). This is the heart of the template <code>trace</code>.</figcaption>
+right edge (330). The template <code>trace</code> works this way.</figcaption>
 </figure>
 
 <h3 id="view-variables">The own place of the view: <code>rot0</code>, <code>dx0</code>, <code>cx0</code>, <code>cy0</code></h3>
@@ -1935,7 +1934,7 @@ right edge (330). This is the heart of the template <code>trace</code>.</figcapt
 <tr><td><code>dx0</code></td><td>How far right of its design place the view is now, in design pixels (a marker that its value moves sideways).</td></tr>
 <tr><td><code>cx0</code>, <code>cy0</code></td><td>The middle of the view where the design puts it (<code>leftmargin + width / 2</code>, <code>topmargin + height / 2</code>).</td></tr>
 </tbody></table></div>
-<p>With these a formula can say where a view <strong>should be</strong>, not only how far it moves. To put the middle of a
+<p>With these a formula can say where a view should be. To put the middle of a
 view on the point 300, 100, write <code>"x": "300 - cx0"</code> and <code>"y": "100 - cy0"</code>. To turn a hand to
 -60 degrees whatever its value is, write <code>"rotation": "-60 - rot0"</code>.</p>
 
@@ -1971,12 +1970,12 @@ one group; the views of a group are drawn in the paint order of the face. A shap
 </div>
 
 <h3 id="view-rest">A view layer with <code>rest</code>: a place for every frame</h3>
-<p>A view layer with <code>rest</code> also places its view in the <strong>normal frames</strong>, and on the always-on
+<p>A view layer with <code>rest</code> also places its view in the normal frames, and on the always-on
 screen. This is how a design puts a view on a place that follows a value: a sun that goes over the face by day, a cloud
 that follows the moon. The watch works the formulas out with <code>t</code> = <code>rest</code> and <code>env</code> = 0,
 each time the face is drawn new (when data comes in, and once a minute). In this case <code>rot0</code> is the turn of
 the design itself, and <code>dx0</code> is 0.</p>
-<p>While a wake plays, the layer gives only the change from its rest place. A design that has only view layers with
+<p>While a wake plays, the layer gives only the change from its <code>rest</code> place. A design that has only view layers with
 <code>rest</code> whose formulas do not read the time has no wake to play.</p>
 
 <figure class="ex" id="ex-view-rest" data-face="on" data-controls="clock" data-set='{"clock": 9}'>
@@ -2034,7 +2033,7 @@ are the list <code>looks</code> at the top of the design JSON, beside <code>anim
 <tr><td><code>images</code></td><td>object</td><td>Picture swaps: <code>{"Background": "BackgroundDay"}</code> shows the zip picture <code>BackgroundDay</code> everywhere the design uses <code>Background</code>. A swap to a picture that is not in the zip is left out.</td></tr>
 </tbody></table></div>
 
-<p>The looks that are on are laid over the design <strong>in the order of the list</strong>, so a later look wins where
+<p>The looks that are on are laid over the design in the order of the list, so a later look wins where
 two looks change the same thing. The watch checks the conditions each time the face is drawn new, and keeps the result
 while the same looks are on. When the looks change the <code>animation</code>, the new animation plays from its start.</p>
 
@@ -2110,7 +2109,7 @@ later, so its glucose colour and its background win, but the clock text keeps th
 
 <div class="note">
   <strong>Lists are not merged.</strong> A patch that gives <code>animation.layers</code> gives the whole new list. To
-  change one layer in a look, repeat all layers. And a swap does not chain: with
+  change one layer in a look, repeat all layers. A swap does not chain: with
   <code>{"A": "B"}</code> and <code>{"B": "C"}</code>, the place of <code>A</code> shows the picture file <code>B</code>.
 </div>
 
@@ -2159,8 +2158,8 @@ or 24 hour form of the watch.</p>
     "dynData": "sunTime"
   }
 }</pre>
-<figcaption><strong>The next sunrise or sunset.</strong> The small text at the top shows the time of the next sunrise or
-sunset. On the test face that is 06:00 or 18:00. Without a value (no place) the watch shows the
+<figcaption><strong>The next sunrise or sunset.</strong> The small text at the top shows that time.
+On the test face it is 06:00 or 18:00. Without a value (no place) the watch shows the
 <code>invalidTextvalue</code>.</figcaption>
 </figure>
 
@@ -2182,7 +2181,7 @@ face, where it is dots. Move the slider to change the newest reading.</figcaptio
   "graphLineWidth": 3,
   "graphLineColor": "#4CC9F0"
 }</pre>
-<figcaption><strong>One colour.</strong> A wider line, all in one colour.</figcaption>
+<figcaption><strong>One colour.</strong> Here the line is also wider.</figcaption>
 </figure>
 
 <h3 id="colour-looks">Colours the wearer can choose: <code>colourLooks</code></h3>
@@ -2211,7 +2210,7 @@ the wearer chooses. Try the buttons.</figcaption>
 
 <div class="warn">
   <strong>Keep the zip small: about 320 KB.</strong> A bigger design never reaches the watch, and there is no error. The
-  files travel unpacked, so the sizes of the files count, not only the size of the zip. Near the limit a design can take
+  files travel unpacked, so the sizes of the files count too. Near the limit a design can take
   a long time to arrive. Ways to save room: jpg for photos and backgrounds, small pictures (a layer scales them to its
   <code>rect</code> anyway), fonts with only the letters you use.
 </div>
@@ -2293,10 +2292,10 @@ picture say what was left out. Layers are counted from 0, after the templates ar
 
 <h3 id="known-limits">Known limits</h3>
 <ul>
-  <li>Rest layers of the slots <code>views</code> and <code>front</code> lie between the right parts of the face only
-    while seconds are shown. When the watch shows no seconds, the face is drawn in one go and these layers are drawn
+  <li><code>rest</code> layers of the slots <code>views</code> and <code>front</code> lie between the right parts of the face only
+    while seconds are shown. When the watch shows no seconds, the face is drawn as a whole and these layers are drawn
     over the whole face, also over the second hand.</li>
-  <li>A rest layer does not move with the time: one that reads <code>sec</code> or <code>min</code> changes once a
+  <li>A <code>rest</code> layer does not move with the time: one that reads <code>sec</code> or <code>min</code> changes once a
     minute at most.</li>
   <li>A view layer with <code>rest</code> moves its view in steps of whole screen pixels.</li>
   <li>The view key <code>image</code> works on text views only.</li>
@@ -2318,7 +2317,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <div class="scroll"><table>
 <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Meaning</th></tr></thead>
 <tbody>
-<tr><td><code>animation</code></td><td>object</td><td>none</td><td>The wake animation and the rest layers. <a href="#overview">1</a></td></tr>
+<tr><td><code>animation</code></td><td>object</td><td>none</td><td>The wake animation and the <code>rest</code> layers. <a href="#overview">1</a></td></tr>
 <tr><td><code>looks</code></td><td>list of looks</td><td>none</td><td>Changes while a condition is true. <a href="#looks">9</a></td></tr>
 <tr><td><code>colourLooks</code></td><td>object with <code>colour1</code>, <code>colour2</code></td><td>none</td><td>Colours the wearer chooses. <a href="#colour-looks">10</a></td></tr>
 <tr><td><code>needsPlace</code></td><td><code>true</code></td><td>not set</td><td>The design wants the place of the wearer. <a href="#needs-place">6</a></td></tr>
@@ -2352,7 +2351,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>gradient</code></td><td>object: <code>type</code> (<code>linear</code>, <code>radial</code>), <code>stops</code> (list of <code>[position, alpha]</code>)</td><td>none</td><td>2 stops or more, each 0 to 1</td><td>no</td><td><code>rect</code>, <code>circle</code></td></tr>
 <tr><td><code>slot</code></td><td><code>back</code>, <code>views</code>, <code>front</code></td><td><code>back</code></td><td>a view is always in <code>views</code></td><td>no</td><td>picture, shape</td></tr>
 <tr><td><code>blend</code></td><td><code>normal</code>, <code>add</code>, <code>screen</code></td><td><code>normal</code></td><td></td><td>no</td><td>picture, shape</td></tr>
-<tr><td><code>glow</code></td><td>object: <code>color</code>, <code>radius</code></td><td>none; white, 10</td><td>radius 0 to 40</td><td>no</td><td>zip picture</td></tr>
+<tr><td><code>glow</code></td><td>object: <code>color</code>, <code>radius</code></td><td>none; white, 10</td><td><code>radius</code> 0 to 40</td><td>no</td><td>zip picture</td></tr>
 <tr><td><code>maxScale</code></td><td>number</td><td>1</td><td>0.1 to 4</td><td>no</td><td>picture</td></tr>
 <tr><td><code>clip</code></td><td>object, see below</td><td>round screen</td><td></td><td>no</td><td>picture, shape</td></tr>
 <tr><td><code>count</code></td><td>whole number</td><td>one copy</td><td>0 to 400</td><td>no</td><td>picture, shape</td></tr>
