@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
+<!-- In a file of its own so this local patch never conflicts with upstream changes to strings.xml -->
+<resources>
+    <!-- Complications made for faces converted to the Watch Face Format -->
+    <string name="complication_wff_glucose">Glucose (value and arrow)</string>
+    <string name="complication_wff_glucose_age">Glucose age</string>
+</resources>

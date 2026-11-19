@@ -64,6 +64,8 @@ import app.aaps.wear.interaction.menus.PreferenceMenuActivity
 import app.aaps.wear.interaction.menus.StatusMenuActivity
 import app.aaps.wear.interaction.menus.TileMenuActivity
 import app.aaps.wear.selfupdate.WatchAppInstallStatusReceiver // PERSONAL PATCH
+import app.aaps.wear.complications.wff.WffGlucoseAgeComplication // PERSONAL PATCH
+import app.aaps.wear.complications.wff.WffGlucoseComplication // PERSONAL PATCH
 import app.aaps.wear.tile.ActionsTileService
 import app.aaps.wear.tile.ActionsTileSettingsActivity
 import app.aaps.wear.tile.BgGraphTileService
@@ -573,4 +575,16 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(WatchAppInstallStatusReceiver::class)
     fun bindWatchAppInstallStatusReceiver(injector: MembersInjector<WatchAppInstallStatusReceiver>): MembersInjector<*> = injector
+    // PERSONAL PATCH: the complications for faces converted to the Watch Face Format.
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(WffGlucoseComplication::class)
+    fun bindWffGlucoseComplication(injector: MembersInjector<WffGlucoseComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(WffGlucoseAgeComplication::class)
+    fun bindWffGlucoseAgeComplication(injector: MembersInjector<WffGlucoseAgeComplication>): MembersInjector<*> = injector
 }
