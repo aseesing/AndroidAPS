@@ -1,29 +1,47 @@
 package app.aaps.wear.watchfaces.settingsync
 
 import android.content.res.Resources
-import app.aaps.core.interfaces.rx.weardata.CwfWatchSetting
-import app.aaps.core.interfaces.rx.weardata.CwfWatchSettings
 import app.aaps.core.interfaces.sharedPreferences.SP
-import app.aaps.wear.watchfaces.CustomWatchface
 
 /**
- * The settings of [CwfWatchSettings] as the watch stores them: each name of the shared table matched
- * to the preference of the Custom watch face with that name.
- *
- * `CwfSettingsSyncWearTest` checks the table against the watch face menu: every setting is there,
- * with the same default.
+ * The settings of [CwfSyncedSettings] by their stored names, read from [resources]. Reads, writes and
+ * checks values the same way on the watch and on the phone.
  */
 class CwfSettingNames(resources: Resources) {
 
-    /** Stored name -> preference key, for every on/off preference of the Custom watch face. */
-    private val preferenceKeys: Map<String, Int> = CustomWatchface.onOffPreferences().associateBy { resources.getString(it) }
+    /** Stored name -> setting, in the order of [CwfSyncedSettings.all]. */
+    val settings: Map<String, CwfSyncedSetting> = CwfSyncedSettings.all.associateBy { resources.getString(it.key) }
 
-    /** Stored name -> setting, in the order of [CwfWatchSettings.all]. Only the ones the watch has. */
-    val settings: Map<String, CwfWatchSetting> = CwfWatchSettings.all.filter { it.key in preferenceKeys }.associateBy { it.key }
+    /** Setting key -> stored name. By key, so a setting with the texts of a design has its name too. */
+    private val names: Map<Int, String> = settings.entries.associate { (name, setting) -> setting.key to name }
+
+    private val allowedChoices: Map<String, Set<String>> = settings.mapNotNull { (name, setting) ->
+        (setting as? CwfSyncedSetting.Choice)?.let { name to resources.getStringArray(it.entryValues).toSet() }
+    }.toMap()
+
+    /** The stored name of [setting]. */
+    fun nameOf(setting: CwfSyncedSetting): String = names.getValue(setting.key)
+
+    /** True when [name] is one of these settings and [value] is a value it can have. */
+    fun isAllowed(name: String, value: String): Boolean =
+        when (settings[name]) {
+            is CwfSyncedSetting.Toggle -> value == "true" || value == "false"
+            is CwfSyncedSetting.Choice -> value in allowedChoices[name].orEmpty()
+            null                       -> false
+        }
 
     /** The value of [setting] in [sp], as text. */
-    fun read(sp: SP, setting: CwfWatchSetting): String = sp.getBoolean(preferenceKeys.getValue(setting.key), setting.default).toString()
+    fun read(sp: SP, setting: CwfSyncedSetting): String =
+        when (setting) {
+            is CwfSyncedSetting.Toggle -> sp.getBoolean(setting.key, setting.default).toString()
+            is CwfSyncedSetting.Choice -> sp.getString(setting.key, setting.defaultValue)
+        }
 
-    /** Stores [value] for [setting] in [sp]. [value] must be allowed, see [CwfWatchSettings.isAllowed]. */
-    fun write(sp: SP, setting: CwfWatchSetting, value: String) = sp.putBoolean(preferenceKeys.getValue(setting.key), value.toBooleanStrict())
+    /** Stores [value] for [setting] in [sp], with the type the watch uses. [value] must be allowed. */
+    fun write(sp: SP, setting: CwfSyncedSetting, value: String) {
+        when (setting) {
+            is CwfSyncedSetting.Toggle -> sp.putBoolean(setting.key, value.toBooleanStrict())
+            is CwfSyncedSetting.Choice -> sp.putString(setting.key, value)
+        }
+    }
 }

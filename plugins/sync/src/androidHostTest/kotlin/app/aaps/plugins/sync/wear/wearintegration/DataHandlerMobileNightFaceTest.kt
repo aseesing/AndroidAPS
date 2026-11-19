@@ -20,6 +20,7 @@ import app.aaps.core.interfaces.utils.TrendCalculator
 import app.aaps.core.keys.StringNonKey
 import app.aaps.core.objects.runningMode.RunningModeGuard
 import app.aaps.core.objects.wizard.QuickWizard
+import app.aaps.plugins.sync.wear.daynight.WearPlaceUse
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineStart
@@ -35,6 +36,7 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import kotlin.reflect.KClass
 
 /**
@@ -63,6 +65,7 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
     private val mainFace = CwfData("{}", mutableMapOf(CwfMetadataKey.CWF_NAME to "AAPS V2"), mutableMapOf())
 
     @Mock private lateinit var wearNightFace: WearNightFace
+    @Mock private lateinit var placeUse: WearPlaceUse
 
     @BeforeEach
     fun prepare() {
@@ -74,7 +77,10 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
             constraintsChecker, activePlugin, commandQueue, fabricPrivacy, uiInteraction,
             persistenceLayer, importExportPrefs, decimalFormatter, pumpStatusProvider,
             ch, runningModeGuard, masterActionExecutor, batchExecutor, wizardExecutor, UnchangedToWearFilter()
-        ).also { it.wearNightFace = wearNightFace }
+        ).also {
+            it.wearNightFace = wearNightFace
+            it.placeUse = placeUse
+        }
     }
 
     /** Sends [fromWatch] and waits for the first [T] the phone sends after it. */
@@ -113,6 +119,28 @@ class DataHandlerMobileNightFaceTest : TestBaseWithProfile() {
         rxBus.send(EventData.ActionClearNightWatchface(1L))
 
         verify(wearNightFace, timeout(5_000)).noneOnWatch()
+    }
+
+    // "No night face" while the phone knew of none is the watch refusing the rule, see WearPlaceUse.ruleRefused
+
+    @Test
+    fun `no night face while the phone knew of none - the phone forgets the need of the design`() {
+        whenever(wearNightFace.isKnown()).thenReturn(false)
+
+        rxBus.send(EventData.ActionClearNightWatchface(1L))
+
+        verify(placeUse, timeout(5_000)).ruleRefused()
+        verify(wearNightFace, timeout(5_000)).noneOnWatch()
+    }
+
+    @Test
+    fun `no night face while the phone knew of one - only the night face is forgotten`() {
+        whenever(wearNightFace.isKnown()).thenReturn(true)
+
+        rxBus.send(EventData.ActionClearNightWatchface(1L))
+
+        verify(wearNightFace, timeout(5_000)).noneOnWatch()
+        verify(placeUse, never()).ruleRefused()
     }
 
     @Test

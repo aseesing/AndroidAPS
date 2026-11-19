@@ -68,6 +68,7 @@ import app.aaps.wear.tile.TempTargetTileService
 import app.aaps.wear.tile.UserActionTileService
 import app.aaps.wear.watchfaces.PushedFace
 import app.aaps.wear.watchfaces.WatchFacePushHelper
+import app.aaps.wear.watchfaces.daynight.StoredWeather
 import com.google.android.gms.wearable.WearableListenerService
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -297,6 +298,9 @@ class DataHandlerWear(
                 else watchFacePushHelper.reportStatusIfChanged()
             }
         }
+        // The weather for the look of the Custom watch face. The face reads it on its next refresh
+        // (every minute), so nothing else needs to be told.
+        onEvent<EventData.Weather> { StoredWeather.save(sp, it) }
         onEvent<EventData.QuickWizard> {
             val serialized = it.serialize()
             if (serialized != sp.getString(R.string.key_quick_wizard_data, "")) {
@@ -376,6 +380,12 @@ class DataHandlerWear(
         onEvent<EventData.ActionSetDayNightRule>(detail = { " rule=${it.rule}" }) {
             inFaceOrder {
                 if (!complicationDataRepository.storeDayNightRule(it.rule)) sendNightWatchface()
+            }
+        }
+        // Nothing needs the rule any more. With a night face the phone is told about it, see PlaceRuleKeeping.kt
+        onEvent<EventData.ActionClearDayNightRule> {
+            inFaceOrder {
+                if (!complicationDataRepository.clearDayNightRule()) sendNightWatchface()
             }
         }
         onEvent<EventData.ActionrequestSetDefaultWatchface> {

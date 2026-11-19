@@ -2,6 +2,7 @@ package app.aaps.wear.watchfaces.utils
 
 import androidx.annotation.ArrayRes
 import androidx.annotation.StringRes
+import app.aaps.wear.watchfaces.options.ChoiceLabels
 
 /*
  * How a watch face describes its own settings screen, so the fragment showing it needs to know
@@ -41,7 +42,8 @@ internal sealed interface WatchFaceSettingRow {
         @ArrayRes val entries: Int,
         @ArrayRes val entryValues: Int,
         val defaultValue: String,
-        @StringRes override val dependencyKey: Int? = null
+        @StringRes override val dependencyKey: Int? = null,
+        val labels: ChoiceLabels? = null // texts of the design, in place of title, entries and entryValues (DesignOptions)
     ) : WatchFaceSettingRow
 
     /** A row that stores nothing and just acts when tapped, e.g. opens a picker. */

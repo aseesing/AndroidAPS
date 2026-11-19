@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The glucose graph of the watch faces with a log time scale -->
+    <string name="key_graph_log_time" translatable="false">graph_log_time</string>
+    <string name="pref_graph_log_time">Log time graph</string>
+    <string name="log_graph_minutes" comment="Short label on the time axis of the watch graph, how long ago: %1$d = minutes. Example: 30m">%1$dm</string>
+    <string name="log_graph_hours" comment="Short label on the time axis of the watch graph, how long ago: %1$d = hours. Example: 6h">%1$dh</string>
+</resources>

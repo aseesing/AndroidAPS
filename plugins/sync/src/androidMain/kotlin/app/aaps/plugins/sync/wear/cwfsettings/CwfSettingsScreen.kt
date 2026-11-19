@@ -25,42 +25,49 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.aaps.core.interfaces.rx.weardata.CwfWatchSettings
 import app.aaps.core.keys.KeysStrings
 import app.aaps.core.ui.CoreUiStrings
 import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.metroViewModel
+import app.aaps.core.ui.compose.preference.ListPreference
 import app.aaps.core.ui.compose.preference.PreferenceCategory
 import app.aaps.core.ui.compose.preference.ProvidePreferenceTheme
 import app.aaps.core.ui.compose.preference.SwitchPreference
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.preview.CwfLivePreview
+import app.aaps.plugins.sync.wear.preview.PreviewSlot
+import app.aaps.wear.watchfaces.settingsync.CwfSyncedSetting
+import app.aaps.wear.watchfaces.settingsync.CwfSyncedSettings
+import androidx.compose.ui.res.stringResource as androidStringResource
 
 /**
  * The watch face settings over the whole screen, with the live preview of the watch face at the top.
  * A change shows in the preview at once.
  *
  * @param bitmap the static picture of the watch face, or null when the phone has none yet
+ * @param slot the face whose settings and preview are shown, the day face or the night face
  */
 @Composable
-internal fun CwfSettingsDialog(bitmap: ImageBitmap?, contentDescription: String?, onClose: () -> Unit) {
+internal fun CwfSettingsDialog(bitmap: ImageBitmap?, contentDescription: String?, onClose: () -> Unit, slot: PreviewSlot = PreviewSlot.DAY) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             val viewModel: CwfSettingsViewModel = metroViewModel()
-            val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val state by viewModel.uiState(slot).collectAsStateWithLifecycle() // one state per face
             CwfSettingsContent(
                 state = state,
                 onChange = viewModel::set,
                 onClose = onClose,
                 preview = {
                     if (bitmap != null)
-                        CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                        CwfLivePreview(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit, slot = slot)
                 }
             )
         }
@@ -76,7 +83,7 @@ internal fun CwfSettingsDialog(bitmap: ImageBitmap?, contentDescription: String?
 @Composable
 internal fun CwfSettingsContent(
     state: CwfSettingsUiState,
-    onChange: (name: String, value: Boolean) -> Unit,
+    onChange: (name: String, value: String) -> Unit,
     onClose: () -> Unit,
     preview: @Composable () -> Unit
 ) {
@@ -99,6 +106,14 @@ internal fun CwfSettingsContent(
         HorizontalDivider()
         ProvidePreferenceTheme {
             LazyColumn(modifier = Modifier.weight(1f)) {
+                if (state.sharedWithOtherFace) item {
+                    Text(
+                        text = stringResource(SyncStrings.wear_cwf_settings_shared),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = AapsSpacing.extraLarge, vertical = AapsSpacing.medium)
+                    )
+                }
                 if (!state.fromWatch) item {
                     Text(
                         text = stringResource(SyncStrings.wear_cwf_settings_not_from_watch),
@@ -107,7 +122,7 @@ internal fun CwfSettingsContent(
                         modifier = Modifier.padding(horizontal = AapsSpacing.extraLarge, vertical = AapsSpacing.medium)
                     )
                 }
-                // All rows are shown, also those the loaded design does not use (the watch menu hides those)
+                // The values shown are all rows, also those the loaded design does not use (the watch menu hides those)
                 item {
                     Text(
                         text = stringResource(SyncStrings.wear_cwf_settings_only_if_used),
@@ -127,16 +142,37 @@ internal fun CwfSettingsContent(
     }
 }
 
-/** One setting: a switch. */
+/** One setting: a switch, or a list of choices. */
 @Composable
-private fun CwfSettingItem(row: CwfSettingRow, onChange: (name: String, value: Boolean) -> Unit) {
-    SwitchPreference(
-        value = row.value,
-        onValueChange = { onChange(row.name, it) },
-        title = { Text(stringResource(row.setting.label)) },
-        enabled = !row.setByDesign,
-        summary = if (row.setByDesign) ({ Text(stringResource(SyncStrings.wear_cwf_settings_set_by_design, stringResource(KeysStrings.pref_title_wear_custom_watchface_authorization))) }) else null
-    )
+private fun CwfSettingItem(row: CwfSettingRow, onChange: (name: String, value: String) -> Unit) {
+    val designTitle = (row.setting as? CwfSyncedSetting.Choice)?.labels?.title
+    val title: @Composable () -> Unit = { Text(designTitle ?: androidStringResource(row.setting.title)) }
+    val setByDesign: @Composable (() -> Unit)? =
+        if (row.setByDesign) ({ Text(stringResource(SyncStrings.wear_cwf_settings_set_by_design, stringResource(KeysStrings.pref_title_wear_custom_watchface_authorization))) }) else null
+    when (val setting = row.setting) {
+        is CwfSyncedSetting.Toggle -> SwitchPreference(
+            value = row.value.toBooleanStrictOrNull() ?: setting.default,
+            onValueChange = { onChange(row.name, it.toString()) },
+            title = title,
+            enabled = !row.setByDesign,
+            summary = setByDesign
+        )
+
+        is CwfSyncedSetting.Choice -> {
+            // An option of the design brings its own texts; a value it does not have is its default
+            val labels = setting.labels?.entries ?: stringArrayResource(setting.entries).toList()
+            val values = setting.labels?.entryValues ?: stringArrayResource(setting.entryValues).toList()
+            val labelOf = { value: String -> labels.getOrNull(values.indexOf(value)) ?: labels.getOrNull(values.indexOf(setting.defaultValue)) ?: value }
+            ListPreference(
+                value = row.value,
+                onValueChange = { onChange(row.name, it) },
+                values = values,
+                title = title,
+                summary = { Text(labelOf(row.value)) },
+                valueToText = { AnnotatedString(labelOf(it)) }
+            )
+        }
+    }
 }
 
 /** How much of the screen width the preview takes. */
@@ -153,9 +189,10 @@ internal fun CwfSettingsContentPreview() {
         Surface {
             CwfSettingsContent(
                 state = CwfSettingsUiState(
-                    look = CwfWatchSettings.look.take(3).map { CwfSettingRow(it.key, it, it.default, setByDesign = false) },
-                    shownValues = CwfWatchSettings.shownValues.take(4).mapIndexed { i, it -> CwfSettingRow(it.key, it, it.default, setByDesign = i == 0) },
-                    fromWatch = false
+                    look = CwfSyncedSettings.faceLook.take(3).map { CwfSettingRow(it.toString(), it, it.defaultValue, setByDesign = false) },
+                    shownValues = CwfSyncedSettings.shownValues.take(4).mapIndexed { i, it -> CwfSettingRow(it.toString(), it, it.defaultValue, setByDesign = i == 0) },
+                    fromWatch = false,
+                    sharedWithOtherFace = true
                 ),
                 onChange = { _, _ -> },
                 onClose = {},

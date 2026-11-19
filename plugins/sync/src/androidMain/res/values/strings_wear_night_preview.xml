@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings for the live preview and the settings of the night face.
+-->
+<resources>
+    <string name="wear_cwf_settings_shared">The day face and the night face share these settings. A change here changes both faces.</string>
+</resources>

@@ -465,7 +465,12 @@ sealed class EventData : Event() {
         val iobBolusValue: Double? = null, // U
         val iobBasalValue: Double? = null, // U
         val basalRateValue: Double? = null, // U/h, the temp basal when one runs
-        val bgiMgdl: Double? = null // mg/dl per 5 minutes
+        val bgiMgdl: Double? = null, // mg/dl per 5 minutes
+        // When the sensor and the pod (or cannula) stop, for the time-left gauges of the Custom watch face.
+        // Null when not known, or from an older sender. Keep new fields at the END of this class: the
+        // ProtoBuf wire format numbers fields by declaration order.
+        val sensorEndsAt: Long? = null,
+        val pumpEndsAt: Long? = null
     ) : EventData(), EventDataSet
 
     @Serializable
@@ -542,6 +547,26 @@ sealed class EventData : Event() {
     }
 
     /**
+     * The weather at the phone's rough place, for the look of the Custom watch face.
+     * Sent by the phone when it changes and with every resend.
+     *
+     * @param timeStamp when the phone read it; the watch treats it as unknown after a few hours
+     * @param kind one of [CLEAR], [PARTLY], [CLOUDY] or [RAIN]
+     * @param temperature the air temperature in °C, or null when not known (also from an older phone)
+     */
+    @Serializable
+    data class Weather(val timeStamp: Long, val kind: String, val temperature: Double? = null) : EventData() {
+
+        companion object {
+
+            const val CLEAR = "clear"
+            const val PARTLY = "partly"
+            const val CLOUDY = "cloudy"
+            const val RAIN = "rain"
+        }
+    }
+
+    /**
      * A Custom watch face design.
      *
      * @param night true for the night face (see [CwfNight]), false for the main face, which is also
@@ -596,6 +621,17 @@ sealed class EventData : Event() {
      */
     @Serializable
     data class ActionSetDayNightRule(val rule: DayNightRule) : EventData()
+
+    /**
+     * Phone to watch: nothing on the watch needs the rule any more (no night face, and the design
+     * does not need the place), so the watch forgets it. A watch that still has a night face keeps
+     * it and reports its night face. See `WearPlaceUse` on the phone. Never part of the AAPSClient
+     * broadcast.
+     *
+     * @param timeStamp when it was sent, for the log, like [ActionPing]
+     */
+    @Serializable
+    data class ActionClearDayNightRule(val timeStamp: Long) : EventData()
 
     /**
      * Phone to watch: send the main face back, as [ActionGetCustomWatchface].

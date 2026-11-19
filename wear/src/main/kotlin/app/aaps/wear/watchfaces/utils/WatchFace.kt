@@ -255,6 +255,9 @@ abstract class WatchFace : WatchFaceService() {
     protected fun complicationDataNow(): List<Any?> =
         complicationSlotsManager?.complicationSlots?.values?.map { it.complicationData.value } ?: emptyList()
 
+    /** Hands the watch state (ambient, visible, headless) to a subclass that wants to follow it. */
+    protected open fun onWatchStateReady(watchState: WatchState) {} // for the wake-up animation
+
     /**
      * Keeps the first frame after a wake cheap, see [FirstFrameAfterWake]. Each renderer (engine) has
      * its own, because the system may make a new engine on the same service object; this is the one
@@ -285,6 +288,7 @@ abstract class WatchFace : WatchFaceService() {
         currentUserStyleRepository: CurrentUserStyleRepository
     ): WatchFace {
         this.complicationSlotsManager = complicationSlotsManager
+        onWatchStateReady(watchState)
 
         // Create renderer that delegates to abstract methods
         renderer = WatchFaceRenderer(
@@ -557,6 +561,11 @@ abstract class WatchFace : WatchFaceService() {
     override fun getSystemService(name: String): Any? {
         // Delegate to application context for backward compatibility
         return applicationContext.getSystemService(name) ?: super.getSystemService(name)
+    }
+
+    /** Asks for a frame without new content, unlike [invalidate]: the kept pictures stay. */
+    protected fun requestFrame() {
+        renderer?.invalidate()
     }
 
     private companion object {

@@ -48,8 +48,10 @@ import app.aaps.plugins.sync.wear.compose.WearComposeContent
 import app.aaps.plugins.sync.wear.keys.WearDayNightBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearDayNightIntKey
 import app.aaps.plugins.sync.wear.keys.WearDayNightStringKey
+import app.aaps.plugins.sync.wear.keys.WearDesignImportKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearNightFaceKey
+import app.aaps.plugins.sync.wear.keys.WearPlaceUseKey
 import app.aaps.plugins.sync.wear.receivers.WearDataReceiver
 import app.aaps.plugins.sync.wear.wearintegration.DataHandlerMobile
 import app.aaps.plugins.sync.wear.wearintegration.DataLayerListenerServiceMobileHelper
@@ -108,7 +110,8 @@ class WearPlugin(
         .description(SyncStrings.description_wear)
         .composeContent { WearComposeContent() },
     ownPreferences = WearNightFaceKey.entries + WearNightFaceBooleanKey.entries +
-        WearDayNightBooleanKey.entries + WearDayNightIntKey.entries + WearDayNightStringKey.entries,
+        WearDayNightBooleanKey.entries + WearDayNightIntKey.entries + WearDayNightStringKey.entries +
+        WearDesignImportKey.entries + WearPlaceUseKey.entries, // the last import place, and what the designs need the place for
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
 
@@ -363,6 +366,9 @@ class WearPlugin(
         ),
         icon = Icons.Default.Watch
     )
+
+    /** The night face the watch confirmed, for its live preview and settings (see `PreviewSlot.NIGHT`). */
+    val savedNightWatchface: StateFlow<CwfData?> get() = wearNightFace.saved
 
     internal companion object {
 

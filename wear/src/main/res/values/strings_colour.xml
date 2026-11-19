@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- In a file of its own so this local patch never conflicts with upstream changes to strings.xml
+     and arrays.xml. The colour choices of a Custom watch face design, see ColourLooks. -->
+<resources>
+    <string name="key_cwf_colour_1" translatable="false">cwf_colour_1</string>
+    <string name="key_cwf_colour_2" translatable="false">cwf_colour_2</string>
+    <string name="pref_cwf_colour_1" comment="Setting: the main colour of the watch face design, for example of the time">Main colour</string>
+    <string name="pref_cwf_colour_2" comment="Setting: a second colour of the watch face design, for example of the date">Second colour</string>
+    <string name="cwf_colour_as_designed" comment="Colour choice: keep the colour the designer chose">As designed</string>
+    <string name="cwf_colour_cyan">Cyan</string>
+    <string name="cwf_colour_blue">Blue</string>
+    <string name="cwf_colour_green">Green</string>
+    <string name="cwf_colour_lime">Lime</string>
+    <string name="cwf_colour_yellow">Yellow</string>
+    <string name="cwf_colour_orange">Orange</string>
+    <string name="cwf_colour_red">Red</string>
+    <string name="cwf_colour_pink">Pink</string>
+    <string name="cwf_colour_purple">Purple</string>
+    <string name="cwf_colour_white">White</string>
+
+    <string-array name="cwf_colour_names">
+        <item>@string/cwf_colour_as_designed</item>
+        <item>@string/cwf_colour_cyan</item>
+        <item>@string/cwf_colour_blue</item>
+        <item>@string/cwf_colour_green</item>
+        <item>@string/cwf_colour_lime</item>
+        <item>@string/cwf_colour_yellow</item>
+        <item>@string/cwf_colour_orange</item>
+        <item>@string/cwf_colour_red</item>
+        <item>@string/cwf_colour_pink</item>
+        <item>@string/cwf_colour_purple</item>
+        <item>@string/cwf_colour_white</item>
+    </string-array>
+
+    <!-- The first value keeps the design as it is (ColourLooks.AS_DESIGNED) -->
+    <string-array name="cwf_colour_values" translatable="false">
+        <item>design</item>
+        <item>#00E5FF</item>
+        <item>#3D8BFF</item>
+        <item>#2EE66B</item>
+        <item>#B6FF1A</item>
+        <item>#FFE11A</item>
+        <item>#FF9A1A</item>
+        <item>#FF3B3B</item>
+        <item>#FF5FB4</item>
+        <item>#B57BFF</item>
+        <item>#F2F2F2</item>
+    </string-array>
+</resources>

@@ -176,7 +176,7 @@ internal fun WearScreen(
                     if (subScreen == SubScreen.IMPORT_LIST) {
                         // The toolbar is set up once per sub-screen, so it reads the state itself
                         val importState by viewModel.uiState.collectAsStateWithLifecycle()
-                        CwfImportAction(importing = importState.importingDesigns, onImport = { uris -> viewModel.importDesigns(uris) })
+                        CwfImportAction(importing = importState.importingDesigns, onImport = { uris -> viewModel.importDesigns(uris) }, lastPlace = viewModel::lastImportPlace)
                     }
                 }
             )
@@ -214,7 +214,7 @@ internal fun WearScreen(
                 }
             }
 
-            SubScreen.DAY_NIGHT        -> WearDayNightScreen(viewModel = dayNightViewModel, modifier = modifier)
+            SubScreen.DAY_NIGHT        -> WearDayNightScreen(viewModel = dayNightViewModel, modifier = modifier, placeUse = uiState.placeUseLine()) // what the place is used for
 
             SubScreen.WATCH_APP_UPDATE -> WatchAppUpdateContent(viewModel = watchAppUpdateViewModel, modifier = modifier)
             SubScreen.WATCH_LOG        -> WatchLogContent(viewModel = watchLogViewModel, modifier = modifier)
@@ -434,7 +434,7 @@ internal fun WearMainContent(
                     )
 
                     // Row 3: the watch face settings, set from the phone
-                    ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings), onCwfSettings), button2 = null)
+                    ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings), onCwfSettings), button2 = placeEntryButton(uiState, onDayNightSettings)) // a design that needs the place, see WearPlaceUseUi.kt
 
                     // Watchface preview image, or a loading indicator while a new face goes to the watch
                     uiState.loadingWatchface?.let { name -> FaceLoadingIndicator(name) }

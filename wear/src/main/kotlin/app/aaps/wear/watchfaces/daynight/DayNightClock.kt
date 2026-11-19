@@ -17,10 +17,27 @@ import java.time.ZoneOffset
  * - No rule, or a rule that makes no sense: from [FALLBACK_DAY_START] to [FALLBACK_NIGHT_START].
  *
  * @param zone the local time zone; read on every question, so a change of zone is followed
+ * @param skyRule the rule for the sun and the moon of a design, see [SkyTimes]
+ * @param location in place of [skyRule], a place for the sun and the moon, as the design tests give it
  */
 class DayNightClock(
-    private val zone: () -> ZoneId = { ZoneId.systemDefault() }
+    private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+    skyRule: () -> DayNightRule? = { null }, // the sun and the moon of a design
+    location: (() -> GeoPoint?)? = null // the design tests give a place
 ) {
+
+    // The sun and the moon for a design, see SkyTimes.kt
+
+    private val sky = SkyTimes(
+        rule = location?.let { place -> { place()?.let { DayNightRule.Place(it.latitude, it.longitude) } } } ?: skyRule,
+        zone = zone
+    ) { epochMs, rule -> isDay(epochMs, rule) }
+
+    fun sunProgress(epochMs: Long): Double = sky.sunProgress(epochMs)
+    fun nightProgress(epochMs: Long): Double = sky.nightProgress(epochMs)
+    fun sunCycle(epochMs: Long): Double = sky.sunCycle(epochMs)
+    fun moonCycle(epochMs: Long): Double = sky.moonCycle(epochMs)
+    fun nextSunEvent(epochMs: Long): Long? = sky.nextSunEvent(epochMs)
 
     /** The sun times per UTC day of [cachedPlace], the last few days asked for. */
     private val cachedSun = LinkedHashMap<LocalDate, SunTimes.Result>()
@@ -87,6 +104,9 @@ class DayNightClock(
         /** The day without a rule: 07:00 to 19:00, in minutes after midnight. */
         const val FALLBACK_DAY_START = 7 * 60
         const val FALLBACK_NIGHT_START = 19 * 60
+
+        /** The value of [DayNightClock.nextSunEvent] for a design, see [SkyTimes.NEXT_SUN_EVENT_KEY]. */
+        const val NEXT_SUN_EVENT_KEY = SkyTimes.NEXT_SUN_EVENT_KEY
 
         private const val MINUTES_PER_DAY = 24 * 60
         private const val CACHED_DAYS = 5

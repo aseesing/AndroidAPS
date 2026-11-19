@@ -3,10 +3,8 @@ package app.aaps.wear.watchfaces.settingsync
 import android.app.Application
 import androidx.preference.PreferenceManager
 import app.aaps.core.interfaces.rx.events.EventWearToMobile
-import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.CwfSettingValue
 import app.aaps.core.interfaces.rx.weardata.CwfSettingsMerge
-import app.aaps.core.interfaces.rx.weardata.CwfWatchSettings
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.shared.impl.rx.bus.RxBusImpl
@@ -76,9 +74,9 @@ class CwfSettingsSyncWearTest {
     @Test
     fun beforeAnyChangeEverySettingIsSentWithAnUnknownTime() {
         val current = sut.current()
-        assertThat(current).hasSize(CwfWatchSettings.all.size)
+        assertThat(current).hasSize(CwfSyncedSettings.all.size)
         assertThat(current["show_iob"]).isEqualTo(CwfSettingValue("true", 0L))
-        assertThat(current["dark"]).isEqualTo(CwfSettingValue("true", 0L))
+        assertThat(current["wake_animation_length"]).isEqualTo(CwfSettingValue("design", 0L))
     }
 
     @Test
@@ -103,10 +101,10 @@ class CwfSettingsSyncWearTest {
     @Test
     fun aNewerValueFromThePhoneIsStoredAndNotSentBack() {
         sut.current()
-        sut.fromPhone(EventData.CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("false", now), "dark" to CwfSettingValue("false", now))))
+        sut.fromPhone(EventData.CwfSettingsSync(mapOf("show_iob" to CwfSettingValue("false", now), "wake_animation_length" to CwfSettingValue("3000", now))))
 
         assertThat(sp.getBoolean(R.string.key_show_iob, true)).isFalse()
-        assertThat(sp.getBoolean(R.string.key_dark, true)).isFalse()
+        assertThat(sp.getString(R.string.key_wake_animation_length, "")).isEqualTo("3000")
         // The phone lacks the other settings, so it gets them once
         assertThat(sent.single().isAnswer).isTrue()
         assertThat(sent.single().settings["show_iob"]).isEqualTo(CwfSettingValue("false", now))
@@ -114,7 +112,7 @@ class CwfSettingsSyncWearTest {
         // The watch announces the change of its settings; that is not a change by the user
         sent.clear()
         sut.settingChanged("show_iob")
-        sut.settingChanged("dark")
+        sut.settingChanged("wake_animation_length")
         assertThat(sent).isEmpty()
     }
 
@@ -148,8 +146,8 @@ class CwfSettingsSyncWearTest {
 
     @Test
     fun aValueTheWatchCannotTakeIsLeftOut() {
-        sut.fromPhone(EventData.CwfSettingsSync(mapOf("dark" to CwfSettingValue("maybe", now), "units_mgdl" to CwfSettingValue("false", now))))
-        assertThat(sp.getBoolean(R.string.key_dark, true)).isTrue()
+        sut.fromPhone(EventData.CwfSettingsSync(mapOf("wake_animation_length" to CwfSettingValue("1234", now), "units_mgdl" to CwfSettingValue("false", now))))
+        assertThat(sp.getString(R.string.key_wake_animation_length, "design")).isEqualTo("design")
         assertThat(sp.getBoolean(R.string.key_units_mgdl, true)).isTrue()
     }
 
@@ -176,46 +174,45 @@ class CwfSettingsSyncWearTest {
     }
 
     /**
-     * The shared table is the on/off rows of the Custom watch face menu that AAPS shows on the watch,
-     * with the same names, defaults and order, then the values a design can carry.
+     * The look settings the phone offers are the rows of the watch's own Custom watch face menu, with
+     * the same keys, labels and defaults. Left out: the complication pickers, the type priority and
+     * simplified view (they need the watch), and the day / night look (the phone has its own).
      */
     @Test
     fun theLookSettingsAreTheRowsOfTheWatchMenu() {
-        val app = RuntimeEnvironment.getApplication()
-        val menu = CustomWatchface.settingRows(null, systemEditor = false, hasNightFace = false)
-            .filterIsInstance<WatchFaceSettingRow.Toggle>()
-            .map { app.getString(it.key) to it.defaultValue }
-        assertThat(CwfWatchSettings.look.map { it.key to it.default }).containsExactlyElementsIn(menu).inOrder()
-        // Every setting of the table is one the watch has
-        assertThat(CwfSettingNames(app.resources).settings.keys).containsExactlyElementsIn(CwfWatchSettings.all.map { it.key }).inOrder()
+        val leftOut = setOf(R.string.key_simplify_ui, R.string.key_day_night_look, R.string.key_day_night_always_on)
+        val rows = CustomWatchface.settingRows(null, systemEditor = true, hasNightFace = false)
+            .filter { it is WatchFaceSettingRow.Toggle || it is WatchFaceSettingRow.Choice }
+            .filter { it.key !in leftOut }
+        val expected = rows.map { row ->
+            when (row) {
+                is WatchFaceSettingRow.Toggle -> Triple(row.key, row.title, row.defaultValue.toString())
+                is WatchFaceSettingRow.Choice -> Triple(row.key, row.title, row.defaultValue)
+                else                          -> error("not a stored row")
+            }
+        }
+        assertThat(CwfSyncedSettings.faceLook.map { Triple(it.key, it.title, it.defaultValue) }).containsExactlyElementsIn(expected).inOrder()
     }
 
     /**
-     * Every setting a design can carry has the watch name, default and label the watch face itself
-     * uses (`CustomWatchface.PrefMap`, private, so read by reflection). Only the complication slots are
-     * left out: a slot needs its data source picked in the system editor on the watch.
+     * Every setting a design can carry has the watch key, default and label the watch face itself
+     * uses (`CustomWatchface.PrefMap`, private, so read by reflection).
      */
     @Test
     fun theDesignSettingsMatchTheWatchFace() {
-        val app = RuntimeEnvironment.getApplication()
         val prefMap = Class.forName("app.aaps.wear.watchfaces.CustomWatchface\$PrefMap")
         fun <T> get(entry: Any, getter: String): T = prefMap.getDeclaredMethod(getter).apply { isAccessible = true }.invoke(entry).let {
             @Suppress("UNCHECKED_CAST")
             it as T
         }
         val watch = prefMap.enumConstants.mapNotNull { entry ->
-            get<CwfMetadataKey?>(entry, "getMetadataKey")?.let { key ->
-                key to Triple(app.getString(get<Int>(entry, "getPrefKey")), get<Any>(entry, "getDefaultValue") as Boolean, key.label)
+            get<Any?>(entry, "getMetadataKey")?.let { key ->
+                key to Triple(get<Int>(entry, "getPrefKey"), get<Any>(entry, "getDefaultValue").toString(), get<Int?>(entry, "getTitle"))
             }
         }.toMap()
-        val ours = CwfWatchSettings.all.mapNotNull { setting -> setting.metadataKey?.let { it to Triple(setting.key, setting.default, setting.label) } }.toMap()
+        val ours = CwfSyncedSettings.all.mapNotNull { setting -> setting.metadataKey?.let { it to Triple(setting.key, setting.defaultValue, setting.title) } }.toMap()
 
-        assertThat(watch).containsAtLeastEntriesIn(ours)
-        assertThat(watch.keys - ours.keys).containsExactly(
-            CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION1, CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION2, CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION3,
-            CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION4, CwfMetadataKey.CWF_PREF_WATCH_SHOW_COMPLICATION5
-        )
-        assertThat(CwfWatchSettings.all.map { it.key }).containsNoDuplicates()
+        assertThat(ours).isEqualTo(watch)
     }
 
     /**
@@ -224,6 +221,7 @@ class CwfSettingsSyncWearTest {
      */
     @Test
     fun aValueForcedByTheDesignIsSentOnceAndThenStill() {
+        val names = CwfSettingNames(RuntimeEnvironment.getApplication().resources)
         sut.current()
         now += 1_000
         sp.putBoolean(R.string.key_show_iob, false) // as CustomWatchface.updatePref does for the design
@@ -232,7 +230,7 @@ class CwfSettingsSyncWearTest {
         assertThat(toPhone.settings["show_iob"]).isEqualTo(CwfSettingValue("false", now))
 
         // The phone merges it: the newer value wins there, and it has nothing newer to send back
-        val onPhone = CwfSettingsMerge.merge(mapOf("show_iob" to CwfSettingValue("true", 0L)), toPhone.settings, localIsWatch = false, allowed = CwfWatchSettings::isAllowed)
+        val onPhone = CwfSettingsMerge.merge(mapOf("show_iob" to CwfSettingValue("true", 0L)), toPhone.settings, localIsWatch = false, allowed = names::isAllowed)
         assertThat(onPhone.taken["show_iob"]).isEqualTo(CwfSettingValue("false", now))
         assertThat(onPhone.answer).isFalse()
 
@@ -244,34 +242,35 @@ class CwfSettingsSyncWearTest {
 
     /**
      * A new watch (or a new install of the watch app) meets a phone that learned other values from
-     * another watch, all with an unknown time. The watch keeps its own values and the phone takes them.
+     * another watch, all with an unknown time. The watch keeps its own values and the phone takes them,
+     * for an on/off setting and for a choice alike.
      */
     @Test
     fun atFirstContactTheWatchKeepsItsValuesAndThePhoneTakesThem() {
-        sp.putBoolean(R.string.key_show_week_number, false)
+        val names = CwfSettingNames(RuntimeEnvironment.getApplication().resources)
         sp.putBoolean(R.string.key_show_date, false)
-        sp.putBoolean(R.string.key_dark, true)
+        sp.putBoolean(R.string.key_show_iob, true)
         var phone = mapOf(
-            "show_week_number" to CwfSettingValue("true", 0L),
             "show_date" to CwfSettingValue("true", 0L),
-            "dark" to CwfSettingValue("false", 0L)
+            "show_iob" to CwfSettingValue("false", 0L),
+            "wake_animation_length" to CwfSettingValue("3000", 0L)
         )
 
         // The phone sends all it has, as when the watch asks for all data
         sut.fromPhone(EventData.CwfSettingsSync(phone))
-        assertThat(sp.getBoolean(R.string.key_show_week_number, true)).isFalse()
         assertThat(sp.getBoolean(R.string.key_show_date, true)).isFalse()
-        assertThat(sp.getBoolean(R.string.key_dark, false)).isTrue()
+        assertThat(sp.getBoolean(R.string.key_show_iob, false)).isTrue()
+        assertThat(sp.getString(R.string.key_wake_animation_length, "design")).isEqualTo("design") // not stored: the default
         val answer = sent.single()
         assertThat(answer.isAnswer).isTrue()
 
         // The phone side takes the values of the watch and does not answer again
-        val onPhone = CwfSettingsMerge.merge(phone, answer.settings, localIsWatch = false, allowed = CwfWatchSettings::isAllowed)
+        val onPhone = CwfSettingsMerge.merge(phone, answer.settings, localIsWatch = false, allowed = names::isAllowed)
         phone = onPhone.merged
         assertThat(onPhone.answer).isFalse()
-        assertThat(phone["show_week_number"]).isEqualTo(CwfSettingValue("false", 0L))
         assertThat(phone["show_date"]).isEqualTo(CwfSettingValue("false", 0L))
-        assertThat(phone["dark"]).isEqualTo(CwfSettingValue("true", 0L))
+        assertThat(phone["show_iob"]).isEqualTo(CwfSettingValue("true", 0L))
+        assertThat(phone["wake_animation_length"]).isEqualTo(CwfSettingValue("design", 0L))
         assertThat(phone).isEqualTo(sut.current())
 
         // Sent again later: both sides agree, nothing moves

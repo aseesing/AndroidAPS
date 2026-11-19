@@ -55,7 +55,11 @@ import app.aaps.plugins.sync.wear.daynight.DayNightSource
  * choosing a city.
  */
 @Composable
-internal fun WearDayNightScreen(viewModel: WearDayNightViewModel, modifier: Modifier = Modifier) {
+internal fun WearDayNightScreen(
+    viewModel: WearDayNightViewModel,
+    modifier: Modifier = Modifier,
+    placeUse: WearPlaceUseLine? = null // what the place is used for, see WearPlaceUseUi.kt
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         viewModel.onPermissionResult(granted)
@@ -79,7 +83,8 @@ internal fun WearDayNightScreen(viewModel: WearDayNightViewModel, modifier: Modi
             onDayStart = viewModel::setDayStart,
             onNightStart = viewModel::setNightStart,
             onChooseCity = viewModel::openCityPicker,
-            modifier = modifier
+            modifier = modifier,
+            placeUse = placeUse
         )
     }
 }
@@ -107,7 +112,8 @@ internal fun WearDayNightContent(
     onDayStart: (Int) -> Unit,
     onNightStart: (Int) -> Unit,
     onChooseCity: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    placeUse: WearPlaceUseLine? = null // what the place is used for, see WearPlaceUseUi.kt
 ) {
     // The time picker that is open: for the day start, for the night start, or none. Kept on rotation.
     var editing by rememberSaveable { mutableStateOf<DayNightEdit?>(null) }
@@ -197,7 +203,7 @@ internal fun WearDayNightContent(
         Text(
             text = stringResource(
                 when (state.source) {
-                    DayNightSource.PHONE_LOCATION -> SyncStrings.wear_day_night_sends_place
+                    DayNightSource.PHONE_LOCATION -> sendsPlaceText(placeUse) // also for a design that needs the place
                     DayNightSource.CITY           -> SyncStrings.wear_day_night_sends_city
                     DayNightSource.FIXED_TIMES    -> SyncStrings.wear_day_night_sends_times
                 }
@@ -206,6 +212,7 @@ internal fun WearDayNightContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = AapsSpacing.small)
         )
+        placeUse?.let { WearPlaceUseText(it, state.source) } // what the place is used for
     }
 
     editing?.let { edit ->

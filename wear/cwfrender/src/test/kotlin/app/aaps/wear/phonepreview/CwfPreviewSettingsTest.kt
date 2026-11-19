@@ -17,24 +17,24 @@ import org.robolectric.annotation.GraphicsMode
 class CwfPreviewSettingsTest {
 
     @Test
-    fun theSettingsAreWrittenWithTheirTypes() {
+    fun theSettingsAreWrittenWithTheirTypesAndTheWakeLengthIsReported() {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
 
-        val changed = renderer.applyWatchSettings(
-            mapOf("show_iob" to "false", "show_second" to "false", "dark" to "maybe", "units_mgdl" to "false")
+        val wakeChanged = renderer.applyWatchSettings(
+            mapOf("show_iob" to "false", "wake_animation_length" to "3000", "dark" to "maybe", "units_mgdl" to "false")
         )
 
-        assertThat(changed).isTrue()
+        assertThat(wakeChanged).isTrue()
         val settings = renderer.watchSettings
         assertThat(settings.getBoolean("show_iob", true)).isFalse()
-        assertThat(settings.getBoolean("show_second", true)).isFalse()
+        assertThat(settings.getString("wake_animation_length", null)).isEqualTo("3000")
         // Not a value the watch can have, and not a setting the phone may set
         assertThat(settings.contains("dark")).isFalse()
         assertThat(settings.contains("units_mgdl")).isFalse()
 
         // The same again changes nothing
-        assertThat(renderer.applyWatchSettings(mapOf("show_iob" to "false"))).isFalse()
-        assertThat(renderer.applyWatchSettings(mapOf("show_iob" to "true"))).isTrue()
+        assertThat(renderer.applyWatchSettings(mapOf("wake_animation_length" to "3000"))).isFalse()
+        assertThat(renderer.applyWatchSettings(mapOf("show_iob" to "true"))).isFalse()
         assertThat(settings.getBoolean("show_iob", false)).isTrue()
     }
 }

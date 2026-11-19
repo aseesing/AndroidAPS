@@ -8,7 +8,6 @@ import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.EventWearToMobile
 import app.aaps.core.interfaces.rx.weardata.CwfSettingValue
 import app.aaps.core.interfaces.rx.weardata.CwfSettingsMerge
-import app.aaps.core.interfaces.rx.weardata.CwfWatchSettings
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.events.EventWearPreferenceChange
@@ -113,7 +112,7 @@ class CwfSettingsSyncWear(
     }
 
     /** True when the watch has the setting [name] and [value] is a value it can have. */
-    private fun isAllowed(name: String, value: String): Boolean = name in names.settings && CwfWatchSettings.isAllowed(name, value)
+    private fun isAllowed(name: String, value: String): Boolean = names.isAllowed(name, value) // also the choices of the watch face menu, see CwfSyncedSettings
 
     private fun readBook(name: String): CwfSettingValue? {
         val value = book.getString(VALUE_PREFIX + name, null) ?: return null
