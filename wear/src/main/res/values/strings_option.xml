@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+     Own file: keep upstream files to small hooks that call into here. -->
+<!-- In a file of its own so this local patch never conflicts with upstream changes to strings.xml
+     and arrays.xml. The options of a Custom watch face design, see DesignOptions. The watch and the
+     app show the title and the choices of the design; these texts are only for a row without a design. -->
+<resources>
+    <string name="key_cwf_option_1" translatable="false">cwf_option_1</string>
+    <string name="key_cwf_option_2" translatable="false">cwf_option_2</string>
+    <string name="key_cwf_option_3" translatable="false">cwf_option_3</string>
+    <string name="key_cwf_option_4" translatable="false">cwf_option_4</string>
+    <string name="pref_cwf_option_1" comment="Setting: the first option that a watch face design offers">Design option 1</string>
+    <string name="pref_cwf_option_2" comment="Setting: the second option that a watch face design offers">Design option 2</string>
+    <string name="pref_cwf_option_3" comment="Setting: the third option that a watch face design offers">Design option 3</string>
+    <string name="pref_cwf_option_4" comment="Setting: the fourth option that a watch face design offers">Design option 4</string>
+    <string name="cwf_option_as_designed" comment="Option choice: keep what the designer chose">As designed</string>
+
+    <string-array name="cwf_option_names" translatable="false">
+        <item>@string/cwf_option_as_designed</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+    </string-array>
+
+    <!-- The first value keeps the default of the design (DesignOptions.AS_DESIGNED), then the number of the choice -->
+    <string-array name="cwf_option_values" translatable="false">
+        <item>design</item>
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+    </string-array>
+</resources>

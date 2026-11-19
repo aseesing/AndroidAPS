@@ -79,6 +79,8 @@ import app.aaps.wear.watchfaces.animation.WakeAnimator
 import app.aaps.wear.watchfaces.animation.ViewRest
 import app.aaps.wear.watchfaces.animation.WakeLength
 import app.aaps.wear.watchfaces.colour.ColourLooks
+import app.aaps.wear.watchfaces.options.DesignOption // PERSONAL PATCH
+import app.aaps.wear.watchfaces.options.DesignOptions // PERSONAL PATCH
 import app.aaps.wear.watchfaces.daynight.DayNightChoice
 import app.aaps.wear.watchfaces.daynight.DayNightClock
 import app.aaps.wear.watchfaces.daynight.GeoPoint
@@ -170,6 +172,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private val nightLooks = Looks()
     private var styleLook: List<Boolean> = emptyList()
     private val colourLooks = ColourLooks() // PERSONAL PATCH: the colours chosen on the watch
+    private val designOptions = DesignOptions() // PERSONAL PATCH: the options of the design
+    private var optionsNow: List<DesignOption?> = emptyList() // PERSONAL PATCH: the options of the design on the face, for v_opt_<name>
     private var styleColours: List<String> = emptyList() // PERSONAL PATCH
 
     /**
@@ -362,6 +366,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     add(DayNightChoice.alwaysOnRow())
                 }
                 addAll(ColourLooks.rows(json)) // PERSONAL PATCH: colours, only those the design offers
+                addAll(DesignOptions.rows(json)) // PERSONAL PATCH: options, only those the design offers
                 if (json == null || ViewMap.CHART.isShownBy(json)) add(LogTimeGraph.row()) // PERSONAL PATCH: log time graph
             }
         }
@@ -1035,7 +1040,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private val faceValues = FaceValues(ValueMap.entries.map { it.key }) { index -> DynProvider(this, JSONObject(), ValueMap.entries[index], 0, 0).let { reader -> { reader.dataValue(this) } } }
 
     /** The value of [key] (for example `uploader_battery`), or null: the `v_<key>` of a formula and of a look condition. Internal for the phone preview. */
-    internal fun designValue(key: String): Double? = faceValues.value(key)
+    internal fun designValue(key: String): Double? =
+        DesignOptions.value(optionsNow, key) { k, default -> sp.getString(k, default) } ?: faceValues.value(key) // PERSONAL PATCH: options
 
     /** The battery of the watch itself, for the value `watch_battery` (private patch). */
     private val watchBattery by lazy(LazyThreadSafetyMode.NONE) { WatchBatteryLevel(this) }
@@ -1245,6 +1251,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 styleShowsNightFace = showsNightFace
                 val colours = ColourLooks.choices { key, default -> sp.getString(key, default) } // PERSONAL PATCH
                 val parsed = (if (showsNightFace) parsedNightJson else parsedJson).parse(face.json)
+                optionsNow = designOptions.of(parsed) // PERSONAL PATCH: options
                 val design = colourLooks.apply(parsed, colours) // PERSONAL PATCH: colours
                 // PERSONAL PATCH: the looks whose conditions are true now (day, weather), see Looks
                 val look = (if (showsNightFace) nightLooks else looks).apply(design) { key -> if (key == ValueMap.IS_DAY.key) (if (showDay) 1.0 else 0.0) else designValue(key) }

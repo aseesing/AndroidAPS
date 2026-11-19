@@ -2560,6 +2560,43 @@ looks, so a look can still change them.</p>
 the wearer chooses. Try the buttons.</figcaption>
 </figure>
 
+<h3 id="options">Choices the wearer can make: <code>options</code></h3>
+<p>A design can offer up to four options, for example "Santa: at Christmas, always, never". The list
+<code>options</code> is at the top of the design JSON. The watch and the AAPS app show one row per option, with the
+title and the choices of the design. A formula and the <code>when</code> of a look read the choice as
+<code>v_opt_</code> and the name: the number of the chosen choice, from 0. While the wearer has not chosen, it is the
+<code>default</code>.</p>
+<table>
+<tr><th>Key of an option</th><th>Type</th><th>Meaning</th></tr>
+<tr><td><code>name</code></td><td>text</td><td>Letters, digits and <code>_</code>. The formulas read <code>v_opt_&lt;name&gt;</code>.</td></tr>
+<tr><td><code>title</code></td><td>text</td><td>The label of the row on the watch and in the app.</td></tr>
+<tr><td><code>choices</code></td><td>list of texts</td><td>2 to 8 names, in the order of their numbers 0, 1, 2, ...</td></tr>
+<tr><td><code>default</code></td><td>number</td><td>The number of the choice while the wearer has not chosen. 0 when it is missing or too big.</td></tr>
+</table>
+<p>An option without a good name or title, or with fewer than 2 or more than 8 choices, is left out. The rows
+have one setting per place in the list, and a choice stays when the wearer loads another design. Then a number
+that the new design does not have counts as its default. The texts come from the design, so they are
+not translated. Like every value, a wake reads the choice when it starts; a layer with <code>rest</code> and a look read
+it each time the face is drawn new.</p>
+<figure class="ex" id="ex-options" data-face="off" data-loop="still" data-controls="option">
+<pre>{
+  "options": [
+    {"name": "stars", "title": "Stars", "choices": ["None", "Few", "Many"], "default": 1}
+  ],
+  "animation": {
+    "durationMs": 3000,
+    "layers": [
+      {"shape": "rect", "color": "#0B1530", "rest": 0, "x": 0, "y": 0, "width": 400, "height": 400},
+      {"shape": "circle", "color": "#FFFFFF", "rest": 0, "count": 60, "seed": 7,
+       "x": "r1 * 400", "y": "r2 * 400", "radius": "1 + r3 * 2",
+       "visible": "i &lt; v_opt_stars * 30"}
+    ]
+  }
+}</pre>
+<figcaption><strong>An option.</strong> The wearer chooses how many stars the sky has. With "None" the value is 0, so
+no copy is shown; with "Many" it is 2 and all 60 are. Try the buttons.</figcaption>
+</figure>
+
 <!-- =================================================================================== 11 -->
 <h2 id="limits">11. Limits and tips</h2>
 
@@ -2672,6 +2709,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>animation</code></td><td>object</td><td>none</td><td>The wake animation and the <code>rest</code> layers. <a href="#overview">1</a></td></tr>
 <tr><td><code>looks</code></td><td>list of looks</td><td>none</td><td>Changes while a condition is true. <a href="#looks">9</a></td></tr>
 <tr><td><code>colourLooks</code></td><td>object with <code>colour1</code>, <code>colour2</code></td><td>none</td><td>Colours the wearer chooses. <a href="#colour-looks">10</a></td></tr>
+<tr><td><code>options</code></td><td>list of objects, at most 4</td><td>none</td><td>Choices the wearer makes, read as <code>v_opt_&lt;name&gt;</code>. <a href="#options">10</a></td></tr>
 <tr><td><code>needsPlace</code></td><td><code>true</code></td><td>not set</td><td>The design wants the place of the wearer. <a href="#needs-place">6</a></td></tr>
 <tr><td><code>graphLineWidth</code></td><td>whole number, 0 to 8</td><td>0 (dots)</td><td>The glucose as a line. <a href="#graph-line">10</a></td></tr>
 <tr><td><code>graphLineColor</code></td><td>colour text</td><td>the range colours</td><td>One colour for the line. <a href="#graph-line">10</a></td></tr>
@@ -2773,7 +2811,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><th>Operators</th><td class="wrap"><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> <code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>==</code> <code>!=</code> <code>&amp;&amp;</code> <code>||</code> <code>!</code> <code>( )</code></td></tr>
 <tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>window</code> <code>pingpong</code></td></tr>
 <tr><th>Variables</th><td class="wrap"><code>t</code> <code>ms</code> <code>len</code> <code>env</code> <code>i</code> <code>n</code> <code>u</code> <code>px</code> <code>py</code> <code>p0</code> to <code>p7</code> <code>r1</code> to <code>r8</code> <code>bpm</code> <code>sec</code> <code>min</code> <code>hour</code> <code>rot0</code> <code>dx0</code> <code>cx0</code> <code>cy0</code> <code>pi</code></td></tr>
-<tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_moon_lit</code> <code>v_moon_limb</code> <code>v_moon_north</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>.</td></tr>
+<tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_moon_lit</code> <code>v_moon_limb</code> <code>v_moon_north</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>. And <code>v_opt_&lt;name&gt;</code> for each option, see <a href="#options">10</a>.</td></tr>
 </tbody></table></div>
 
 
@@ -4767,6 +4805,19 @@ function merge(target, overlay) {
   return target;
 }
 
+/** DesignOptions.read: the options of the design that can be read, at most 4. */
+function designOptions(design) {
+  var list = Array.isArray(design.options) ? design.options.slice(0, 4) : [];
+  return list.filter(function (o) {
+    return isObj(o) && typeof o.name === 'string' && /^[A-Za-z0-9_]+$/.test(o.name) && typeof o.title === 'string' && o.title.trim() !== '' &&
+      Array.isArray(o.choices) && o.choices.length >= 2 && o.choices.length <= 8 &&
+      o.choices.every(function (c) { return typeof c === 'string' && c.trim() !== ''; });
+  }).map(function (o) {
+    var def = typeof o['default'] === 'number' && o['default'] >= 0 && o['default'] < o.choices.length ? Math.floor(o['default']) : 0;
+    return { name: o.name, choices: o.choices, def: def };
+  });
+}
+
 /** ColourLooks.lookOf: the design with the colours the wearer chose laid over it. */
 function colourLook(design, choices) {
   var looks = design.colourLooks;
@@ -4860,6 +4911,7 @@ function Scene(example, options) {
     moon: null,             // the moon phase of the control, or null: the real one
     moonTurn: 0,            // how far the control turns the moon in the sky, in degrees with the clock
     colours: ['design', 'design'],
+    options: {},            // the choices of the option buttons: name to number
     over: {}                // values set by a control or by the example: key to number
   };
   this.vals = {};
@@ -4914,6 +4966,11 @@ Scene.prototype.refreshValues = function (nowMs) {
   };
   if (inputs.isDay !== null) v.is_day = inputs.isDay;
   if (inputs.weather !== null) { v.weather_kind = inputs.weather; v.weather_temperature = 14; }
+  // DesignOptions.value: the chosen number, or the default of the option
+  designOptions(this.design0).forEach(function (o) {
+    var chosen = inputs.options[o.name];
+    v['opt_' + o.name] = typeof chosen === 'number' && chosen >= 0 && chosen < o.choices.length ? chosen : o.def;
+  });
   Object.keys(inputs.over).forEach(function (key) { v[key] = inputs.over[key]; });
   if (has(inputs.over, 'sgv')) v.sgvLevel = v.sgv < 70 ? -1 : (v.sgv > 180 ? 1 : 0);
   this.vals = v;
@@ -5337,7 +5394,9 @@ var CONTROLS = {
   moon: { label: 'Moon phase', type: 'range', min: 0, max: 0.99, step: 0.01, start: 0.3, set: function (s, v) { s.inputs.moon = v; }, show: function (v) { return v.toFixed(2); } },
   turn: { label: 'Turn in the sky', type: 'range', min: -180, max: 180, step: 5, start: 0, set: function (s, v) { s.inputs.moonTurn = v; }, show: function (v) { return v + ' degrees'; } },
   colour: { label: 'Main colour', type: 'choice', options: [['as designed', 'design'], ['cyan', '#00E5FF'], ['orange', '#FF9F1C']], start: 'design',
-    set: function (s, v) { s.inputs.colours = [v, 'design']; } }
+    set: function (s, v) { s.inputs.colours = [v, 'design']; } },
+  option: { label: 'Stars', type: 'choice', options: [['as designed', null], ['none', 0], ['few', 1], ['many', 2]], start: null,
+    set: function (s, v) { s.inputs.options = v === null ? {} : { stars: v }; } }
 };
 
 var api = {
