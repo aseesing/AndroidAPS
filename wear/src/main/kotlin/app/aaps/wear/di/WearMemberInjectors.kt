@@ -64,6 +64,7 @@ import app.aaps.wear.interaction.menus.PreferenceMenuActivity
 import app.aaps.wear.interaction.menus.StatusMenuActivity
 import app.aaps.wear.interaction.menus.TileMenuActivity
 import app.aaps.wear.selfupdate.WatchAppInstallStatusReceiver // PERSONAL PATCH
+import app.aaps.wear.complications.wff.WffDataComplication // PERSONAL PATCH
 import app.aaps.wear.complications.wff.WffGlucoseAgeComplication // PERSONAL PATCH
 import app.aaps.wear.complications.wff.WffGlucoseComplication // PERSONAL PATCH
 import app.aaps.wear.tile.ActionsTileService
@@ -587,4 +588,10 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(WffGlucoseAgeComplication::class)
     fun bindWffGlucoseAgeComplication(injector: MembersInjector<WffGlucoseAgeComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(WffDataComplication::class)
+    fun bindWffDataComplication(injector: MembersInjector<WffDataComplication>): MembersInjector<*> = injector
 }

@@ -1790,7 +1790,11 @@ design into a WFF face has to handle each one in one of three ways:</p>
 <tr><td>Written out: made into plain WFF math or fixed numbers when the face is made</td><td><code>let</code>, <a href="#own-functions">own functions</a>, <a href="#templates">templates</a>, the copies (<code>count</code>, <code>seed</code>, <code>points</code>, <code>i</code>, <code>n</code>, <code>u</code>, <code>px</code>, <code>py</code>, <code>p0</code> to <code>p7</code>, <code>r1</code> to <code>r8</code>), <code>if</code>, <code>min</code>, <code>max</code>, <code>mix</code>, <code>step</code>, <code>smoothstep</code>, <code>sign</code>, <code>atan2</code>, <code>mod</code>, <code>%</code>, <code>missing</code>, <code>easeInOut</code>, <code>window</code>, <code>pingpong</code>, <code>hash</code> and <code>noise</code> of fixed numbers, <code>bpm</code>, the text functions that WFF does not have.</td></tr>
 <tr><td>Baked: drawn as frames, because WFF has no time of a wake</td><td><code>t</code>, <code>ms</code>, <code>len</code>, <code>env</code>, and everything that reads them (also <code>noise(t)</code>), <code>slices</code>, <code>glow</code>, <code>clip</code> rings and masks.</td></tr>
 </tbody></table></div>
-<p>The planner of the converter (<code>WffPlanner</code>) follows this table; the rest of the converter is not built yet.</p>
+<p>A first converter is built. It is simpler than this table: it keeps the plain clock, date, hands, glucose and
+age live, bakes the static art and the layers that show only in the wake, and lets the watch draw everything else
+that shows a value into one picture, with this engine. So a design needs no change for it. How to make a WFF face
+of a design is in the watch face designs repository (<code>docs/wff-apk.md</code>); what the converter does with
+each view and layer is in its lint.</p>
 
 <!-- =================================================================================== 6 -->
 <h2 id="values">6. Values: <code>v_&lt;key&gt;</code></h2>

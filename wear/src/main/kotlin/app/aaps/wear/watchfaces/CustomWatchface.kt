@@ -176,6 +176,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     private val colourLooks = ColourLooks() // PERSONAL PATCH: the colours chosen on the watch
     private val designOptions = DesignOptions() // PERSONAL PATCH: the options of the design
     private var optionsNow: List<DesignOption?> = emptyList() // PERSONAL PATCH: the options of the design on the face, for v_opt_<name>
+
+    /**
+     * PERSONAL PATCH: changes the design before this face reads it, for a face that draws only a part of
+     * it (the data picture of a Watch Face Format face, see `WffDataPicture`). Set before the first draw.
+     * The night face is not used then: the pictures of such a face are made from the main design.
+     */
+    internal var designFilter: ((CwfData) -> CwfData)? = null
     private var styleColours: List<String> = emptyList() // PERSONAL PATCH
 
     /**
@@ -1250,8 +1257,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                         isDayNow = { dayNight.isDay(renderNow(), night.dayNightRule) }
                     )
                 }
-                val face = NightFace.choose(main, night.customWatchfaceNight) { showDay }
-                showsNightFace = face !== main
+                val whole = NightFace.choose(main, night.customWatchfaceNight) { showDay } // PERSONAL PATCH: was `face`
+                showsNightFace = designFilter == null && whole !== main // PERSONAL PATCH: designFilter
+                val face = designFilter?.invoke(main) ?: whole // PERSONAL PATCH: only a part of the design, see designFilter
                 // A swap between the day face and the night face is not a new zip
                 val daySwap = showsNightFace != styleShowsNightFace
                 styleShowsNightFace = showsNightFace

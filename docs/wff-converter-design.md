@@ -1,6 +1,8 @@
 # Design: converting a Custom watch face design into a Watch Face Format face
 
-Status: design only, nothing is built. Written 2026-11-19 on `local/personal`.
+Status: a first converter is built (2026-11-20, branch `local/wear-wff`). **Section 13 says what
+was built and where it differs from this design**; read it first. Sections 1 to 12 are the design
+as it was written on 2026-11-19, before the build.
 
 This document describes a converter in AAPS that takes one of our design zips (the layer and
 animation engine plus the classic Custom watch face keys) and turns it into a Watch Face Format
@@ -1002,3 +1004,62 @@ Each step gives something usable and answers some of the open questions.
 6. **Transfer and push**: Channel API, a third `PushedFace`, the rebuild triggers of 2.3.
 7. **Hints**: the `wff` keys, after the defaults have been tried on real designs, so the hints solve
    real cases and not guessed ones.
+
+---
+
+## 13. What was built (2026-11-20)
+
+The build follows the design above in its goals and its checks, but it is simpler in one big way:
+**blocks and value slots were replaced by one data picture.** Designs use views as free sprites (a
+weather icon in the `time` view, a gauge hand in `patient_name`, a view placed by a watch
+preference), so the key of a view does not say what it shows. Only our engine draws those right.
+
+### 13.1 The parts of a converted face
+
+| Part | Who draws it | When it changes |
+|---|---|---|
+| Static pictures (`static_0` at the bottom, later ones over the parts between) | our engine, on the dev machine | never |
+| Wake loops (`PartAnimatedImage`), for layers that show only in the wake | our engine, on the dev machine, as frames | play on wake |
+| Live parts: plain clock and date texts, hands, the wearer's slots | WFF | always right |
+| Glucose slot 10: plain `sgv` text coloured by level, the arrow, the delta; glucose text layers | WFF, fed by `WffGlucoseComplication` | when data arrives |
+| Age slot 11: plain `timestamp` | WFF, fed by `WffGlucoseAgeComplication` (a dynamic value) | counts by itself |
+| **Data picture, slot 20**: every other view or layer that shows a value, a view with `dynData`, `dynPref` or `twinView`, the graph, the sky | our engine **on the watch** (`WffDataComplication`), one see-through picture as large as the screen | when data arrives and every 5 minutes |
+
+Every picture is made the same way: the engine draws a **copy of the design** in which the parts
+that are not wanted are `gone` (views) or have `visible` 0 (layers), on a clear background
+(`WffDesignParts`). The engine itself is not changed; `CustomWatchface` only got a hook
+(`designFilter`) that hands it such a copy. So there is no second way of drawing, on the dev machine
+or on the watch.
+
+### 13.2 Where the code is
+
+| What | Where |
+|---|---|
+| The plan and the lint | `wear/.../watchfaces/wff/WffPlanner.kt`, `WffPlan.kt` |
+| The copies of a design | `WffDesignParts.kt` |
+| `watchface.xml` | `WffFaceWriter.kt`, with the baked pictures in `WffAssets.kt` |
+| A formula as a WFF expression (section 3; not used by the writer yet) | `WffExpressionPrinter.kt` |
+| The complications | `wear/.../complications/wff/` |
+| Baking, Pack, the push validator, the emulator | the watch face designs repository: `docs/wff-apk.md`, `tools/`, `src/test/.../wff/` |
+
+The converter runs on a dev machine, not on the phone. The phone side (sections 2.1 steps 5 to 9:
+build on the phone, send, push) is not built.
+
+### 13.3 What differs from sections 1 to 12
+
+- **No `Block1..4` and `Value1..4`** (5.3, 5.4): one data picture. A face needs at most 8 slots: 5 of
+  the wearer, glucose, age, data. The slot budget (7.1) is no longer a problem.
+- **Options, `dynPref` and the show or hide preferences are watch settings**, so the data picture
+  follows them by itself. A live part cannot: it follows what the design sets in its metadata. No
+  `ListConfiguration` is written.
+- **No hints** (section 6). The defaults were enough for the four designs.
+- **A wake layer that also shows at rest keeps its rest pose** and does not move (Aurora's lights,
+  the aurora). Only layers that show in the wake alone become frames (snow, rain).
+- **A baked layer that blends** (`add`, `screen`) stays in the picture below it, so a data part
+  between them lies over it.
+- **The old-reading mark of a shape layer** (Aurora) is in the data picture, not live.
+- A wearer's slot starts with the source the code-based face gives it (heart rate, steps, carbs,
+  insulin in slots 1 to 4) when the design turns the slot on.
+- The fitted sun times (4.3), `[REFERENCE]` across slots and the expression printer are proven or
+  built but not needed by the writer so far.
+
