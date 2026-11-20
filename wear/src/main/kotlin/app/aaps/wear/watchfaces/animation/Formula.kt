@@ -25,6 +25,7 @@ import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
+import kotlin.math.truncate
 
 /** A formula of a design that cannot be read: the text says why. */
 class FormulaException(message: String) : IllegalArgumentException(message)
@@ -235,7 +236,8 @@ class Formula private constructor(private val root: Node, val text: String) {
             "ceil" to Fn1 { a -> ceil(a) },
             // A half goes up, like a person rounds (kotlin.math.round would make round(2.5) = 2)
             "round" to Fn1 { a -> floor(a + 0.5) },
-            "fract" to Fn1 { a -> a - floor(a) },
+            // As in the Watch Face Format: the part after the dot keeps the sign, fract(-0.25) is -0.25
+            "fract" to Fn1 { a -> a - truncate(a) },
             "noise" to Fn1 { a -> noise(a) },
             "hash" to Fn1 { a -> hash(a) },
             "easeInOut" to Fn1 { a -> easeInOut(a) },
@@ -672,6 +674,7 @@ class Formula private constructor(private val root: Node, val text: String) {
             is CallN      -> visitor.function(part.name, part.args.map { walk(it, visitor) })
             is DatePart   -> visitor.source(part.sourceName)
             is Is24Hour   -> visitor.source("IS_24_HOUR_MODE")
+            is MoonPosition -> visitor.source("MOON_PHASE_POSITION")
             else          -> visitor.other(part.javaClass.simpleName)
         }
 

@@ -4,6 +4,9 @@
 // ============================================================================================
 package app.aaps.wear.watchfaces.animation
 
+import android.icu.text.DateTimePatternGenerator
+import android.icu.text.SimpleDateFormat
+import android.icu.util.TimeZone
 import app.aaps.core.data.configuration.Constants
 import java.math.RoundingMode
 import java.text.DecimalFormat
@@ -12,6 +15,7 @@ import java.text.ParsePosition
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -109,7 +113,7 @@ internal class TextFunctions(private val setting: FormulaSetting, private val na
             "subText"      -> TextCall(parts, setting) { n, t, _ -> subText(t[0]!!, whole(n[1]), whole(n[2])) }
             "numberFormat" -> NumberText(NumberText.NUMBER_FORMAT, parts, setting).also { checkPattern(parts[0]) { p -> DecimalFormat(p) } }
             "icuText"      -> ClockText(ClockText.ICU, clockParts(name, parts[0]), setting).also {
-                checkPattern(parts[0]) { p -> require(isIcuPattern(p)) { p }; DateTimeFormatter.ofPattern(p) }
+                checkPattern(parts[0]) { p -> require(isIcuSkeleton(p)) { p } }
             }
             else           -> throw IllegalStateException(name)
         }
@@ -222,21 +226,11 @@ internal class TextFunctions(private val setting: FormulaSetting, private val na
         }
 
         /**
-         * The pattern letters of `icuText` that ICU (the Watch Face Format) and java.time read the same:
-         * era, year, month, day, day of the week, am/pm, the hours, minutes, seconds, part of a second
-         * and the name of the zone.
+         * True when [skeleton] can be an ICU skeleton for `icuText`: it has a letter. ICU picks the order
+         * and the signs between the letters itself, and leaves out the other signs, as WFF does:
+         * `icuText('d.M.')` is "11/20" in English.
          */
-        private const val ICU_LETTERS = "GyMdEahHkKmsSz"
-
-        /** True when [pattern] uses only [ICU_LETTERS]; text between quotes does not count. */
-        fun isIcuPattern(pattern: String): Boolean {
-            var quoted = false
-            for (c in pattern) {
-                if (c == '\'') quoted = !quoted
-                else if (!quoted && c.isLetter() && c !in ICU_LETTERS) return false
-            }
-            return true
-        }
+        fun isIcuSkeleton(skeleton: String): Boolean = skeleton.any { it.isLetter() }
 
         /** No spaces at the ends, and one space where there were more. */
         fun trim(text: String): String {
@@ -429,13 +423,17 @@ internal class ClockText(private val kind: Int, args: Array<Part>, setting: Form
     private var formatterGeneration = -1
     private var formatterPattern: String? = null
 
+    private var icuFormat: SimpleDateFormat? = null
+    private var icuGeneration = -1
+    private var icuSkeleton: String? = null
+
     override fun make(n: DoubleArray, t: Array<String?>): String {
         val pattern = when (kind) {
             CLOCK  -> if (setting.is24Hour) "HH:mm" else "hh:mm"
             HOUR   -> if (setting.is24Hour) "HH" else "hh"
             MINUTE -> "mm"
             AM_PM  -> if (setting.is24Hour) return "" else "a"
-            ICU    -> t[0]!!.takeIf { TextFunctions.isIcuPattern(it) } ?: return ""
+            ICU    -> return icu(t[0]!!)
             else   -> t[0]!!
         }
         val format = formatter?.takeIf { formatterPattern === pattern && formatterGeneration == setting.generation } ?: try {
@@ -455,6 +453,27 @@ internal class ClockText(private val kind: Int, args: Array<Part>, setting: Form
         }
     }
 
+    /**
+     * `icuText(skeleton)` as the Watch Face Format makes it: ICU picks the best pattern of the
+     * watch's language for the letters of [skeleton], so `yyyyMMdd` is "11/20/2026" in English and
+     * "20.11.2026" in German. The order and the signs come from the language, not from the skeleton.
+     */
+    private fun icu(skeleton: String): String {
+        if (!TextFunctions.isIcuSkeleton(skeleton)) return ""
+        val format = icuFormat?.takeIf { icuSkeleton == skeleton && icuGeneration == setting.generation } ?: try {
+            val pattern = DateTimePatternGenerator.getInstance(setting.locale).getBestPattern(skeleton)
+            SimpleDateFormat(pattern, setting.locale).also {
+                it.timeZone = TimeZone.getTimeZone(setting.zone.id)
+                icuFormat = it
+                icuSkeleton = skeleton
+                icuGeneration = setting.generation
+            }
+        } catch (_: RuntimeException) {
+            return ""
+        }
+        return TextFunctions.cut(format.format(Date(setting.nowMs)))
+    }
+
     companion object {
 
         const val CLOCK = 0
@@ -463,7 +482,7 @@ internal class ClockText(private val kind: Int, args: Array<Part>, setting: Form
         const val AM_PM = 3
         const val PATTERN = 4
 
-        /** `icuText(format)` of the Watch Face Format: `date(format)`, for the letters ICU and java.time read the same. */
+        /** `icuText(skeleton)` of the Watch Face Format, see [icu]. */
         const val ICU = 5
     }
 }

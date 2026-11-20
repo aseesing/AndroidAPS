@@ -43,8 +43,6 @@ object WffSources {
         "BATTERY_PERCENT" to "v_watch_battery",
         "STEP_COUNT" to "v_steps",
         "HEART_RATE" to "v_heart_rate",
-        // The days since the last new moon that have started: 0 to 28
-        "MOON_PHASE_POSITION" to "min(floor(v_moon_phase * 29.530588853), 28)",
         "WEATHER.IS_AVAILABLE" to "!missing(v_weather_kind)",
         // Our kinds 0 clear, 1 partly cloudy, 2 cloudy, 3 rain as the WFF codes 1 CLEAR, 14 PARTLY_CLOUDY,
         // 2 CLOUDY, 6 RAIN; 0 (UNKNOWN) without weather
@@ -65,7 +63,7 @@ object WffSources {
     private val OPTION_NAME = Regex("[A-Za-z0-9_]+")
 
     /** The names of all sources, for the tests and the manual. `CONFIGURATION.<name>` is one per option. */
-    val NAMES: Set<String> get() = FORMULAS.keys + DATE_PARTS.keys + "IS_24_HOUR_MODE"
+    val NAMES: Set<String> get() = FORMULAS.keys + DATE_PARTS.keys + "IS_24_HOUR_MODE" + "MOON_PHASE_POSITION"
 
     /** The formula of the source [name] in our variables, or null when it is not made that way. */
     internal fun formula(name: String): String? = FORMULAS[name]
@@ -77,6 +75,11 @@ object WffSources {
      */
     internal fun part(name: String, setting: FormulaSetting, index: (String) -> Int): Part? {
         DATE_PARTS[name]?.let { return DatePart(it, Var(index(LayerVariables.DAY_NAME)), name) }
+        if (name == "MOON_PHASE_POSITION") {
+            // The moon of the clock's moment, so only where there is a clock (see MoonQuarters)
+            index(LayerVariables.DAY_NAME)
+            return MoonPosition(setting)
+        }
         if (name == "IS_24_HOUR_MODE") {
             // Only where there is a clock: there the setting is the one of the watch (in a look it is not set)
             index(LayerVariables.DAY_NAME)
@@ -134,6 +137,13 @@ internal class DatePart(private val kind: Int, private val day: Node, val source
         const val DAYS_IN_MONTH = 6
         const val DAY_OF_WEEK = 7
     }
+}
+
+/** `[MOON_PHASE_POSITION]`: 0 at new moon to 28, at the clock's moment ([FormulaSetting.nowMs]), see [MoonQuarters]. */
+internal class MoonPosition(private val setting: FormulaSetting) : Node() {
+
+    override val usesSetting: Boolean get() = true
+    override fun eval(v: DoubleArray): Double = MoonQuarters.position(setting.nowMs)
 }
 
 /** `[IS_24_HOUR_MODE]`: 1 when the watch shows 24 hours, else 0. */

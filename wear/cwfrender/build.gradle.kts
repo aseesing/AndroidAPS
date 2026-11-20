@@ -63,6 +63,7 @@ val wearShared = listOf(
     "watchfaces/animation/FormulaParts.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerAnimator.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerVariables.kt", // PERSONAL PATCH
+    "watchfaces/animation/MoonQuarters.kt", // PERSONAL PATCH
     "watchfaces/animation/PulseCurve.kt", // PERSONAL PATCH
     "watchfaces/animation/Templates.kt", // PERSONAL PATCH
     "watchfaces/animation/TextFormula.kt", // PERSONAL PATCH

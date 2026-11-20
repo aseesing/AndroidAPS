@@ -171,8 +171,7 @@ class TextFormulaTest {
         // The text functions of the Watch Face Format, with its meaning (see WffNamesTest)
         "textLength" to listOf("textLength('')" to 0.0, "textLength('abcdef')" to 6.0),
         "subText" to listOf("subText('abc def', 2, 5)" to "c d", "subText('abc def', 2, 7)" to "c def", "subText('abc', -1, 2)" to "ab", "subText('abc', 2, 9)" to "c", "subText('abc', 2, 1)" to ""),
-        "numberFormat" to listOf("numberFormat('#,##0.00', 1234.5)" to "1,234.50", "numberFormat('00', 5)" to "05", "numberFormat('0', 2.5)" to "2", "numberFormat('0', 3.5)" to "4"),
-        "icuText" to listOf("icuText('EEE, MMM d, yyyy h:mm a')" to "Thu, Nov 19, 2026 1:05 PM", "icuText('HH:mm')" to "13:05")
+        "numberFormat" to listOf("numberFormat('#,##0.00', 1234.5)" to "1,234.50", "numberFormat('00', 5)" to "05", "numberFormat('0', 2.5)" to "2", "numberFormat('0', 3.5)" to "4")
     )
 
     /** 13:05 on Thursday 19 November 2026, in UTC. */
@@ -180,7 +179,8 @@ class TextFormulaTest {
 
     @Test
     fun everyTextFunctionHasASample() {
-        assertThat(samples.keys).containsExactlyElementsIn(TextFunctions.FUNCTIONS.keys)
+        // icuText needs the ICU of Android, so its samples are in IcuTextTest (Robolectric)
+        assertThat(samples.keys + "icuText").containsExactlyElementsIn(TextFunctions.FUNCTIONS.keys)
     }
 
     @Test

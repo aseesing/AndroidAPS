@@ -9,6 +9,7 @@ import com.google.common.truth.Truth.assertWithMessage
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
@@ -189,14 +190,19 @@ class WffNamesTest {
         assertThat(eval("[HEART_RATE]", values(heartRate = Double.NaN))).isNaN()
     }
 
+    /** The values the WFF runtime showed on the Wear OS 6 emulator at these moments (UTC), to 4 decimals. */
     @Test
-    fun theMoonPhasePositionCountsTheDaysThatStarted() {
-        assertThat(eval("[MOON_PHASE_POSITION]", values(moonPhase = 0.0))).isEqualTo(0.0)
-        assertThat(eval("[MOON_PHASE_POSITION]", values(moonPhase = 0.03))).isEqualTo(0.0)
-        assertThat(eval("[MOON_PHASE_POSITION]", values(moonPhase = 0.04))).isEqualTo(1.0)
-        assertThat(eval("[MOON_PHASE_POSITION]", values(moonPhase = 0.5))).isEqualTo(14.0)
-        // WFF counts 0 to 28
-        assertThat(eval("[MOON_PHASE_POSITION]", values(moonPhase = 0.999))).isEqualTo(28.0)
+    fun theMoonPhasePositionIsTheOneOfWff() {
+        val shown = listOf(
+            "2026-11-19T23:00" to 9.4221, "2026-11-20T05:00" to 9.6676, "2026-11-20T11:00" to 9.9131, "2026-11-20T17:00" to 10.1586,
+            "2026-11-21T23:00" to 11.3859, "2026-12-19T23:00" to 9.7908, "2027-06-01T12:00" to 24.7866, "2026-11-10T12:00" to 1.0305,
+            "2026-11-10T00:00" to 0.6035, "2026-11-09T12:00" to 0.1766, "2025-01-01T12:00" to 1.5509, "2020-01-07T12:00" to 10.9578
+        )
+        val position = parse("[MOON_PHASE_POSITION]")
+        for ((moment, wff) in shown) {
+            setting.nowMs = LocalDateTime.parse(moment).toInstant(ZoneOffset.UTC).toEpochMilli()
+            assertWithMessage(moment).that(position.eval(values())).isWithin(0.003).of(wff)
+        }
     }
 
     @Test
@@ -292,15 +298,10 @@ class WffNamesTest {
     }
 
     @Test
-    fun icuTextTakesOnlyTheLettersBothRead() {
-        setting.nowMs = ZonedDateTime.of(2026, 11, 19, 13, 5, 0, 0, utc).toInstant().toEpochMilli()
-        assertThat(text("icuText('EEEE d MMMM')", values())).isEqualTo("Thursday 19 November")
-        assertThat(text("icuText('''day'' d')", values())).isEqualTo("day 19")
-        // 'u', 'e', 'c', 'L', 'Q', 'w' ... mean another thing (or nothing) in ICU
-        assertError("icuText('uuuu')", "is not a format")
-        assertError("icuText('e')", "is not a format")
-        // A format that is worked out: an empty text
-        assertThat(text("icuText(x > 0 ? 'u' : 'd')", values(x = 1.0))).isEqualTo("")
+    fun icuTextNeedsALetter() {
+        // The texts themselves need the ICU of Android: see IcuTextTest
+        assertError("icuText('-')", "is not a format")
+        assertThat(text("icuText(x > 0 ? ':' : 'd')", values(x = 1.0))).isEqualTo("")
     }
 
     @Test

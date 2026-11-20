@@ -191,7 +191,7 @@ class FormulaTest {
         "floor" to listOf("floor(1.7)" to 1.0, "floor(-1.2)" to -2.0),
         "ceil" to listOf("ceil(1.2)" to 2.0, "ceil(-1.7)" to -1.0),
         "round" to listOf("round(1.4)" to 1.0, "round(1.6)" to 2.0, "round(2.5)" to 3.0, "round(0.5)" to 1.0, "round(-1.6)" to -2.0),
-        "fract" to listOf("fract(1.25)" to 0.25, "fract(-0.25)" to 0.75),
+        "fract" to listOf("fract(1.25)" to 0.25, "fract(-0.25)" to -0.25, "fract(-1.75)" to -0.75),
         "mod" to listOf("mod(7, 3)" to 1.0, "mod(-7, 3)" to 2.0),
         "min" to listOf("min(3, 1)" to 1.0, "min(5, 4, 3, 2, 9, 8, 7, 6)" to 2.0),
         "max" to listOf("max(3, 1)" to 3.0, "max(5, 4, 3, 2, 9, 8, 7, 6)" to 9.0),

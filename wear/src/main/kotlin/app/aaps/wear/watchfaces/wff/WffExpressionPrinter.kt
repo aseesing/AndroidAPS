@@ -16,8 +16,7 @@ import kotlin.math.abs
  * then the converter bakes that part.
  *
  * The meanings follow the WFF runtime as measured on the Wear OS 6 emulator (design doc 11.1):
- * WFF `%` keeps the sign of the left side and WFF `fract` cuts towards 0, so ours are written out
- * with `floor`. Functions WFF lacks (`min`, `max`, `mix`, `step`, `atan2`, ...) are written out.
+ * WFF `%` keeps the sign of the left side, so ours is written out with `floor`. Functions WFF lacks (`min`, `max`, `mix`, `step`, `atan2`, ...) are written out.
  * `noise`, `hash`, `missing` and all text parts cannot be written.
  *
  * Every part is put in brackets, so no WFF operator strength can change the meaning.
@@ -54,7 +53,6 @@ class WffExpressionPrinter(private val variable: (Int) -> String?) {
             val a = args.map { it!! }
             return when (name) {
                 in SAME_NAME  -> "$name(${a.joinToString(", ")})"
-                "fract"       -> "(${a[0]} - floor(${a[0]}))"
                 "mod"         -> mod(a[0], a[1])
                 "min"         -> a.reduce { x, y -> "($x < $y ? $x : $y)" }
                 "max"         -> a.reduce { x, y -> "($x > $y ? $x : $y)" }
@@ -93,7 +91,7 @@ class WffExpressionPrinter(private val variable: (Int) -> String?) {
         /** The functions WFF has with exactly our meaning (radians; `round` half up). */
         private val SAME_NAME = setOf(
             "sin", "cos", "tan", "asin", "acos", "atan", "abs", "sqrt", "exp", "log", "pow", "floor", "ceil", "round",
-            "log2", "log10", "cbrt", "expm1", "deg", "rad"
+            "log2", "log10", "cbrt", "expm1", "deg", "rad", "fract"
         )
 
         private val PI = number(Math.PI)!!

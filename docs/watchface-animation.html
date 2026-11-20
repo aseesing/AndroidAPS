@@ -1277,7 +1277,7 @@ goes from left to right, but <code>?</code> goes from the right: <code>a ? b : c
   <td><span class="curve" data-f="clamp(x, 1, 3)" data-x0="0" data-x1="4" data-y0="0" data-y1="4"></span><br><code>clamp(x, 1, 3)</code></td></tr>
 <tr><td><code>mix(a, b, u)</code></td><td>From <code>a</code> (at <code>u</code> = 0) to <code>b</code> (at <code>u</code> = 1): <code>a + (b - a) * u</code>. <code>u</code> is not cut.</td>
   <td><span class="curve" data-f="mix(2, 10, x)" data-x0="0" data-x1="1" data-y0="0" data-y1="10"></span><br><code>mix(2, 10, x)</code></td></tr>
-<tr><td><code>fract(x)</code></td><td>The part after the dot: <code>x - floor(x)</code>, always 0 to below 1. <code>fract(t)</code> is a saw that starts again every second.</td>
+<tr><td><code>fract(x)</code></td><td>The part after the dot, as in WFF: <code>fract(1.25)</code> is 0.25. For a negative number it keeps the minus: <code>fract(-0.25)</code> is -0.25, not 0.75. <code>fract(t)</code> is a saw that starts again every second. For a saw that also runs 0 to 1 below 0, use <code>mod(x, 1)</code>.</td>
   <td><span class="curve" data-f="fract(x)" data-x0="0" data-x1="4"></span><br><code>fract(x)</code></td></tr>
 <tr><td><code>mod(a, b)</code></td><td>The rest of <code>a</code> divided by <code>b</code>, never negative for a positive <code>b</code>: <code>mod(-1, 4)</code> is 3. With <code>b</code> = 0 it is no number.</td>
   <td><span class="curve" data-f="mod(x, 2)" data-x0="-2" data-x1="6"></span><br><code>mod(x, 2)</code></td></tr>
@@ -1600,7 +1600,7 @@ that rounds to zero is written without a minus: <code>fixed(-0.04, 1)</code> is 
 <tr><td><code>clockMinute()</code></td><td>The minute in two digits: <code>05</code>.</td></tr>
 <tr><td><code>ampm()</code></td><td>The AM or PM mark of the watch language; an empty text when the watch shows 24 hours.</td></tr>
 <tr><td><code>date(pattern)</code></td><td>The clock time written with a date pattern, in the watch language: <code>date('EEE d MMM')</code> is <code>Thu 19 Nov</code>. The letters are those of Java: <code>y</code> year, <code>M</code> month (<code>MMM</code> short name, <code>MMMM</code> full name), <code>d</code> day, <code>E</code> day of the week (<code>EEEE</code> full name), <code>H</code> hour of 24, <code>h</code> hour of 12, <code>m</code> minute, <code>a</code> AM or PM. Other text goes between single quotes, written twice inside a formula text: <code>date('d ''of'' MMMM')</code>. The text changes once a minute, so seconds in a pattern do not run; use <code>sec</code> for those. A fixed pattern that is wrong leaves the layer out.</td></tr>
-<tr><td><code>icuText(pattern)</code></td><td>The <code>icuText</code> of the Watch Face Format: <code>date(pattern)</code>, for the letters that the Watch Face Format (ICU) and the watch (Java) read the same way: <code>G y M d E a h H k K m s S z</code>. A fixed pattern with another letter (like <code>u</code>, <code>e</code>, <code>c</code>, <code>L</code>, <code>w</code>) leaves the layer out. Like <code>date</code>, the text changes once a minute.</td></tr>
+<tr><td><code>icuText(skeleton)</code></td><td>The <code>icuText</code> of the Watch Face Format. The text gives only <em>which</em> parts to show (an ICU skeleton); the watch language chooses their order and the signs between them. <code>icuText('yyyyMMdd')</code> is <code>11/20/2026</code> in English and <code>20.11.2026</code> in German, <code>icuText('EEE d MMM yyyy')</code> is <code>Fri, Nov 20, 2026</code>. Signs in the skeleton are left out (<code>icuText('d.M.')</code> is <code>11/20</code>), and <code>HH</code> gives 24 hours without AM or PM. For an exact order of your own, use <code>date(pattern)</code>. A fixed skeleton without a letter leaves the layer out. Like <code>date</code>, the text changes once a minute.</td></tr>
 <tr><td><code>glucose(mgdl)</code></td><td>A glucose value (always given in mg/dl, like <code>v_sgv</code>) in the unit the wearer uses: a whole number for mg/dl, one decimal for mmol/l. <code>glucose(v_sgv, 'mmol')</code> and <code>glucose(v_sgv, 'mgdl')</code> force a unit.</td></tr>
 </tbody></table></div>
 <p>The language, 12 or 24 hours and the glucose unit are read at the start of a wake, like the <a href="#values">values</a>.
@@ -1731,7 +1731,7 @@ an hour.</p>
 <tr><td><code>[DAY_OF_WEEK]</code></td><td>The day of the week, <strong>1 is Sunday</strong> and 7 is Saturday. (<code>v_day_name</code> starts on Monday.)</td></tr>
 <tr><td><code>[IS_24_HOUR_MODE]</code></td><td>1 when the watch shows 24 hours, else 0.</td></tr>
 <tr><td><code>[BATTERY_PERCENT]</code>, <code>[STEP_COUNT]</code>, <code>[HEART_RATE]</code></td><td>The values <code>v_watch_battery</code>, <code>v_steps</code> and <code>v_heart_rate</code>. No number when the watch does not know them.</td></tr>
-<tr><td><code>[MOON_PHASE_POSITION]</code></td><td>The days since the last new moon that have started, 0 to 28. From <code>v_moon_phase</code>.</td></tr>
+<tr><td><code>[MOON_PHASE_POSITION]</code></td><td>Where the moon is in its month, as in WFF: 0 at new moon, 7 at first quarter, 14 at full moon, 21 at last quarter, up to 28. Between these four moments it grows evenly, so it is not a count of days (a quarter can last 6.5 or 8.5 days). The moments are the true ones of the sky, not the mean ones of <code>v_moon_phase</code>, so the two can differ by most of a day.</td></tr>
 <tr><td><code>[WEATHER.IS_AVAILABLE]</code></td><td>1 when there is weather, else 0.</td></tr>
 <tr><td><code>[WEATHER.CONDITION]</code></td><td>The weather in the codes of WFF: 1 clear, 14 partly cloudy, 2 cloudy, 6 rain, 0 when there is no weather.</td></tr>
 <tr><td><code>[WEATHER.TEMPERATURE]</code>, <code>[WEATHER.TEMPERATURE_UNIT]</code></td><td>The temperature as a whole number, in the unit the second one gives. The phone sends degrees Celsius, so the unit is always 1 (Celsius).</td></tr>
@@ -1790,7 +1790,7 @@ design into a WFF face has to handle each one in one of three ways:</p>
 <tr><td>Written out: made into plain WFF math or fixed numbers when the face is made</td><td><code>let</code>, <a href="#own-functions">own functions</a>, <a href="#templates">templates</a>, the copies (<code>count</code>, <code>seed</code>, <code>points</code>, <code>i</code>, <code>n</code>, <code>u</code>, <code>px</code>, <code>py</code>, <code>p0</code> to <code>p7</code>, <code>r1</code> to <code>r8</code>), <code>if</code>, <code>min</code>, <code>max</code>, <code>mix</code>, <code>step</code>, <code>smoothstep</code>, <code>sign</code>, <code>atan2</code>, <code>mod</code>, <code>%</code>, <code>missing</code>, <code>easeInOut</code>, <code>window</code>, <code>pingpong</code>, <code>hash</code> and <code>noise</code> of fixed numbers, <code>bpm</code>, the text functions that WFF does not have.</td></tr>
 <tr><td>Baked: drawn as frames, because WFF has no time of a wake</td><td><code>t</code>, <code>ms</code>, <code>len</code>, <code>env</code>, and everything that reads them (also <code>noise(t)</code>), <code>slices</code>, <code>glow</code>, <code>clip</code> rings and masks.</td></tr>
 </tbody></table></div>
-<p>This is the plan for such a tool; the tool does not exist yet.</p>
+<p>The planner of the converter (<code>WffPlanner</code>) follows this table; the rest of the converter is not built yet.</p>
 
 <!-- =================================================================================== 6 -->
 <h2 id="values">6. Values: <code>v_&lt;key&gt;</code></h2>
@@ -3612,7 +3612,7 @@ var FN = {
   rad: function (a) { return a * (Math.PI / 180); },
   floor: Math.floor, ceil: Math.ceil,
   round: function (a) { return Math.floor(a + 0.5); },
-  fract: function (a) { return a - Math.floor(a); },
+  fract: function (a) { return a - Math.trunc(a); },
   mod: mod, min: Math.min, max: Math.max,
   clamp: function (a, b, c) { return clamp(a, Math.min(b, c), Math.max(b, c)); },
   mix: function (a, b, c) { return a + (b - a) * c; },
@@ -3814,7 +3814,6 @@ var WFF_FORMULAS = {
   HOUR_0_23_MINUTE: 'hour + min / 60', HOUR_0_11_MINUTE: 'mod(hour, 12) + min / 60', HOUR_1_12_MINUTE: 'mod(hour + 11, 12) + 1 + min / 60',
   HOUR_1_24_MINUTE: 'if(hour == 0, 24, hour) + min / 60', AMPM_STATE: 'hour >= 12',
   BATTERY_PERCENT: 'v_watch_battery', STEP_COUNT: 'v_steps', HEART_RATE: 'v_heart_rate',
-  MOON_PHASE_POSITION: 'min(floor(v_moon_phase * 29.530588853), 28)',
   'WEATHER.IS_AVAILABLE': '!missing(v_weather_kind)',
   'WEATHER.CONDITION': 'missing(v_weather_kind) ? 0 : v_weather_kind == 0 ? 1 : v_weather_kind == 1 ? 14 : v_weather_kind == 2 ? 2 : v_weather_kind == 3 ? 6 : 0',
   'WEATHER.TEMPERATURE': 'round(v_weather_temperature)', 'WEATHER.TEMPERATURE_UNIT': '1'
@@ -3832,15 +3831,64 @@ var WFF_DATE_PARTS = {
   DAY_OF_WEEK: function (d) { return d.getDay() + 1; }
 };
 
-/** True when an icuText pattern uses only the letters ICU and java.time read the same (TextFunctions.isIcuPattern). */
-function isIcuPattern(pattern) {
-  var quoted = false;
-  for (var i = 0; i < pattern.length; i++) {
-    var c = pattern.charAt(i);
-    if (c === "'") quoted = !quoted;
-    else if (!quoted && /[A-Za-z]/.test(c) && 'GyMdEahHkKmsSz'.indexOf(c) < 0) return false;
+/** True when an icuText skeleton has a letter (TextFunctions.isIcuSkeleton). */
+function isIcuSkeleton(skeleton) { return /[A-Za-z]/.test(skeleton); }
+
+/**
+ * icuText(skeleton): the parts the skeleton names, in the order of the language. The browser's Intl is
+ * ICU too, so it picks the same pattern as the watch for the usual letters.
+ */
+function writeSkeleton(epochMs, skeleton) {
+  var count = function (c) { var m = skeleton.match(new RegExp(c + '+')); return m ? m[0].length : 0; };
+  var o = {}, y = count('y'), M = count('M'), d = count('d'), E = count('E'), H = count('H'), h = count('h'), m = count('m'), s = count('s');
+  if (y) o.year = y === 2 ? '2-digit' : 'numeric';
+  if (M) o.month = M >= 4 ? 'long' : M === 3 ? 'short' : M === 2 ? '2-digit' : 'numeric';
+  if (d) o.day = d >= 2 ? '2-digit' : 'numeric';
+  if (E) o.weekday = E >= 4 ? 'long' : 'short';
+  if (H) { o.hour = H >= 2 ? '2-digit' : 'numeric'; o.hourCycle = 'h23'; } else if (h) { o.hour = h >= 2 ? '2-digit' : 'numeric'; o.hourCycle = 'h12'; }
+  if (m) o.minute = '2-digit';
+  if (s) o.second = '2-digit';
+  try { return new Intl.DateTimeFormat(SETTING.locale, o).format(new Date(epochMs)); } catch (e) { return null; }
+}
+
+/** [MOON_PHASE_POSITION]: 0 at new moon to 28, even between the true quarters (MoonQuarters, Meeus chapter 49). */
+var MOON_TAIL = [[-0.00111,0,0,1,-2,0],[-0.00057,0,0,1,2,0],[0.00056,1,1,2,0,0],[-0.00042,0,0,3,0,0],[0.00042,1,1,0,2,0],[0.00038,1,1,0,-2,0],
+  [-0.00024,1,-1,2,0,0],[-0.00017,0,0,0,0,1],[-0.00007,0,2,1,0,0],[0.00004,0,0,2,-2,0],[0.00004,0,3,0,0,0],[0.00003,0,1,1,-2,0],[0.00003,0,0,2,2,0],
+  [-0.00003,0,1,1,2,0],[0.00003,0,-1,1,2,0],[-0.00002,0,-1,1,-2,0],[-0.00002,0,1,3,0,0],[0.00002,0,0,4,0,0]];
+var MOON_NEW = [[-0.40720,0,0,1,0,0],[0.17241,1,1,0,0,0],[0.01608,0,0,2,0,0],[0.01039,0,0,0,2,0],[0.00739,1,-1,1,0,0],[-0.00514,1,1,1,0,0],[0.00208,2,2,0,0,0]].concat(MOON_TAIL);
+var MOON_FULL = [[-0.40614,0,0,1,0,0],[0.17302,1,1,0,0,0],[0.01614,0,0,2,0,0],[0.01043,0,0,0,2,0],[0.00734,1,-1,1,0,0],[-0.00515,1,1,1,0,0],[0.00209,2,2,0,0,0]].concat(MOON_TAIL);
+var MOON_QUARTER = [[-0.62801,0,0,1,0,0],[0.17172,1,1,0,0,0],[-0.01183,1,1,1,0,0],[0.00862,0,0,2,0,0],[0.00804,0,0,0,2,0],[0.00454,1,-1,1,0,0],[0.00204,2,2,0,0,0],
+  [-0.00180,0,0,1,-2,0],[-0.00070,0,0,1,2,0],[-0.00040,0,0,3,0,0],[-0.00034,1,-1,2,0,0],[0.00032,1,1,0,2,0],[0.00032,1,1,0,-2,0],[-0.00028,2,2,1,0,0],
+  [0.00027,1,1,2,0,0],[-0.00017,0,0,0,0,1],[-0.00005,0,-1,1,-2,0],[0.00004,0,0,2,2,0],[-0.00004,0,1,1,2,0],[0.00004,0,-2,1,0,0],[0.00003,0,1,1,-2,0],
+  [0.00003,0,3,0,0,0],[0.00002,0,0,2,-2,0],[0.00002,0,-1,1,2,0],[-0.00002,0,1,3,0,0]];
+var MOON_PLANETS = [[299.77,0.107408,0.000325],[251.88,0.016321,0.000165],[251.83,26.651886,0.000164],[349.42,36.412478,0.000126],[84.66,18.206239,0.000110],
+  [141.74,53.303771,0.000062],[207.14,2.453732,0.000060],[154.84,7.306860,0.000056],[34.52,27.261239,0.000047],[207.19,0.121824,0.000042],
+  [291.34,1.844379,0.000040],[161.72,24.198154,0.000037],[239.56,25.513099,0.000035],[331.55,3.592518,0.000023]];
+function moonQuarter(k) { return Math.round((k - Math.floor(k)) * 4) % 4; }
+function moonPhaseJde(k) {
+  var T = k / 1236.85, T2 = T * T, R = Math.PI / 180, q = moonQuarter(k);
+  var jde = 2451550.09766 + 29.530588861 * k + 0.00015437 * T2 - 0.000000150 * T2 * T + 0.00000000073 * T2 * T2;
+  var E = 1 - 0.002516 * T - 0.0000074 * T2;
+  var M = R * (2.5534 + 29.10535670 * k - 0.0000014 * T2 - 0.00000011 * T2 * T);
+  var Mp = R * (201.5643 + 385.81693528 * k + 0.0107582 * T2 + 0.00001238 * T2 * T - 0.000000058 * T2 * T2);
+  var F = R * (160.7108 + 390.67050284 * k - 0.0016118 * T2 - 0.00000227 * T2 * T + 0.000000011 * T2 * T2);
+  var Om = R * (124.7746 - 1.56375588 * k + 0.0020672 * T2 + 0.00000215 * T2 * T);
+  var terms = q === 0 ? MOON_NEW : q === 2 ? MOON_FULL : MOON_QUARTER;
+  terms.forEach(function (x) { jde += x[0] * Math.pow(E, x[1]) * Math.sin(x[2] * M + x[3] * Mp + x[4] * F + x[5] * Om); });
+  if (q === 1 || q === 3) {
+    var W = 0.00306 - 0.00038 * E * Math.cos(M) + 0.00026 * Math.cos(Mp) - 0.00002 * Math.cos(Mp - M) + 0.00002 * Math.cos(Mp + M) + 0.00002 * Math.cos(2 * F);
+    jde += q === 1 ? W : -W;
   }
-  return true;
+  MOON_PLANETS.forEach(function (p, i) { jde += p[2] * Math.sin(R * (p[0] + p[1] * k - (i === 0 ? 0.009173 * T2 : 0))); });
+  return jde;
+}
+function moonPosition(epochMs) {
+  var jd = epochMs / 86400000 + 2440587.5 + 69 / 86400;
+  var k = Math.floor((jd - 2451550.09766) / 29.530588861 * 4) / 4 - 0.5;
+  while (moonPhaseJde(k + 0.25) <= jd) k += 0.25;
+  while (moonPhaseJde(k) > jd) k -= 0.25;
+  var a = moonPhaseJde(k), b = moonPhaseJde(k + 0.25);
+  return 7 * (moonQuarter(k) + (jd - a) / (b - a));
 }
 
 /** The date pattern of each clock function (ClockText). */
@@ -4032,6 +4080,11 @@ function readFormula(text, constants, names, own, state) {
       var clock = own.clock, part = WFF_DATE_PARTS[name];
       return count({ k: false, s: true, ev: function () { return part(new Date(clock.nowMs)); } });
     }
+    if (name === 'MOON_PHASE_POSITION') {
+      if (!own || !own.clock) throw new FormulaError('[' + name + '] cannot be used here: there is no clock');
+      var moonClock = own.clock;
+      return count({ k: false, s: true, ev: function () { return moonPosition(moonClock.nowMs); } });
+    }
     if (name === 'IS_24_HOUR_MODE') {
       if (!own || !own.clock) throw new FormulaError('[' + name + '] cannot be used here: there is no clock');
       return count({ k: false, s: true, ev: function () { return SETTING.is24Hour ? 1 : 0; } });
@@ -4174,10 +4227,13 @@ function readFormula(text, constants, names, own, state) {
       var clock = own.clock;
       if (name === 'date' || name === 'icuText') {
         var P = args[0].ev, icu = name === 'icuText';
-        if (args[0].k && (writeDate(0, args[0].v) === null || (icu && !isIcuPattern(args[0].v)))) throw new FormulaError("'" + args[0].v + "' is not a format");
+        if (args[0].k && (icu ? !isIcuSkeleton(args[0].v) : writeDate(0, args[0].v) === null)) throw new FormulaError("'" + args[0].v + "' is not a format");
         return {
           k: false, tx: true, s: true,
-          ev: function (v) { var p = P(v), out = icu && !isIcuPattern(p) ? null : writeDate(clock.nowMs, p); return out === null ? '' : cutText(out); }
+          ev: function (v) {
+            var p = P(v), out = icu ? (isIcuSkeleton(p) ? writeSkeleton(clock.nowMs, p) : null) : writeDate(clock.nowMs, p);
+            return out === null ? '' : cutText(out);
+          }
         };
       }
       return { k: false, tx: true, s: true, ev: function () { var p = clockPattern(name); return p ? writeDate(clock.nowMs, p) : ''; } };

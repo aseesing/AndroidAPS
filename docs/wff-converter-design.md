@@ -943,11 +943,12 @@ set-watchface --es watchFaceId <package>`. A small probe provider app sent the d
 
 What this changes:
 - 5.1: the arrow is the glucose slot's monochromatic image.
-- The printer (section 3) writes `fract(x)` as `x - floor(x)`, never maps `date(pattern)` to
-  `icuText` (a pattern is not a skeleton), and writes our `%` as `a - b * floor(a / b)`.
-- The names table of the engine (`WffSources`, `TextFunctions`) has three WFF names whose meaning
-  differs from the runtime: `fract` for negative numbers, `icuText` and `[MOON_PHASE_POSITION]`.
-  That is an engine fix for the owner to decide.
+- The printer (section 3) never maps `date(pattern)` to `icuText` (a pattern is not a skeleton),
+  and writes our `%` as `a - b * floor(a / b)`.
+- The engine now gives `fract`, `icuText` and `[MOON_PHASE_POSITION]` the runtime's meaning (the
+  owner's choice, 2026-11-20): `fract` keeps the sign, `icuText` reads a skeleton with the ICU of
+  Android, and the moon position is even between the true quarters (Meeus chapter 49; 12 emulator
+  samples from 2020 to 2027 match to 0.003). No design zip depended on the old meanings.
 - Step 5 must write string resources.
 
 Questions only a real watch can answer:
