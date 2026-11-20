@@ -173,7 +173,7 @@ internal class WearViewModelNightFacePersonalTest {
     @Test
     fun `after an import in the night list the next pick is still the night face`() = runTest(UnconfinedTestDispatcher()) {
         val uri: Uri = mock()
-        whenever(designImport.importFrom(listOf(uri))).thenReturn(DesignImport("Designs imported: 1", emptyList()))
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
         sut.loadNightWatchfaceFiles()
         awaitImportList()
 
@@ -190,7 +190,7 @@ internal class WearViewModelNightFacePersonalTest {
     @Test
     fun `after an import in the main list the next pick is still the main face`() = runTest(UnconfinedTestDispatcher()) {
         val uri: Uri = mock()
-        whenever(designImport.importFrom(listOf(uri))).thenReturn(DesignImport("Designs imported: 1", emptyList()))
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
         sut.loadWatchfaceFiles()
         awaitImportList()
 
@@ -204,7 +204,7 @@ internal class WearViewModelNightFacePersonalTest {
     @Test
     fun `a design picked while the list reloads after an import - the reload does not open the list again`() = runTest(UnconfinedTestDispatcher()) {
         val uri: Uri = mock()
-        whenever(designImport.importFrom(listOf(uri))).thenReturn(DesignImport("Designs imported: 1", emptyList()))
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
         val reloadStarted = CountDownLatch(1)
         val picked = CountDownLatch(1)
         // The first read shows the list; the second one, after the import, waits until the wearer picked
@@ -234,7 +234,7 @@ internal class WearViewModelNightFacePersonalTest {
     fun `an import remembers the place of the pick for the next file picker`() = runTest(UnconfinedTestDispatcher()) {
         val uri: Uri = mock()
         whenever(uri.toString()).thenReturn("content://drive/doc1")
-        whenever(designImport.importFrom(listOf(uri))).thenReturn(DesignImport("Designs imported: 1", emptyList()))
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
         // The import starts from the open list, as in the app
         sut.loadWatchfaceFiles()
         awaitImportList()

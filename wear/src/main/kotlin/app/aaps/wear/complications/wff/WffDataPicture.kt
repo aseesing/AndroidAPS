@@ -20,6 +20,7 @@ internal class WffDataPicture(context: Context, logger: AAPSLogger) {
 
     private val app = context.applicationContext
     private var design: CwfData? = null
+    private var source: CwfData? = null // PERSONAL PATCH: the design that [design] was made from
 
     private val face = CustomWatchface().apply {
         designFilter = { stored -> design ?: stored }
@@ -29,7 +30,7 @@ internal class WffDataPicture(context: Context, logger: AAPSLogger) {
 
     /** The data picture of [design] at [nowMs]. */
     fun draw(design: CwfData, nowMs: Long): Bitmap {
-        this.design = design
+        if (design !== source) this.design = WffClearBackground.of(design).also { source = design } // PERSONAL PATCH: always see-through, see WffClearBackground
         val size = app.resources.displayMetrics.widthPixels
         pipeline.invalidateData()
         return pipeline.compose(nowMs, ambient = false, width = size, height = size)

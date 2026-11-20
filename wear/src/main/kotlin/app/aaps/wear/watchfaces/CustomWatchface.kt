@@ -1216,6 +1216,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     /**
      * Gives the design to draw instead of the stored one, for an instance that only draws pictures:
      * the data picture of a Watch Face Format face (`WffDataPicture`). Set before the first draw.
+     * PERSONAL PATCH: such a face never shows the night face (`NightFace`), which is a whole design with all its art.
      */
     internal var designFilter: ((CwfData) -> CwfData)? = null
 
@@ -1255,7 +1256,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                         isDayNow = { dayNight.isDay(renderNow(), night.dayNightRule) }
                     )
                 }
-                val face = NightFace.choose(main, night.customWatchfaceNight) { showDay }
+                val face = if (designFilter != null) main else NightFace.choose(main, night.customWatchfaceNight) { showDay } // PERSONAL PATCH: a face with a designFilter (the WFF data picture) never shows the night face
                 showsNightFace = face !== main
                 // A swap between the day face and the night face is not a new zip
                 val daySwap = showsNightFace != styleShowsNightFace

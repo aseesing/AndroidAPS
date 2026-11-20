@@ -9,11 +9,14 @@ what that tool must deliver, and what AAPS does with it.
 
 On the phone, in the Wear plugin, open the list of watchfaces and tap **Import designs from Google
 Drive or phone storage**. Pick one or more zips from Downloads, Google Drive or anywhere else. The
-phone looks inside each one:
+phone copies each one into AAPS/export, and the list shows it:
 
-- an old Custom watchface zip is copied into the list, as before;
-- a WFF face zip goes straight to the watch as a face, in the version the watch can run. It is not
-  added to the list.
+- an old Custom watchface zip is a design, as before (at most 5 MB);
+- a WFF face zip (at most 32 MB) shows with the name, author and picture of its `data.zip`, and
+  the label "Watch Face Format face". Delete removes the face zip itself.
+
+Tap an entry to send it to the watch. A WFF face goes as a face, in the version the watch can run.
+The list for the night face does not show WFF faces: a WFF face cannot be the night face.
 
 What then happens on the watch:
 
@@ -76,7 +79,8 @@ updates: animations of a design belong in the face itself, as frames.
 
 ## Code
 
-- Phone: `plugins/sync/.../wear/WffFaceZip.kt` (check the zip and cut it down), `WearViewModel.loadWatchfaceFile`,
+- Phone: `plugins/sync/.../wear/WffFaceZip.kt` (check the zip and cut it down), `wear/compose/WffFaceDesigns.kt` (face
+  zips in the list), `WearViewModel.selectImportItem`,
   `DataLayerListenerServiceMobile` (sends it on a Data Layer channel, path `path_wff_face`).
 - Watch: `DataLayerListenerServiceWear.onChannelOpened`, `watchfaces/wff/WffFace.kt` (keeps the zip),
   `watchfaces/wff/WffFaceInstaller.kt` (Watch Face Push or the package installer), `WatchFacePushHelper`

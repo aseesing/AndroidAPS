@@ -8,6 +8,7 @@ import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.Event
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
+import app.aaps.core.interfaces.rx.events.EventMobileToWearWatchface
 import app.aaps.core.interfaces.rx.events.EventMobileToWearWffFace
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.weardata.CwfData
@@ -288,7 +289,7 @@ internal class WearViewModelTest {
         channelSends(ok = true)
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
 
-        importFace()
+        pickFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
         verify(rxBus).send(any<EventMobileToWearWffFace>())
@@ -301,7 +302,7 @@ internal class WearViewModelTest {
         channelSends(ok = true)
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
 
-        importFace()
+        pickFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent_confirm)
         verify(rxBus).send(any<EventMobileToWearWffFace>())
@@ -315,7 +316,7 @@ internal class WearViewModelTest {
         doAnswer { event.complete(it.arguments[0] as EventMobileToWearWffFace) }.whenever(rxBus).send(any<EventMobileToWearWffFace>())
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
 
-        importFace()
+        pickFace()
         verify(rxBus, timeout(TIMEOUT_MS)).send(any<EventMobileToWearWffFace>())
 
         // Still on its way: no message and the choice of face is not changed yet
@@ -334,7 +335,7 @@ internal class WearViewModelTest {
         channelSends(ok = false)
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
 
-        importFace()
+        pickFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_not_sent)
         verify(rh, never()).gs(SyncStrings.wear_wff_face_sent)
@@ -348,7 +349,7 @@ internal class WearViewModelTest {
         sut.faceSendWait = 200.milliseconds
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
 
-        importFace()
+        pickFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_not_sent)
         verify(rh, never()).gs(SyncStrings.wear_wff_face_sent_confirm)
@@ -360,7 +361,7 @@ internal class WearViewModelTest {
         channelSends(ok = true)
         watchAnswersPing { watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36) }
 
-        importFace()
+        pickFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
         assertThat(pings()).isEqualTo(1)
@@ -375,7 +376,7 @@ internal class WearViewModelTest {
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false)
         watchAnswersPing { watchApiLevelFlow.value = 34 }
 
-        importFace()
+        pickFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent_confirm)
         assertThat(pings()).isEqualTo(1)
@@ -389,7 +390,7 @@ internal class WearViewModelTest {
         channelSends(ok = true)
         watchApiLevelFlow.value = 36
 
-        importFace()
+        pickFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
         assertThat(pings()).isEqualTo(0)
@@ -400,19 +401,132 @@ internal class WearViewModelTest {
         stubFaceMessages()
         sut.watchVersionWait = 200.milliseconds
 
-        importFace()
+        pickFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_watch_unknown)
         assertThat(pings()).isEqualTo(1)
         verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
     }
 
-    /** The wearer picks [faceZip] with "Import designs": the import hands it over as a face zip */
-    private fun importFace() {
-        val uri: Uri = mock()
-        runBlocking { whenever(designImport.importFrom(listOf(uri))).thenReturn(DesignImport("", listOf(faceZip()))) }
+    /** A face zip in AAPS/export as the list holds it: the design of its data.zip, named by the face zip */
+    private val face = CwfFile(
+        cwfData = CwfData(
+            json = "{}",
+            metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "D2", CwfMetadataKey.CWF_FILENAME to "D2-wff"),
+            resData = mutableMapOf()
+        ),
+        zipByteArray = ByteArray(0)
+    )
+
+    /** A design in AAPS/export */
+    private val design = CwfFile(
+        cwfData = CwfData(
+            json = "{}",
+            metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Analog", CwfMetadataKey.CWF_FILENAME to "Analog"),
+            resData = mutableMapOf()
+        ),
+        zipByteArray = ByteArray(3)
+    )
+
+    private fun item(cwfFile: CwfFile, wffFace: Boolean) = CwfImportItemState(
+        cwfFile = cwfFile, name = "", fileName = "", author = "", createdAt = "", version = "", isVersionOk = true,
+        prefCount = 0, hasPrefAuthorization = false, watchfaceImage = null, wffFace = wffFace
+    )
+
+    /** The wearer picks the face zip [faceZip] in the list of watchfaces */
+    private fun pickFace() {
+        whenever(designImport.readFace(face)).thenReturn(faceZip())
+        sut.selectImportItem(item(face, wffFace = true))
+    }
+
+    /** The list is read on Dispatchers.IO: wait until it shows */
+    private fun awaitImportList() {
+        val until = System.currentTimeMillis() + TIMEOUT_MS
+        while (!sut.uiState.value.showImportList && System.currentTimeMillis() < until) Thread.sleep(10)
+        assertThat(sut.uiState.value.showImportList).isTrue()
+    }
+
+    /** The list's texts: each label shows its value, so "File name: %1$s" shows only the file name */
+    private fun labelsShowTheirValue() {
+        whenever(rh.gs(any<TextRef>(), any())).thenAnswer { it.arguments[1].toString() }
+    }
+
+    @Test
+    fun `face zips in AAPS export show in the list next to the designs, marked as faces`() {
+        labelsShowTheirValue()
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf(design))
+        whenever(designImport.listFaces()).thenReturn(listOf(face))
+
+        sut.loadWatchfaceFiles()
+        awaitImportList()
+
+        val items = sut.uiState.value.importItems
+        assertThat(items.map { it.name }).containsExactly("Analog", "D2").inOrder()
+        val faceItem = items.single { it.wffFace }
+        assertThat(faceItem.cwfFile).isSameInstanceAs(face)
+        assertThat(faceItem.fileName).isEqualTo("D2-wff.zip")
+        assertThat(items.single { !it.wffFace }.cwfFile).isSameInstanceAs(design)
+    }
+
+    @Test
+    fun `the night list does not show face zips, so a face zip can never be the night face`() {
+        labelsShowTheirValue()
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf(design))
+        whenever(designImport.listFaces()).thenReturn(listOf(face))
+
+        sut.loadNightWatchfaceFiles()
+        awaitImportList()
+
+        assertThat(sut.uiState.value.importItems.map { it.cwfFile }).containsExactly(design)
+        verify(designImport, never()).listFaces()
+    }
+
+    @Test
+    fun `picking a face zip in the list sends the face zip, not a design`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        verify(designImport).readFace(face)
+        verify(rxBus).send(any<EventMobileToWearWffFace>())
+        verify(rxBus, never()).send(any<EventMobileToWearWatchface>())
+        assertThat(sut.uiState.value.showImportList).isFalse()
+    }
+
+    @Test
+    fun `picking a design in the list goes the old way`() {
+        sut.selectImportItem(item(design, wffFace = false))
+
+        verify(rxBus).send(any<EventMobileToWearWatchface>())
+        verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
+        verify(designImport, never()).readFace(any())
+    }
+
+    @Test
+    fun `a face zip that cannot be read any more says so`() {
+        whenever(rh.gs(SyncStrings.wear_not_a_watchface_file)).thenReturn("not a watchface")
+        whenever(designImport.readFace(face)).thenReturn(null)
+
+        sut.selectImportItem(item(face, wffFace = true))
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_not_a_watchface_file)
+        verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
+    }
+
+    @Test
+    fun `deleting a face zip deletes the entry the list holds`() = runTest(UnconfinedTestDispatcher()) {
+        whenever(designImport.deleteFrom(face)).thenReturn("Deleted: D2-wff.zip")
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
-        sut.importDesigns(listOf(uri))
+        val messages = mutableListOf<String>()
+        backgroundScope.launch { sut.toastEvent.toList(messages) }
+
+        sut.deleteDesign(item(face, wffFace = true).cwfFile)
+
+        assertThat(messages).containsExactly("Deleted: D2-wff.zip")
+        verify(designImport).deleteFrom(face)
     }
 
     private fun faceZip(): ByteArray {
@@ -538,7 +652,7 @@ internal class WearViewModelTest {
     @Test
     fun `importing designs says how it went and shows the list again`() = runTest(UnconfinedTestDispatcher()) {
         val uri: Uri = mock()
-        whenever(designImport.importFrom(listOf(uri))).thenReturn(DesignImport("Designs imported: 1", emptyList()))
+        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
         val messages = mutableListOf<String>()
         backgroundScope.launch { sut.toastEvent.toList(messages) }
@@ -556,7 +670,7 @@ internal class WearViewModelTest {
         val gate = CompletableDeferred<Unit>()
         whenever(designImport.importFrom(any())).doSuspendableAnswer {
             gate.await()
-            DesignImport("Designs imported: 1", emptyList())
+            "Designs imported: 1"
         }
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
 

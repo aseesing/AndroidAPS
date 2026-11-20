@@ -198,7 +198,7 @@ internal fun WearScreen(
                 CwfImportContent(
                     items = uiState.importItems,
                     importing = uiState.importingDesigns,
-                    onItemClick = { item -> viewModel.selectWatchface(item.cwfFile) },
+                    onItemClick = { item -> viewModel.selectImportItem(item) }, // PERSONAL PATCH: a face zip goes its own way, see WffFaceDesigns.kt
                     onItemDelete = { item -> viewModel.deleteDesign(item.cwfFile) },
                     modifier = modifier
                 )

@@ -8,6 +8,7 @@ import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfFile
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.shared.impl.weardata.ResFileMap
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -157,46 +158,108 @@ internal class CwfDesignImportTest {
     }
 
     @Test
-    fun `a face zip is set aside for the watch and not copied`() {
+    fun `a face zip is copied into the folder like a design`() {
         val folder = FakeFolder()
-        val face = faceZip()
+        val face = faceZip("D2")
 
         val result = sut.import(listOf(picked("D2-wff.zip", face), picked("Design_One.zip", design("One"))), folder)
 
-        assertThat(result.faces).hasSize(1)
-        assertThat(result.faces[0]).isEqualTo(face)
-        assertThat(result.imported).containsExactly("Design_One.zip")
+        assertThat(result.imported).containsExactly("D2-wff.zip", "Design_One.zip")
         assertThat(result.refused).isEmpty()
-        assertThat(folder.files.keys).containsExactly("Design_One.zip")
+        assertThat(folder.files["D2-wff.zip"]).isEqualTo(face)
     }
 
     @Test
     fun `a face zip may be bigger than a design`() {
         val folder = FakeFolder()
         // A design of this size is refused, a face zip of this size is fine
-        val big = faceZip(padding = CwfDesignImport.MAX_ZIP_BYTES + 1)
+        val big = faceZip("Big", padding = CwfDesignImport.MAX_ZIP_BYTES + 1)
+        assertThat(big.size).isGreaterThan(CwfDesignImport.MAX_ZIP_BYTES)
 
         val result = sut.import(listOf(picked("Big-wff.zip", big)), folder)
 
-        assertThat(result.faces).hasSize(1)
+        assertThat(result.imported).containsExactly("Big-wff.zip")
         assertThat(result.refused).isEmpty()
     }
 
     @Test
-    fun `only face zips picked gives no count line`() {
-        val message = sut.message(DesignImportResult(emptyList(), emptyList(), listOf(faceZip())))
+    fun `a face zip without a design in its data zip is refused, the list could not show it`() {
+        val folder = FakeFolder()
+        val noDesign = zipOf("face.json" to FACE_JSON.toByteArray(), "data.zip" to "not a zip".toByteArray())
 
-        assertThat(message).isEmpty()
+        val result = sut.import(listOf(picked("Broken-wff.zip", noDesign)), folder)
+
+        assertThat(result.refused).containsExactly("Broken-wff.zip" to DesignRefusal.NOT_A_DESIGN)
+        assertThat(folder.files).isEmpty()
     }
 
-    /** A face zip as the design tool makes it: a `face.json` among other files */
-    private fun faceZip(padding: Int = 0): ByteArray {
+    @Test
+    fun `the list shows a face zip by the name and preview of its design, named by its own file`() {
+        val folder = FakeFaceFolder(mutableMapOf("D2-wff.zip" to faceZip("D2"), "Design_One.zip" to design("One"), "notes.zip" to "not a zip".toByteArray()))
+
+        val faces = WffFaceDesigns(mock<AAPSLogger>()).list(folder)
+
+        // The design zip and the broken zip are not face zips
+        assertThat(faces).hasSize(1)
+        val metadata = faces[0].cwfData.metadata
+        assertThat(metadata[CwfMetadataKey.CWF_NAME]).isEqualTo("D2")
+        assertThat(metadata[CwfMetadataKey.CWF_AUTHOR]).isEqualTo("Someone")
+        assertThat(metadata[CwfMetadataKey.CWF_FILENAME]).isEqualTo("D2-wff")
+        assertThat(faces[0].cwfData.resData).containsKey(ResFileMap.CUSTOM_WATCHFACE.fileName)
+    }
+
+    @Test
+    fun `a listed face reads back as the whole face zip`() {
+        val face = faceZip("D2")
+        val folder = FakeFaceFolder(mutableMapOf("D2-wff.zip" to face))
+        val faces = WffFaceDesigns(mock<AAPSLogger>())
+
+        val listed = faces.list(folder).single()
+
+        assertThat(faces.read(folder, listed)).isEqualTo(face)
+        // Gone meanwhile
+        folder.files.clear()
+        assertThat(faces.read(folder, listed)).isNull()
+    }
+
+    @Test
+    fun `deleting a listed face removes the face zip, not a file named after its design`() {
+        val face = faceZip("D2")
+        val design = design("D2")
+        val folder = FakeFolder(mutableMapOf("D2-wff.zip" to face, "D2.zip" to design))
+        whenever(rh.gs(SyncStrings.wear_design_delete_done, "D2-wff.zip")).thenReturn("Deleted: D2-wff.zip")
+        val listed = WffFaceDesigns(mock<AAPSLogger>()).list(FakeFaceFolder(folder.files)).single()
+
+        val message = sut.delete(listed, folder)
+
+        assertThat(message).isEqualTo("Deleted: D2-wff.zip")
+        assertThat(folder.files).containsExactly("D2.zip", design)
+    }
+
+    /** The zips of AAPS/export in memory, for [WffFaceDesigns]. */
+    private class FakeFaceFolder(val files: MutableMap<String, ByteArray>) : FaceFolder {
+
+        override fun zipNames() = files.keys.filter { it.endsWith(".zip") }
+
+        override fun open(name: String) = files[name]?.let { ByteArrayInputStream(it) }
+    }
+
+    /**
+     * A face zip as the design tool makes it: `face.json`, `data.zip` with the design [name], and a
+     * face APK of [padding] bytes. The APK is stored as it is, so [padding] sets the size of the zip.
+     */
+    private fun faceZip(name: String, padding: Int = 0): ByteArray {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
             zip.setLevel(0)
-            for (name in listOf("face.json", "data.zip", "wff2/app.apk")) {
-                zip.putNextEntry(ZipEntry(name))
-                zip.write(if (name == "wff2/app.apk") ByteArray(padding) else name.toByteArray())
+            val entries = listOf(
+                "face.json" to FACE_JSON.toByteArray(),
+                "data.zip" to design(name, author = "Someone"),
+                "wff2/app.apk" to ByteArray(padding)
+            )
+            for ((entryName, content) in entries) {
+                zip.putNextEntry(ZipEntry(entryName))
+                zip.write(content)
                 zip.closeEntry()
             }
         }
@@ -362,11 +425,18 @@ internal class CwfDesignImportTest {
         return CwfFile(CwfData("{}", metadata, mutableMapOf()), ByteArray(0))
     }
 
-    private fun json(name: String) = "{\"metadata\":{\"name\":\"$name\"}}"
+    private fun json(name: String, author: String? = null) =
+        if (author == null) "{\"metadata\":{\"name\":\"$name\"}}"
+        else "{\"metadata\":{\"name\":\"$name\",\"author\":\"$author\"}}"
 
     /** The smallest zip AAPS loads as a design: the json with a name, and the preview picture. */
-    private fun design(name: String): ByteArray =
-        zipOf("CustomWatchface.json" to json(name).toByteArray(), "CustomWatchface.png" to name.toByteArray())
+    private fun design(name: String, author: String? = null): ByteArray =
+        zipOf("CustomWatchface.json" to json(name, author).toByteArray(), "CustomWatchface.png" to name.toByteArray())
+
+    private companion object {
+
+        const val FACE_JSON = "{\"format\":1,\"name\":\"D2\"}"
+    }
 
     /** A zip of [entries]: file name and content. */
     private fun zipOf(vararg entries: Pair<String, ByteArray>): ByteArray = ByteArrayOutputStream().also { bytes ->

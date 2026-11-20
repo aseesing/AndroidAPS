@@ -60,7 +60,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -135,7 +134,8 @@ data class CwfImportItemState(
     val isVersionOk: Boolean,
     val prefCount: Int,
     val hasPrefAuthorization: Boolean,
-    val watchfaceImage: ImageBitmap?
+    val watchfaceImage: ImageBitmap?,
+    val wffFace: Boolean = false // PERSONAL PATCH: a Watch Face Format face zip, see WffFaceDesigns.kt
 )
 
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
@@ -341,7 +341,8 @@ class WearViewModel(
         _uiState.update { it.copy(nightFace = it.nightFace.copy(importForNight = forNight)) }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val cwfAuthorization = preferences.get(BooleanKey.WearCustomWatchfaceAuthorization)
-            val files = fileListProvider.listCustomWatchfaceFiles()
+            val faces = if (forNight) emptyList() else designImport.listFaces() // PERSONAL PATCH: face zips in the list, never as the night face
+            val files = (fileListProvider.listCustomWatchfaceFiles() + faces)
                 .sortedBy { it.cwfData.metadata[CwfMetadataKey.CWF_NAME] }
             val items = files.map { cwfFile ->
                 val metadata = cwfFile.cwfData.metadata
@@ -359,7 +360,8 @@ class WearViewModel(
                     isVersionOk = checkCustomVersion(metadata),
                     prefCount = metadata.count { it.key.isPref },
                     hasPrefAuthorization = cwfAuthorization,
-                    watchfaceImage = decodeWatchfaceImage(cwfFile.cwfData)
+                    watchfaceImage = decodeWatchfaceImage(cwfFile.cwfData),
+                    wffFace = faces.any { it === cwfFile } // PERSONAL PATCH
                 )
             }
             // PERSONAL PATCH: a reload never opens a list the user closed meanwhile (by picking a design)
@@ -526,15 +528,13 @@ class WearViewModel(
         importPlace.remember(uris) // PERSONAL PATCH: last import place
         _uiState.update { it.copy(importingDesigns = true) }
         viewModelScope.launch {
-            val result = try {
+            val message = try {
                 designImport.importFrom(uris)
             } finally {
                 _uiState.update { it.copy(importingDesigns = false) }
             }
-            if (result.message.isNotBlank()) _toastEvent.emit(result.message)
+            _toastEvent.emit(message)
             reloadImportList()
-            // A Watch Face Format face zip is not a design for the list: it goes to the watch
-            for (face in result.faces) withContext(Dispatchers.IO) { sendWffFace(face) }
         }
     }
 
@@ -551,4 +551,24 @@ class WearViewModel(
      * next zip the wearer picks does not replace the main face.
      */
     private fun reloadImportList() = openImportList(forNight = _uiState.value.nightFace.importForNight, reload = true)
+
+    // ---- PERSONAL PATCH: Watch Face Format face zips in the list, see WffFaceDesigns.kt ----
+
+    /** The wearer picked [item] in the import list: a face zip goes to the watch as a face, a design goes the old way. */
+    fun selectImportItem(item: CwfImportItemState) {
+        if (item.wffFace) selectWffFace(item.cwfFile) else selectWatchface(item.cwfFile)
+    }
+
+    /**
+     * Sends the face zip of [cwfFile] to the watch, cut down to the face that watch can run. The list
+     * closes at once; the message comes when the send is done. The night list never shows face zips.
+     */
+    private fun selectWffFace(cwfFile: CwfFile) {
+        _uiState.update { it.copy(showImportList = false, importItems = emptyList(), nightFace = it.nightFace.copy(importForNight = false)) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val bytes = designImport.readFace(cwfFile)
+            if (bytes == null) _toastEvent.emit(rh.gs(SyncStrings.wear_not_a_watchface_file))
+            else sendWffFace(bytes)
+        }
+    }
 }
