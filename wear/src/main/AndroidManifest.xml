@@ -28,6 +28,9 @@
          one-shot activation on first install was used -->
     <uses-permission android:name="com.google.wear.permission.PUSH_WATCH_FACES" />
     <uses-permission android:name="com.google.wear.permission.SET_PUSHED_WATCH_FACE_AS_ACTIVE" />
+    <!-- Below Wear OS 6: a watch face loaded from a file on the phone is installed as an app,
+         and the wearer confirms it -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- androidx.wear.watchfacepush requires minSdk 36; all usages are runtime-guarded by SDK checks -->
     <!-- The sensor driver modules need Android 12. Direct-to-watch checks the version and is not offered below it. -->
@@ -47,6 +50,7 @@
         <intent>
             <action android:name="android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" />
         </intent>
+        <package android:name="${applicationId}.watchfacepush.design" />
     </queries>
 
     <application
@@ -272,7 +276,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
         </service>
 
         <!-- Same reading as SgvComplication, but a tap opens the menu. Used only by the ambient
@@ -301,7 +305,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
             <meta-data
                 android:name="android.support.wearable.complications.HIDDEN"
                 android:value="true" />
@@ -325,7 +329,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
             <meta-data
                 android:name="android.support.wearable.complications.HIDDEN"
                 android:value="true" />
@@ -427,7 +431,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
         </service>
 
         <service
@@ -556,7 +560,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
         </service>
 
         <service
@@ -649,7 +653,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
         </service>
 
         <service
@@ -682,7 +686,7 @@
 
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
             <meta-data
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
                 android:value="SHORT_TEXT" />
@@ -727,7 +731,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
         </service>
 
         <service
@@ -748,7 +752,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
         </service>
 
         <service
@@ -803,6 +807,71 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />
+        </service>
+
+        <!-- For a Watch Face Format face loaded from a face zip (complications/wff): the glucose and
+             its age as ranged values, and the data picture drawn from the face's data.zip -->
+        <service
+            android:name=".complications.wff.WffGlucoseComplication"
+            android:exported="true"
+            android:icon="@drawable/ic_sgv"
+            android:label="@string/complication_wff_glucose"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="300" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
+        </service>
+
+        <service
+            android:name=".complications.wff.WffGlucoseAgeComplication"
+            android:exported="true"
+            android:icon="@drawable/ic_sgv"
+            android:label="@string/complication_wff_glucose_age"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="300" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
+        </service>
+
+        <service
+            android:name=".complications.wff.WffDataComplication"
+            android:exported="true"
+            android:icon="@drawable/ic_sgv"
+            android:label="@string/complication_wff_data"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SMALL_IMAGE" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="300" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
+            <meta-data
+                android:name="android.support.wearable.complications.HIDDEN"
+                android:value="true" />
         </service>
 
         <service

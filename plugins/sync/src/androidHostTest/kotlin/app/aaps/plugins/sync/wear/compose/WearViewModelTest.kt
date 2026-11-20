@@ -1,12 +1,14 @@
 package app.aaps.plugins.sync.wear.compose
 
 import android.net.Uri
+import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.Event
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
+import app.aaps.core.interfaces.rx.events.EventMobileToWearWffFace
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfFile
@@ -36,6 +38,9 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
@@ -62,6 +67,7 @@ internal class WearViewModelTest {
     @Mock private lateinit var aapsLogger: AAPSLogger
     @Mock private lateinit var designImport: CwfDesignImport
     @Mock private lateinit var wearNightFace: WearNightFace
+    @Mock private lateinit var config: Config
 
     private val connectedDeviceFlow = MutableStateFlow<String?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
@@ -82,7 +88,8 @@ internal class WearViewModelTest {
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(eventWearUpdateGuiFlow)
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(pushedWatchfaceFlow)
         whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace)
+        whenever(config.APPLICATION_ID).thenReturn(APP_ID)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace, config)
     }
 
     @AfterEach
@@ -243,6 +250,48 @@ internal class WearViewModelTest {
         cwfData = CwfData(json = "{}", metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Analog G-Watch"), resData = mutableMapOf()),
         zipByteArray = ByteArray(0)
     )
+
+    @Test
+    fun `a face zip for a Wear OS 6 watch goes to the watch and becomes the pushed face`() {
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+
+        verify(rxBus, timeout(TIMEOUT_MS)).send(any<EventMobileToWearWffFace>())
+        verify(preferences, timeout(TIMEOUT_MS)).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+    }
+
+    @Test
+    fun `a face zip for a Wear OS 5 watch goes to the watch and leaves the pushed face alone`() {
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+
+        verify(rxBus, timeout(TIMEOUT_MS)).send(any<EventMobileToWearWffFace>())
+        verify(preferences, never()).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+    }
+
+    @Test
+    fun `a face zip is not sent while the watch has not told its version`() {
+        whenever(rh.gs(SyncStrings.wear_wff_face_watch_unknown)).thenReturn("unknown")
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_watch_unknown)
+        verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
+    }
+
+    private fun faceZip(): ByteArray {
+        val out = ByteArrayOutputStream()
+        ZipOutputStream(out).use { zip ->
+            for (name in listOf("face.json", "data.zip", "wff4/$APP_ID.apk", "wff4/$APP_ID.token", "wff2/$APP_ID.apk")) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(name.toByteArray())
+                zip.closeEntry()
+            }
+        }
+        return out.toByteArray()
+    }
 
     @Test
     fun `selectPushedWatchface stores the choice for the plugin to resend`() {
@@ -410,5 +459,11 @@ internal class WearViewModelTest {
         sut.importDesigns(emptyList())
 
         verifyNoInteractions(designImport)
+    }
+
+    private companion object {
+
+        const val APP_ID = "info.nightscout.androidaps"
+        const val TIMEOUT_MS = 2_000L
     }
 }

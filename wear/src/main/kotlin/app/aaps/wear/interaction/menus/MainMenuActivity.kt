@@ -85,7 +85,7 @@ class MainMenuActivity : MenuListActivity() {
                 // The entry installs whichever face is selected on the phone, so it shows that face
                 val icon = when (watchFacePushHelper.selectedFace) {
                     PushedFace.WFS -> R.drawable.watchface_wfs
-                    PushedFace.CWF -> R.drawable.watchface_custom
+                    PushedFace.CWF, PushedFace.DESIGN -> R.drawable.watchface_custom
                 }
                 add(MenuItem(icon, getString(if (installing) R.string.menu_installing_watchface else R.string.menu_install_watchface)))
             }

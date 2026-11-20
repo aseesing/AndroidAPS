@@ -13,6 +13,7 @@ import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
 import app.aaps.core.interfaces.rx.events.EventMobileToWearWatchface
+import app.aaps.core.interfaces.rx.events.EventMobileToWearWffFace
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
@@ -58,6 +59,7 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
 
     private val dataClient by lazy { Wearable.getDataClient(this) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
+    private val channelClient by lazy { Wearable.getChannelClient(this) }
     private val capabilityClient by lazy { Wearable.getCapabilityClient(this) }
     //private val nodeClient by lazy { Wearable.getNodeClient(this) }
 
@@ -88,6 +90,10 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
         rxBus.toFlow(EventMobileToWearWatchface::class)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
                 withContext(Dispatchers.IO) { sendMessage(watchfacePath(rxWatchfacePath, it.night), it.payload) }
+            }
+        rxBus.toFlow(EventMobileToWearWffFace::class)
+            .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
+                withContext(Dispatchers.IO) { sendOnChannel(getString(app.aaps.core.interfaces.R.string.path_wff_face), it.payload) }
             }
     }
 
@@ -191,6 +197,17 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
                 }
             }
         return true
+    }
+
+    /**
+     * Sends [data] on a channel, for a payload too large for a message (a face zip). The watch reads
+     * to the end of the stream and then closes the channel.
+     */
+    private suspend fun sendOnChannel(path: String, data: ByteArray) {
+        val nodeId = transcriptionNodeId ?: return aapsLogger.debug(LTag.WEAR, "sendOnChannel: $path no watch")
+        aapsLogger.debug(LTag.WEAR, "sendOnChannel: $path ${data.size}")
+        val channel = channelClient.openChannel(nodeId, path).await()
+        channelClient.getOutputStream(channel).await().use { it.write(data) }
     }
 
     private fun sendMessage(path: String, data: ByteArray) {

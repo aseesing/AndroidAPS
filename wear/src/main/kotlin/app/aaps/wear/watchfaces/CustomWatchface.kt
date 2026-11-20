@@ -1213,6 +1213,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         binding.secondHand.visibility = secondVisibility(ViewMap.SECOND_HAND.visibility(this) == View.VISIBLE, showSecond)
     }
 
+    /**
+     * Gives the design to draw instead of the stored one, for an instance that only draws pictures:
+     * the data picture of a Watch Face Format face (`WffDataPicture`). Set before the first draw.
+     */
+    internal var designFilter: ((CwfData) -> CwfData)? = null
+
     private fun setWatchfaceStyle() {
         var customWatchfaceData = runBlocking {
             complicationDataRepository.getCustomWatchface() ?: complicationDataRepository.getCustomWatchface(true)
@@ -1230,6 +1236,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             runBlocking { complicationDataRepository.setDefaultWatchface() }
             customWatchfaceData = runBlocking { complicationDataRepository.getCustomWatchface(true) }
         }
+        customWatchfaceData = customWatchfaceData?.let { stored -> designFilter?.invoke(stored) ?: stored }
         // The night face, when one is stored, shows instead of the main face at night (see CwfNight)
         val night = runBlocking { complicationDataRepository.getNightWatchfaceData() }
         skyRule = night.dayNightRule // PERSONAL PATCH: the sun and the moon of the personal designs

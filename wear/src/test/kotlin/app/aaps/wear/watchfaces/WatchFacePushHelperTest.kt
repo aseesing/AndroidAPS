@@ -7,6 +7,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.core.keys.PushedWatchfaceId
 import app.aaps.wear.AAPSLoggerTest
+import app.aaps.wear.watchfaces.wff.WffFace
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -40,7 +41,7 @@ internal class WatchFacePushHelperTest {
     private val aapsLogger: AAPSLogger = AAPSLoggerTest()
 
     private fun sut(): WatchFacePushHelper =
-        WatchFacePushHelper(RuntimeEnvironment.getApplication(), sp, rxBus, aapsLogger)
+        WatchFacePushHelper(RuntimeEnvironment.getApplication(), sp, rxBus, aapsLogger, WffFace(RuntimeEnvironment.getApplication(), aapsLogger))
 
     @Test
     fun `below API 36 the feature reports unsupported`() {
@@ -72,9 +73,10 @@ internal class WatchFacePushHelperTest {
 
     @Test
     fun `below API 36 the watch still tells the phone that Watch Face Push is missing`() = runTest {
-        // Without this the phone would show the face choice to a watch that cannot act on it
+        // Without this the phone would show the face choice to a watch that cannot act on it. The
+        // API level lets the phone pick the Watch Face Format version of a face zip.
         sut().syncOnStartup()
-        verify(rxBus).send(EventWearToMobile(EventData.WatchFacePushStatus(supported = false)))
+        verify(rxBus).send(EventWearToMobile(EventData.WatchFacePushStatus(supported = false, apiLevel = 35)))
     }
 
     /** An SP that hands back the default it is asked for, like the real one */
@@ -83,7 +85,7 @@ internal class WatchFacePushHelperTest {
     }
 
     private fun sut(sp: SP): WatchFacePushHelper =
-        WatchFacePushHelper(RuntimeEnvironment.getApplication(), sp, rxBus, aapsLogger)
+        WatchFacePushHelper(RuntimeEnvironment.getApplication(), sp, rxBus, aapsLogger, WffFace(RuntimeEnvironment.getApplication(), aapsLogger))
 
     @Test
     fun `the selected face is the Custom watchface until the phone chooses`() {
