@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -47,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -85,6 +87,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun DexcomOnePlusStartScreen(
     host: DexcomOnePlusHost,
+    /**
+     * The slot this visit starts, chosen by the button that opened the screen ("Start / new sensor"
+     * or "Start a pre-soak sensor"). The other slot is shown but disabled, so a production sensor
+     * cannot be started from the pre-soak button by accident, nor the other way round.
+     */
+    initialSlot: SensorSlot = SensorSlot.PRODUCTION,
     permissions: OnePlusBlePermissionGate,
     onBack: () -> Unit,
     onEnsureDriver: () -> OnePlusCgmDriver,
@@ -118,7 +126,8 @@ fun DexcomOnePlusStartScreen(
     // Which slot the guided flow starts. PRODUCTION keeps the existing behaviour (activates the
     // plugin + feeds the loop after warm-up). STAGING pre-soaks a second sensor collect-only — it
     // never touches the AAPS active BG source until promoted from the status screen.
-    var slot by remember { mutableStateOf(SensorSlot.PRODUCTION) }
+    // A phone with one sensor slot has no pre-soak: it always starts production.
+    var slot by remember { mutableStateOf(if (onStagingDriver == null) SensorSlot.PRODUCTION else initialSlot) }
     // EVERY store read below follows the selected slot. Reading the production store while starting a
     // STAGING sensor pre-filled the old sensor's code and MAC and ranked the scan with the old
     // sensor's fingerprint, so a pre-soak silently re-adopted the sensor already in use (seen in a
@@ -133,6 +142,9 @@ fun DexcomOnePlusStartScreen(
 
     var applicatorInput by remember { mutableStateOf("") }
     var parsedIdentity by remember { mutableStateOf<OnePlusSensorIdentity?>(null) }
+    // The last identity read from a whole applicator code (scanned or pasted). The field shows only
+    // its 4 digits, so this is where the serial is kept while those digits stay the same.
+    var scannedIdentity by remember { mutableStateOf<OnePlusSensorIdentity?>(null) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var scanning by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<OnePlusScanResult?>(null) }
@@ -152,8 +164,10 @@ fun DexcomOnePlusStartScreen(
     //
     // The selection is not seeded here: it follows the code on screen, in the effect below.
     LaunchedEffect(slot) {
-        applicatorInput = storedSession?.identity?.rawGs1 ?: storedSession?.identity?.pin.orEmpty()
-        parsedIdentity = storedSession?.identity ?: OnePlusGs1ApplicatorParser.parse(applicatorInput)
+        // Only the 4 digits are shown, also for a sensor that was started from a scanned code.
+        applicatorInput = storedSession?.identity?.pin.orEmpty()
+        parsedIdentity = storedSession?.identity
+        scannedIdentity = storedSession?.identity?.takeIf { it.rawGs1 != null }
         selected = null
         deviceChosenByUser = false
         devices.clear()
@@ -189,14 +203,7 @@ fun DexcomOnePlusStartScreen(
     val pluginStopped = stringResource(SourceStrings.dexcom_oneplus_plugin_stopped)
     var connectRequested by remember { mutableStateOf(false) }
 
-    // Guided-flow progress for the stepper: Prepare → Code → Connect → Warm-up.
-    val hasPermissions = permissions.granted()
     val hasDevice = selected != null
-    val currentStep = DexcomOnePlusStartRules.currentStep(
-        hasPermissions = hasPermissions,
-        hasCode = parsedIdentity != null,
-        hasDevice = hasDevice,
-    )
 
     DisposableEffect(Unit) {
         onDispose {
@@ -213,6 +220,16 @@ fun DexcomOnePlusStartScreen(
     // non-scrolling Column it was pushed off-screen as soon as the scan list filled up, leaving the
     // user with a selected device and no way to validate it — and the slot store still holding the
     // PREVIOUS sensor's MAC.
+    // Typed, pasted or scanned text for the code field. See DexcomOnePlusStartRules.codeEntry.
+    val onApplicatorChange: (String) -> Unit = { text ->
+        val entry = DexcomOnePlusStartRules.codeEntry(text, scannedIdentity)
+        applicatorInput = entry.shown
+        parsedIdentity = entry.identity
+        if (entry.identity?.rawGs1 != null) scannedIdentity = entry.identity
+        errorText = null
+        newSensorConfirmPending = false
+    }
+
     val onConnectClick: () -> Unit = onConnectClick@{
         if (isPluginStopped()) {
             errorText = pluginStopped
@@ -410,7 +427,6 @@ fun DexcomOnePlusStartScreen(
                 ) {
                     FormPane(
                         window = window,
-                        currentStep = currentStep,
                         slot = slot,
                         onSlotChange = { slot = it; errorText = null },
                         slotChoiceOffered = onStagingDriver != null,
@@ -420,14 +436,8 @@ fun DexcomOnePlusStartScreen(
                         parsedIdentity = parsedIdentity,
                         errorText = errorText,
                         serialNone = serialNone,
-                        storedMac = storedSession?.lastMac,
                         applicatorScanner = applicatorScanner,
-                        onApplicatorChange = { text ->
-                            applicatorInput = text
-                            parsedIdentity = OnePlusGs1ApplicatorParser.parse(text)
-                            errorText = null
-                            newSensorConfirmPending = false
-                        },
+                        onApplicatorChange = onApplicatorChange,
                     )
                     connectAction()
                 }
@@ -470,7 +480,6 @@ fun DexcomOnePlusStartScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(AapsSpacing.large)) {
                         FormPane(
                             window = window,
-                            currentStep = currentStep,
                             slot = slot,
                             onSlotChange = { slot = it; errorText = null },
                             slotChoiceOffered = onStagingDriver != null,
@@ -480,14 +489,8 @@ fun DexcomOnePlusStartScreen(
                             parsedIdentity = parsedIdentity,
                             errorText = errorText,
                             serialNone = serialNone,
-                            storedMac = storedSession?.lastMac,
                             applicatorScanner = applicatorScanner,
-                            onApplicatorChange = { text ->
-                                applicatorInput = text
-                                parsedIdentity = OnePlusGs1ApplicatorParser.parse(text)
-                                errorText = null
-                                newSensorConfirmPending = false
-                            },
+                            onApplicatorChange = onApplicatorChange,
                         )
                     }
                 }
@@ -509,7 +512,11 @@ fun DexcomOnePlusStartScreen(
                 )
                 item(key = "help") {
                     Column(verticalArrangement = Arrangement.spacedBy(AapsSpacing.large)) {
-                        HelpSection(slot = slot, slotChoiceOffered = onStagingDriver != null)
+                        HelpSection(
+                            slot = slot,
+                            slotChoiceOffered = onStagingDriver != null,
+                            competingApps = competingApps,
+                        )
                     }
                 }
             }
@@ -569,11 +576,10 @@ private fun SlotConflictDialog(
     )
 }
 
-/** The stepper, slot choice, permission prompt, code field and help — everything but the scan. */
+/** The slot choice, permission prompt, code field and (in two panes) the help — everything but the scan. */
 @Composable
 private fun ColumnScope.FormPane(
     window: CgmWindow,
-    currentStep: Int,
     slot: SensorSlot,
     onSlotChange: (SensorSlot) -> Unit,
     slotChoiceOffered: Boolean,
@@ -583,24 +589,10 @@ private fun ColumnScope.FormPane(
     parsedIdentity: OnePlusSensorIdentity?,
     errorText: String?,
     serialNone: String,
-    storedMac: String?,
     applicatorScanner: OnePlusApplicatorScanner?,
     onApplicatorChange: (String) -> Unit,
 ) {
     var scanning by remember { mutableStateOf(false) }
-    CgmStepper(
-        currentStep = currentStep,
-        labels = listOf(
-            stringResource(SourceStrings.dexcom_oneplus_step_prepare),
-            stringResource(SourceStrings.dexcom_oneplus_step_code),
-            stringResource(SourceStrings.dexcom_oneplus_step_connect),
-            stringResource(SourceStrings.dexcom_oneplus_step_warmup),
-        ),
-        // Four labels never fit across a phone; the compact form shows one at a time instead of
-        // truncating all of them.
-        compact = window.width == CgmWidth.Compact,
-    )
-
     // A real single-choice control: the selected side carries the selection state, so TalkBack
     // announces a choice instead of two buttons, one of which used to do nothing at all.
     //
@@ -611,6 +603,8 @@ private fun ColumnScope.FormPane(
             SegmentedButton(
                 selected = slot == SensorSlot.PRODUCTION,
                 onClick = { onSlotChange(SensorSlot.PRODUCTION) },
+                // Locked on the slot the opening button asked for (see `initialSlot`).
+                enabled = slot == SensorSlot.PRODUCTION,
                 shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
             ) {
                 Text(stringResource(SourceStrings.dexcom_oneplus_slot_production_short))
@@ -618,14 +612,13 @@ private fun ColumnScope.FormPane(
             SegmentedButton(
                 selected = slot == SensorSlot.STAGING,
                 onClick = { onSlotChange(SensorSlot.STAGING) },
+                enabled = slot == SensorSlot.STAGING,
                 shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
             ) {
                 Text(stringResource(SourceStrings.dexcom_oneplus_slot_staging_short))
             }
         }
     }
-
-    if (competingApps.isNotEmpty()) CompetingAppsCard(competingApps)
 
     if (!permissions.granted()) {
         Button(
@@ -642,7 +635,7 @@ private fun ColumnScope.FormPane(
             value = applicatorInput,
             onValueChange = onApplicatorChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(SourceStrings.dexcom_oneplus_applicator_gs1_label)) },
+            label = { Text(stringResource(SourceStrings.dexcom_oneplus_pairing_code_label)) },
             supportingText = {
                 if (parsedIdentity != null) {
                     Text(
@@ -653,11 +646,14 @@ private fun ColumnScope.FormPane(
                         ),
                     )
                 } else {
-                    Text(stringResource(SourceStrings.dexcom_oneplus_applicator_gs1_hint))
+                    Text(stringResource(SourceStrings.dexcom_oneplus_pairing_code_hint))
                 }
             },
-            singleLine = false,
-            minLines = 2,
+            // One line and the number keyboard: the field only ever shows the 4 digits. A scanned
+            // or pasted applicator code is cut down to them (the serial is kept, see the line below
+            // the field).
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             isError = errorText != null && parsedIdentity == null,
         )
         applicatorScanner?.let { scanner ->
@@ -675,28 +671,33 @@ private fun ColumnScope.FormPane(
                 )
             }
         }
-        storedMac?.let { mac ->
-            Text(
-                text = stringResource(SourceStrings.dexcom_oneplus_last_mac_hint, mac),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 
-    if (window.isTwoPane) HelpSection(slot = slot, slotChoiceOffered = slotChoiceOffered)
+    if (window.isTwoPane) {
+        HelpSection(
+            slot = slot,
+            slotChoiceOffered = slotChoiceOffered,
+            competingApps = competingApps,
+        )
+    }
 }
 
 /**
  * Warns that another app on this phone may take the sensor from us.
  *
- * Open, not folded: it is about this phone, right now, and it explains a refusal before it happens.
+ * Folded: the title has a warning sign, and a tap opens the text and the app names. Open all the
+ * time it took half the screen on every start, also for a user who knows it.
  * One line per app, so no list of names is joined in code.
+ *
+ * It is the first card of `HelpSection`, with the other folded cards. While it shows, the general
+ * "other sensor apps" help card is left out, so the same warning is not on the screen twice.
  */
 @Composable
 private fun CompetingAppsCard(apps: List<OnePlusCompetingApp>) {
-    CgmCard(tone = CgmCardTone.Warning) {
-        CgmCardHeader(stringResource(SourceStrings.dexcom_oneplus_competing_apps_title))
+    CgmHelpCard(
+        title = stringResource(SourceStrings.dexcom_oneplus_competing_apps_title),
+        tone = CgmCardTone.Warning,
+    ) {
         Text(
             text = stringResource(SourceStrings.dexcom_oneplus_competing_apps_message),
             style = MaterialTheme.typography.bodyMedium,
@@ -713,32 +714,38 @@ private fun CompetingAppsCard(apps: List<OnePlusCompetingApp>) {
 /**
  * The five help blocks that used to sit permanently open above the first control — about two
  * screens of scrolling before the user could reach Scan. Folded away, but the one that warns about
- * losing the Dexcom app keeps its warning colour while closed.
+ * losing the Dexcom app keeps its warning sign while closed.
  */
 @Composable
-private fun ColumnScope.HelpSection(slot: SensorSlot, slotChoiceOffered: Boolean) {
+private fun ColumnScope.HelpSection(
+    slot: SensorSlot,
+    slotChoiceOffered: Boolean,
+    competingApps: List<OnePlusCompetingApp>,
+) {
+    // First of the folded cards: it is about this phone, the others are general reading.
+    if (competingApps.isNotEmpty()) CompetingAppsCard(competingApps)
     CgmHelpCard(title = stringResource(SourceStrings.dexcom_oneplus_help_how_to_start)) {
         Text(
             text = stringResource(SourceStrings.dexcom_oneplus_start_steps),
             style = MaterialTheme.typography.bodyMedium,
         )
     }
-    CgmHelpCard(
-        title = stringResource(SourceStrings.dexcom_oneplus_help_before_pairing),
-        tone = CgmCardTone.Warning,
-    ) {
-        Text(
-            text = stringResource(SourceStrings.dexcom_oneplus_dexcom_recovery_warning),
-            style = MaterialTheme.typography.bodyMedium,
-        )
+    // The general warning about other sensor apps, for a phone where none was found (or that
+    // cannot list its apps). Where one was found, the card above says the same and names it.
+    if (competingApps.isEmpty()) {
+        CgmHelpCard(
+            title = stringResource(SourceStrings.dexcom_oneplus_help_before_pairing),
+            tone = CgmCardTone.Warning,
+        ) {
+            Text(
+                text = stringResource(SourceStrings.dexcom_oneplus_dexcom_recovery_warning),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
     CgmHelpCard(title = stringResource(SourceStrings.dexcom_oneplus_help_permissions)) {
         Text(
             text = stringResource(SourceStrings.dexcom_oneplus_permissions_hint),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Text(
-            text = stringResource(SourceStrings.dexcom_oneplus_scan_hint),
             style = MaterialTheme.typography.bodyMedium,
         )
     }
@@ -946,8 +953,8 @@ private fun ColumnScope.ConnectAction(
             color = MaterialTheme.colorScheme.error,
         )
     }
-    // Connect overwrites the slot's stored MAC, so the screen says which sensor it is about to
-    // adopt rather than leaving the user to check the highlighted row.
+    // Connect overwrites the slot's stored MAC, so the screen names the selected sensor
+    // rather than leaving the user to check the highlighted row.
     Text(
         text = when {
             slot == SensorSlot.STAGING -> stringResource(SourceStrings.dexcom_oneplus_staging_return_note)

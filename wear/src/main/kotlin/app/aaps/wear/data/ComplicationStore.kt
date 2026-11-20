@@ -134,7 +134,16 @@ data class ComplicationData(
     // PERSONAL PATCH: where the personal build kept the night face before it got a file of its own
     // (NightWatchfaceData). Read once to move it there, then cleared, see NightFaceFromDesignFile.
     // Last, so the protobuf number stays the one the old file was written with.
-    val customWatchfaceNight: CwfData? = null
+    val customWatchfaceNight: CwfData? = null,
+    // The time of the newest glucose reading the phone has sent (the reading's own time, not when
+    // it arrived). 0 = not known yet. It tells how fresh the phone's IOB, COB and basal can be: a
+    // phone that has no new reading runs no loop. The arrival time is no use for that, because a
+    // phone that is away from the sensor but reaches the watch over Wi-Fi or LTE keeps sending its
+    // old reading and its old status again.
+    // Keep new fields at the END of this class: the ProtoBuf wire format numbers fields by declaration order.
+    // PERSONAL PATCH: after customWatchfaceNight, so the personal build's old file keeps its numbers.
+    // Live data: written and read through LiveComplicationData.
+    val phoneReadingTimestamp: Long = 0L
 )
 
 /**

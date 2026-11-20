@@ -15,7 +15,6 @@ import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.source.PromotionRejectReason
 import app.aaps.core.interfaces.source.PromotionResult
 import app.aaps.core.interfaces.source.StagingState
-import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.dexcomoneplus.OnePlusAndroidPlatform
 import app.aaps.plugins.dexcomoneplus.OnePlusCgmDriverReal
@@ -38,7 +37,6 @@ import org.mockito.Mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
-import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.timeout
@@ -80,6 +78,8 @@ class DexcomOnePlusPromotionOrderTest : TestBase() {
         whenever(context.applicationContext).thenReturn(context)
         whenever(context.getSharedPreferences(PRODUCTION_PREFS_NAME, Context.MODE_PRIVATE)).thenReturn(productionPrefs)
         whenever(context.getSharedPreferences(STAGING_PREFS_NAME, Context.MODE_PRIVATE)).thenReturn(stagingPrefs)
+        whenever(persistenceLayer.getTherapyEventDataFromToTime(any(), any())).thenReturn(emptyList())
+        whenever(persistenceLayer.getTherapyEventDataIncludingInvalidFromTime(any(), any())).thenReturn(emptyList())
         whenever(persistenceLayer.insertCgmSourceData(any(), any(), any(), anyOrNull()))
             .thenReturn(PersistenceLayer.TransactionResult())
         plugin = DexcomOnePlusPlugin(
@@ -165,8 +165,20 @@ class DexcomOnePlusPromotionOrderTest : TestBase() {
     }
 
     @Test
+    fun `a long soak with a stale reading writes nothing irreversible`() = runTest {
+        readyStaging(mac = "AA:BB:CC:DD:EE:29", ageMs = 13L * 60L * 60L * 1000L)
+        setPrivate("stagingLastValueAtMs", System.currentTimeMillis() - 31L * 60L * 1000L)
+        setStagingState(StagingState.READY)
+        val stagingBefore = stagingPrefs.all.toMap()
+
+        val result = plugin.promoteStagingToProduction(allowEarly = false)
+
+        assertThat(result).isEqualTo(PromotionResult.Rejected(PromotionRejectReason.STAGING_NO_RECENT_GLUCOSE))
+        assertNothingIrreversible(stagingBefore)
+    }
+
+    @Test
     fun `the bound runs after the exchange and before select`() = runTest {
-        whenever(preferences.get(BooleanKey.BgSourceCreateSensorChange)).thenReturn(true)
         val startMs = System.currentTimeMillis() - 60_000L
         readyStaging(mac = "AA:BB:CC:DD:EE:24", ageMs = 60_000L, startMs = startMs)
         val soak = OnePlusCgmDrivers.staging()
@@ -187,9 +199,7 @@ class DexcomOnePlusPromotionOrderTest : TestBase() {
         assertThat(identityAdoptedAtBound).isTrue()
         assertThat(stagingClearedAtBound).isTrue()
         assertThat(productionWasSoakAtBound).isTrue()
-        val order = inOrder(preferences, activeCalibration)
-        order.verify(preferences).get(BooleanKey.BgSourceCreateSensorChange)
-        order.verify(activeCalibration).ignoreEntriesBefore(any())
+        verify(activeCalibration).ignoreEntriesBefore(any())
         assertThat(OnePlusCgmDrivers.default()).isSameInstanceAs(soak)
         verify(persistenceLayer, timeout(2_000L)).insertCgmSourceData(any(), any(), any(), eq(startMs))
     }
@@ -296,10 +306,7 @@ class DexcomOnePlusPromotionOrderTest : TestBase() {
     @Test
     fun `promotion texts distinguish refusal, a failed bound, and a later failure`() {
         val english = readResource("src/androidMain/res/values/strings.xml")
-        assertThat(english).contains(
-            "Sensor promoted, but older calibration entries could not be ignored. " +
-                "Remove fingerstick calibrations taken before this switch, then calibrate again if needed.",
-        )
+        assertThat(english).contains(BOUND_FAILED_TEXT)
         assertThat(DexcomOnePlusStatusState.promotionMessage(PromotionResult.Rejected(PromotionRejectReason.STAGING_ABSENT)))
             .isEqualTo(SourceStrings.dexcom_oneplus_staging_promote_rejected_absent)
         assertThat(DexcomOnePlusStatusState.promotionMessage(PromotionResult.OkBoundFailed))
@@ -461,11 +468,11 @@ class DexcomOnePlusPromotionOrderTest : TestBase() {
         private const val KEY_MAC = "last_mac"
         private const val HOUR_MS = 60L * 60L * 1000L
         private const val BOUND_FAILED_TEXT =
-            "Sensor promoted, but older calibration entries could not be ignored. " +
-                "Remove fingerstick calibrations taken before this switch, then calibrate again if needed."
+            "The switch was made, but older calibration entries could not be ignored. " +
+                "Remove finger prick calibrations taken before this switch, then calibrate again if needed."
         private const val FOLLOW_UP_TEXT =
-            "Sensor promoted, but reconnecting it failed. The production sensor is the one just promoted."
+            "The switch was made, but reconnecting the sensor failed. The sensor in use is now the one that was the pre-soak sensor."
         private const val FOLLOW_UP_NO_IDENTITY_TEXT =
-            "A step after the exchange failed, and the production sensor identity is missing."
+            "A step after the switch failed, and the app does not know which sensor is in use."
     }
 }

@@ -13,7 +13,7 @@ has one sentence about the base.
 The changes 1 to 8 are made on top of upstream **4.0.0** (`master` at `f77abd9b82`). The Dexcom
 ONE+ / G7 driver (the Dexcom ONE+ / G7 pull request) is built on upstream `dev`, so merging it also brought the commits of
 upstream `dev` that came after 4.0.0. Merged now: upstream **4.0.0** (`master` at `f77abd9b82`) and
-pull request #5431 at `13005dae25` (2026-11-12), which holds upstream `dev` up to `951df2fa89`. So
+pull request #5431 at `992bb1c1e0` (2026-11-20), which holds upstream `dev` up to `9c7e775437`. So
 the base of `local/personal` is upstream `dev`, not 4.0.0. Later changes are made on top of that.
 
 Upstream `dev` calls itself `4.0.1-dev-a`. AAPS sees the `-dev` and then turns the closed loop off

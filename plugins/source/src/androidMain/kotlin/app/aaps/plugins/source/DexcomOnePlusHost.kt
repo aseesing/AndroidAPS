@@ -1,7 +1,6 @@
 package app.aaps.plugins.source
 
 import app.aaps.core.interfaces.rx.bus.RxBus
-import app.aaps.core.keys.interfaces.PreferenceItem
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.plugins.dexcomoneplus.OnePlusCgmDriver
 import app.aaps.plugins.dexcomoneplus.OnePlusCompetingApps
@@ -112,15 +111,20 @@ interface DexcomOnePlusHost {
     val installedApps: OnePlusInstalledApps?
 
     /**
-     * The entries that open this plugin's own screens, for the settings screen.
+     * False when the phone's Bluetooth is switched off.
      *
-     * @param plugin the plugin these screens act on. It is passed in rather than injected because
-     *   the plugin builds the host, so a host that asked for the plugin would be a loop.
+     * The driver cannot tell a radio that is off from a sensor that is silent, so after some minutes
+     * it suspects a wrong sensor. The screens ask here first and say "Bluetooth is off" then.
+     * True by default: a host that cannot tell must not hide the driver's own message.
      */
-    fun screenItems(plugin: DexcomOnePlusPlugin): List<PreferenceItem>
+    fun bluetoothOn(): Boolean = true
 
-    /** The screens of this plugin that the status screen opens through the host. */
-    enum class Screen { START, WARMUP }
+    /**
+     * The screens of this plugin that the status screen opens through the host. [START] starts the
+     * sensor that feeds the loop, [START_PRESOAK] a pre-soak sensor; each locks the Start screen on
+     * its own slot, so the wrong kind of sensor cannot be started by accident.
+     */
+    enum class Screen { START, START_PRESOAK, WARMUP }
 
     /** Opens [screen]. */
     fun openScreen(screen: Screen)

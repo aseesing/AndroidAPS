@@ -33,7 +33,9 @@ data class LiveComplicationData(
     val statusData2: EventData.Status,
     val graphData: EventData.GraphData,
     val treatmentData: EventData.TreatmentData,
-    val lastUpdateTimestamp: Long
+    val lastUpdateTimestamp: Long,
+    /** See [ComplicationData.phoneReadingTimestamp]. Last, with a default, so an older live file still reads. */
+    val phoneReadingTimestamp: Long = 0L
 ) {
 
     companion object {
@@ -47,14 +49,16 @@ data class LiveComplicationData(
 fun ComplicationData.toLive() = LiveComplicationData(
     bgData = bgData, bgData1 = bgData1, bgData2 = bgData2,
     statusData = statusData, statusData1 = statusData1, statusData2 = statusData2,
-    graphData = graphData, treatmentData = treatmentData, lastUpdateTimestamp = lastUpdateTimestamp
+    graphData = graphData, treatmentData = treatmentData, lastUpdateTimestamp = lastUpdateTimestamp,
+    phoneReadingTimestamp = phoneReadingTimestamp
 )
 
 /** These designs with [live] data. */
 fun ComplicationData.withLive(live: LiveComplicationData) = copy(
     bgData = live.bgData, bgData1 = live.bgData1, bgData2 = live.bgData2,
     statusData = live.statusData, statusData1 = live.statusData1, statusData2 = live.statusData2,
-    graphData = live.graphData, treatmentData = live.treatmentData, lastUpdateTimestamp = live.lastUpdateTimestamp
+    graphData = live.graphData, treatmentData = live.treatmentData, lastUpdateTimestamp = live.lastUpdateTimestamp,
+    phoneReadingTimestamp = live.phoneReadingTimestamp
 )
 
 /**

@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
@@ -93,6 +94,12 @@ class ComplicationDataRepository(
     /**
      * Reactive Flow of complication data
      * Complications should collect this Flow to get automatic updates
+     *
+     * While the watch shows its own sensor reading and the phone has had no new reading for too long,
+     * the values only the phone knows (IOB, COB, basal) come out blank and the predictions empty, see
+     * [WatchDirectReadings.withoutOldPhoneValues]. The store keeps the last values: the blank is made
+     * here, on the way out, so every face, complication and tile gets it, and the next status from
+     * the phone shows at once.
      */
     val complicationData: Flow<ComplicationData> = combine(
         // Each file on its own: a file that cannot be read gives its defaults, the other keeps working
@@ -109,6 +116,14 @@ class ComplicationDataRepository(
             aapsLogger.error(LTag.WEAR, "Error reading complication data", exception)
             emit(ComplicationData()) // Emit default on error
         }
+        .map { stored ->
+            if (WatchDirectReadings.phoneValuesAreOld(stored.bgData.fromSensor, stored.phoneReadingTimestamp, System.currentTimeMillis()))
+                stored.copy(
+                    statusData = WatchDirectReadings.withoutOldPhoneValues(stored.statusData),
+                    treatmentData = WatchDirectReadings.withoutOldPredictions(stored.treatmentData)
+                )
+            else stored
+        }
 
     /**
      * Update BG data from phone
@@ -122,7 +137,10 @@ class ComplicationDataRepository(
                     // replaced by an older one from the phone. The phone's copy of the same reading wins.
                     0    -> {
                         val chosen = WatchDirectReadings.choose(current.bgData, singleBg)
-                        if (same(EventData.SingleBg.serializer(), current.bgData, chosen)) current else current.copy(bgData = chosen)
+                        // The reading's own time. The phone sends an old reading again when it has no new one.
+                        val phoneTime = if (singleBg.fromSensor) current.phoneReadingTimestamp else maxOf(current.phoneReadingTimestamp, singleBg.timeStamp)
+                        if (same(EventData.SingleBg.serializer(), current.bgData, chosen) && phoneTime == current.phoneReadingTimestamp) current
+                        else current.copy(bgData = chosen, phoneReadingTimestamp = phoneTime)
                     }
                     1    -> if (same(EventData.SingleBg.serializer(), current.bgData1, singleBg)) current else current.copy(bgData1 = singleBg)
                     2    -> if (same(EventData.SingleBg.serializer(), current.bgData2, singleBg)) current else current.copy(bgData2 = singleBg)
@@ -182,12 +200,14 @@ class ComplicationDataRepository(
     }
 
     /**
-     * Update Graph data from phone
+     * Update Graph data from phone. Readings the watch took from the sensor itself (direct-to-watch)
+     * stay where the phone has none of that time, see [WatchDirectReadings.keepOwnReadings].
      */
     suspend fun updateGraphData(graphData: EventData.GraphData) {
         try {
             updateLiveData { current ->
-                if (same(EventData.GraphData.serializer(), current.graphData, graphData)) current else current.copy(graphData = graphData)
+                val merged = EventData.GraphData(WatchDirectReadings.keepOwnReadings(graphData.entries, current.graphData.entries))
+                if (same(EventData.GraphData.serializer(), current.graphData, merged)) current else current.copy(graphData = merged)
             }
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "Failed to update graph data", e)

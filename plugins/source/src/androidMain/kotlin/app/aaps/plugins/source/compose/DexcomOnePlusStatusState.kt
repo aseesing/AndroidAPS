@@ -41,8 +41,6 @@ data class DexcomOnePlusStatusInput(
     val calibrationWaiting: Boolean,
     /** `DexcomOnePlusBooleanKey.SendCalibrationToSensor`. */
     val sendCalibrationToSensor: Boolean,
-    /** `DexcomOnePlusBooleanKey.CorrectSensorStart`. */
-    val correctSensorStartEnabled: Boolean,
     val stagingState: StagingState,
     val stagingEvidence: CgmStagingEvidence?,
     val nowMs: Long,
@@ -50,6 +48,8 @@ data class DexcomOnePlusStatusInput(
     val sensor: DexcomOnePlusSensorFacts? = null,
     /** End of the warm-up the driver works with, or null when not warming up. */
     val warmupEndsAtMs: Long? = null,
+    /** The phone's Bluetooth is switched off, so nothing the driver says about the sensor counts. */
+    val bluetoothOff: Boolean = false,
 )
 
 /** What the plugin knows about the sensor in use. Plain data, read from the slot store. */
@@ -76,9 +76,12 @@ class DexcomOnePlusStatusFormat(
     val dateTime: (Long) -> String = time,
 )
 
-/** What the three buttons at the bottom of the status screen do. */
+/** What the buttons of the status screen do. */
 class DexcomOnePlusStatusActions(
+    /** Start the sensor that feeds the loop (the Start screen locked on production). */
     val onOpenStart: () -> Unit,
+    /** Start a pre-soak sensor (the Start screen locked on pre-soak). */
+    val onOpenPresoak: () -> Unit,
     val onOpenWarmup: () -> Unit,
     val onOpenLog: () -> Unit,
 )
@@ -115,6 +118,11 @@ data class DexcomOnePlusStagingCard(
     val lastValueMgdl: Double?,
     val lastValueAtMs: Long?,
     val promote: DexcomOnePlusPromoteOffer,
+    /**
+     * The last reading is too old to promote. The card says the sensor has to connect again.
+     * The time of that reading is [lastValueAtMs].
+     */
+    val needsReconnect: Boolean = false,
 )
 
 /**
@@ -130,8 +138,11 @@ data class DexcomOnePlusStatusView(
     val calibration: DexcomOnePlusCalibrationCard?,
     val endOfLifePrompt: Boolean,
     val staging: DexcomOnePlusStagingCard,
-    /** Start time the "correct insertion date" action works on, or null when the action is hidden. */
-    val correctInsertionStartMs: Long?,
+    /**
+     * False while no sensor feeds the loop and the pre-soak slot is empty: a second sensor only makes
+     * sense when there is a first one, so the pre-soak card is not shown.
+     */
+    val stagingOffered: Boolean,
 )
 
 /** Turns a [DexcomOnePlusStatusInput] into a [DexcomOnePlusStatusView]. Pure: no clock, no driver. */
@@ -146,9 +157,10 @@ object DexcomOnePlusStatusState {
         val overview = PumpOverviewUiState(
             statusBanner = banner(input, format),
             infoRows = productionRows(input, format),
-            primaryActions = listOf(
+            primaryActions = listOfNotNull(
                 ScreenAction(label = rh.gs(SourceStrings.dexcom_oneplus_start_action), onClick = actions.onOpenStart),
-                ScreenAction(label = rh.gs(SourceStrings.dexcom_oneplus_step_warmup), onClick = actions.onOpenWarmup),
+                ScreenAction(label = rh.gs(SourceStrings.dexcom_oneplus_warmup_title), onClick = actions.onOpenWarmup)
+                    .takeIf { showsWarmupButton(input) },
             ),
             managementActions = listOf(
                 ScreenAction(label = rh.gs(SourceStrings.cgm_driver_log_open), onClick = actions.onOpenLog),
@@ -161,10 +173,36 @@ object DexcomOnePlusStatusState {
             // replacement is warming up yet.
             endOfLifePrompt = input.lifecycle?.endOfLife == true && input.stagingState == StagingState.ABSENT,
             staging = stagingCard(input),
-            // Hidden while the setting is off. The plugin also refuses before any write.
-            correctInsertionStartMs = input.lifecycle?.startedAtEpochMs?.takeIf { input.correctSensorStartEnabled },
+            stagingOffered = input.lifecycle != null || input.stagingState != StagingState.ABSENT,
         )
     }
+
+    /**
+     * The warm-up screen has something to show only while a sensor pairs or warms up, or after a
+     * failure (it offers "try again"). A reconnect in the middle of a warm-up changes the phase, so
+     * a warm-up end that is still in the future counts too. For a running sensor the button is hidden.
+     *
+     * After an app restart in the middle of a warm-up the driver knows neither the phase nor the end
+     * until the sensor answers again, which can take minutes. So a sensor that was started less than
+     * [WARMUP_BUTTON_WINDOW_MS] ago keeps the button too, until it is known to be ready: the phase
+     * says so, or the sensor has sent its first reading. The phase alone is not enough, because
+     * between two readings the link is closed and the phase is "reconnecting".
+     */
+    fun showsWarmupButton(input: DexcomOnePlusStatusInput): Boolean {
+        val startedAt = input.lifecycle?.startedAtEpochMs ?: input.sensor?.startedAtMs
+        val justStarted = startedAt != null && input.nowMs - startedAt < WARMUP_BUTTON_WINDOW_MS
+        val hasReading = startedAt != null && input.newestGlucose
+            ?.takeIf { it.sourceSensor == SourceSensor.DEXCOM_ONEPLUS_NATIVE }
+            ?.let { it.timestamp >= startedAt } == true
+        return input.phase == OnePlusWarmupState.Phase.PAIRING ||
+            input.phase == OnePlusWarmupState.Phase.WARMING ||
+            input.phase == OnePlusWarmupState.Phase.FAILED ||
+            (input.warmupEndsAtMs ?: 0L) > input.nowMs ||
+            (justStarted && input.phase != OnePlusWarmupState.Phase.READY && !hasReading)
+    }
+
+    /** A warm-up takes about 30 minutes. Twice that, so a slow start is still inside the window. */
+    const val WARMUP_BUTTON_WINDOW_MS = 60L * 60_000L
 
     /** The sensor sends a reading about every 5 minutes, then the link closes until the next one. */
     const val READING_INTERVAL_MS = 5L * 60_000L
@@ -237,6 +275,10 @@ object DexcomOnePlusStatusState {
         val sessionEnd = sessionEndMs(input)
         val left = nominalEnd?.let { it - input.nowMs }?.takeIf { it > 0L }?.let { format.age(it) }
         val inGrace = nominalEnd != null && sessionEnd != null && input.nowMs >= nominalEnd && input.nowMs < sessionEnd
+        // The cause the user can do something about, before anything the driver concluded without a radio.
+        if (input.bluetoothOff) {
+            return StatusBanner(text = rh.gs(SourceStrings.dexcom_oneplus_bluetooth_off), level = StatusLevel.WARNING)
+        }
         val text = when {
             age == null || !isLinkPhase(input.phase)       -> rh.gs(DexcomOnePlusUiLabels.phaseLabelRef(input.phase))
             age > READING_LATE_MS                         -> rh.gs(SourceStrings.dexcom_oneplus_banner_no_reading_for, minutesText(rh, age))
@@ -302,15 +344,17 @@ object DexcomOnePlusStatusState {
                 label = rh.gs(SourceStrings.cgm_session_label),
                 value = rh.gs(
                     when {
-                        input.sessionUp -> SourceStrings.dexcom_oneplus_session_up
-                        onTime          -> SourceStrings.dexcom_oneplus_session_between_readings
-                        else            -> SourceStrings.dexcom_oneplus_session_down
+                        input.bluetoothOff -> SourceStrings.dexcom_oneplus_session_bluetooth_off
+                        input.sessionUp    -> SourceStrings.dexcom_oneplus_session_up
+                        onTime             -> SourceStrings.dexcom_oneplus_session_between_readings
+                        else               -> SourceStrings.dexcom_oneplus_session_down
                     }
                 ),
                 level = when {
-                    input.sessionUp -> StatusLevel.NORMAL
-                    onTime          -> StatusLevel.UNSPECIFIED
-                    else            -> StatusLevel.WARNING
+                    input.bluetoothOff -> StatusLevel.WARNING
+                    input.sessionUp    -> StatusLevel.NORMAL
+                    onTime             -> StatusLevel.UNSPECIFIED
+                    else               -> StatusLevel.WARNING
                 },
             ),
         )
@@ -335,15 +379,16 @@ object DexcomOnePlusStatusState {
             rows += PumpInfoRow(label = rh.gs(SourceStrings.dexcom_oneplus_row_pairing_code), value = code)
         }
         // The sensor's own state when the driver line holds one, else the last driver message.
+        // No row at all when the driver has said nothing, or only that a normal round goes on.
         val sensorState = sensorStateRef(input.driverMessage)
-        rows += if (sensorState != null) {
-            PumpInfoRow(
+        if (sensorState != null) {
+            rows += PumpInfoRow(
                 label = rh.gs(SourceStrings.dexcom_oneplus_row_sensor_state),
                 value = rh.gs(sensorState),
                 level = sensorStateLevel(input.driverMessage),
             )
-        } else {
-            PumpInfoRow(
+        } else if (!input.driverMessage.isNullOrBlank() && !DexcomOnePlusUiLabels.isRoutineMessage(input.driverMessage)) {
+            rows += PumpInfoRow(
                 label = rh.gs(SourceStrings.dexcom_oneplus_row_message),
                 value = rh.gs(DexcomOnePlusUiLabels.userMessageRef(input.driverMessage)),
             )
@@ -471,23 +516,29 @@ object DexcomOnePlusStatusState {
 
     private fun stagingCard(input: DexcomOnePlusStatusInput): DexcomOnePlusStagingCard {
         val evidence = input.stagingEvidence
+        val fresh = DexcomOnePlusStaging.readingFreshForPromotion(evidence?.lastValueAtEpochMs, input.nowMs)
         val promote = when {
             input.stagingState == StagingState.ABSENT -> DexcomOnePlusPromoteOffer.NONE
-            input.stagingState == StagingState.READY  -> DexcomOnePlusPromoteOffer.NORMAL
+            // A silent sensor must not be offered: promoting it would drop the one that feeds the loop.
+            input.stagingState == StagingState.READY && fresh -> DexcomOnePlusPromoteOffer.NORMAL
             // The way out when the production sensor stops before the soak ends - see canPromoteEarly.
-            DexcomOnePlusStaging.canPromoteEarly(
+            input.stagingState != StagingState.READY && DexcomOnePlusStaging.canPromoteEarly(
                 validEgvCount = evidence?.validCount ?: 0,
                 lastValueAtEpochMs = evidence?.lastValueAtEpochMs,
                 nowMs = input.nowMs,
             )                                         -> DexcomOnePlusPromoteOffer.EARLY
             else                                      -> DexcomOnePlusPromoteOffer.NONE
         }
+        val needsReconnect = input.stagingState != StagingState.ABSENT &&
+            input.stagingState != StagingState.WARMUP &&
+            !fresh
         return DexcomOnePlusStagingCard(
             state = input.stagingState,
             validCount = evidence?.validCount ?: 0,
             lastValueMgdl = evidence?.lastValueMgdl,
             lastValueAtMs = evidence?.lastValueAtEpochMs,
             promote = promote,
+            needsReconnect = needsReconnect,
         )
     }
 
