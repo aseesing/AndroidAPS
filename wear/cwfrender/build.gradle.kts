@@ -75,19 +75,10 @@ val wearShared = listOf(
     "watchfaces/animation/WakeTimer.kt", // PERSONAL PATCH
     "watchfaces/animation/WallClock.kt", // PERSONAL PATCH
     "watchfaces/animation/WffSources.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffPlan.kt", // PERSONAL PATCH: the plan of a face converted to the Watch Face Format
-    "watchfaces/wff/WffAssets.kt", // PERSONAL PATCH
+    "watchfaces/wff/WffPlan.kt", // PERSONAL PATCH: the plan of a converted WFF face, for its data picture (the converter is in aaps-face-tool)
     "watchfaces/wff/WffDesignParts.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffExpressionPrinter.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffFaceWriter.kt", // PERSONAL PATCH
     "watchfaces/wff/WffLooks.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffLoops.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffPictures.kt", // PERSONAL PATCH
     "watchfaces/wff/WffPlanner.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffResources.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffShowDays.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffSlotLayout.kt", // PERSONAL PATCH
-    "watchfaces/wff/WffText.kt", // PERSONAL PATCH
     "watchfaces/colour/ColourLooks.kt", // PERSONAL PATCH
     "watchfaces/daynight/DayNightChoice.kt",
     "watchfaces/daynight/DayNightClock.kt",
@@ -308,6 +299,5 @@ dependencies {
     implementation(files(chartJar).builtBy(unpackChartJar))
 
     testImplementation(libs.org.robolectric)
-    testImplementation(libs.com.google.watchface.validator.push.cli) // PERSONAL PATCH: checks the faces of the WFF converter
     testRuntimeOnly(libs.org.junit.vintage.engine)
 }

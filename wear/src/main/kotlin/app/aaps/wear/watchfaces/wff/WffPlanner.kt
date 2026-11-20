@@ -83,8 +83,8 @@ class WffPlanner(private val version: Int = 4) {
      */
     fun settle(plan: WffPlan, still: Set<Int>): WffPlan {
         val settled = withRuns(plan.items.map { if (it.loop && it.layer in still) it.copy(loop = false, note = "shows at rest too: its rest pose in a static picture, its wake motion is left out", severity = WffSeverity.WARNING) else it })
-        // The first picture plays as frames during the wake (WffLoops.runCanMove): its layers keep their motion
-        val items = settled.map { if (it.layer in still && it.run != null && WffLoops.runCanMove(it.run)) it.copy(note = "shows at rest too: in static picture ${it.run}, which plays as frames in the wake", severity = WffSeverity.INFO) else it }
+        // The first picture plays as frames during the wake (runCanMove): its layers keep their motion
+        val items = settled.map { if (it.layer in still && it.run != null && runCanMove(it.run)) it.copy(note = "shows at rest too: in static picture ${it.run}, which plays as frames in the wake", severity = WffSeverity.INFO) else it }
         return plan.copy(items = items, staticRuns = (items.maxOfOrNull { it.run ?: 0 } ?: 0) + 1)
     }
 
@@ -379,6 +379,16 @@ class WffPlanner(private val version: Int = 4) {
     }
 
     companion object {
+
+        /**
+         * True when the static picture [run] can be shown in motion in the wake.
+         *
+         * Only picture 0: it holds the background, so it is opaque, and its frames hide it fully while
+         * they play. The frames of a later, see-through picture cannot hide the picture under them:
+         * where a moved part leaves a hole, the rest pose would show through, so the part would be seen
+         * twice. Such a picture keeps its rest pose.
+         */
+        fun runCanMove(run: Int): Boolean = run == 0
 
         /** WFF allows at most this many complication slots in a face. The plan needs at most 8: 5 of the wearer, glucose, age and the data picture. */
         const val MAX_SLOTS = 8
