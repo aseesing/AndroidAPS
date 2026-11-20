@@ -83,6 +83,8 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     private val rxDataPath get() = getString(app.aaps.core.interfaces.R.string.path_rx_data_bridge)
     // A night face zip, see CwfNight
     private val rxNightDataPath get() = rxDataPath + CwfNight.PATH_SUFFIX
+    // PERSONAL PATCH: the status at the start of the app is lost on the bus, so send it once the phone node is known
+    private val startupStatusReport by lazy { StartupStatusReport(scope, aapsLogger) { watchFacePushHelper.reportStatus() } }
 
     @ExperimentalSerializationApi
     override fun onCreate() {
@@ -116,6 +118,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
         // preferences arrive. So ask now. Posted behind the capability lookup above, on the same
         // thread: that is the first moment a node is known, and the collectors above exist by then.
         handler.post {
+            startupStatusReport.onPhoneNode(transcriptionNodeId) // PERSONAL PATCH
             if (watchFacePushHelper.isSupported())
                 rxBus.send(EventWearToMobile(EventData.ActionResendData("DataLayerListenerServiceWear::onCreate")))
         }
@@ -124,11 +127,15 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     override fun onCapabilityChanged(p0: CapabilityInfo) {
         super.onCapabilityChanged(p0)
         handler.post { updateTranscriptionCapability() }
-        aapsLogger.debug(LTag.WEAR, "onCapabilityChanged:  ${p0.name} ${p0.nodes.joinToString(", ") { it.displayName + "(" + it.id + ")" }}")
+        handler.post { startupStatusReport.onPhoneNode(transcriptionNodeId) } // PERSONAL PATCH
+        aapsLogger.debug(LTag.WEAR, "onCapabilityChanged: ${p0.name} ${p0.nodes.joinToString(", ") { it.displayName + "(" + it.id + ")" }}")
     }
 
-    /** A Watch Face Format face zip from the phone. It comes on a channel: it is too large for a message. */
-    /** A Watch Face Format face zip sent by the phone, installed by [WffFaceInstaller]. */
+    /**
+     * A Watch Face Format face zip sent by the phone, installed by [WffFaceInstaller]. It comes on a
+     * channel: it is too large for a message. The service gets the channel only through the
+     * `CHANNEL_EVENT` filter for this path in the manifest.
+     */
     private fun receiveWffFace(channel: ChannelClient.Channel) {
         if (channel.path != getString(app.aaps.core.interfaces.R.string.path_wff_face)) return
         scope.launch(Dispatchers.IO) {
@@ -179,9 +186,10 @@ class DataLayerListenerServiceWear : WearableListenerService() {
                 aapsLogger.debug(LTag.WEAR, "Updated node: $transcriptionNodeId")
             }
         }
+        startupStatusReport.onPhoneNode(transcriptionNodeId) // PERSONAL PATCH
     }
 
-    // A channel from the phone app: a new watch app, or a request for the watch log
+    // A channel from the phone app: a new watch app, a request for the watch log, or a face zip
     override fun onChannelOpened(channel: ChannelClient.Channel) {
         super.onChannelOpened(channel)
         watchAppSelfUpdate.onChannelOpened(channel)

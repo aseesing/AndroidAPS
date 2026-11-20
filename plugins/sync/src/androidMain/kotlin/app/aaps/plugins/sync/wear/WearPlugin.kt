@@ -125,9 +125,25 @@ class WearPlugin(
     private val _watchFacePushStatus = MutableStateFlow<EventData.WatchFacePushStatus?>(null)
     val watchFacePushStatus: StateFlow<EventData.WatchFacePushStatus?> = _watchFacePushStatus.asStateFlow()
 
+    /**
+     * The watch's Android API level from its last answer to a ping, or 0 when unknown. A second
+     * source next to [watchFacePushStatus]: an older watch app reports a status without the level,
+     * but every watch app answers a ping with it. Cleared when the watch disconnects, like the status.
+     */
+    private val _watchApiLevel = MutableStateFlow(0)
+    val watchApiLevel: StateFlow<Int> = _watchApiLevel.asStateFlow()
+
     fun updateConnectedDevice(deviceName: String?) {
         _connectedDevice.value = deviceName
-        if (deviceName == null) _watchFacePushStatus.value = null
+        if (deviceName == null) {
+            _watchFacePushStatus.value = null
+            _watchApiLevel.value = 0
+        }
+    }
+
+    /** Keeps the API level from the watch's answer to a ping; 0 says nothing and changes nothing */
+    fun updateWatchApiLevel(apiLevel: Int) {
+        if (apiLevel > 0) _watchApiLevel.value = apiLevel
     }
 
     fun updateSavedCustomWatchface(cwfData: CwfData?) {
@@ -218,6 +234,8 @@ class WearPlugin(
                     event.watchFacePushStatus?.let { _watchFacePushStatus.value = it }
                 }
             }
+        rxBus.toFlow(EventData.ActionPong::class)
+            .collectResilient(newScope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { updateWatchApiLevel(it.apiLevel) }
         rxBus.toFlow(EventMobileToWear::class)
             .collectResilient(newScope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
                 // If there is a broadcast selected (ie.

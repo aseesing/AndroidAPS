@@ -2,6 +2,7 @@ package app.aaps.plugins.sync.wear.compose
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
@@ -54,9 +55,15 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Immutable
 data class WearUiState(
@@ -383,15 +390,30 @@ class WearViewModel(
         }
     }
 
+    /** How long a face zip waits for the watch to tell its Android API level after a ping */
+    @VisibleForTesting internal var watchVersionWait: Duration = 8.seconds
+
+    /** How long a face zip waits for the phone to finish sending it to the watch */
+    @VisibleForTesting internal var faceSendWait: Duration = 2.minutes
+
     private suspend fun sendWffFace(bytes: ByteArray) {
-        val apiLevel = wearPlugin.watchFacePushStatus.value?.apiLevel ?: 0
+        val apiLevel = watchApiLevel()
         if (apiLevel == 0) return _toastEvent.emit(rh.gs(SyncStrings.wear_wff_face_watch_unknown))
         val message = when (val result = WffFaceZip.forWatch(bytes, config.APPLICATION_ID, apiLevel)) {
             is WffFaceZip.Result.ForWatch    -> {
+                val event = EventMobileToWearWffFace(result.zip)
+                rxBus.send(event)
+                // "Sent" only when it really went out: the watch can close the channel before the end
+                val sent = withTimeoutOrNull(faceSendWait) { event.sent.await() } == true
                 // The watch puts the face in the app's one slot, so the choice follows
-                if (result.usesPush) preferences.put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
-                rxBus.send(EventMobileToWearWffFace(result.zip))
-                rh.gs(if (result.usesPush) SyncStrings.wear_wff_face_sent else SyncStrings.wear_wff_face_sent_confirm)
+                if (sent && result.usesPush) preferences.put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+                rh.gs(
+                    when {
+                        !sent           -> SyncStrings.wear_wff_face_not_sent
+                        result.usesPush -> SyncStrings.wear_wff_face_sent
+                        else            -> SyncStrings.wear_wff_face_sent_confirm
+                    }
+                )
             }
 
             is WffFaceZip.Result.WatchTooOld -> rh.gs(SyncStrings.wear_wff_face_watch_too_old, wearOsVersion(result.minApiLevel))
@@ -400,6 +422,22 @@ class WearViewModel(
         }
         _toastEvent.emit(message)
     }
+
+    /**
+     * The watch's Android API level, or 0 when the watch does not tell it. The status of Watch Face
+     * Push carries it, and so does the watch's answer to a ping. When neither has it yet (an old
+     * status from an older watch app, or none at all), the phone pings the watch and waits a little.
+     */
+    private suspend fun watchApiLevel(): Int {
+        knownWatchApiLevel(wearPlugin.watchFacePushStatus.value, wearPlugin.watchApiLevel.value).takeIf { it > 0 }?.let { return it }
+        rxBus.send(EventMobileToWear(EventData.ActionPing(dateUtil.now())))
+        return withTimeoutOrNull(watchVersionWait) {
+            combine(wearPlugin.watchFacePushStatus, wearPlugin.watchApiLevel, ::knownWatchApiLevel).first { it > 0 }
+        } ?: 0
+    }
+
+    private fun knownWatchApiLevel(status: EventData.WatchFacePushStatus?, pongApiLevel: Int): Int =
+        status?.apiLevel?.takeIf { it > 0 } ?: pongApiLevel
 
     /** The Wear OS version that comes with Android API level [apiLevel], as people know it */
     private fun wearOsVersion(apiLevel: Int): String = when {

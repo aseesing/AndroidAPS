@@ -92,8 +92,14 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
                 withContext(Dispatchers.IO) { sendMessage(watchfacePath(rxWatchfacePath, it.night), it.payload) }
             }
         rxBus.toFlow(EventMobileToWearWffFace::class)
-            .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
-                withContext(Dispatchers.IO) { sendOnChannel(getString(app.aaps.core.interfaces.R.string.path_wff_face), it.payload) }
+            .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { event ->
+                // The Wear screen waits for this answer before it says "sent"
+                var sent = false
+                try {
+                    sent = withContext(Dispatchers.IO) { sendOnChannel(getString(app.aaps.core.interfaces.R.string.path_wff_face), event.payload) }
+                } finally {
+                    event.sent.complete(sent)
+                }
             }
     }
 
@@ -202,12 +208,26 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
     /**
      * Sends [data] on a channel, for a payload too large for a message (a face zip). The watch reads
      * to the end of the stream and then closes the channel.
+     *
+     * @return true when all of [data] went out without an error, false when there is no watch or the
+     * channel failed (for example when the watch closed it before the end)
      */
-    private suspend fun sendOnChannel(path: String, data: ByteArray) {
-        val nodeId = transcriptionNodeId ?: return aapsLogger.debug(LTag.WEAR, "sendOnChannel: $path no watch")
+    private suspend fun sendOnChannel(path: String, data: ByteArray): Boolean {
+        val nodeId = transcriptionNodeId ?: run {
+            aapsLogger.debug(LTag.WEAR, "sendOnChannel: $path no watch")
+            return false
+        }
         aapsLogger.debug(LTag.WEAR, "sendOnChannel: $path ${data.size}")
-        val channel = channelClient.openChannel(nodeId, path).await()
-        channelClient.getOutputStream(channel).await().use { it.write(data) }
+        return try {
+            val channel = channelClient.openChannel(nodeId, path).await()
+            channelClient.getOutputStream(channel).await().use { it.write(data) }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "sendOnChannel: $path failed", e)
+            false
+        }
     }
 
     private fun sendMessage(path: String, data: ByteArray) {

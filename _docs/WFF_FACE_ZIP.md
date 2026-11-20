@@ -42,6 +42,11 @@ The phone shows the name of the face once the watch reports it installed.
   `<appId>.watchfacepush.` start; the wear app lists `.design` as a safe face of its complications.
 - The phone takes the highest version the watch can run, and sends the watch only `face.json`,
   `data.zip`, that APK as `face.apk` and its token as `face.token`.
+- The phone knows the watch's Android API level from the watch's `WatchFacePushStatus`, or from its
+  `ActionPong`. When it has neither, it pings the watch and waits about 8 seconds before it says
+  that the watch has not told its version.
+- The phone says "sent" only after the whole zip went out on the channel. When the channel fails,
+  it says that the watchface could not be sent.
 - On Wear OS 5 a face can only replace an installed one when both are signed with the same key.
 
 ## Complications the face reads

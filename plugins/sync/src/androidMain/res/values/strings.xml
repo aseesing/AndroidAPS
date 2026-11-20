@@ -224,6 +224,7 @@
     <string name="wear_wff_face_other_app">This watchface was made for another AAPS app. Make it again for this app.</string>
     <string name="wear_wff_face_sent">Watchface sent to the watch.</string>
     <string name="wear_wff_face_sent_confirm">Watchface sent. Confirm the install on the watch, then pick the watchface on the watch.</string>
+    <string name="wear_wff_face_not_sent">The watchface could not be sent to the watch. Check the connection and try again.</string>
     <string name="wear_wff_face_on_watch" comment="%1$s = name of a watchface loaded from a file">On the watch: %1$s</string>
     <string name="wear_infos_watchface">Infos Watchface</string>
     <string name="wear_export_watchface">Export template</string>

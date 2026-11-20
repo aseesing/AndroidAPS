@@ -31,10 +31,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -45,6 +47,8 @@ import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.atLeast
+import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -53,6 +57,7 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class WearViewModelTest {
@@ -74,6 +79,7 @@ internal class WearViewModelTest {
     private val eventWearUpdateGuiFlow = MutableSharedFlow<EventWearUpdateGui>()
     private val pushedWatchfaceFlow = MutableStateFlow(PushedWatchfaceId.CWF)
     private val watchFacePushStatusFlow = MutableStateFlow<EventData.WatchFacePushStatus?>(null)
+    private val watchApiLevelFlow = MutableStateFlow(0)
 
     private lateinit var sut: WearViewModel
 
@@ -84,6 +90,7 @@ internal class WearViewModelTest {
         whenever(wearPlugin.connectedDevice).thenReturn(connectedDeviceFlow)
         whenever(wearPlugin.savedCustomWatchface).thenReturn(savedCustomWatchfaceFlow)
         whenever(wearPlugin.watchFacePushStatus).thenReturn(watchFacePushStatusFlow)
+        whenever(wearPlugin.watchApiLevel).thenReturn(watchApiLevelFlow)
         whenever(wearNightFace.saved).thenReturn(MutableStateFlow(null))
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(eventWearUpdateGuiFlow)
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(pushedWatchfaceFlow)
@@ -251,33 +258,152 @@ internal class WearViewModelTest {
         zipByteArray = ByteArray(0)
     )
 
+    /** The phone's channel send: completes the face zip event with [ok], like the service does */
+    private fun channelSends(ok: Boolean) {
+        doAnswer { (it.arguments[0] as EventMobileToWearWffFace).sent.complete(ok) }.whenever(rxBus).send(any<EventMobileToWearWffFace>())
+    }
+
+    /** The watch's answer to a ping: runs [answer] when the phone pings */
+    private fun watchAnswersPing(answer: () -> Unit) {
+        doAnswer { if ((it.arguments[0] as EventMobileToWear).payload is EventData.ActionPing) answer() }.whenever(rxBus).send(any<EventMobileToWear>())
+    }
+
+    /** How many pings the phone sent so far */
+    private fun pings(): Int {
+        val captor = argumentCaptor<Event>()
+        verify(rxBus, atLeast(0)).send(captor.capture())
+        return captor.allValues.filterIsInstance<EventMobileToWear>().count { it.payload is EventData.ActionPing }
+    }
+
+    private fun stubFaceMessages() {
+        whenever(rh.gs(SyncStrings.wear_wff_face_sent)).thenReturn("sent")
+        whenever(rh.gs(SyncStrings.wear_wff_face_sent_confirm)).thenReturn("sent, confirm")
+        whenever(rh.gs(SyncStrings.wear_wff_face_not_sent)).thenReturn("not sent")
+        whenever(rh.gs(SyncStrings.wear_wff_face_watch_unknown)).thenReturn("unknown")
+    }
+
     @Test
     fun `a face zip for a Wear OS 6 watch goes to the watch and becomes the pushed face`() {
+        stubFaceMessages()
+        channelSends(ok = true)
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
 
         sut.loadWatchfaceFile { "face.zip" to faceZip() }
 
-        verify(rxBus, timeout(TIMEOUT_MS)).send(any<EventMobileToWearWffFace>())
-        verify(preferences, timeout(TIMEOUT_MS)).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        verify(rxBus).send(any<EventMobileToWearWffFace>())
+        verify(preferences).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
     }
 
     @Test
     fun `a face zip for a Wear OS 5 watch goes to the watch and leaves the pushed face alone`() {
+        stubFaceMessages()
+        channelSends(ok = true)
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
 
         sut.loadWatchfaceFile { "face.zip" to faceZip() }
 
-        verify(rxBus, timeout(TIMEOUT_MS)).send(any<EventMobileToWearWffFace>())
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent_confirm)
+        verify(rxBus).send(any<EventMobileToWearWffFace>())
         verify(preferences, never()).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
     }
 
     @Test
-    fun `a face zip is not sent while the watch has not told its version`() {
-        whenever(rh.gs(SyncStrings.wear_wff_face_watch_unknown)).thenReturn("unknown")
+    fun `a face zip says sent only after the send has finished`() {
+        stubFaceMessages()
+        val event = CompletableDeferred<EventMobileToWearWffFace>()
+        doAnswer { event.complete(it.arguments[0] as EventMobileToWearWffFace) }.whenever(rxBus).send(any<EventMobileToWearWffFace>())
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        verify(rxBus, timeout(TIMEOUT_MS)).send(any<EventMobileToWearWffFace>())
+
+        // Still on its way: no message and the choice of face is not changed yet
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_sent)
+        verify(preferences, never()).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+
+        runBlocking { withTimeout(TIMEOUT_MS) { event.await() } }.sent.complete(true)
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        verify(preferences, timeout(TIMEOUT_MS)).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+    }
+
+    @Test
+    fun `a face zip that the phone could not send says so and keeps the pushed face`() {
+        stubFaceMessages()
+        channelSends(ok = false)
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_not_sent)
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_sent)
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_sent_confirm)
+        verify(preferences, never()).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+    }
+
+    @Test
+    fun `a face zip whose send never ends counts as not sent`() {
+        stubFaceMessages()
+        sut.faceSendWait = 200.milliseconds
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_not_sent)
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_sent_confirm)
+    }
+
+    @Test
+    fun `without a known version the phone pings and sends once the status tells the version`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        watchAnswersPing { watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36) }
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        assertThat(pings()).isEqualTo(1)
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_watch_unknown)
+    }
+
+    @Test
+    fun `an old status without a version is not enough, the answer to the ping tells the version`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        // From an older watch app: no version, and the new ping status does not come
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false)
+        watchAnswersPing { watchApiLevelFlow.value = 34 }
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent_confirm)
+        assertThat(pings()).isEqualTo(1)
+        verify(rxBus).send(any<EventMobileToWearWffFace>())
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_watch_unknown)
+    }
+
+    @Test
+    fun `a version known from an earlier ping is used at once`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        watchApiLevelFlow.value = 36
+
+        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        assertThat(pings()).isEqualTo(0)
+    }
+
+    @Test
+    fun `a face zip is not sent when the watch does not tell its version after a ping`() {
+        stubFaceMessages()
+        sut.watchVersionWait = 200.milliseconds
 
         sut.loadWatchfaceFile { "face.zip" to faceZip() }
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_watch_unknown)
+        assertThat(pings()).isEqualTo(1)
         verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
     }
 

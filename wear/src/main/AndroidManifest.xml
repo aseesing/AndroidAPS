@@ -186,6 +186,18 @@
                     android:scheme="wear" />
             </intent-filter>
 
+            <!-- PERSONAL PATCH: a Watch Face Format face zip from the phone, see WffFaceInstaller.
+                 Without this filter the channel never reaches the service, and the phone sees
+                 "Channel closed unexpectedly". -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+
+                <data
+                    android:host="*"
+                    android:path="@string/path_wff_face"
+                    android:scheme="wear" />
+            </intent-filter>
+
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
 
