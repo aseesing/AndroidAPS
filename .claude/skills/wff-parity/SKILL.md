@@ -30,21 +30,25 @@ A change elsewhere in the wear app does not need it.
 
 ## How to run it
 
-In the design repository, with its `aapsDir` set to the AAPS checkout you changed:
+In the design repository, with its `aapsDir` set to the AAPS checkout you changed. Every Gradle build
+goes through `sh ~/.claude/bin/gradle-locked.sh <folder> <log> <tasks>` (see the global rules).
 
 1. Once: build Pack, `sh tools/build-pack.sh` (see `docs/wff-apk.md`).
-2. Without the emulator (converts, validates and checks the lint of every feature):
-   `sh ~/.claude/bin/gradle-locked.sh <design repo> <log> wffParityTest`
-3. With the emulator: start a Wear OS 6 emulator (API 36), install a **debug** build of the wear app
-   of the AAPS checkout you changed (`:wear:assembleFullDebug`), then add `-PwffParityEmulator`.
-4. One group: `--tests "*ParityShapes*"`.
+2. Without the emulator (converts, validates and checks the lint of every feature): `wffParityTest`.
+3. With the emulator: start a Wear OS 6 emulator (API 36), build the debug wear app of the AAPS
+   checkout (`:wear:assembleFullDebug` in AAPS), then `wffParityTest -PwffParityEmulator`. The run
+   installs that wear app when it changed, and refuses one that is older than its sources.
+4. While you work on one feature, run only its part: `-PwffParityOnly=ShapesText,ClassicFace.secondView`.
+   A face that did not change keeps its last emulator picture, so a run again is quick.
 
-Only one test drives the emulator at a time (the lock `~/.cache/aaps-wff/emulator.lock`). The scripts
-refuse a real watch.
+The tests run side by side on the JVM and queue their faces; one driver shows them on the emulator
+while the tests still run. Do not start a second run in the same folder at the same time (the lock
+script makes it wait). The scripts refuse a real watch.
 
 ## Reading the result
 
-Per test, in `build/wff-parity/<class>/<test>/`:
+`build/wff-parity/summary.html` lists every compared face, the differing ones first. Per test, in
+`build/wff-parity/<class>/<test>/`:
 
 - `result.txt`: the lint, the share of changed pixels per region, and why it failed
 - `diff.png`: our engine, the WFF face on the emulator, and the changed pixels in red
