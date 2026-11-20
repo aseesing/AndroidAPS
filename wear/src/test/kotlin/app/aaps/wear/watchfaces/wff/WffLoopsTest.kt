@@ -69,6 +69,43 @@ internal class WffLoopsTest {
     }
 
     @Test
+    fun aLoopOfTheWholeWakeGetsTheFadeInAndOutAroundIt() {
+        // A wake of 6 s with a fade of 1.5 s: 3 s between the fades, 2 loops of 1.5 s
+        val rules = WffLoops(wakeMs = 6000, fadeMs = 1500)
+        val take = rules.take(null)!!
+        assertThat(take.atMs).hasSize(23)
+        assertThat(take.atMs.first()).isEqualTo(1500L)
+        val faded = rules.faded(take)!!
+        // The fade in plays once from the start of the wake, at the rate of the loop
+        assertThat(faded.fadeIn.atMs.first()).isEqualTo(0L)
+        assertThat(faded.fadeIn.atMs).hasSize(23)
+        assertThat(faded.fadeIn.atMs.last()).isLessThan(1500L)
+        assertThat(faded.fadeIn.delaySeconds).isEqualTo(0f)
+        assertThat(rules.loopCount(faded.fadeIn, 23)).isEqualTo(1)
+        // The loop starts after it and repeats until the fade out
+        assertThat(faded.loop.delaySeconds).isEqualTo(1.5f)
+        assertThat(rules.loopCount(faded.loop, 23)).isEqualTo(2)
+        // The fade out is drawn from the last 1.5 s of the wake and plays once when the loop ends
+        assertThat(faded.fadeOut.atMs.first()).isEqualTo(4500L)
+        assertThat(faded.fadeOut.atMs.last()).isLessThan(6000L)
+        assertThat(faded.fadeOut.delayMs).isEqualTo(1500L + 2 * 23 * 1000L / 15)
+        assertThat(rules.loopCount(faded.fadeOut, 23)).isEqualTo(1)
+    }
+
+    @Test
+    fun aLoopKeepsFullStrengthWhenTheWakeDoesNotFadeOrTheBudgetHasNoRoom() {
+        val noFade = WffLoops(wakeMs = 6000, fadeMs = 0)
+        assertThat(noFade.faded(noFade.take(null)!!)).isNull()
+        // A part of the wake already has its fade in its own frames
+        assertThat(loops.faded(loops.take(Span(6000, 9000))!!)).isNull()
+        // 30 frames for the loop, 9 for each fade: 47 left is not enough
+        val tight = WffLoops(wakeMs = 15_000, fadeMs = 600).apply { spend(WffLoops.MAX_FRAMES - 47) }
+        assertThat(tight.faded(tight.take(null)!!)).isNull()
+        val enough = WffLoops(wakeMs = 15_000, fadeMs = 600).apply { spend(WffLoops.MAX_FRAMES - 48) }
+        assertThat(enough.faded(enough.take(null)!!)).isNotNull()
+    }
+
+    @Test
     fun aPartOfTheWakePlaysOnceAtMostAtThePartRate() {
         val take = loops.take(Span(6000, 9000))!!
         assertThat(take.fps).isEqualTo(WffLoops.PART_FPS)

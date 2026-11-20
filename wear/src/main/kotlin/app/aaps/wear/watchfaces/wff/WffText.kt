@@ -4,6 +4,9 @@
 // ============================================================================================
 package app.aaps.wear.watchfaces.wff
 
+import kotlin.math.ceil
+import kotlin.math.floor
+
 /**
  * The heights of a font in parts of its size, as Android's `Paint.FontMetrics` gives them: [top] and
  * [ascent] lie above the base line and are below 0, [descent] and [bottom] lie below it.
@@ -36,16 +39,20 @@ object WffTextPlace {
     fun wffBaseline(m: WffFontMetrics, size: Double, height: Double): Double = (height - (m.descent - m.ascent) * size) / 2 - m.ascent * size
 
     /**
-     * The base line of a classic text view of [height], from its top. [centred]: the view's gravity is
-     * `center`. `left` and `right` keep the text at the top of the view.
+     * The base line of a classic text view of [height] whole pixels, from its top, for a font of [size]
+     * pixels. [centred]: the view's gravity is `center`. `left` and `right` keep the text at the top of
+     * the view. In whole pixels, as Android works it out: the top of the font is rounded down and its
+     * bottom up (`Paint.getFontMetricsInt`), and a centred line moves down by half the room that is
+     * left, cut to whole pixels (`TextView.getVerticalOffset`).
      */
-    fun viewBaseline(m: WffFontMetrics, size: Double, height: Double, centred: Boolean): Double {
-        val textHeight = (m.bottom - m.top) * size
-        val offset = if (centred && textHeight < height) (height - textHeight) / 2 else 0.0
-        return offset - m.top * size
+    fun viewBaseline(m: WffFontMetrics, size: Double, height: Int, centred: Boolean): Int {
+        val top = floor(m.top * size).toInt()
+        val textHeight = ceil(m.bottom * size).toInt() - top
+        val offset = if (centred && textHeight < height) (height - textHeight) / 2 else 0
+        return offset - top
     }
 
-    /** How far a WFF box with the place of a classic text view must move down, so its text shows where the view shows it. */
-    fun viewShift(m: WffFontMetrics, size: Double, height: Double, centred: Boolean): Double =
-        viewBaseline(m, size, height, centred) - wffBaseline(m, size, height)
+    /** How far, in pixels, a WFF box with the place of a classic text view must move down, so its text shows where the view shows it. */
+    fun viewShift(m: WffFontMetrics, size: Double, height: Int, centred: Boolean): Double =
+        viewBaseline(m, size, height, centred) - wffBaseline(m, size, height.toDouble())
 }

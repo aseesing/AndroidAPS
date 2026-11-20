@@ -224,6 +224,7 @@ the nodes are private to `Formula`), so the engine gets a small visitor. Functio
 | `mod(a, b)`, `a % b` | `((a % b) + b) % b` unless both sides are known to be positive (WFF `%` sign rule is not documented) |
 | `sign(x)`, `step(e, x)`, `mix(a, b, u)`, `smoothstep`, `window`, `easeInOut`, `pingpong` | written out with `? :` and arithmetic |
 | `atan2(y, x)` | written out with `atan` and `? :` |
+| `a / b`, `mod`, `sqrt`, `log`, `asin`, `acos`, `pow` | the value and a test that is false where ours gives no number or an endless one (`WffExpression.valid`): WFF gives 0 for `x / 0` (11.1). The writer then does what ours does with no number: no `x`/`y` hides the part, no `rotation` or `scale` is no turn or scale, no `alpha` or `visible` hides it. A compare with no number is 0, `!` of it is 1, `if` takes the other way. |
 | `missing(x)` | inside a slot: the `EMPTY` or no-data branch of the complication; else a constant |
 | `noise`, `hash` | not translated: the layer is baked |
 | `&` (text join), `concat` | a `Template` with several `%s` parameters |
@@ -383,7 +384,7 @@ most designs end with one or two pictures.
 | `timestamp` | C: age slot | | Safety view (the "old reading" mark). |
 | `delta`, `avg_delta` | C: glucose slot `TITLE`, or a block | | |
 | `iob1`, `iob2`, `cob1`, `cob2`, `basalRate`, `bgi`, `reservoir`, `tempTarget`, `status`, `loop`, `uploader_battery`, `rig_battery`, `patient_name`, all `_Ext1` / `_Ext2` views | C: a block picture | C value slot when a live gauge needs the number | They change only when data arrives, which wakes our app anyway. |
-| `time`, `hour`, `minute`, `second`, `timePeriod` | L: `DigitalClock` / `TimeText`, `[AMPM_STRING]` | | `enableSecond` adds the seconds; they hide in always-on. |
+| `time`, `hour`, `minute`, `second`, `timePeriod` | L: `time` as a `PartText` with `[HOUR_1_12_Z]` or `[HOUR_0_23_Z]` (by `[IS_24_HOUR_MODE]`) and `[MINUTE_Z]`; `hour`, `minute`, `second` as `DigitalClock` / `TimeText`; `[AMPM_STRING]` | | `enableSecond` adds the seconds; they hide in always-on. A `TimeText` of "hh:mm" puts about 1 px more between the signs than the text view. |
 | `day_name`, `day`, `month`, `week_number` | L: `PartText` with `[DAY_OF_WEEK_S]` / `_F`, `[DAY]`, `[MONTH_S]` / `_F`, `[WEEK_IN_YEAR]` | | `dayNameFormat`, `monthFormat` pick short or long; `allCaps` becomes `Upper`. |
 | `hour_hand`, `minute_hand`, `second_hand` | L: `AnalogClock` with `HourHand`, `MinuteHand`, `SecondHand` (sweep or tick) | | Proven for hour and minute. |
 | `freetext1` to `freetext4`, static text | B | | |
@@ -573,7 +574,11 @@ A design without any `wff` key converts like this:
   tap, then hidden; trimmed to the frame and size budgets. The planner samples `visible` and
   `alpha` over the wake to find when a layer shows:
   - a layer that shows the whole wake (snow, rain) becomes a loop of `min(wake, 2 s)` (the prototype's snow loop length) played until
-    the wake is over. A seam can show where the loop starts again; the lint says so.
+    the wake is over. A seam can show where the loop starts again; the lint says so. When the wake
+    fades (`fadeMs`), the loop is taken after the fade in and fits a whole number of times between
+    the fades; frames of the fade in play once before it (`delayPlay` 0) and frames of the fade out
+    once after it (`WffLoops.faded`). Without room in the frame budget the loop shows at full
+    strength from start to end, and the lint says the fade is lost.
   - a layer that shows only for a part of the wake (Santa) is baked over that part and played once,
     with `delayPlay` for its start;
 - `@moon` and place-based sky: the sky block;
@@ -782,8 +787,8 @@ Without the aurora loop: about 0.6 MB and 40 MB, inside the defaults. With it, t
 
 - The aurora sways only within the budget (or not at all), the stars and lights do not twinkle,
   the star glow does not wobble. The face is still lively through the snow and Santa.
-- The loops cannot fade out with `env`: they end hard (`afterPlaying="HIDE"`). A fade could be baked
-  into a last "out" sequence that starts with `delayPlay`; whether WFF keeps that timing is open.
+- The loops fade in and out with `env` only through baked frames of the fade (6.4), which cost
+  frames of the budget; without room they end hard (`afterPlaying="HIDE"`).
 - Santa's speed is fixed; he does not follow a changed wake length until a rebuild.
 - In always-on: clock (red), glucose (green), age and the user slots. The design's art is hidden,
   as on our code face.
@@ -960,6 +965,15 @@ emulator; `docs/wff-parity.md` of the design repository):
   classic face places it by the top and the bottom of the font, and a text higher than its view
   starts at the top of the view. The same box showed a text of 80 px about 7 px higher. The writer
   now moves the box of a text by the difference, with the real heights of the font (`WffText`).
+- The classic face makes each number of a view whole pixels by cutting (`toInt()`), and Android
+  works out the place of the line in whole pixels too (`getFontMetricsInt`, half the room left,
+  and a centred line by an even number of pixels of its width, up to 1 px right of the middle).
+  The writer does the same, and makes the box of a centred view of an even width 1 px wider on
+  the right. Rounding instead put texts 1 to 3 px off.
+- A `TimeText` of "hh:mm" puts about 1 px more between each two signs than a text view; a
+  `PartText` lays out the line as the view does. The writer writes the `time` view as a
+  `PartText`. A `TimeText` matched a `clock()` text layer of our engine with size 82, and was
+  3 px narrower over five signs with size 81.72; other texts keep the fraction of their size.
 - A face of 400 units with pictures of 454 px is drawn soft on a screen of 454 px: the picture is
   scaled twice. The writer now writes the face in the size the pictures are baked at
   (`faceSize`), and a baked picture then shows one to one (0.00 % changed pixels).

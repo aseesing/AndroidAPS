@@ -36,12 +36,23 @@ class WffLoops(private val wakeMs: Long, private val fadeMs: Long) {
      * @param fps the frames per second it plays at
      * @param atMs the moments to draw, after the start of the wake
      * @param span when the layers show, or null for a short loop that plays over the whole wake
+     * @param delayMs how long after the start of the wake the frames start to play
+     * @param once true when the frames play once, false for a short loop that repeats
      */
-    data class Take(val fps: Int, val atMs: List<Long>, val span: Span?, val cut: Boolean = false) {
+    data class Take(
+        val fps: Int, val atMs: List<Long>, val span: Span?, val cut: Boolean = false,
+        val delayMs: Long = span?.fromMs ?: 0L, val once: Boolean = span != null
+    ) {
 
         /** How long after the start of the wake the frames start to play. */
-        val delaySeconds: Float get() = if (span == null) 0f else span.fromMs / 1000f
+        val delaySeconds: Float get() = delayMs / 1000f
     }
+
+    /**
+     * A loop of the whole wake with the fade of the wake: [fadeIn] plays once at the start, then [loop]
+     * repeats, then [fadeOut] plays once.
+     */
+    data class Faded(val fadeIn: Take, val loop: Take, val fadeOut: Take)
 
     /** How many frames are left for this face. */
     var budget: Int = MAX_FRAMES
@@ -102,23 +113,62 @@ class WffLoops(private val wakeMs: Long, private val fadeMs: Long) {
      * The moments to draw for layers that show during [span], or for the whole wake when it is null;
      * null when the budget has fewer than 2 frames left.
      *
-     * A loop of the whole wake is [LOOP_MS] long at [LOOP_FPS], and is taken after the fade in, so it
-     * has the full strength. A layer that shows for a part of the wake gets as many frames as the
-     * budget allows, at most [PART_FPS].
+     * A loop of the whole wake is at most [LOOP_MS] long at [LOOP_FPS], and is taken after the fade in,
+     * so it has the full strength. When the wake fades, its length fits a whole number of times between
+     * the fade in and the fade out (see [faded]). A layer that shows for a part of the wake gets as many
+     * frames as the budget allows, at most [PART_FPS].
      */
     fun take(span: Span?): Take? {
-        val seconds = if (span == null) minOf(LOOP_MS, wakeMs) / 1000.0 else (span.toMs - span.fromMs) / 1000.0
+        val seconds = if (span == null) loopMs() / 1000.0 else (span.toMs - span.fromMs) / 1000.0
         val fps = if (span == null) LOOP_FPS else (budget / maxOf(seconds, 0.1)).toInt().coerceIn(1, PART_FPS)
         val wanted = ceil(seconds * fps).toInt()
         val count = minOf(budget, wanted)
         if (count < 2) return null
-        val start = span?.fromMs ?: minOf(fadeMs, wakeMs / 4)
+        val start = span?.fromMs ?: fade()
         return Take(fps, (0 until count).map { start + it * 1000L / fps }, span, cut = count < wanted)
     }
 
-    /** How often the [frames] of [take] play in one wake: a short loop repeats until the wake ends, a part of the wake plays once. */
-    fun loopCount(take: Take, frames: Int): Int =
-        if (take.span == null) ceil(wakeMs / (frames * 1000.0 / take.fps)).toInt().coerceAtLeast(1) else 1
+    /**
+     * The fade of the wake for [loop], a loop of the whole wake from [take]. Our engine fades with `env`
+     * at the start and the end of the wake; WFF has no time of the wake, so the frames of the fade in
+     * play once before the loop and the frames of the fade out once after it, at [LOOP_FPS]. Null when
+     * the wake does not fade, or when the budget has no room for the fade next to the loop: the loop
+     * then shows at full strength from the start of the wake to its end.
+     */
+    fun faded(loop: Take): Faded? {
+        val fade = fade()
+        if (loop.span != null || fade <= 0L) return null
+        val count = ceil(fade * LOOP_FPS / 1000.0).toInt()
+        if (budget - loop.atMs.size < 2 * count) return null
+        val repeating = loop.copy(delayMs = fade)
+        val endMs = fade + loopCount(repeating, loop.atMs.size) * loop.atMs.size * 1000L / loop.fps
+        return Faded(
+            fadeIn = Take(LOOP_FPS, (0 until count).map { it * 1000L / LOOP_FPS }, null, delayMs = 0L, once = true),
+            loop = repeating,
+            fadeOut = Take(LOOP_FPS, (0 until count).map { wakeMs - fade + it * 1000L / LOOP_FPS }, null, delayMs = endMs, once = true)
+        )
+    }
+
+    /**
+     * How often the [frames] of [take] play in one wake: a part of the wake plays once, a short loop
+     * repeats until the wake ends, and a short loop after a fade in ([faded]) until the fade out starts.
+     */
+    fun loopCount(take: Take, frames: Int): Int {
+        if (take.once) return 1
+        val loopMs = frames * 1000.0 / take.fps
+        return if (take.delayMs > 0L) Math.round((wakeMs - 2 * take.delayMs) / loopMs).toInt().coerceAtLeast(1)
+        else ceil(wakeMs / loopMs).toInt().coerceAtLeast(1)
+    }
+
+    /** How long the wake fades in and out: at most a quarter of the wake each. */
+    private fun fade(): Long = minOf(fadeMs, wakeMs / 4).coerceAtLeast(0L)
+
+    /** The length of a loop of the whole wake: at most [LOOP_MS], and a whole number of times between the fade in and the fade out. */
+    private fun loopMs(): Long {
+        val between = wakeMs - 2 * fade()
+        if (fade() <= 0L || between <= 0L) return minOf(LOOP_MS, wakeMs)
+        return between / ceil(between.toDouble() / LOOP_MS).toLong()
+    }
 
     companion object {
 

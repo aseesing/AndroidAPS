@@ -91,7 +91,8 @@ class WffFaceWriter(
             when {
                 item.tier == WffTier.OMIT                              -> Unit
                 item.tier == WffTier.BAKE && item.loop                 ->
-                    assets.loops.withIndex().firstOrNull { it.value.overRun == null && item.layer in it.value.layers }?.let { (i, loop) -> if (done.add("loop$i")) loop(loop) }
+                    // A loop of the whole wake can come with the frames of its fade in and fade out (`WffLoops.faded`)
+                    assets.loops.withIndex().filter { it.value.overRun == null && item.layer in it.value.layers }.forEach { (i, loop) -> if (done.add("loop$i")) loop(loop) }
 
                 item.tier == WffTier.BAKE                              -> if (done.add("static${item.run}")) {
                     assets.statics[item.run]?.let { picture(it) }
@@ -128,7 +129,7 @@ class WffFaceWriter(
             }
             line(2, """<PartAnimatedImage ${rect(loop.box)}${loop.blend?.let { " blendMode=\"$it\"" } ?: ""}>""")
             line(3, HIDE_IN_AMBIENT)
-            line(3, """<AnimationController play="ON_VISIBLE" beforePlaying="HIDE" afterPlaying="HIDE" loopCount="${loop.loopCount}" delayPlay="${num(loop.delaySeconds.toDouble())}" />""")
+            line(3, """<AnimationController play="ON_VISIBLE" beforePlaying="HIDE" afterPlaying="HIDE" loopCount="${loop.loopCount}" delayPlay="${num(Math.round(loop.delaySeconds * 1000.0) / 1000.0)}" />""")
             line(3, """<SequenceImages frameRate="${loop.fps}">""")
             loop.frames.forEach { line(4, """<Image resource="$it" />""") }
             line(3, "</SequenceImages>")
@@ -146,25 +147,45 @@ class WffFaceWriter(
                 "second" -> "ss"
                 else     -> if (seconds()) "hh:mm:ss" else "hh:mm"
             }
-            // The time with seconds shows without them in always-on, as our face: a second clock for always-on only
-            if (format == "hh:mm:ss") {
-                digitalClock(box, v, format, ambient = false)
-                digitalClock(box, v, "hh:mm", ambient = true)
-            } else digitalClock(box, v, format, ambient = null)
+            when (format) {
+                // The time with seconds shows without them in always-on, as our face: a second text for always-on only
+                "hh:mm:ss" -> {
+                    timeText(box, v, withSeconds = true, ambient = false)
+                    timeText(box, v, withSeconds = false, ambient = true)
+                }
+
+                "hh:mm"    -> timeText(box, v, withSeconds = false, ambient = null)
+                else       -> digitalClock(box, v, format)
+            }
         }
 
-        /** A clock text. [ambient]: true shows it only in always-on, false hides it there, null shows it in both. */
-        private fun digitalClock(box: DesignRect, v: JSONObject, format: String, ambient: Boolean?) {
-            line(2, """<DigitalClock ${rect(box)}${if (ambient == true) " alpha=\"0\"" else ""}>""")
-            when (ambient) {
-                true  -> line(3, """<Variant mode="AMBIENT" target="alpha" value="255" />""")
-                false -> line(3, HIDE_IN_AMBIENT)
-                null  -> Unit
-            }
+        /** One part of the time (`hh`, `mm` or `ss`) as a clock text. */
+        private fun digitalClock(box: DesignRect, v: JSONObject, format: String) {
+            line(2, """<DigitalClock ${rect(box)}>""")
             line(3, """<TimeText format="$format" hourFormat="SYNC_TO_DEVICE" align="${align(v.optString("gravity"))}" x="0" y="0" width="${px(box.width)}" height="${px(box.height)}">""")
             line(4, font(v) + " />")
             line(3, "</TimeText>")
             line(2, "</DigitalClock>")
+        }
+
+        /**
+         * The time of a `time` view as a text. A WFF `TimeText` of "hh:mm" puts about 1 px more between
+         * each two signs than the text view of the classic face (parity suite); a `PartText` lays out the
+         * line as the view does. The hour has two digits and follows the 12 or 24 hour setting of the
+         * watch, as on the classic face. [ambient]: true shows it only in always-on, false hides it
+         * there, null shows it in both.
+         */
+        private fun timeText(box: DesignRect, v: JSONObject, withSeconds: Boolean, ambient: Boolean?) {
+            val template = if (withSeconds) "%s:%s:%s" else "%s:%s"
+            val rest = if (withSeconds) arrayOf("[MINUTE_Z]", "[SECOND_Z]") else arrayOf("[MINUTE_Z]")
+            line(2, """<Condition><Expressions><Expression name="h12">[IS_24_HOUR_MODE] == 0</Expression></Expressions>""")
+            line(2, """<Compare expression="h12">""")
+            text(box, align(v.optString("gravity")), font(v), template, "[HOUR_1_12_Z]", *rest, ambient = ambient)
+            line(2, "</Compare>")
+            line(2, "<Default>")
+            text(box, align(v.optString("gravity")), font(v), template, "[HOUR_0_23_Z]", *rest, ambient = ambient)
+            line(2, "</Default>")
+            line(2, "</Condition>")
         }
 
         /** The time shows seconds: the design enables them and the wearer's preference (as the design sets it) allows them. */
@@ -210,16 +231,24 @@ class WffFaceWriter(
             val box = textBox(source, props, metricsOf(source)) ?: return false
             line(2, """<DigitalClock ${rect(box)}>""")
             line(3, """<TimeText format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="${align(source.align)}" x="0" y="0" width="${px(box.width)}" height="${px(box.height)}">""")
-            line(4, font(source.font, source.size.toDouble(), source.colors.firstOrNull()?.let { argb(it) } ?: DEFAULT_TEXT) + " />")
+            line(4, font(source.font, source.size.toDouble(), source.colors.firstOrNull()?.let { argb(it) } ?: DEFAULT_TEXT, whole = true) + " />")
             line(3, "</TimeText>")
             line(2, "</DigitalClock>")
             return true
         }
 
-        /** A text: [template] with `%s` for the value of [source], or a fixed text when [source] is null. */
-        private fun text(box: DesignRect, align: String, font: String, template: String, source: String?, upper: Boolean = false) {
-            val content = if (source == null) "<![CDATA[$template]]>" else """<Template>${xml(template)}<Parameter expression="$source" /></Template>"""
-            line(2, """<PartText ${rect(box)}><Text align="$align">""")
+        /**
+         * A text: [template] with one `%s` for each of [sources], or a fixed text when there are none.
+         * [ambient]: true shows it only in always-on, false hides it there, null shows it in both.
+         */
+        private fun text(box: DesignRect, align: String, font: String, template: String, vararg sources: String, upper: Boolean = false, ambient: Boolean? = null) {
+            // A fixed text is escaped, not put in CDATA: a text of the design could hold "]]>"
+            val content = if (sources.isEmpty()) xml(template) else "<Template>${xml(template)}" + sources.joinToString("") { """<Parameter expression="$it" />""" } + "</Template>"
+            when (ambient) {
+                null  -> line(2, """<PartText ${rect(box)}><Text align="$align">""")
+                true  -> line(2, """<PartText ${rect(box)} alpha="0"><Variant mode="AMBIENT" target="alpha" value="255" /><Text align="$align">""")
+                false -> line(2, """<PartText ${rect(box)}>$HIDE_IN_AMBIENT<Text align="$align">""")
+            }
             line(3, "$font>" + (if (upper) "<Upper>" else "") + content + (if (upper) "</Upper>" else "") + "</Font>")
             line(2, "</Text></PartText>")
         }
@@ -230,44 +259,88 @@ class WffFaceWriter(
          * A slot of the wearer, in the style of the design: its fill, its ring for a value with a range,
          * its icon and its text. Until the wearer picks something it shows what the code-based face
          * shows there: heart rate, steps, carbs and insulin from AAPS in slots 1 to 4.
+         *
+         * Each key is found as our engine finds it (`customizeComplicationView`): on the slot, then in
+         * the design's `complicationStyle` section, then the engine's default. The parts go where the
+         * watch's complication renderer puts them for our engine, see [WffSlotLayout]. Not written:
+         * the `dynData` steps of a slot, and the way the engine makes a long text smaller until it fits.
          */
         private fun userSlot(item: WffPlanItem) {
             val key = item.where ?: return
             val v = design.optJSONObject(key) ?: JSONObject()
+            val global = design.optJSONObject("complicationStyle") ?: JSONObject()
             val box = item.box ?: return
-            val w = px(box.width)
-            val h = px(box.height)
+            // Our engine places the slot like a view: each length of the design scaled and cut to whole pixels
+            val w = (box.width * scale).toInt()
+            val h = (box.height * scale).toInt()
+            if (w <= 0 || h <= 0) {
+                notWritten += "$key: the slot has no size"
+                return
+            }
             val n = key.last().digitToInt()
             strings["slot_$n"] = String.format(Locale.ROOT, "Slot %d", n)
-            val back = color(v.optString("color"), CLEAR)
-            val radius = px(v.optDouble("borderRadius", 0.0))
-            val ring = px(v.optDouble("ringWidth", 0.0))
-            val ringOn = color(v.optString("ringPrimaryColor"), CLEAR)
-            val ringOff = color(v.optString("ringSecondaryColor"), CLEAR)
-            val iconColor = color(v.optString("iconColor"), CLEAR)
-            // A wide slot keeps room for its icon before the text, also when the icon has no colour
-            // (the design then draws its own icon there); a small or round one has only the text
-            val icon = if (w < h * 2) 0 else h
+            // A size of the slot, else of the section, when above 0
+            fun size(name: String): Int? = v.optInt(name).takeIf { it > 0 } ?: global.optInt(name).takeIf { it > 0 }
+            fun scaled(designPx: Int): Int = (designPx * scale).toInt()
+            // A colour key that is there but cannot be read is gray in our engine
+            val back = when {
+                v.has("color")      -> color(v.optString("color"), WffSlotLayout.ENGINE_GRAY)
+                global.has("color") -> color(global.optString("color"), WffSlotLayout.ENGINE_GRAY)
+                else                -> CLEAR
+            }
+            val globalText = color(global.optString("fontColor"), DEFAULT_TEXT)
+            val textColor = color(v.optString("fontColor"), globalText)
+            // The icon follows its own colour, then the text colour of the slot, then the section
+            val iconColor = color(v.optString("iconColor").ifEmpty { v.optString("fontColor") }, color(global.optString("iconColor"), globalText))
+            fun ringColor(name: String, default: String) = v.optString(name).takeIf { it.isNotEmpty() }?.let { color(it, WffSlotLayout.ENGINE_GRAY) } ?: color(global.optString(name), default)
+            val ringOn = ringColor("ringPrimaryColor", "#FFFFFFFF")
+            val ringOff = ringColor("ringSecondaryColor", "#80FFFFFF")
+            val borderColor = color(v.optString("borderColor").ifEmpty { global.optString("borderColor") }, CLEAR)
+            val borderWidth = scaled(size("borderWidth") ?: WffSlotLayout.ENGINE_BORDER_WIDTH)
+            // ViewMap.ringWidthPx: never wider than the slot, at least 2 pixels
+            val ringRaw = (size("ringWidth") ?: WffSlotLayout.ENGINE_RING_WIDTH) * scale
+            val ringWidth = (0.5 + if (v.optInt("width") > 0) minOf(ringRaw, v.optInt("width") * scale) else ringRaw).toInt().coerceAtLeast(2)
+            val fontKey = v.optString("font").ifEmpty { global.optString("font") }
+            // A style of the slot changes the font; without one the font of the section keeps its own style
+            val fontStyle = v.optString("fontStyle").ifEmpty { if (v.optString("font").isEmpty()) global.optString("fontStyle") else "" }
+            val metrics = measure.metrics(fontKey, "bold" in fontStyle)
             // The watch shows a slot only when its preference is on, which the design sets: only then
             // the slot starts with a source. The wearer can still pick one for any slot.
             val on = design.optJSONObject("metadata")?.optString("key_show_complication$n") == "true"
-            val font = font(v.optString("font"), minOf(v.optDouble("textsize", box.height * 0.5), box.height * 0.9), color(v.optString("fontColor"), DEFAULT_TEXT))
             val policy = USER_SLOT_DEFAULTS[n]?.takeIf { on }?.let { (provider, type) -> """ primaryProvider="$providerApp/$provider" primaryProviderType="$type"""" } ?: ""
-            line(2, """<ComplicationSlot slotId="$n" name="Slot$n" displayName="@string/slot_$n" isCustomizable="TRUE" supportedTypes="RANGED_VALUE SHORT_TEXT SMALL_IMAGE MONOCHROMATIC_IMAGE EMPTY" ${rect(box)}>""")
+            line(2, """<ComplicationSlot slotId="$n" name="Slot$n" displayName="@string/slot_$n" isCustomizable="TRUE" supportedTypes="RANGED_VALUE SHORT_TEXT SMALL_IMAGE MONOCHROMATIC_IMAGE EMPTY" x="${(box.left * scale).toInt()}" y="${(box.top * scale).toInt()}" width="$w" height="$h">""")
             line(3, """<DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"$policy />""")
-            line(3, if (radius * 2 >= minOf(w, h)) """<BoundingOval x="0" y="0" width="$w" height="$h" />""" else """<BoundingBox x="0" y="0" width="$w" height="$h" />""")
+            val corners = scaled(size("borderRadius") ?: 0)
+            val radius = minOf(minOf(w, h) / 2, corners)
+            line(3, if (radius >= minOf(w, h) / 2) """<BoundingOval x="0" y="0" width="$w" height="$h" />""" else """<BoundingBox x="0" y="0" width="$w" height="$h" />""")
             for (type in listOf("RANGED_VALUE", "SHORT_TEXT")) {
+                val parts = WffSlotLayout.of(w, h, corners, ringWidth, ranged = type == "RANGED_VALUE", textSize = size("textsize")?.let { scaled(it) })
+                // A slot too small for its ring, or for a text, leaves them out
+                val ring = parts.ring?.takeIf { it.width > 0 && it.height > 0 }
                 line(3, """<Complication type="$type">""")
-                line(4, """<PartDraw x="0" y="0" width="$w" height="$h">""")
-                line(5, """<RoundRectangle x="0" y="0" width="$w" height="$h" cornerRadiusX="$radius" cornerRadiusY="$radius"><Fill color="$back" /></RoundRectangle>""")
-                if (type == "RANGED_VALUE" && ring > 0 && !ringOn.startsWith("#00")) {
-                    val arc = """<Arc centerX="${w / 2f}" centerY="${h / 2f}" width="${w - ring}" height="${h - ring}" startAngle="0" endAngle="360">"""
-                    if (!ringOff.startsWith("#00")) line(5, """$arc<Stroke color="$ringOff" thickness="$ring" /></Arc>""")
-                    line(5, arc + """<Transform target="endAngle" value="360 * ([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])" /><Stroke color="$ringOn" thickness="$ring" cap="ROUND" /></Arc>""")
+                val drawn = visible(back) || (ring != null && (visible(ringOn) || visible(ringOff))) || (visible(borderColor) && borderWidth > 0)
+                // A PartDraw must hold something
+                if (drawn) line(4, """<PartDraw x="0" y="0" width="$w" height="$h">""")
+                if (visible(back)) line(5, """<RoundRectangle x="0" y="0" width="$w" height="$h" cornerRadiusX="${parts.radius}" cornerRadiusY="${parts.radius}"><Fill color="$back" /></RoundRectangle>""")
+                ring?.let { slotRing(it, ringWidth, ringOn, ringOff) }
+                if (visible(borderColor) && borderWidth > 0)
+                    line(5, """<RoundRectangle x="0" y="0" width="$w" height="$h" cornerRadiusX="${parts.radius}" cornerRadiusY="${parts.radius}"><Stroke color="$borderColor" thickness="$borderWidth" /></RoundRectangle>""")
+                if (drawn) line(4, "</PartDraw>")
+                val icon = parts.icon
+                if (icon != null && visible(iconColor))
+                    line(4, """<PartImage x="${icon.left}" y="${icon.top}" width="${icon.width}" height="${icon.height}" tintColor="$iconColor"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" /></PartImage>""")
+                val text = parts.text
+                if (!text.isEmpty && parts.textSize >= 1) {
+                    val size = parts.textSize.toDouble()
+                    // The renderer centres the line by the top and the bottom of the font, WFF by its ascent and descent
+                    val engineBaseline = (text.height - (metrics.bottom - metrics.top) * size) / 2 - metrics.top * size
+                    val y = text.top + (engineBaseline - WffTextPlace.wffBaseline(metrics, size, text.height.toDouble())).roundToInt()
+                    val font = font(fontKey, size / scale, textColor) + fontLook(fontKey, fontStyle)
+                    line(
+                        4, """<PartText x="${text.left + parts.textStart}" y="$y" width="${text.width - parts.textStart}" height="${text.height}">""" +
+                            """<Text align="${if (parts.centred) "CENTER" else "START"}">$font><Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>"""
+                    )
                 }
-                line(4, "</PartDraw>")
-                if (icon > 0 && !iconColor.startsWith("#00")) line(4, """<PartImage x="0" y="0" width="$icon" height="$icon" tintColor="$iconColor"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" /></PartImage>""")
-                line(4, """<PartText x="$icon" y="0" width="${w - icon}" height="$h"><Text align="${align(v.optString("gravity"))}">$font><Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>""")
                 line(3, "</Complication>")
             }
             for (type in listOf("SMALL_IMAGE", "MONOCHROMATIC_IMAGE")) {
@@ -277,6 +350,37 @@ class WffFaceWriter(
             line(3, """<Complication type="EMPTY" />""")
             line(2, "</ComplicationSlot>")
         }
+
+        /**
+         * The ring of a slot with a value with a range, as `ComplicationRenderer.drawRangedValue` draws
+         * it: from the top, clockwise, the done part in [on] and the rest in [off], with a gap of 4
+         * degrees between them (none when the value is at an end). [ring] is the box of its centre line.
+         */
+        private fun slotRing(ring: WffSlotLayout.Box, width: Int, on: String, off: String) {
+            if (!visible(on) && !visible(off)) return
+            val value = "[COMPLICATION.RANGED_VALUE_VALUE]"
+            val min = "[COMPLICATION.RANGED_VALUE_MIN]"
+            val max = "[COMPLICATION.RANGED_VALUE_MAX]"
+            // The done part in degrees, and the gap: none when the value is at an end
+            val done = "($max > $min ? 360 * clamp(($value - $min) / ($max - $min), 0, 1) : 0)"
+            val gap = "($done <= 0 || $done >= 360 ? 0 : 4)"
+            val doneSweep = "clamp($done - $gap, 0, 360)"
+            val restSweep = "clamp(360 - $done - $gap, 0, 360)"
+            val doneStart = "$gap / 2"
+            val restStart = "$gap * 1.5 + $doneSweep"
+            val arc = """<Arc centerX="${num(ring.left + ring.width / 2.0)}" centerY="${num(ring.top + ring.height / 2.0)}" width="${ring.width}" height="${ring.height}" startAngle="0" endAngle="0">"""
+            fun angles(start: String, sweep: String) =
+                """<Transform target="startAngle" value="${xml(start)}" /><Transform target="endAngle" value="${xml("$start + $sweep")}" />"""
+            if (visible(off)) line(5, arc + angles(restStart, restSweep) + """<Stroke color="$off" thickness="$width" /></Arc>""")
+            if (visible(on)) line(5, arc + angles(doneStart, doneSweep) + """<Stroke color="$on" thickness="$width" /></Arc>""")
+        }
+
+        /** The weight and the slant of a font with the style [style] (`bold`, `italic`, `bold_italic`). */
+        private fun fontLook(key: String, style: String): String =
+            (if ("bold" in style && key != BOLD_FONT) """ weight="BOLD"""" else "") + (if ("italic" in style) """ slant="ITALIC"""" else "")
+
+        /** False for a colour without any alpha. */
+        private fun visible(colour: String): Boolean = !colour.startsWith("#00")
 
         /** One full-face picture of everything the watch draws from AAPS data, see `WffDataComplication`. */
         private fun dataSlot() {
@@ -306,15 +410,15 @@ class WffFaceWriter(
                 when {
                     item.view == "sgv" && v != null       -> {
                         val colours = sgvColours(v)
-                        parts += SlotPart(union(box(v), viewTextBox(v)), { byLevel(colours) { colour -> text(viewTextBox(v), align(v.optString("gravity")), font(v, colour), "%s", "[COMPLICATION.TEXT]") } },
-                            { text(viewTextBox(v), align(v.optString("gravity")), font(v, colours.invalid), "---", null) })
+                        parts += SlotPart(union(viewBox(v), viewTextBox(v)), { byLevel(colours) { colour -> text(viewTextBox(v), align(v.optString("gravity")), font(v, colour), "%s", "[COMPLICATION.TEXT]") } },
+                            { text(viewTextBox(v), align(v.optString("gravity")), font(v, colours.invalid), "---") })
                     }
 
                     // The face tints the arrow with the range colour of the glucose
-                    item.view == "direction" && v != null -> parts += SlotPart(box(v), {
-                        byLevel(rangeColours()) { colour -> line(2, """<PartImage ${rect(box(v))} tintColor="$colour"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" /></PartImage>""") }
+                    item.view == "direction" && v != null -> parts += SlotPart(viewBox(v), {
+                        byLevel(rangeColours()) { colour -> line(2, """<PartImage ${rect(viewBox(v))} tintColor="$colour"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" /></PartImage>""") }
                     })
-                    item.view == "delta" && v != null     -> parts += SlotPart(union(box(v), viewTextBox(v)), { text(viewTextBox(v), align(v.optString("gravity")), font(v), "%s", "[COMPLICATION.TITLE]") })
+                    item.view == "delta" && v != null     -> parts += SlotPart(union(viewBox(v), viewTextBox(v)), { text(viewTextBox(v), align(v.optString("gravity")), font(v), "%s", "[COMPLICATION.TITLE]") })
                     source != null && source.source is LayerSource.Text -> {
                         val text = source.source as LayerSource.Text
                         val box = textBox(text, source.props, metricsOf(text))
@@ -322,7 +426,7 @@ class WffFaceWriter(
                         else {
                             val colours = layerColours(text, source.props[LayerProp.COLOR])
                             parts += SlotPart(box, { byLevel(colours) { colour -> text(box, align(text.align), font(text.font, text.size.toDouble(), colour), "%s", "[COMPLICATION.TEXT]") } },
-                                { if ("'---'" in text.text) text(box, align(text.align), font(text.font, text.size.toDouble(), colours.invalid), "---", null) })
+                                { if ("'---'" in text.text) text(box, align(text.align), font(text.font, text.size.toDouble(), colours.invalid), "---") })
                         }
                     }
 
@@ -346,10 +450,10 @@ class WffFaceWriter(
                 val template = (dyn?.optString("textvalue1")?.takeIf { "%.0f" in it } ?: "%.0f'").replace("%.0f", "%s").replace("%%", "%")
                 val minutes = "floor([COMPLICATION.RANGED_VALUE_VALUE])"
                 val steps = dyn?.let { steps(it, "fontColor") }.orEmpty()
-                parts += SlotPart(union(box(v), viewTextBox(v)), {
+                parts += SlotPart(union(viewBox(v), viewTextBox(v)), {
                     if (steps.size < 2) text(viewTextBox(v), align(v.optString("gravity")), font(v, steps.firstOrNull()), template, minutes)
                     else bySteps(dyn!!, steps) { colour -> text(viewTextBox(v), align(v.optString("gravity")), font(v, colour), template, minutes) }
-                }, { text(viewTextBox(v), align(v.optString("gravity")), font(v, dyn?.optString("invalidFontColor")?.let { color(it, DEFAULT_TEXT) }), dyn?.optString("invalidTextvalue")?.takeIf { it.isNotEmpty() } ?: "--", null) })
+                }, { text(viewTextBox(v), align(v.optString("gravity")), font(v, dyn?.optString("invalidFontColor")?.let { color(it, DEFAULT_TEXT) }), dyn?.optString("invalidTextvalue")?.takeIf { it.isNotEmpty() } ?: "--") })
             }
             slot(WffPlanner.AGE_SLOT_ID, "GlucoseAge", "glucose_age", "WffGlucoseAgeComplication", parts)
         }
@@ -438,12 +542,32 @@ class WffFaceWriter(
 
         // ---- small helpers ----
 
+        /**
+         * The box of a classic view where the classic face puts it. `CustomWatchface` makes each of its
+         * numbers whole face pixels by cutting off the part after the point (`toInt()`); [px] rounds,
+         * which put a box up to 1 px further right or lower, and made it 1 px larger.
+         */
+        private fun viewBox(v: JSONObject): DesignRect {
+            fun whole(key: String): Float = ((v.optInt(key) * scale).toInt() / scale).toFloat()
+            return DesignRect(whole("leftmargin"), whole("topmargin"), whole("width"), whole("height"))
+        }
+
         /** The box of the text of a classic text view, moved so that WFF shows the text at the height where the view shows it. */
         private fun viewTextBox(v: JSONObject): DesignRect {
-            val box = box(v)
+            val box = viewBox(v)
             val metrics = measure.metrics(v.optString("font"), "bold" in v.optString("fontStyle"))
-            val shift = WffTextPlace.viewShift(metrics, v.optDouble("textsize", DEFAULT_TEXT_SIZE), box.height.toDouble(), v.optString("gravity", "center") == "center")
-            return DesignRect(box.left, (box.top + shift).toFloat(), box.width, box.height)
+            // Worked out in face pixels: the view is whole pixels, its text size is not
+            val size = v.optInt("textsize", DEFAULT_TEXT_SIZE) * scale
+            val height = (v.optInt("height") * scale).toInt()
+            // Any other gravity is the centre, as on the classic face
+            val centred = align(v.optString("gravity")) == "CENTER"
+            val shift = WffTextPlace.viewShift(metrics, size, height, centred) / scale
+            // Android centres a line by an even number of whole pixels of its width (`Layout`:
+            // `(right + left - (max & ~1)) >> 1`), which puts it up to 1 px right of the middle. WFF
+            // shows it at the same place when its box is 1 px wider on the right where the view's width
+            // is even (parity suite: a line 1 px left in about half of the texts before)
+            val wider = if (centred && (v.optInt("width") * scale).toInt() % 2 == 0) 1 / scale else 0.0
+            return DesignRect(box.left, (box.top + shift).toFloat(), (box.width + wider).toFloat(), box.height)
         }
 
         private fun metricsOf(text: LayerSource.Text): WffFontMetrics = measure.metrics(text.font, false)
@@ -457,13 +581,20 @@ class WffFaceWriter(
             // The font default_bold carries its own weight (see the other font())
             val weight = if ("bold" in style && v.optString("font") != BOLD_FONT) """ weight="BOLD"""" else ""
             val slant = if ("italic" in style) """ slant="ITALIC"""" else ""
-            return font(v.optString("font"), v.optDouble("textsize", DEFAULT_TEXT_SIZE), colour ?: color(v.optString("fontColor"), DEFAULT_TEXT)) + weight + slant
+            return font(v.optString("font"), v.optInt("textsize", DEFAULT_TEXT_SIZE).toDouble(), colour ?: color(v.optString("fontColor"), DEFAULT_TEXT)) + weight + slant
         }
 
-        private fun font(key: String, size: Double, colour: String): String {
+        /**
+         * A font of [size] design pixels. A text keeps the fraction of its size, as our engine draws it.
+         * [whole]: the size is rounded to whole pixels, for the `TimeText` "hh:mm" of a `clock()` layer.
+         * In the parity suite a `clock()` of 72 design px matched our engine with size 82, and with
+         * size 81.72 its five signs were 3 px narrower. A `TimeText` of only "mm" matched better with
+         * the fraction.
+         */
+        private fun font(key: String, size: Double, colour: String, whole: Boolean = false): String {
             val family = if (key.isEmpty() || key in SYSTEM_FONTS) "SYNC_TO_DEVICE" else fonts.getOrPut(key) { "font_" + key.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9_]"), "_") }
             val weight = if (key == BOLD_FONT) """ weight="BOLD"""" else ""
-            return """<Font family="$family" size="${px(size)}" color="$colour"$weight"""
+            return """<Font family="$family" size="${if (whole) px(size).toString() else num((size * scale * 100).roundToInt() / 100.0)}" color="$colour"$weight"""
         }
 
         private fun line(depth: Int, text: String) {
@@ -483,7 +614,7 @@ class WffFaceWriter(
         const val BOLD_FONT = "default_bold"
 
         /** The text size of a classic view that sets none, as `CustomWatchface` uses. */
-        const val DEFAULT_TEXT_SIZE = 22.0
+        const val DEFAULT_TEXT_SIZE = 22
         const val CLEAR = "#00000000"
 
         /** What a slot of the wearer shows until they pick something, as on the code-based face (`customSlotDefaultSource`). */

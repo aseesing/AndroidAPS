@@ -170,7 +170,8 @@ class WffPlanner(private val version: Int = 4) {
                 if (plain || (dynKey == "timestamp" && dynKinds.all { it in COLOUR_KINDS || it in TEXT_KINDS })) item(WffTier.COMPLICATION, "minutes that keep counting", AGE)
                 else data("the age with steps: in the data picture")
 
-            "time", "hour", "minute", "second"    -> if (plain) item(WffTier.LIVE, "DigitalClock") else data("shows $dynKey: in the data picture")
+            "time"                                -> if (plain) item(WffTier.LIVE, "time text") else data("shows $dynKey: in the data picture")
+            "hour", "minute", "second"            -> if (plain) item(WffTier.LIVE, "DigitalClock") else data("shows $dynKey: in the data picture")
             "day_name", "day", "month"            -> if (plain) item(WffTier.LIVE, "date text") else data("shows $dynKey: in the data picture")
             "hour_hand", "minute_hand", "second_hand" -> if (plain) item(WffTier.LIVE, "AnalogClock hand") else data("a hand with steps: in the data picture")
             in STATIC_VIEWS                       ->

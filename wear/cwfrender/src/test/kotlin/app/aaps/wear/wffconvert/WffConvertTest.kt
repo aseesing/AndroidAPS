@@ -96,9 +96,11 @@ class WffConvertTest {
         assertThat(xml).contains("WffGlucoseAgeComplication")
         assertThat(xml).contains("<Template>%s'<Parameter expression=\"floor([COMPLICATION.RANGED_VALUE_VALUE])\" />")
         assertThat(xml).contains("[COMPLICATION.RANGED_VALUE_VALUE] &lt; 10</Expression>")
-        assertThat(xml).contains("<![CDATA[--]]>")
+        assertThat(xml).contains(">--</Font>")
         // The live parts
-        assertThat(Regex("<TimeText").findAll(xml).count()).isEqualTo(2)
+        // The time view is a text of the hour and the minute (a TimeText spaces its signs wider), the clock() layer a TimeText
+        assertThat(Regex("<TimeText").findAll(xml).count()).isEqualTo(1)
+        assertThat(xml).contains("[MINUTE_Z]")
         // The wearer's slot starts with the heart rate of AAPS, as on the code-based face, because the design turns it on
         assertThat(xml).contains("""slotId="1"""")
         assertThat(xml).contains("info.nightscout.androidaps/app.aaps.wear.health.HeartRateComplication")
@@ -106,6 +108,28 @@ class WffConvertTest {
         assertThat(xml).contains("<HourHand")
         assertThat(face.strings.keys).containsAtLeast("app_name", "slot_1", "glucose", "glucose_age", "data")
         assertThat(face.notWritten).isEmpty()
+    }
+
+    @Test
+    fun aLoopWithItsFadeWritesTheFadeInTheLoopAndTheFadeOut() {
+        val box = DesignRect(0f, 80f, 400f, 40f)
+        val assets = WffAssets(
+            statics = emptyMap(),
+            loops = listOf(
+                WffAssets.Loop(layers = setOf(2), frames = listOf("loop0_000", "loop0_001"), fps = 15, box = box),
+                WffAssets.Loop(layers = setOf(2), frames = listOf("loop1_000", "loop1_001"), fps = 15, box = box, loopCount = 2, delaySeconds = 1.5f),
+                WffAssets.Loop(layers = setOf(2), frames = listOf("loop2_000", "loop2_001"), fps = 15, box = box, delaySeconds = 4.5f)
+            )
+        )
+        val xml = WffFaceWriter(providerApp = "info.nightscout.androidaps").write(design, animation, plan, assets).xml
+        val file = File.createTempFile("watchface", ".xml").apply { writeText(xml) }
+        assertWithMessage("%s", xml).that(WatchFaceXmlValidator().validate(file.path, "4")).isTrue()
+        // All three, in the order they play
+        val order = listOf("loop0_000", "loop1_000", "loop2_000").map { xml.indexOf("\"$it\"") }
+        assertThat(order.first()).isAtLeast(0)
+        assertThat(order).isInOrder()
+        assertThat(xml).contains("loopCount=\"2\" delayPlay=\"1.5\"")
+        assertThat(xml).contains("loopCount=\"1\" delayPlay=\"4.5\"")
     }
 
     @Test
