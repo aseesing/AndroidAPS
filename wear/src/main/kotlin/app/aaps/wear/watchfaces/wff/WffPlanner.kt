@@ -145,7 +145,7 @@ class WffPlanner(private val version: Int = 4) {
         val read = names.groupsOf(layer)
         val copies = layer.copies.size
         val viewKey = (layer.source as? LayerSource.View)?.key
-        val base = Item(view = null, name = label, tier = WffTier.BAKE, note = "", box = box, viewBox = viewKey?.let { view(design, it)?.box }, movesView = viewKey)
+        val base = Item(view = null, name = label, tier = WffTier.BAKE, note = "", box = box, viewBox = viewKey?.let { view(design, it)?.box }, movesView = viewKey, layer = index)
         val source = layer.source
 
         if (source is LayerSource.View) return viewLayerItem(base, source.key, read, design)
@@ -386,14 +386,15 @@ class WffPlanner(private val version: Int = 4) {
         val viewBox: DesignRect? = null,
         val loop: String? = null,
         val movesView: String? = null,
-        val needsAge: Boolean = false
+        val needsAge: Boolean = false,
+        val layer: Int? = null
     ) {
 
         /** A classic view of the design. */
         constructor(view: View, tier: WffTier, note: String, severity: WffSeverity = WffSeverity.INFO, where: String? = null) :
             this(view.key, view.key, tier, note, severity, where, view.box)
 
-        fun toPlanItem() = WffPlanItem(name, tier, note, severity, where, box ?: viewBox)
+        fun toPlanItem() = WffPlanItem(name, tier, note, severity, where, box ?: viewBox, view.takeIf { layer == null && it != "slots" }, layer)
     }
 
     companion object {

@@ -76,7 +76,10 @@ val wearShared = listOf(
     "watchfaces/animation/WallClock.kt", // PERSONAL PATCH
     "watchfaces/animation/WffSources.kt", // PERSONAL PATCH
     "watchfaces/wff/WffPlan.kt", // PERSONAL PATCH: the plan of a face converted to the Watch Face Format
+    "watchfaces/wff/WffExpressionPrinter.kt", // PERSONAL PATCH
+    "watchfaces/wff/WffFaceWriter.kt", // PERSONAL PATCH
     "watchfaces/wff/WffPlanner.kt", // PERSONAL PATCH
+    "watchfaces/wff/WffStaticDesign.kt", // PERSONAL PATCH
     "watchfaces/colour/ColourLooks.kt", // PERSONAL PATCH
     "watchfaces/daynight/DayNightChoice.kt",
     "watchfaces/daynight/DayNightClock.kt",
@@ -297,5 +300,6 @@ dependencies {
     implementation(files(chartJar).builtBy(unpackChartJar))
 
     testImplementation(libs.org.robolectric)
+    testImplementation(libs.com.google.watchface.validator.push.cli) // PERSONAL PATCH: checks the faces of the WFF converter
     testRuntimeOnly(libs.org.junit.vintage.engine)
 }

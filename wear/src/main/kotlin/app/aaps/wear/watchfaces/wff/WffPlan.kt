@@ -27,6 +27,8 @@ enum class WffSeverity { INFO, WARNING, ERROR }
  * @param name what the designer knows it by: a view key (`chart`) or a layer (`L11 Santa`)
  * @param where the slot or block it goes to, or the static run, when it has one
  * @param box where it lies on the face, in design pixels (400 x 400), when known
+ * @param view the key of the classic view, for a view
+ * @param layer the index of the layer in the read animation, for a layer
  */
 data class WffPlanItem(
     val name: String,
@@ -34,7 +36,9 @@ data class WffPlanItem(
     val note: String,
     val severity: WffSeverity = WffSeverity.INFO,
     val where: String? = null,
-    val box: DesignRect? = null
+    val box: DesignRect? = null,
+    val view: String? = null,
+    val layer: Int? = null
 )
 
 /** One complication slot of the face. [id] follows the fixed role table, so an update keeps the wearer's settings. */
