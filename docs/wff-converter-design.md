@@ -953,6 +953,17 @@ What this changes:
   samples from 2020 to 2027 match to 0.003). No design zip depended on the old meanings.
 - Step 5 must write string resources.
 
+Found later with the parity suite (one small design per feature, compared with our engine on the
+emulator; `docs/wff-parity.md` of the design repository):
+
+- A text in a WFF box is centred by the ascent and the descent of its font. A text view of the
+  classic face places it by the top and the bottom of the font, and a text higher than its view
+  starts at the top of the view. The same box showed a text of 80 px about 7 px higher. The writer
+  now moves the box of a text by the difference, with the real heights of the font (`WffText`).
+- A face of 400 units with pictures of 454 px is drawn soft on a screen of 454 px: the picture is
+  scaled twice. The writer now writes the face in the size the pictures are baked at
+  (`faceSize`), and a baked picture then shows one to one (0.00 % changed pixels).
+
 Questions only a real watch can answer:
 
 13. Bluetooth transfer time for 0.5 to 2 MB through the Channel API, and how reliable it is.
