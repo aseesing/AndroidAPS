@@ -217,7 +217,6 @@
     <string name="wear_pushed_watchface_confirm_message" comment="%1$s=name of the watchface that will be installed, %2$s=name of the one installed now. Example: Complications watchface will replace the Custom watchface on the watch.">%1$s will replace the %2$s on the watch.</string>
     <string name="wear_pushed_watchface_confirm_message_from_complications" comment="%1$s=name of the watchface that will be installed, %2$s=name of the one installed now. Example: Custom watchface will replace the Complications watchface on the watch.">%1$s will replace the %2$s on the watch. Complications you changed in the watch face editor go back to the defaults.</string>
     <string name="wear_load_watchface">Load Watchface</string>
-    <string name="wear_load_watchface_file">Load from file</string>
     <string name="wear_not_a_watchface_file">This file is not a watchface.</string>
     <string name="wear_wff_face_watch_unknown">The watch has not told its Wear OS version yet. Check the connection, and that the AAPS app on the watch is of the same version.</string>
     <string name="wear_wff_face_watch_too_old" comment="%1$s = a Wear OS version, for example 5 or 6">This watchface needs Wear OS %1$s or newer on the watch.</string>

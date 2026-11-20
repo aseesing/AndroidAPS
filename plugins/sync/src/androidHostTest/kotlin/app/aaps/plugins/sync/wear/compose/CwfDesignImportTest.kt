@@ -157,6 +157,53 @@ internal class CwfDesignImportTest {
     }
 
     @Test
+    fun `a face zip is set aside for the watch and not copied`() {
+        val folder = FakeFolder()
+        val face = faceZip()
+
+        val result = sut.import(listOf(picked("D2-wff.zip", face), picked("Design_One.zip", design("One"))), folder)
+
+        assertThat(result.faces).hasSize(1)
+        assertThat(result.faces[0]).isEqualTo(face)
+        assertThat(result.imported).containsExactly("Design_One.zip")
+        assertThat(result.refused).isEmpty()
+        assertThat(folder.files.keys).containsExactly("Design_One.zip")
+    }
+
+    @Test
+    fun `a face zip may be bigger than a design`() {
+        val folder = FakeFolder()
+        // A design of this size is refused, a face zip of this size is fine
+        val big = faceZip(padding = CwfDesignImport.MAX_ZIP_BYTES + 1)
+
+        val result = sut.import(listOf(picked("Big-wff.zip", big)), folder)
+
+        assertThat(result.faces).hasSize(1)
+        assertThat(result.refused).isEmpty()
+    }
+
+    @Test
+    fun `only face zips picked gives no count line`() {
+        val message = sut.message(DesignImportResult(emptyList(), emptyList(), listOf(faceZip())))
+
+        assertThat(message).isEmpty()
+    }
+
+    /** A face zip as the design tool makes it: a `face.json` among other files */
+    private fun faceZip(padding: Int = 0): ByteArray {
+        val out = ByteArrayOutputStream()
+        ZipOutputStream(out).use { zip ->
+            zip.setLevel(0)
+            for (name in listOf("face.json", "data.zip", "wff2/app.apk")) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(if (name == "wff2/app.apk") ByteArray(padding) else name.toByteArray())
+                zip.closeEntry()
+            }
+        }
+        return out.toByteArray()
+    }
+
+    @Test
     fun `a design zip is a watch face, other bytes are not`() {
         assertThat(CwfDesignImport.isWatchfaceZip(design("Test"), "Test.zip")).isTrue()
         // Without its preview picture it is not a design

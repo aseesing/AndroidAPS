@@ -7,11 +7,13 @@ what that tool must deliver, and what AAPS does with it.
 
 ## For the user
 
-On the phone, in the Wear plugin, **Load from file** opens the system file picker. Pick a zip from
-Downloads, Google Drive or anywhere else. The phone looks inside:
+On the phone, in the Wear plugin, open the list of watchfaces and tap **Import designs from Google
+Drive or phone storage**. Pick one or more zips from Downloads, Google Drive or anywhere else. The
+phone looks inside each one:
 
-- an old Custom watchface zip goes to the watch as before;
-- a WFF face zip goes to the watch as a face, in the version the watch can run.
+- an old Custom watchface zip is copied into the list, as before;
+- a WFF face zip goes straight to the watch as a face, in the version the watch can run. It is not
+  added to the list.
 
 What then happens on the watch:
 

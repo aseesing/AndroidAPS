@@ -12,6 +12,7 @@ import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.weardata.CwfFile
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.plugins.sync.wear.WffFaceZip
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -30,7 +31,7 @@ import java.util.zip.ZipInputStream
  */
 internal class PickedDesign(val fileName: String, val read: () -> ByteArray?)
 
-/** A picked file is bigger than [CwfDesignImport.MAX_ZIP_BYTES]: it is not read to the end. */
+/** A picked file is bigger than [CwfDesignImport.MAX_FACE_ZIP_BYTES]: it is not read to the end. */
 internal class DesignTooBigException : IOException()
 
 /** The folder the designs are copied to: AAPS/export. */
@@ -51,8 +52,23 @@ internal enum class DesignRefusal { TOO_BIG, NOT_A_DESIGN, NOT_READ, NOT_WRITTEN
  *
  * @param imported the file names that are now in AAPS/export
  * @param refused the picked file names that were left out, with the reason
+ * @param faces Watch Face Format face zips among the picked files. They are not copied to AAPS/export:
+ *   they go to the watch, see `WearViewModel.importDesigns`.
  */
-internal data class DesignImportResult(val imported: List<String>, val refused: List<Pair<String, DesignRefusal>>)
+internal data class DesignImportResult(
+    val imported: List<String>,
+    val refused: List<Pair<String, DesignRefusal>>,
+    val faces: List<ByteArray> = emptyList()
+)
+
+/**
+ * The answer of [CwfDesignImport.importFrom].
+ *
+ * @param message for the wearer: the designs imported and the files left out. Empty when only face
+ *   zips were picked, because sending them gives its own message.
+ * @param faces the Watch Face Format face zips among the picked files, to send to the watch
+ */
+class DesignImport(val message: String, val faces: List<ByteArray>)
 
 /**
  * Copies Custom watch face zips into AAPS/export, from Google Drive, the phone storage, or any other
@@ -81,20 +97,23 @@ class CwfDesignImport(
 ) {
 
     /**
-     * Copies the zips at [uris] into AAPS/export.
+     * Copies the design zips at [uris] into AAPS/export, and picks out the Watch Face Format face zips.
      *
-     * @return the message for the wearer: how many designs were imported, then one line for each
-     *   file that was not, with the reason
+     * @return the message for the wearer (how many designs were imported, then one line for each
+     *   file that was not, with the reason) and the face zips, which the caller sends to the watch
      */
-    suspend fun importFrom(uris: List<Uri>): String = withContext(Dispatchers.IO) {
+    suspend fun importFrom(uris: List<Uri>): DesignImport = withContext(Dispatchers.IO) {
         val contentResolver = context.contentResolver
-        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext rh.gs(SyncStrings.wear_design_import_no_folder)
+        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext DesignImport(rh.gs(SyncStrings.wear_design_import_no_folder), emptyList())
         val result = import(contentResolver.pickedDesigns(uris), SafeReplaceFolder(SafFolderFiles(dir, contentResolver, aapsLogger)))
-        message(result)
+        DesignImport(message(result), result.faces)
     }
 
     internal fun message(result: DesignImportResult): String {
-        val lines = listOf(rh.gs(SyncStrings.wear_design_import_done, result.imported.size)) +
+        // Only face zips picked: their own message comes when they are sent
+        val countLine = if (result.imported.isEmpty() && result.faces.isNotEmpty()) emptyList()
+        else listOf(rh.gs(SyncStrings.wear_design_import_done, result.imported.size))
+        val lines = countLine +
             result.refused.map { (fileName, refusal) ->
                 val reason = when (refusal) {
                     DesignRefusal.TOO_BIG      -> SyncStrings.wear_design_import_too_big
@@ -111,28 +130,46 @@ class CwfDesignImport(
     internal fun import(picked: List<PickedDesign>, folder: DesignFolder): DesignImportResult {
         val imported = mutableListOf<String>()
         val refused = mutableListOf<Pair<String, DesignRefusal>>()
+        val faces = mutableListOf<ByteArray>()
         // Two picks with the same name would end as one file: only the last one counts
         val unique = picked.associateBy { zipName(it.fileName).lowercase() }.values
         for (design in unique) {
             val fileName = zipName(design.fileName)
-            val refusal = refusalOf(design, fileName, folder)
-            if (refusal == null) imported += fileName else refused += design.fileName to refusal
+            when (val outcome = outcomeOf(design, fileName, folder)) {
+                Outcome.Imported   -> imported += fileName
+                is Outcome.Face    -> faces += outcome.bytes
+                is Outcome.Refused -> refused += design.fileName to outcome.refusal
+            }
         }
-        aapsLogger.debug(LTag.WEAR, "Design import: imported $imported, refused $refused")
-        return DesignImportResult(imported, refused)
+        aapsLogger.debug(LTag.WEAR, "Design import: imported $imported, refused $refused, face zips ${faces.size}")
+        return DesignImportResult(imported, refused, faces)
+    }
+
+    private sealed class Outcome {
+        object Imported : Outcome()
+        class Face(val bytes: ByteArray) : Outcome()
+        class Refused(val refusal: DesignRefusal) : Outcome()
+    }
+
+    /** Checks and writes one design, or sets a face zip aside for the watch. */
+    private fun outcomeOf(design: PickedDesign, fileName: String, folder: DesignFolder): Outcome {
+        val bytes = try {
+            design.read() ?: return Outcome.Refused(DesignRefusal.NOT_READ)
+        } catch (_: DesignTooBigException) {
+            return Outcome.Refused(DesignRefusal.TOO_BIG)
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.WEAR, "Cannot read picked design ${design.fileName}", e)
+            return Outcome.Refused(DesignRefusal.NOT_READ)
+        }
+        // A face zip holds a face for each AAPS app and Wear OS version, so it may be bigger than a design
+        if (isFaceZip(bytes)) return Outcome.Face(bytes)
+        return refusalOf(bytes, fileName, folder)?.let { Outcome.Refused(it) } ?: Outcome.Imported
     }
 
     /** Checks and writes one design. Returns null when it was imported, or why it was not. */
-    private fun refusalOf(design: PickedDesign, fileName: String, folder: DesignFolder): DesignRefusal? {
-        val bytes = try {
-            design.read() ?: return DesignRefusal.NOT_READ
-        } catch (_: DesignTooBigException) {
-            return DesignRefusal.TOO_BIG
-        } catch (e: Exception) {
-            aapsLogger.error(LTag.WEAR, "Cannot read picked design ${design.fileName}", e)
-            return DesignRefusal.NOT_READ
-        }
+    private fun refusalOf(bytes: ByteArray, fileName: String, folder: DesignFolder): DesignRefusal? {
         return when {
+            bytes.size > MAX_ZIP_BYTES                 -> DesignRefusal.TOO_BIG
             !unzipsToAtMost(bytes, MAX_UNZIPPED_BYTES) -> DesignRefusal.TOO_BIG
             !isWatchfaceZip(bytes, fileName)           -> DesignRefusal.NOT_A_DESIGN
             !folder.write(fileName, bytes)             -> DesignRefusal.NOT_WRITTEN
@@ -164,7 +201,7 @@ class CwfDesignImport(
     private fun ContentResolver.pickedDesigns(uris: List<Uri>): List<PickedDesign> =
         uris.map { uri ->
             PickedDesign(fileName = displayName(uri) ?: uri.lastPathSegment ?: "design") {
-                openInputStream(uri)?.use { readAtMost(it, MAX_ZIP_BYTES) }
+                openInputStream(uri)?.use { readAtMost(it, MAX_FACE_ZIP_BYTES) }
             }
         }
 
@@ -179,8 +216,14 @@ class CwfDesignImport(
 
     companion object {
 
-        /** A bigger file is not read at all. The watch only takes zips of about 320 KB anyway. */
+        /** A bigger design is refused. The watch only takes zips of about 320 KB anyway. */
         const val MAX_ZIP_BYTES = 5 * 1024 * 1024
+
+        /**
+         * A bigger file is not read at all. A Watch Face Format face zip holds a face for each AAPS
+         * app and Wear OS version: about 12 MB for a big design.
+         */
+        const val MAX_FACE_ZIP_BYTES = 32 * 1024 * 1024
 
         /**
          * A zip that unpacks to more is refused before it is loaded. A small zip can unpack to
@@ -200,6 +243,20 @@ class CwfDesignImport(
         fun zipName(fileName: String): String =
             if (fileName.endsWith(ZIP_EXTENSION, ignoreCase = true)) fileName.dropLast(ZIP_EXTENSION.length) + ZIP_EXTENSION
             else fileName + ZIP_EXTENSION
+
+        /**
+         * True when [bytes] is a Watch Face Format face zip, made by the design tool. It must unpack
+         * to a sane size, like a design.
+         */
+        fun isFaceZip(bytes: ByteArray): Boolean =
+            try {
+                unzipsToAtMost(bytes, MAX_UNZIPPED_FACE_BYTES) && WffFaceZip.isFaceZip(bytes)
+            } catch (_: Exception) {
+                false
+            }
+
+        /** A face zip that unpacks to more is not a face. Its APKs are stored compressed already. */
+        const val MAX_UNZIPPED_FACE_BYTES = 64L * 1024 * 1024
 
         /** True when [bytes] is a zip of a sane size that AAPS can load as a Custom watch face. */
         fun isWatchfaceZip(bytes: ByteArray, fileName: String): Boolean =

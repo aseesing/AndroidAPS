@@ -288,7 +288,7 @@ internal class WearViewModelTest {
         channelSends(ok = true)
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
         verify(rxBus).send(any<EventMobileToWearWffFace>())
@@ -301,7 +301,7 @@ internal class WearViewModelTest {
         channelSends(ok = true)
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent_confirm)
         verify(rxBus).send(any<EventMobileToWearWffFace>())
@@ -315,7 +315,7 @@ internal class WearViewModelTest {
         doAnswer { event.complete(it.arguments[0] as EventMobileToWearWffFace) }.whenever(rxBus).send(any<EventMobileToWearWffFace>())
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
         verify(rxBus, timeout(TIMEOUT_MS)).send(any<EventMobileToWearWffFace>())
 
         // Still on its way: no message and the choice of face is not changed yet
@@ -334,7 +334,7 @@ internal class WearViewModelTest {
         channelSends(ok = false)
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_not_sent)
         verify(rh, never()).gs(SyncStrings.wear_wff_face_sent)
@@ -348,7 +348,7 @@ internal class WearViewModelTest {
         sut.faceSendWait = 200.milliseconds
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_not_sent)
         verify(rh, never()).gs(SyncStrings.wear_wff_face_sent_confirm)
@@ -360,7 +360,7 @@ internal class WearViewModelTest {
         channelSends(ok = true)
         watchAnswersPing { watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36) }
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
         assertThat(pings()).isEqualTo(1)
@@ -375,7 +375,7 @@ internal class WearViewModelTest {
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false)
         watchAnswersPing { watchApiLevelFlow.value = 34 }
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent_confirm)
         assertThat(pings()).isEqualTo(1)
@@ -389,7 +389,7 @@ internal class WearViewModelTest {
         channelSends(ok = true)
         watchApiLevelFlow.value = 36
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
         assertThat(pings()).isEqualTo(0)
@@ -400,11 +400,19 @@ internal class WearViewModelTest {
         stubFaceMessages()
         sut.watchVersionWait = 200.milliseconds
 
-        sut.loadWatchfaceFile { "face.zip" to faceZip() }
+        importFace()
 
         verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_watch_unknown)
         assertThat(pings()).isEqualTo(1)
         verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
+    }
+
+    /** The wearer picks [faceZip] with "Import designs": the import hands it over as a face zip */
+    private fun importFace() {
+        val uri: Uri = mock()
+        runBlocking { whenever(designImport.importFrom(listOf(uri))).thenReturn(DesignImport("", listOf(faceZip()))) }
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        sut.importDesigns(listOf(uri))
     }
 
     private fun faceZip(): ByteArray {
@@ -530,7 +538,7 @@ internal class WearViewModelTest {
     @Test
     fun `importing designs says how it went and shows the list again`() = runTest(UnconfinedTestDispatcher()) {
         val uri: Uri = mock()
-        whenever(designImport.importFrom(listOf(uri))).thenReturn("Designs imported: 1")
+        whenever(designImport.importFrom(listOf(uri))).thenReturn(DesignImport("Designs imported: 1", emptyList()))
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
         val messages = mutableListOf<String>()
         backgroundScope.launch { sut.toastEvent.toList(messages) }
@@ -548,7 +556,7 @@ internal class WearViewModelTest {
         val gate = CompletableDeferred<Unit>()
         whenever(designImport.importFrom(any())).doSuspendableAnswer {
             gate.await()
-            "Designs imported: 1"
+            DesignImport("Designs imported: 1", emptyList())
         }
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
 

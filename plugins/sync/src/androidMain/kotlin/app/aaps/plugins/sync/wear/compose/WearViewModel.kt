@@ -60,6 +60,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -366,30 +367,6 @@ class WearViewModel(
         }
     }
 
-    /**
-     * Loads a zip the wearer picked with the system file picker. A face zip of the Watch Face Format
-     * goes to the watch cut down to the face that watch can run; anything else is read as an old
-     * design zip and goes the old way. [read] gives the file's name and content, off the main thread.
-     */
-    fun loadWatchfaceFile(read: () -> Pair<String, ByteArray>?) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val (fileName, bytes) = try {
-                read()
-            } catch (e: Exception) {
-                aapsLogger.error(LTag.WEAR, "Watchface file not read", e)
-                null
-            } ?: ("" to null)
-            when {
-                bytes == null                -> _toastEvent.emit(rh.gs(SyncStrings.wear_not_a_watchface_file))
-                WffFaceZip.isFaceZip(bytes) -> sendWffFace(bytes)
-                else                         ->
-                    ZipWatchfaceFormat.loadCustomWatchface(bytes, fileName, preferences.get(BooleanKey.WearCustomWatchfaceAuthorization))
-                        ?.let { selectWatchface(it) }
-                        ?: _toastEvent.emit(rh.gs(SyncStrings.wear_not_a_watchface_file))
-            }
-        }
-    }
-
     /** How long a face zip waits for the watch to tell its Android API level after a ping */
     @VisibleForTesting internal var watchVersionWait: Duration = 8.seconds
 
@@ -549,13 +526,15 @@ class WearViewModel(
         importPlace.remember(uris) // PERSONAL PATCH: last import place
         _uiState.update { it.copy(importingDesigns = true) }
         viewModelScope.launch {
-            val message = try {
+            val result = try {
                 designImport.importFrom(uris)
             } finally {
                 _uiState.update { it.copy(importingDesigns = false) }
             }
-            _toastEvent.emit(message)
+            if (result.message.isNotBlank()) _toastEvent.emit(result.message)
             reloadImportList()
+            // A Watch Face Format face zip is not a design for the list: it goes to the watch
+            for (face in result.faces) withContext(Dispatchers.IO) { sendWffFace(face) }
         }
     }
 

@@ -2,10 +2,7 @@ package app.aaps.plugins.sync.wear.compose
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +26,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
@@ -192,16 +188,6 @@ internal fun WearScreen(
     // The settings of the Custom watch face, set from the phone
     var cwfSettingsOpen by rememberSaveable { mutableStateOf(false) }
     if (cwfSettingsOpen) CwfSettingsDialog(uiState.watchfaceImage, uiState.watchfaceName, onClose = { cwfSettingsOpen = false })
-    // A zip from anywhere the system picker reaches (Downloads, Google Drive): an old design zip or
-    // a Watch Face Format face zip, the view model tells them apart
-    val pickZip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        viewModel.loadWatchfaceFile {
-            val resolver = context.contentResolver
-            val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null }
-            resolver.openInputStream(uri)?.use { (name ?: "") to it.readBytes() }
-        }
-    }
 
     AnimatedContent(
         targetState = subScreen,
@@ -251,7 +237,6 @@ internal fun WearScreen(
                         }
                     },
                     onSelectPushedWatchface = { viewModel.selectPushedWatchface(it) },
-                    onLoadWatchfaceFile = { pickZip.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
                     onDismissCustomWatchfaceNotShown = { viewModel.dismissCustomWatchfaceNotShown() },
                     onCwfSettings = { cwfSettingsOpen = true },
                     onLoadNightWatchface = { viewModel.loadNightWatchfaceFiles() },
@@ -285,7 +270,6 @@ internal fun WearMainContent(
     onExportTemplate: () -> Unit,
     onMoreWatchfaces: () -> Unit,
     onSelectPushedWatchface: (String) -> Unit,
-    onLoadWatchfaceFile: () -> Unit,
     onDismissCustomWatchfaceNotShown: () -> Unit,
     onCwfSettings: () -> Unit,
     onLoadNightWatchface: () -> Unit,
@@ -455,11 +439,7 @@ internal fun WearMainContent(
                     // Row 3: the watch face settings, set from the phone
                     ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings), onCwfSettings), button2 = placeEntryButton(uiState, onDayNightSettings)) // PERSONAL PATCH: a design that needs the place, see WearPlaceUseUi.kt
 
-                    // Row 4: any watchface zip from a file, old design or Watch Face Format face
-                    ButtonRow(
-                        button1 = ButtonDef(Icons.Default.FolderOpen, stringResource(SyncStrings.wear_load_watchface_file), onLoadWatchfaceFile),
-                        button2 = null
-                    )
+                    // The Watch Face Format face loaded with "Import designs"
                     uiState.wffFaceName?.let { name ->
                         Text(
                             text = stringResource(SyncStrings.wear_wff_face_on_watch, name),
