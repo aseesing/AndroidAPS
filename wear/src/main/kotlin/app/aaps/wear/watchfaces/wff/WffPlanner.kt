@@ -345,7 +345,14 @@ class WffPlanner(private val version: Int = 4) {
         /** WFF allows at most this many complication slots in a face. The plan needs at most 8: 5 of the wearer, glucose, age and the data picture. */
         const val MAX_SLOTS = 8
 
-        /** The fixed slot ids, so an update keeps the wearer's settings (design doc 2.3). */
+        /**
+         * The fixed slot ids, so an update keeps the wearer's settings (design doc 2.3).
+         *
+         * Why they must never change: a watch reads the default data sources of a complication slot
+         * only the first time it binds that slot id. A new id for the same role is a new slot: it
+         * loses the wearer's choice. A changed default source under an old id is never read: the slot
+         * keeps the source it was bound to first.
+         */
         const val GLUCOSE_SLOT_ID = 10
         const val AGE_SLOT_ID = 11
         const val DATA_SLOT_ID = 20

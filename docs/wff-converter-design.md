@@ -1053,8 +1053,15 @@ build on the phone, send, push) is not built.
   follows them by itself. A live part cannot: it follows what the design sets in its metadata. No
   `ListConfiguration` is written.
 - **No hints** (section 6). The defaults were enough for the four designs.
-- **A wake layer that also shows at rest keeps its rest pose** and does not move (Aurora's lights,
-  the aurora). Only layers that show in the wake alone become frames (snow, rain).
+- **Wake motion, three ways.** A layer that shows only in the wake becomes frames over the face
+  (snow, rain; Santa). A static picture with layers that also move in the wake (Aurora's sky, lights
+  and stars) gets frames of the whole picture from the start of the wake to its end, at 4 frames a
+  second, as lossy WebP; they start and end at rest, so there is no jump. Layers that add light
+  (`add`, `screen`) are framed on black and played with `blendMode` `PLUS` or `SCREEN`.
+- **A wake layer that shows only on some days** (Santa at Christmas): `WffShowDays` works out its
+  days from its own formula with the design's default options; its frames play inside a WFF
+  `Condition` on `[MONTH]` and `[DAY]`. A choice of the wearer in the watch app (Santa always or
+  never) does not reach the face.
 - **A baked layer that blends** (`add`, `screen`) stays in the picture below it, so a data part
   between them lies over it.
 - **The old-reading mark of a shape layer** (Aurora) is in the data picture, not live.

@@ -12,7 +12,6 @@ import app.aaps.wear.watchfaces.animation.WakeAnimationJson
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Base64
 
 /**
  * Copies of a design that each show only some of its parts, for the pictures of a converted face
@@ -23,7 +22,7 @@ import java.util.Base64
  * layer that moves a view is never changed: it draws nothing when its view is gone. The layers are
  * written out of their templates first, so the index of a layer is its index in the plan.
  *
- * A copy that must be see-through gets a clear picture as its background ([asCwf]).
+ * A copy that must be see-through gets a clear picture as its background ([asCwf], [WffPictures.CLEAR_PNG]).
  */
 class WffDesignParts(private val design: JSONObject, animation: WakeAnimationSpec?, private val plan: WffPlan) {
 
@@ -87,9 +86,6 @@ class WffDesignParts(private val design: JSONObject, animation: WakeAnimationSpe
         /** The background pictures of a design, by the name of their file. */
         private val BACKGROUND_FILES = listOf("Background", "BackgroundHigh", "BackgroundLow")
 
-        /** A PNG of one clear pixel (RGBA 0, 0, 0, 0). */
-        internal val CLEAR_PNG: ByteArray = Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=")
-
         /**
          * The design [source] with [json] as its json. A [transparent] one gets a clear background
          * picture: without one the face draws its own default background.
@@ -97,7 +93,7 @@ class WffDesignParts(private val design: JSONObject, animation: WakeAnimationSpe
         fun asCwf(source: CwfData, json: JSONObject, transparent: Boolean): CwfData {
             val res = if (!transparent) source.resData else source.resData.toMutableMap().apply {
                 BACKGROUND_FILES.forEach { remove(it) }
-                put(BACKGROUND_FILES.first(), ResData(CLEAR_PNG, ResFormat.PNG))
+                put(BACKGROUND_FILES.first(), ResData(WffPictures.CLEAR_PNG, ResFormat.PNG))
             }
             return CwfData(json.toString(), source.metadata, res)
         }

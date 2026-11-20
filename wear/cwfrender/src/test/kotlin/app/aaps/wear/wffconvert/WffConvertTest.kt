@@ -67,17 +67,24 @@ class WffConvertTest {
     fun aSmallDesignGivesAValidFace() {
         val assets = WffAssets(
             statics = mapOf(0 to WffAssets.Picture("static_0", DesignRect.FULL), 1 to WffAssets.Picture("static_1", DesignRect(10f, 10f, 380f, 380f))),
-            loops = listOf(WffAssets.Loop(layers = setOf(2), frames = listOf("loop0_000", "loop0_001"), fps = 15, box = DesignRect(0f, 80f, 400f, 40f), loopCount = 3, blend = "PLUS"))
+            loops = listOf(
+                WffAssets.Loop(layers = setOf(2), frames = listOf("loop0_000", "loop0_001"), fps = 15, box = DesignRect(0f, 80f, 400f, 40f), loopCount = 3, blend = "PLUS", condition = "[MONTH] == 12 && [DAY] >= 24"),
+                WffAssets.Loop(layers = emptySet(), frames = listOf("sky_000", "sky_001"), fps = 6, box = DesignRect(0f, 0f, 400f, 200f), overRun = 0)
+            )
         )
         val face = WffFaceWriter(providerApp = "info.nightscout.androidaps").write(design, animation, plan, assets)
         val file = File.createTempFile("watchface", ".xml").apply { writeText(face.xml) }
         assertWithMessage("%s", face.xml).that(WatchFaceXmlValidator().validate(file.path, "4")).isTrue()
         val xml = face.xml
         // The pictures in paint order: the bottom one, the data picture, the one over it, and the loop on top
-        val order = listOf("\"static_0\"", "WffDataComplication", "\"static_1\"", "<PartAnimatedImage").map { xml.indexOf(it) }
+        val order = listOf("\"static_0\"", "WffDataComplication", "\"static_1\"", "\"loop0_000\"").map { xml.indexOf(it) }
         assertThat(order).isInOrder()
         assertThat(order.first()).isAtLeast(0)
         assertThat(xml).contains("""<PartAnimatedImage x="0" y="80" width="400" height="40" blendMode="PLUS">""")
+        assertThat(xml).contains("""<Expression name="days">[MONTH] == 12 &amp;&amp; [DAY] &gt;= 24</Expression>""")
+        // The bottom picture in motion lies right over it, under the data picture
+        assertThat(xml.indexOf("\"sky_000\"")).isGreaterThan(xml.indexOf("\"static_0\""))
+        assertThat(xml.indexOf("\"sky_000\"")).isLessThan(xml.indexOf("WffDataComplication"))
         // The glucose in its slot, coloured by the thresholds, twice (the view and the text layer); the arrow, the delta
         assertThat(xml).contains("""slotId="10"""")
         assertThat(xml).contains("info.nightscout.androidaps/app.aaps.wear.complications.wff.WffGlucoseComplication")

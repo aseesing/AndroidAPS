@@ -72,8 +72,14 @@ class WffFaceWriter(private val providerApp: String, private val lowMgdl: Double
             val layer = item.layer?.let { animation?.layers?.getOrNull(it) }
             when {
                 item.tier == WffTier.OMIT                              -> Unit
-                item.tier == WffTier.BAKE && item.loop                 -> assets.loops.withIndex().firstOrNull { item.layer in it.value.layers }?.let { (i, loop) -> if (done.add("loop$i")) loop(loop) }
-                item.tier == WffTier.BAKE                              -> assets.statics[item.run]?.let { if (done.add("static${item.run}")) picture(it) }
+                item.tier == WffTier.BAKE && item.loop                 ->
+                    assets.loops.withIndex().firstOrNull { it.value.overRun == null && item.layer in it.value.layers }?.let { (i, loop) -> if (done.add("loop$i")) loop(loop) }
+
+                item.tier == WffTier.BAKE                              -> if (done.add("static${item.run}")) {
+                    assets.statics[item.run]?.let { picture(it) }
+                    // The same picture in motion during the wake, right over it
+                    assets.loops.filter { it.overRun == item.run }.forEach { loop(it) }
+                }
                 item.where in WffPlanner.USER_SLOTS                    -> userSlot(item)
                 item.where == WffPlanner.GLUCOSE                       -> if (done.add("glucose")) glucoseSlot()
                 item.where == WffPlanner.AGE                           -> if (done.add("age")) ageSlot()
@@ -96,6 +102,12 @@ class WffFaceWriter(private val providerApp: String, private val lowMgdl: Double
         }
 
         private fun loop(loop: WffAssets.Loop) {
+            loop.condition?.let {
+                line(2, """<Condition><Expressions><Expression name="days">${xml(it)}</Expression></Expressions><Compare expression="days">""")
+                loop(loop.copy(condition = null))
+                line(2, "</Compare></Condition>")
+                return
+            }
             line(2, """<PartAnimatedImage ${rect(loop.box)}${loop.blend?.let { " blendMode=\"$it\"" } ?: ""}>""")
             line(3, HIDE_IN_AMBIENT)
             line(3, """<AnimationController play="ON_VISIBLE" beforePlaying="HIDE" afterPlaying="HIDE" loopCount="${loop.loopCount}" delayPlay="${num(loop.delaySeconds.toDouble())}" />""")

@@ -28,7 +28,13 @@ data class WffAssets(val statics: Map<Int, Picture> = emptyMap(), val loops: Lis
      * @param loopCount how often the frames play in one wake
      * @param delaySeconds how long after the wake they start
      * @param blend the WFF `blendMode` of layers that add light (`PLUS`, `SCREEN`): their frames are on
-     *   black and mix with what lies below; null for normal see-through frames
+     *   black and mix with what lies below ([WffPictures.lightBlend]); null for normal see-through frames
+     * @param condition a WFF expression: the frames play only when it is true (the days a layer shows)
+     * @param overRun the static picture these frames show in motion: they lie right over it, and while
+     *   they play they hide it where they lie; null for the frames of layers that show only in the wake
      */
-    data class Loop(val layers: Set<Int>, val frames: List<String>, val fps: Int, val box: DesignRect, val loopCount: Int = 1, val delaySeconds: Float = 0f, val blend: String? = null)
+    data class Loop(
+        val layers: Set<Int>, val frames: List<String>, val fps: Int, val box: DesignRect, val loopCount: Int = 1, val delaySeconds: Float = 0f,
+        val blend: String? = null, val condition: String? = null, val overRun: Int? = null
+    )
 }
