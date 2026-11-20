@@ -9,6 +9,7 @@ import app.aaps.wear.watchfaces.animation.WakeAnimationJson
 import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -167,5 +168,49 @@ internal class WffPlannerTest {
             val visible = design.keys().asSequence().filter { design.optJSONObject(it)?.optString("visibility") == "visible" }.toSet()
             assertWithMessage(zip.name).that(plan.items.mapNotNull { it.view }.toSet()).containsAtLeastElementsIn(visible)
         }
+    }
+    @Test
+    fun aViewThatALookChangesGoesToTheDataPicture() {
+        val design = design(""""freetext1": ${view(100, 160, 64, 64, ", \"image\": \"Star\"")}, "freetext2": ${view(240, 160, 64, 64, ", \"image\": \"Star\", \"visibility\": \"gone\"")},
+            "freetext3": ${view(100, 260, 64, 64, ", \"image\": \"Moon\"")}""")
+            .put("looks", JSONArray("""[{"when": "v_is_day == 1", "patch": {"freetext2": {"visibility": "visible"}}, "images": {"Moon": "Sun"}}]"""))
+        val plan = plan(design)
+        assertThat(item(plan, "freetext1").tier).isEqualTo(WffTier.BAKE)
+        // Shown by the look, and showing a picture that the look swaps
+        assertThat(item(plan, "freetext2").where).isEqualTo("data")
+        assertThat(item(plan, "freetext3").where).isEqualTo("data")
+    }
+
+    @Test
+    fun aColourOfTheWearerMovesBakedPartsToTheDataPictureAndWarnsOnLiveOnes() {
+        val design = design(""""time": ${view(100, 60, 200, 70)}, "cover_chart": ${view(10, 10, 50, 50)}""", layers = """{"shape": "circle", "rest": 0, "x": 200, "y": 200, "radius": 40}""")
+            .put("colourLooks", JSONObject("""{"colour1": {"time": {"fontColor": "@colour"}, "cover_chart": {"color": "@colour"}}, "colour2": {"animation": {"layers": []}}}"""))
+        val plan = plan(design)
+        assertThat(item(plan, "time").tier).isEqualTo(WffTier.LIVE)
+        assertThat(item(plan, "time").severity).isEqualTo(WffSeverity.WARNING)
+        assertThat(item(plan, "time").note).contains("the colour the wearer picks does not reach it")
+        assertThat(item(plan, "cover_chart").where).isEqualTo("data")
+        assertThat(item(plan, "L0").where).isEqualTo("data")
+    }
+
+    @Test
+    fun anEraseLayerWithoutAGroupIsLeftOut() {
+        val plan = plan(design(""""time": ${view(100, 60, 200, 70)}""", layers = """{"shape": "circle", "rest": 0, "x": 200, "y": 200, "radius": 40, "blend": "erase"}"""))
+        assertThat(item(plan, "L0").tier).isEqualTo(WffTier.OMIT)
+    }
+    @Test
+    fun onlyThePlainClockAndGlucoseTextsAreLive() {
+        val plan = plan(design(""""time": ${view(100, 60, 200, 70)}""", layers = """
+            {"text": "clock()", "rest": 0, "x": 200, "y": 100},
+            {"text": "clockHour() & 'h' & clockMinute()", "rest": 0, "x": 200, "y": 150},
+            {"text": "upper(date('EEE d MMM'))", "rest": 0, "x": 200, "y": 200},
+            {"text": "glucose(v_sgv)", "rest": 0, "x": 200, "y": 250},
+            {"text": "'BG ' & glucose(v_sgv, 'mgdl')", "rest": 0, "x": 200, "y": 300}"""))
+        assertThat(item(plan, "L0").tier).isEqualTo(WffTier.LIVE)
+        assertThat(item(plan, "L1").where).isEqualTo("data")
+        assertThat(item(plan, "L1").severity).isEqualTo(WffSeverity.WARNING)
+        assertThat(item(plan, "L2").where).isEqualTo("data")
+        assertThat(item(plan, "L3").where).isEqualTo("glucose")
+        assertThat(item(plan, "L4").where).isEqualTo("data")
     }
 }

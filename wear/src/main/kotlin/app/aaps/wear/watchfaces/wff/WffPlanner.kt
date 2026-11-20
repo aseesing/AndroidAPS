@@ -82,7 +82,9 @@ class WffPlanner(private val version: Int = 4) {
      * loop but a part of a static picture, in its rest pose.
      */
     fun settle(plan: WffPlan, still: Set<Int>): WffPlan {
-        val items = withRuns(plan.items.map { if (it.loop && it.layer in still) it.copy(loop = false, note = "shows at rest too: its rest pose in a static picture, its wake motion is left out", severity = WffSeverity.WARNING) else it })
+        val settled = withRuns(plan.items.map { if (it.loop && it.layer in still) it.copy(loop = false, note = "shows at rest too: its rest pose in a static picture, its wake motion is left out", severity = WffSeverity.WARNING) else it })
+        // The first picture plays as frames during the wake (WffLoops.runCanMove): its layers keep their motion
+        val items = settled.map { if (it.layer in still && it.run != null && WffLoops.runCanMove(it.run)) it.copy(note = "shows at rest too: in static picture ${it.run}, which plays as frames in the wake", severity = WffSeverity.INFO) else it }
         return plan.copy(items = items, staticRuns = (items.maxOfOrNull { it.run ?: 0 } ?: 0) + 1)
     }
 
@@ -114,14 +116,42 @@ class WffPlanner(private val version: Int = 4) {
 
     // ---- the classic views ----
 
+    /** The looks of the last design planned: [view] and [layer] ask for them often. */
+    private var looksCache: Pair<JSONObject, WffLooks>? = null
+
+    private fun looks(design: JSONObject): WffLooks =
+        looksCache?.takeIf { it.first === design }?.second ?: WffLooks(design).also { looksCache = design to it }
+
+    /**
+     * The view [key], with what its looks and the colours of the wearer change: a baked view that they
+     * change goes to the data picture, which follows them; a live part keeps the design's own look.
+     */
     private fun view(design: JSONObject, key: String): WffPlanItem? {
+        val looks = looks(design)
+        val planned = viewPlanned(design, key, shownByLook = key in looks.lookViews) ?: return null
+        if (planned.where == DATA || planned.tier == WffTier.OMIT) return planned
+        val byLook = key in looks.lookViews
+        val byColour = key in looks.colourViews
+        return when {
+            planned.tier == WffTier.BAKE && byLook   -> planned.copy(tier = WffTier.COMPLICATION, note = "changed by a look of the design: in the data picture", where = DATA, run = null)
+            planned.tier == WffTier.BAKE && byColour -> planned.copy(tier = WffTier.COMPLICATION, note = "its colour is the wearer's choice: in the data picture", where = DATA, run = null)
+            byLook                                   -> planned.copy(note = planned.note + "; a look of the design does not reach it", severity = WffSeverity.WARNING)
+            byColour                                 -> planned.copy(note = planned.note + "; the colour the wearer picks does not reach it", severity = WffSeverity.WARNING)
+            else                                     -> planned
+        }
+    }
+
+    /** [view] without the looks. [shownByLook]: a look can show the view, so it counts also when it is hidden. */
+    private fun viewPlanned(design: JSONObject, key: String, shownByLook: Boolean): WffPlanItem? {
         val json = design.optJSONObject(key) ?: return null
-        if (json.optString("visibility") != "visible") return null
+        if (json.optString("visibility") != "visible" && !shownByLook) return null
         val box = DesignRect(json.optDouble("leftmargin", 0.0).toFloat(), json.optDouble("topmargin", 0.0).toFloat(), json.optDouble("width", 0.0).toFloat(), json.optDouble("height", 0.0).toFloat())
         fun item(tier: WffTier, note: String, where: String? = null, severity: WffSeverity = WffSeverity.INFO) = WffPlanItem(key, tier, note, severity, where, box, view = key)
         fun data(why: String) = item(WffTier.COMPLICATION, why, DATA)
 
         if (key == "background") return item(WffTier.BAKE, "static picture")
+        // Our engine shows the seconds only when the design enables them
+        if ((key == "second" || key == "second_hand") && !design.optBoolean("enableSecond")) return item(WffTier.OMIT, "the design does not enable the seconds (enableSecond)")
         if (key in USER_SLOTS) return item(WffTier.LIVE, "user slot ${key.last()}", key)
         // A view that a watch preference changes: the watch knows the preference, so it draws it
         if (json.has("dynPref") || json.has("twinView")) return data("changed by a watch preference: in the data picture")
@@ -176,6 +206,8 @@ class WffPlanner(private val version: Int = 4) {
             WffPlanItem("L$index ${describe(layer)}", tier, note, severity, where, box, layer = index, loop = loop, slot = slotOf(layer).name.lowercase(), blends = layer.blend != LayerBlend.NORMAL || layer.group != null)
 
         val wake = NameGroup.WAKE in read || NameGroup.RANDOM in read || NameGroup.HEART in read
+        // The engine draws an erase or an inside layer only in a group
+        if (layer.blend.needsGroup && layer.group == null) return item(WffTier.OMIT, "${layer.blend.name.lowercase()} without a group: left out, as our engine does")
         val data = read.any { it in DATA_GROUPS } || (source is LayerSource.Image && source.key == MOON_IMAGE) || source is LayerSource.Dynamic
         val glucose = NameGroup.GLUCOSE in read || NameGroup.AGE in read
 
@@ -190,15 +222,17 @@ class WffPlanner(private val version: Int = 4) {
             }
         }
         if (source is LayerSource.Text && glucose && !wake) {
-            return if (NameGroup.GLUCOSE in read && NameGroup.AGE !in read) item(WffTier.COMPLICATION, "glucose text: live in the glucose slot", GLUCOSE, box = DesignRect.FULL)
-            else item(WffTier.COMPLICATION, "reads the glucose and its age: in the data picture", DATA)
+            // Only the plain glucose is the text of the slot: a text with more, or with its own unit, is drawn by the watch
+            return if (PLAIN_GLUCOSE.matches(source.text.trim())) item(WffTier.COMPLICATION, "glucose text: live in the glucose slot", GLUCOSE, box = DesignRect.FULL)
+            else item(WffTier.COMPLICATION, "a text of the glucose: in the data picture", DATA)
         }
         if (source !is LayerSource.Text && NameGroup.AGE in read && !wake)
             return item(
                 WffTier.COMPLICATION, "a mark of an old reading, in the data picture: it shows when the watch makes the picture again, at least every 5 minutes", DATA,
                 severity = WffSeverity.WARNING
             )
-        if (source is LayerSource.Text && names.textReadsClock(source.text) && !wake && !data)
+        // Only the plain clock is a DigitalClock: other clock and date texts are drawn by the watch
+        if (source is LayerSource.Text && PLAIN_CLOCK.matches(source.text.trim()) && !wake && !data)
             return item(WffTier.LIVE, "clock text: DigitalClock with the zip font", box = DesignRect.FULL)
         if (wake) {
             val heart = if (NameGroup.HEART in read) "; the heart rate is ${names.fallbackBpm} bpm" else ""
@@ -208,13 +242,18 @@ class WffPlanner(private val version: Int = 4) {
                 severity = if (heart.isNotEmpty() || lost.isNotEmpty()) WffSeverity.WARNING else WffSeverity.INFO
             )
         }
+        if (looks(design).changes(layer)) return item(WffTier.COMPLICATION, "changed by a look or a colour of the wearer$copies: in the data picture", DATA)
         if (data || glucose || NameGroup.CLOCK in read || NameGroup.SECONDS in read || NameGroup.WFF_VALUE in read || NameGroup.OPTION in read) {
             val what = read.joinToString(", ") { it.name.lowercase() }
             val fast = NameGroup.SECONDS in read
-            return item(
-                WffTier.COMPLICATION, "reads $what$copies: in the data picture" + if (fast) "; it reads the seconds, but the picture changes only with the data" else "", DATA,
-                severity = if (fast) WffSeverity.WARNING else WffSeverity.INFO
-            )
+            val clock = NameGroup.CLOCK in read
+            val reads = if (what.isEmpty()) "the ${describe(layer)} picture of the app" else "reads $what"
+            val late = when {
+                fast  -> "; it reads the seconds, but the picture changes only with the data"
+                clock -> "; it reads the clock, but the picture changes only with the data, at least every 5 minutes"
+                else  -> ""
+            }
+            return item(WffTier.COMPLICATION, "$reads$copies: in the data picture$late", DATA, severity = if (fast || clock) WffSeverity.WARNING else WffSeverity.INFO)
         }
         return item(WffTier.BAKE, "static picture$copies")
     }
@@ -304,8 +343,6 @@ class WffPlanner(private val version: Int = 4) {
             texts.forEach { scan(it, localLets, found, HashSet()) }
             return found
         }
-
-        fun textReadsClock(text: String): Boolean = CLOCK_FUNCTION.containsMatchIn(text)
 
         private fun scan(text: String, localLets: Map<String, String>, found: MutableSet<NameGroup>, seen: MutableSet<String>) {
             for (match in TOKEN.findAll(text)) {
@@ -398,6 +435,8 @@ class WffPlanner(private val version: Int = 4) {
         private val SKY_VALUES = setOf("sun_progress", "night_progress", "sun_cycle", "moon_cycle", "moon_limb", "moon_north", "moon_lit", "is_day", "sun_next_time")
 
         private val TOKEN = Regex("\\[[^\\]]+]|[A-Za-z_][A-Za-z0-9_]*")
-        private val CLOCK_FUNCTION = Regex("\\b(clock|clockHour|clockMinute|ampm|date)\\s*\\(")
+        /** The texts that WFF shows itself: the clock as hh:mm, and the glucose as the slot sends it. */
+        private val PLAIN_CLOCK = Regex("clock\\(\\s*\\)")
+        private val PLAIN_GLUCOSE = Regex("glucose\\(\\s*v_sgv\\s*\\)")
     }
 }

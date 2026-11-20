@@ -144,22 +144,47 @@ class WffFaceWriter(
                 "hour"   -> "hh"
                 "minute" -> "mm"
                 "second" -> "ss"
-                else     -> "hh:mm"
+                else     -> if (seconds()) "hh:mm:ss" else "hh:mm"
             }
-            line(2, """<DigitalClock ${rect(box)}>""")
+            // The time with seconds shows without them in always-on, as our face: a second clock for always-on only
+            if (format == "hh:mm:ss") {
+                digitalClock(box, v, format, ambient = false)
+                digitalClock(box, v, "hh:mm", ambient = true)
+            } else digitalClock(box, v, format, ambient = null)
+        }
+
+        /** A clock text. [ambient]: true shows it only in always-on, false hides it there, null shows it in both. */
+        private fun digitalClock(box: DesignRect, v: JSONObject, format: String, ambient: Boolean?) {
+            line(2, """<DigitalClock ${rect(box)}${if (ambient == true) " alpha=\"0\"" else ""}>""")
+            when (ambient) {
+                true  -> line(3, """<Variant mode="AMBIENT" target="alpha" value="255" />""")
+                false -> line(3, HIDE_IN_AMBIENT)
+                null  -> Unit
+            }
             line(3, """<TimeText format="$format" hourFormat="SYNC_TO_DEVICE" align="${align(v.optString("gravity"))}" x="0" y="0" width="${px(box.width)}" height="${px(box.height)}">""")
             line(4, font(v) + " />")
             line(3, "</TimeText>")
             line(2, "</DigitalClock>")
         }
 
+        /** The time shows seconds: the design enables them and the wearer's preference (as the design sets it) allows them. */
+        private fun seconds(): Boolean =
+            design.optBoolean("enableSecond") && design.optJSONObject("metadata")?.optString("key_show_seconds")?.takeIf { it.isNotEmpty() }?.let { it == "true" } ?: true
+
         private fun dateView(key: String) {
             val v = design.optJSONObject(key) ?: return
-            val long = if (key == "month") v.optString("monthFormat") == "MMMM" else v.optString("dayNameFormat") == "EEEE"
+            // The formats are keys of the design itself, as our engine reads them
+            val dayName = design.optString("dayNameFormat", "E").takeIf { it.matches(Regex("E{1,4}")) } ?: "E"
+            val month = design.optString("monthFormat", "MMM").takeIf { it.matches(Regex("M{1,4}")) } ?: "MMM"
             val source = when (key) {
-                "day_name" -> if (long) "[DAY_OF_WEEK_F]" else "[DAY_OF_WEEK_S]"
+                "day_name" -> if (dayName.length == 4) "[DAY_OF_WEEK_F]" else "[DAY_OF_WEEK_S]"
                 "day"      -> "[DAY_Z]"
-                else       -> if (long) "[MONTH_F]" else "[MONTH_S]"
+                else       -> when (month.length) {
+                    1    -> "[MONTH]"
+                    2    -> "[MONTH_Z]"
+                    3    -> "[MONTH_S]"
+                    else -> "[MONTH_F]"
+                }
             }
             text(viewTextBox(v), align(v.optString("gravity")), font(v), "%s", source, upper = v.optBoolean("allCaps", false))
         }
@@ -429,14 +454,16 @@ class WffFaceWriter(
         /** The font of a text view, in [colour] or its own. */
         private fun font(v: JSONObject, colour: String? = null): String {
             val style = v.optString("fontStyle")
-            val weight = if ("bold" in style) """ weight="BOLD"""" else ""
+            // The font default_bold carries its own weight (see the other font())
+            val weight = if ("bold" in style && v.optString("font") != BOLD_FONT) """ weight="BOLD"""" else ""
             val slant = if ("italic" in style) """ slant="ITALIC"""" else ""
             return font(v.optString("font"), v.optDouble("textsize", DEFAULT_TEXT_SIZE), colour ?: color(v.optString("fontColor"), DEFAULT_TEXT)) + weight + slant
         }
 
         private fun font(key: String, size: Double, colour: String): String {
             val family = if (key.isEmpty() || key in SYSTEM_FONTS) "SYNC_TO_DEVICE" else fonts.getOrPut(key) { "font_" + key.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9_]"), "_") }
-            return """<Font family="$family" size="${px(size)}" color="$colour""""
+            val weight = if (key == BOLD_FONT) """ weight="BOLD"""" else ""
+            return """<Font family="$family" size="${px(size)}" color="$colour"$weight"""
         }
 
         private fun line(depth: Int, text: String) {
@@ -451,6 +478,9 @@ class WffFaceWriter(
         const val SIZE = 400
 
         const val DEFAULT_TEXT = "#FFFFFFFF"
+
+        /** The system font that is bold: WFF has only the font of the device, with a weight. */
+        const val BOLD_FONT = "default_bold"
 
         /** The text size of a classic view that sets none, as `CustomWatchface` uses. */
         const val DEFAULT_TEXT_SIZE = 22.0

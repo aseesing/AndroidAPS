@@ -37,7 +37,7 @@ class WffLoops(private val wakeMs: Long, private val fadeMs: Long) {
      * @param atMs the moments to draw, after the start of the wake
      * @param span when the layers show, or null for a short loop that plays over the whole wake
      */
-    data class Take(val fps: Int, val atMs: List<Long>, val span: Span?) {
+    data class Take(val fps: Int, val atMs: List<Long>, val span: Span?, val cut: Boolean = false) {
 
         /** How long after the start of the wake the frames start to play. */
         val delaySeconds: Float get() = if (span == null) 0f else span.fromMs / 1000f
@@ -109,10 +109,11 @@ class WffLoops(private val wakeMs: Long, private val fadeMs: Long) {
     fun take(span: Span?): Take? {
         val seconds = if (span == null) minOf(LOOP_MS, wakeMs) / 1000.0 else (span.toMs - span.fromMs) / 1000.0
         val fps = if (span == null) LOOP_FPS else (budget / maxOf(seconds, 0.1)).toInt().coerceIn(1, PART_FPS)
-        val count = minOf(budget, ceil(seconds * fps).toInt())
+        val wanted = ceil(seconds * fps).toInt()
+        val count = minOf(budget, wanted)
         if (count < 2) return null
         val start = span?.fromMs ?: minOf(fadeMs, wakeMs / 4)
-        return Take(fps, (0 until count).map { start + it * 1000L / fps }, span)
+        return Take(fps, (0 until count).map { start + it * 1000L / fps }, span, cut = count < wanted)
     }
 
     /** How often the [frames] of [take] play in one wake: a short loop repeats until the wake ends, a part of the wake plays once. */
