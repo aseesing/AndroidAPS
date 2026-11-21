@@ -919,6 +919,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 backgroundView.draw(this)
             }
         if (!renderSkipBackground) drawRestLayers(canvas, canvasWidth, renderNow()) // PERSONAL PATCH: wake layers that stay on the face
+        if (!renderSkipBackground) slotPainter?.invoke(canvas) // PERSONAL PATCH: the phone preview's slots, where the system draws them on the watch
         // super.onDraw() has just laid out mainLayout, so the placeholders hold this frame's geometry
         // and the slots' declared bounds can follow it. Not in complicationRender(): that runs per
         // slot, while one pushed option covers every slot at once.
@@ -1061,6 +1062,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         drawSlots = { canvas ->
             complications.syncGeometry(::visibleSlotBounds)
             slotTime?.let { drawComplicationSlots(canvas, it) }
+            slotPainter?.invoke(canvas) // PERSONAL PATCH: the phone preview's slots
         },
         drawRest = { canvas, nowMs, slot -> drawRestLayers(canvas, canvas.width, nowMs, slot) }
     )
@@ -1515,7 +1517,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     fun previewImageBytes(): ByteArray? = resDataMap[ResFileMap.CUSTOM_WATCHFACE.fileName]?.value
 
     private fun prefBoolean(prefMap: PrefMap): Boolean =
-        if (isRenderOnly && ComplicationMap.entries.any { it.showPref == prefMap }) false
+        if (isRenderOnly && slotPainter == null && ComplicationMap.entries.any { it.showPref == prefMap }) false // PERSONAL PATCH: slotPainter, the phone preview draws its slots
         else sp.getBoolean(prefMap.prefKey, prefMap.defaultValue as Boolean)
 
     private fun setVisibility(visibility: String, pref: Boolean = true): Int = when (visibility) {
@@ -2606,6 +2608,19 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     private fun checkPref() = valPref.any { (prefMap, s) ->
         s != PrefMap.fromKey(prefMap)?.let { if (it.typeBool) prefBoolean(it).toString() else sp.getString(it.prefKey, it.defaultValue as String) }
+    }
+
+    // PERSONAL PATCH: the phone preview has no system to draw the complication slots, so it draws them
+    // itself (`PreviewSlots` in wear/cwfrender). Never set on the watch, where the system draws them.
+    /** Draws the slots right after the background, where the system draws them on the watch. */
+    internal var slotPainter: ((Canvas) -> Unit)? = null
+
+    /** Where slot [slotId] is drawn this frame and the style the design gives it, or null when it is not shown. */
+    internal fun slotLook(slotId: Int): Pair<ComplicationRender.At, ComplicationStyleValues>? {
+        val view = complicationPlaceholder(slotId)?.takeIf { it.isVisible && it.width > 0 && it.height > 0 } ?: return null
+        if (simpleUi.isEnabled(currentWatchMode)) return null
+        val style = complications.stateFor(slotId)?.style ?: return null
+        return Pair(ComplicationRender.At(Rect(view.left, view.top, view.right, view.bottom), view.rotation), style)
     }
 
     // PERSONAL PATCH: the layers of the wake-up animation that stay on the face while no wake plays

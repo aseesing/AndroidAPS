@@ -68,7 +68,14 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
      */
     private inner class Drawing(val size: Int) {
 
-        val face = CustomWatchface().apply { prepareForRendering(host) }
+        /** The time of the frame being drawn, for the complication slots. */
+        var frameTime = System.currentTimeMillis()
+
+        val face = CustomWatchface().apply {
+            prepareForRendering(host)
+            // The system draws the slots on the watch; here the preview draws them itself
+            slotPainter = { canvas -> slots.draw(canvas, this, frameTime) }
+        }
         val pipeline = CwfFramePipeline(host, logger) { face }
         val wakeAnimator = WakeAnimator(
             heartRate = { null }, // the phone does not measure it; the pulse uses the design's fallback
@@ -99,6 +106,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         /** Marks the views as out of date: [all] also for a new design or new settings, else for new values. */
         fun invalidate(all: Boolean) {
             if (all) pipeline.invalidateAll() else pipeline.invalidateData()
+            slots.invalidate() // the texts of the slots are made from the same values
             stale = true
         }
 
@@ -146,6 +154,34 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
 
     /** The design last set, to skip setting the same design again. */
     private var design: CwfData? = null
+
+    /** Draws the complication slots, which the system draws on the watch. */
+    private val slots = PreviewSlots(host, logger)
+
+    /**
+     * What each complication slot shows, by its number (1 to 5). A slot that is not in the map shows
+     * what it shows on the watch before the wearer picks a source: carbs on board or insulin on board
+     * in the slots that have them as default, else nothing. Only a slot the design shows is drawn.
+     */
+    var slotSources: Map<Int, PreviewSlotSource>
+        get() = slots.chosen
+        set(value) {
+            if (value == slots.chosen) return
+            slots.chosen = value
+            settingsChanged()
+        }
+
+    /** What slot [number] (1 to 5) shows on the watch before the wearer picks a source: what it shows here when [slotSources] leaves it out. */
+    fun defaultSlotSource(number: Int): PreviewSlotSource = slots.defaultOf(number)
+
+    /** The steps of today for a slot that shows [PreviewSlotSource.STEPS], or null for none. The watch does not send them. */
+    var stepsToday: Long?
+        get() = slots.steps
+        set(value) {
+            if (value == slots.steps) return
+            slots.steps = value
+            settingsChanged()
+        }
 
     /** The watch settings this preview draws with. Call [settingsChanged] after writing them. */
     val watchSettings: SharedPreferences get() = host.watchSettings
@@ -252,6 +288,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         val index = freeBuffer(size, isFree) ?: return null
         val target = buffers[index]!!
         val drawing = drawing(size)
+        drawing.frameTime = nowMs
         // The hour, minute and date fields are filled with the data, from the real clock
         val minute = nowMs / MS_PER_MINUTE
         if (minute != drawing.minute) {

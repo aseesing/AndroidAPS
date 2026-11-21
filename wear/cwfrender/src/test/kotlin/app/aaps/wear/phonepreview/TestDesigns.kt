@@ -73,6 +73,29 @@ internal object TestDesigns {
         getJSONObject("metadata").put("key_show_bg", show)
     }, "#101828")
 
+    /**
+     * A dark face that shows all five complication slots as rows of [SLOT_INK], one below the other:
+     * slot n is at [slotBox] of n.
+     */
+    fun withSlots(): CwfData = load("Test_Slots", face("Test Slots", "#101828").apply {
+        for (n in 1..5) {
+            val box = slotBox(n)
+            put("complication$n", slot(left = box[0], top = box[1], width = box[2] - box[0], height = box[3] - box[1], color = SLOT_INK))
+            getJSONObject("metadata").put("key_show_complication$n", "true")
+        }
+    }, "#101828")
+
+    /** The colour of the text and the icon of the slots of [withSlots]. */
+    const val SLOT_INK = "#FFE600"
+
+    /** Where slot [n] (1 to 5) of [withSlots] is: left, top, right, bottom in the 400 design space. */
+    fun slotBox(n: Int): IntArray = intArrayOf(240, 110 + (n - 1) * 50, 380, 150 + (n - 1) * 50)
+
+    private fun slot(left: Int, top: Int, width: Int, height: Int, color: String): JSONObject = JSONObject()
+        .put("width", width).put("height", height).put("topmargin", top).put("leftmargin", left).put("visibility", "visible")
+        .put("color", "#00000000").put("borderRadius", 0).put("fontColor", color).put("iconColor", color)
+        .put("ringPrimaryColor", "#00000000").put("ringSecondaryColor", "#00000000").put("textsize", 20).put("gravity", "center")
+
     private fun face(name: String, background: String): JSONObject = JSONObject()
         .put("metadata", JSONObject().put("name", name).put("cwf_version", "3.0").put("key_show_date", "false"))
         .put("background", JSONObject().put("width", 400).put("height", 400).put("topmargin", 0).put("leftmargin", 0).put("visibility", "visible"))

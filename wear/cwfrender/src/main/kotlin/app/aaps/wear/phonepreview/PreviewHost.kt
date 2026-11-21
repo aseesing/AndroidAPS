@@ -67,6 +67,7 @@ class PreviewHost(
     /**
      * PERSONAL PATCH: the heart rate store of the face, in the same file as on the watch (see
      * `HealthModule`), here behind [name]. The watch does not send the heart rate, so on the phone it stays empty.
+     * A slot of the preview that shows the heart rate reads it too, see `PreviewSlots`.
      */
     val healthValues: HealthValues by lazy { HealthValues(getSharedPreferences(HealthValues.FILE, MODE_PRIVATE)) }
 
