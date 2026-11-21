@@ -28,6 +28,8 @@ import java.math.BigDecimal
  * - a template layer may `use` another template, at most [MAX_DEPTH] deep, never itself.
  * - a template layer with `"if": "<formula of the parameters>"` is left out when the formula is 0, so a
  *   part that cannot show is not a layer at all.
+ * - a `use` may carry `wff` (how the layer is made in the Watch Face Format). It is no parameter: each
+ *   layer the template makes gets it, unless that layer has its own. The engine itself never reads it.
  *
  * @param own the templates of the design (the `templates` of the animation), by name, or null
  */
@@ -58,7 +60,10 @@ class Templates(private val own: JSONObject?) {
             name in using            -> return errors.plusAssign("$where: template '$name' uses itself")
             using.size >= MAX_DEPTH  -> return errors.plusAssign("$where: templates nested more than $MAX_DEPTH deep")
         }
-        val params = bind(template.optJSONObject(PARAMS) ?: JSONObject(), entry, name, errors, where)
+        val spec = template.optJSONObject(PARAMS) ?: JSONObject()
+        val params = bind(spec, entry, name, errors, where)
+        // A template may still have a parameter of that name; then it is that parameter
+        val wff = entry.opt(WFF)?.takeIf { !spec.has(WFF) }
         val layers = template.optJSONArray(LAYERS) ?: return
         for (i in 0 until layers.length()) {
             val layer = layers.optJSONObject(i) ?: continue
@@ -75,6 +80,7 @@ class Templates(private val own: JSONObject?) {
                 }
                 if (!keep) continue
             }
+            if (wff != null && !filled.has(WFF)) filled.put(WFF, copyOf(wff))
             expand(filled, using + name, into, errors, "$where ($name)")
         }
     }
@@ -82,7 +88,7 @@ class Templates(private val own: JSONObject?) {
     /** The values of the parameters of template [name] for [entry], in the order the template gives them. */
     private fun bind(spec: JSONObject, entry: JSONObject, name: String, errors: MutableList<String>, where: String): Map<String, Any?> {
         val params = LinkedHashMap<String, Any?>()
-        entry.keys().forEach { key -> if (key != USE && !spec.has(key)) errors += "$where: '$name' has no parameter '$key'" }
+        entry.keys().forEach { key -> if (key != USE && key != WFF && !spec.has(key)) errors += "$where: '$name' has no parameter '$key'" }
         spec.keys().forEach { key ->
             val declared = spec.opt(key)
             val limits = (declared as? JSONObject)?.takeIf { it.has(DEFAULT) }
@@ -169,6 +175,7 @@ class Templates(private val own: JSONObject?) {
         const val MAX = "max"
         const val INT = "int"
         const val IF = "if"
+        const val WFF = "wff"
 
         /** How deep a template may use other templates. */
         const val MAX_DEPTH = 4
