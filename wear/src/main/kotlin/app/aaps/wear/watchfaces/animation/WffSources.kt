@@ -41,8 +41,11 @@ object WffSources {
         "HOUR_1_24_MINUTE" to "if(hour == 0, 24, hour) + min / 60",
         "AMPM_STATE" to "hour >= 12",
         "BATTERY_PERCENT" to "v_watch_battery",
+        // The watch app has no step count: `v_steps` is a value nobody fills, so this has no number
         "STEP_COUNT" to "v_steps",
-        "HEART_RATE" to "v_heart_rate",
+        // The heart rate the engine uses: the one the watch measured in a design that reads it, else the
+        // fallback of the design. Reading it counts as reading `bpm`, so the watch measures for it too
+        "HEART_RATE" to "bpm",
         "WEATHER.IS_AVAILABLE" to "!missing(v_weather_kind)",
         // Our kinds 0 clear, 1 partly cloudy, 2 cloudy, 3 rain as the WFF codes 1 CLEAR, 14 PARTLY_CLOUDY,
         // 2 CLOUDY, 6 RAIN; 0 (UNKNOWN) without weather

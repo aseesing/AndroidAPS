@@ -1748,7 +1748,8 @@ an hour.</p>
 <tr><td><code>[DAY_OF_WEEK]</code></td><td>The day of the week, <strong>1 is Sunday</strong> and 7 is Saturday. (<code>v_day_name</code> starts on Monday.)</td></tr>
 <tr><td><code>[IS_24_HOUR_MODE]</code></td><td>1 when the watch shows 24 hours, else 0.</td></tr>
 <tr><td><code>[BATTERY_PERCENT]</code></td><td>The value <code>v_watch_battery</code>. No number when the watch does not know it.</td></tr>
-<tr><td><code>[STEP_COUNT]</code>, <code>[HEART_RATE]</code></td><td>The steps and the heart rate of the watch. A Watch Face Format face reads them from the watch itself. This engine has no number for them: the watch app no longer has the values <code>steps</code> and <code>heart_rate</code>. For the heart rate in this engine, use <code>bpm</code>.</td></tr>
+<tr><td><code>[HEART_RATE]</code></td><td>The heart rate, the same number as <code>bpm</code>: the last one the watch measured, else <code>fallbackBpm</code>. A design that reads it counts as a design that uses <code>bpm</code>, so the watch measures the heart rate for it. A Watch Face Format face reads the heart rate from the watch itself.</td></tr>
+<tr><td><code>[STEP_COUNT]</code></td><td>The steps of today. A Watch Face Format face reads them from the watch itself. This engine has no number for them: the watch app has no value for the steps.</td></tr>
 <tr><td><code>[MOON_PHASE_POSITION]</code></td><td>Where the moon is in its month, as in WFF: 0 at new moon, 7 at first quarter, 14 at full moon, 21 at last quarter, up to 28. Between these four moments it grows evenly, so it is not a count of days (a quarter can last 6.5 or 8.5 days). The moments are the true ones of the sky, not the mean ones of <code>v_moon_phase</code>, so the two can differ by most of a day.</td></tr>
 <tr><td><code>[WEATHER.IS_AVAILABLE]</code></td><td>1 when there is weather, else 0.</td></tr>
 <tr><td><code>[WEATHER.CONDITION]</code></td><td>The weather in the codes of WFF: 1 clear, 14 partly cloudy, 2 cloudy, 6 rain, 0 when there is no weather.</td></tr>
@@ -4058,7 +4059,7 @@ var WFF_FORMULAS = {
   HOUR_0_23: 'hour', HOUR_0_11: 'mod(hour, 12)', HOUR_1_12: 'mod(hour + 11, 12) + 1', HOUR_1_24: 'if(hour == 0, 24, hour)',
   HOUR_0_23_MINUTE: 'hour + min / 60', HOUR_0_11_MINUTE: 'mod(hour, 12) + min / 60', HOUR_1_12_MINUTE: 'mod(hour + 11, 12) + 1 + min / 60',
   HOUR_1_24_MINUTE: 'if(hour == 0, 24, hour) + min / 60', AMPM_STATE: 'hour >= 12',
-  BATTERY_PERCENT: 'v_watch_battery', STEP_COUNT: 'v_steps', HEART_RATE: 'v_heart_rate',
+  BATTERY_PERCENT: 'v_watch_battery', STEP_COUNT: 'v_steps', HEART_RATE: 'bpm',
   'WEATHER.IS_AVAILABLE': '!missing(v_weather_kind)',
   'WEATHER.CONDITION': 'missing(v_weather_kind) ? 0 : v_weather_kind == 0 ? 1 : v_weather_kind == 1 ? 14 : v_weather_kind == 2 ? 2 : v_weather_kind == 3 ? 6 : 0',
   'WEATHER.TEMPERATURE': 'round(v_weather_temperature)', 'WEATHER.TEMPERATURE_UNIT': '1'

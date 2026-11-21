@@ -23,7 +23,7 @@ import java.util.Locale
 class WffNamesTest {
 
     private val names = listOf(
-        "sec", "min", "hour", LayerVariables.DAY_NAME, "v_watch_battery", "v_steps", "v_heart_rate", "v_moon_phase", "v_weather_kind",
+        "sec", "min", "hour", LayerVariables.DAY_NAME, "v_watch_battery", "v_steps", "bpm", "v_moon_phase", "v_weather_kind",
         "v_weather_temperature", "v_opt_santa", "x"
     )
     private val utc: ZoneId = ZoneId.of("UTC")
@@ -184,10 +184,21 @@ class WffNamesTest {
     @Test
     fun theValuesOfTheWatch() {
         assertThat(eval("[BATTERY_PERCENT]", values(battery = 55.0))).isEqualTo(55.0)
-        assertThat(eval("[STEP_COUNT]", values(steps = 4321.0))).isEqualTo(4321.0)
+        // The steps are the value `steps`, which the watch app does not have: no number
+        assertThat(eval("[STEP_COUNT]", values(steps = Double.NaN))).isNaN()
+    }
+
+    @Test
+    fun theHeartRateIsTheBpmOfTheEngine() {
+        // The same number as `bpm`: the measured heart rate in a design that reads it, else its fallback
+        assertThat(WffSources.formula("HEART_RATE")).isEqualTo("bpm")
         assertThat(eval("[HEART_RATE]", values(heartRate = 64.0))).isEqualTo(64.0)
-        // No value stays no value (WFF does not say what it gives)
-        assertThat(eval("[HEART_RATE]", values(heartRate = Double.NaN))).isNaN()
+        assertThat(eval("60000 / [HEART_RATE]", values(heartRate = 75.0))).isEqualTo(eval("60000 / bpm", values(heartRate = 75.0)))
+        // It reads the variable `bpm`, so the face knows the design wants the heart rate of the watch
+        assertThat(parse("[HEART_RATE]").variables.toList()).containsExactly(names.indexOf("bpm"))
+        // Where there is no `bpm` (the condition of a look) it cannot be read
+        val e = assertThrows<FormulaException> { Formula.parse("[HEART_RATE]", setting = setting) { name -> index(name).takeIf { name != "bpm" } } }
+        assertThat(e.message).contains("[HEART_RATE] cannot be used here")
     }
 
     /** The values the WFF runtime showed on the Wear OS 6 emulator at these moments (UTC), to 4 decimals. */
