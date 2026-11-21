@@ -9,10 +9,18 @@
     <string name="key_cwf_option_2" translatable="false">cwf_option_2</string>
     <string name="key_cwf_option_3" translatable="false">cwf_option_3</string>
     <string name="key_cwf_option_4" translatable="false">cwf_option_4</string>
+    <string name="key_cwf_option_5" translatable="false">cwf_option_5</string>
+    <string name="key_cwf_option_6" translatable="false">cwf_option_6</string>
+    <string name="key_cwf_option_7" translatable="false">cwf_option_7</string>
+    <string name="key_cwf_option_8" translatable="false">cwf_option_8</string>
     <string name="pref_cwf_option_1" comment="Setting: the first option that a watch face design offers">Design option 1</string>
     <string name="pref_cwf_option_2" comment="Setting: the second option that a watch face design offers">Design option 2</string>
     <string name="pref_cwf_option_3" comment="Setting: the third option that a watch face design offers">Design option 3</string>
     <string name="pref_cwf_option_4" comment="Setting: the fourth option that a watch face design offers">Design option 4</string>
+    <string name="pref_cwf_option_5" comment="Setting: the fifth option that a watch face design offers">Design option 5</string>
+    <string name="pref_cwf_option_6" comment="Setting: the sixth option that a watch face design offers">Design option 6</string>
+    <string name="pref_cwf_option_7" comment="Setting: the seventh option that a watch face design offers">Design option 7</string>
+    <string name="pref_cwf_option_8" comment="Setting: the eighth option that a watch face design offers">Design option 8</string>
     <string name="cwf_option_as_designed" comment="Option choice: keep what the designer chose">As designed</string>
 
     <string-array name="cwf_option_names" translatable="false">

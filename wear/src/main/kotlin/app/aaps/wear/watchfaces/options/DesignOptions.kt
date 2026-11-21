@@ -67,14 +67,20 @@ class DesignOptions {
         const val AS_DESIGNED = "design"
 
         /** How many options a design can offer; more are left out. */
-        const val MAX_OPTIONS = 4
+        const val MAX_OPTIONS = 8
 
         /** How many choices one option can have, at least and at most. */
         const val MIN_CHOICES = 2
         const val MAX_CHOICES = 8
 
-        private val PREF_KEYS = listOf(R.string.key_cwf_option_1, R.string.key_cwf_option_2, R.string.key_cwf_option_3, R.string.key_cwf_option_4)
-        private val TITLES = listOf(R.string.pref_cwf_option_1, R.string.pref_cwf_option_2, R.string.pref_cwf_option_3, R.string.pref_cwf_option_4)
+        private val PREF_KEYS = listOf(
+            R.string.key_cwf_option_1, R.string.key_cwf_option_2, R.string.key_cwf_option_3, R.string.key_cwf_option_4,
+            R.string.key_cwf_option_5, R.string.key_cwf_option_6, R.string.key_cwf_option_7, R.string.key_cwf_option_8
+        )
+        private val TITLES = listOf(
+            R.string.pref_cwf_option_1, R.string.pref_cwf_option_2, R.string.pref_cwf_option_3, R.string.pref_cwf_option_4,
+            R.string.pref_cwf_option_5, R.string.pref_cwf_option_6, R.string.pref_cwf_option_7, R.string.pref_cwf_option_8
+        )
         private val NAME = Regex("[A-Za-z0-9_]+")
 
         /**

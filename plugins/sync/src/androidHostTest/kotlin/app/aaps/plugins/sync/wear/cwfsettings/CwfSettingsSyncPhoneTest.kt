@@ -232,6 +232,9 @@ class CwfSettingsSyncPhoneTest {
         assertThat(sut.names.isAllowed("cwf_option_1", "1")).isTrue()
         assertThat(sut.names.isAllowed("cwf_option_1", "design")).isTrue()
         assertThat(sut.names.isAllowed("cwf_option_1", "santa")).isFalse()
+        // All eight places are known to the phone, so it can send each of them
+        assertThat(sut.names.isAllowed("cwf_option_8", "7")).isTrue()
+        assertThat(sut.names.isAllowed("cwf_option_9", "1")).isFalse()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
