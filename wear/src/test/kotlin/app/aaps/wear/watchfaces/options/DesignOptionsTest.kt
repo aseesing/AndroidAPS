@@ -79,11 +79,21 @@ class DesignOptionsTest {
     }
 
     @Test
-    fun atMostFourOptions() {
+    fun atMostEightOptions() {
+        assertThat(DesignOptions.MAX_OPTIONS).isEqualTo(8)
         val many = JSONObject().put("options", JSONArray().apply {
-            repeat(6) { put(JSONObject().put("name", "o$it").put("title", "O$it").put("choices", JSONArray(listOf("a", "b")))) }
+            repeat(10) { put(JSONObject().put("name", "o$it").put("title", "O$it").put("choices", JSONArray(listOf("a", "b")))) }
         })
-        assertThat(DesignOptions.read(many)).hasSize(DesignOptions.MAX_OPTIONS)
+        val options = DesignOptions.read(many)
+        assertThat(options.map { it?.name }).containsExactly("o0", "o1", "o2", "o3", "o4", "o5", "o6", "o7").inOrder()
+        // The eighth option has its own key; the ninth is left out
+        assertThat(DesignOptions.value(options, "opt_o7", stored(R.string.key_cwf_option_8 to "1"))).isEqualTo(1.0)
+        assertThat(DesignOptions.value(options, "opt_o4", stored(R.string.key_cwf_option_8 to "1"))).isEqualTo(0.0)
+        assertThat(DesignOptions.value(options, "opt_o8", stored())).isNull()
+        assertThat(DesignOptions.rows(many).map { it.key }).containsExactly(
+            R.string.key_cwf_option_1, R.string.key_cwf_option_2, R.string.key_cwf_option_3, R.string.key_cwf_option_4,
+            R.string.key_cwf_option_5, R.string.key_cwf_option_6, R.string.key_cwf_option_7, R.string.key_cwf_option_8
+        ).inOrder()
     }
 
     @Test
@@ -104,6 +114,8 @@ class DesignOptionsTest {
         assertThat(options[1].defaultValue).isEqualTo("2")
         // And none for a design without options
         assertThat(CwfSyncedSettings.faceLookFor("{}").map { it.key }).containsNoneOf(R.string.key_cwf_option_1, R.string.key_cwf_option_2)
+        // The phone knows every key, so it sends all eight
+        assertThat(CwfSyncedSettings.faceLook.map { it.key }).containsAtLeast(R.string.key_cwf_option_1, R.string.key_cwf_option_5, R.string.key_cwf_option_8)
     }
 
     @Test
