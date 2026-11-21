@@ -41,4 +41,17 @@ class CwfPreviewSettingsTest {
         assertThat(renderer.applyWatchSettings(mapOf("show_iob" to "true"))).isFalse()
         assertThat(settings.getBoolean("show_iob", false)).isTrue()
     }
+
+    @Test
+    fun allEightOptionsOfADesignCanBeSet() {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
+
+        renderer.applyWatchSettings(mapOf("cwf_option_1" to "1", "cwf_option_8" to "7", "cwf_option_9" to "1"))
+
+        val settings = renderer.watchSettings
+        assertThat(settings.getString("cwf_option_1", null)).isEqualTo("1")
+        assertThat(settings.getString("cwf_option_8", null)).isEqualTo("7")
+        // There is no ninth place
+        assertThat(settings.contains("cwf_option_9")).isFalse()
+    }
 }
