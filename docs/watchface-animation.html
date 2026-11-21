@@ -149,6 +149,14 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
   A design is a zip with one JSON file and some pictures. This page tells what the layer engine of the watch reads from
   the JSON: the <code>animation</code>, the <code>looks</code> and a few view keys.</p>
 
+  <div class="note" id="making">
+    <strong>Making a design.</strong> This page is the reference of the format. The steps of making a design with the
+    editor <code>facetool</code>, with a worked example, are on another page: <code>docs/making-a-design.html</code> in
+    the repository <code>aaps-face-tool</code>. In the browser page of the editor both pages are in the
+    <strong>Help</strong> menu (<code>/docs/making-a-design.html</code> and <code>/docs/manual.html</code> of the editor
+    server). <code>facetool manual &lt;topic&gt;</code> prints a chapter of this page as plain text.
+  </div>
+
   <div class="note" id="pictures">
     <strong>About the pictures on this page.</strong>
     Every example has a small round picture. Your browser draws it with a small copy of the rules of the engine. The copy
@@ -193,6 +201,15 @@ kbd { background: var(--code-bg); border: 1px solid var(--line); border-radius: 
       <li><a href="#limits">Limits and tips</a></li>
       <li><a href="#reference">Key reference</a></li>
       <li><a href="#moon">Example: the moon from plain layers</a></li>
+      <li><a href="#wff-faces">WFF: a design as a Watch Face Format face</a>
+        <ol>
+          <li><a href="#wff-what">What WFF is here</a></li>
+          <li><a href="#wff-parts">Where each part of a design ends up</a></li>
+          <li><a href="#wff-keys">The WFF options of a design: <code>wff</code></a></li>
+          <li><a href="#wff-limits">What works on WFF, per version</a></li>
+          <li><a href="#wff-check">How to check a design for WFF</a></li>
+        </ol>
+      </li>
     </ol>
   </nav>
 
@@ -1792,9 +1809,10 @@ design into a WFF face has to handle each one in one of three ways:</p>
 </tbody></table></div>
 <p>A first converter is built. It is simpler than this table: it keeps the plain clock, date, hands, glucose and
 age live, bakes the static art and the layers that show only in the wake, and lets the watch draw everything else
-that shows a value into one picture, with this engine. So a design needs no change for it. How to make a WFF face
-of a design is in the watch face designs repository (<code>docs/wff-apk.md</code>); what the converter does with
-each view and layer is in its lint.</p>
+that shows a value into one picture, with this engine. So a design needs no change for it. What the converter does
+with each view and layer, the key <code>wff</code> and the limits of a WFF face are in
+<a href="#wff-faces">chapter 14</a>. How to make a WFF face of a design is in the repository
+<code>aaps-face-tool</code> (<code>docs/wff-apk.md</code>).</p>
 
 <!-- =================================================================================== 6 -->
 <h2 id="values">6. Values: <code>v_&lt;key&gt;</code></h2>
@@ -1978,7 +1996,8 @@ at the end of this chapter are ready to copy into a design.</p>
 <p>The other keys of the entry are the parameters. A parameter that you do not give has its default. A
 number parameter is cut to its limits. A key that the template does not know is an error in the design tests, and is not
 used. So you cannot add layer keys such as <code>slot</code> or <code>rest</code> to a <code>use</code> entry: change the
-template for that.</p>
+template for that. The one exception is <a href="#wff-keys"><code>wff</code></a>: every layer the template makes gets
+the <code>wff</code> of the entry, unless the layer has its own or the template has a parameter of that name.</p>
 
 <h3 id="own-templates">How to write a template</h3>
 
@@ -3155,6 +3174,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>needsPlace</code></td><td><code>true</code></td><td>not set</td><td>The design wants the place of the wearer. <a href="#needs-place">6</a></td></tr>
 <tr><td><code>graphLineWidth</code></td><td>whole number, 0 to 8</td><td>0 (dots)</td><td>The glucose as a line. <a href="#graph-line">10</a></td></tr>
 <tr><td><code>graphLineColor</code></td><td>colour text</td><td>the range colours</td><td>One colour for the line. <a href="#graph-line">10</a></td></tr>
+<tr><td><code>wff</code></td><td>object</td><td>none</td><td>Defaults for the Watch Face Format face. This engine does not read it. Not built in the converter yet. <a href="#wff-keys">14</a></td></tr>
 </tbody></table></div>
 
 <h3>In <code>animation</code></h3>
@@ -3216,6 +3236,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>colorIndex</code></td><td>number</td><td>0</td><td>wraps round</td><td>yes</td><td>shape, text</td></tr>
 <tr><td><code>glowAlpha</code></td><td>number</td><td>0</td><td>0 to 1</td><td>yes</td><td>zip picture, text</td></tr>
 <tr><td><code>clipLeft</code>, <code>clipTop</code>, <code>clipRight</code>, <code>clipBottom</code></td><td>number</td><td>open</td><td></td><td>yes</td><td>all</td></tr>
+<tr><td><code>wff</code></td><td><code>false</code>, <code>"still"</code> or an object</td><td>none</td><td></td><td>no</td><td>all. Only for the Watch Face Format face; this engine does not read it. <a href="#wff-keys">14</a></td></tr>
 </tbody></table></div>
 
 <h3>In <code>clip</code></h3>
@@ -3236,6 +3257,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <thead><tr><th>Where</th><th>Key</th><th>Meaning</th></tr></thead>
 <tbody>
 <tr><td>an entry of <code>layers</code></td><td><code>use</code></td><td>The name of a template; the other keys are its parameters.</td></tr>
+<tr><td>an entry of <code>layers</code> with <code>use</code></td><td><code>wff</code></td><td>Handed to every layer the template makes, unless the layer has its own. <a href="#wff-keys">14</a></td></tr>
 <tr><td>a template</td><td><code>params</code></td><td>Parameter name to default, or to <code>{"default", "min", "max", "int"}</code>.</td></tr>
 <tr><td>a template</td><td><code>layers</code></td><td>The layers, with <code>$name</code> and <code>$name.key</code>.</td></tr>
 <tr><td>a layer of a template</td><td><code>if</code></td><td>A formula of the parameters; the layer is left out when it is 0.</td></tr>
@@ -3500,6 +3522,223 @@ this template needs the place, see <a href="#needs-place"><code>needsPlace</code
 <tr><td><code>dark</code></td><td>0.3</td><td>0 to 1</td><td>How bright the dark part is, against the lit part. Not 0, so the moon can be found at new moon.</td></tr>
 <tr><td><code>cover</code></td><td>0.45</td><td>0 to 1</td><td>How much the dark part covers what is behind it. Below 1 a day sky shows through it; with 1 it covers all.</td></tr>
 </tbody></table></div>
+
+<!-- =================================================================================== 14 -->
+<h2 id="wff-faces">14. WFF: a design as a Watch Face Format face</h2>
+
+<p>Watches that started with Wear OS 5, and all watches on Wear OS 6, only run Watch Face Format (WFF) faces: an APK
+with pictures and one XML file, and no code. This engine is code, so it cannot run there as a face. A converter turns a
+design zip into a WFF face. The converter is not in the watch app. It is in the repository <code>aaps-face-tool</code>
+and runs on a computer. The design zip stays the source: you change the design, never the WFF face.</p>
+
+<p>This chapter says what the converter makes of a design, which keys of a design are for WFF, and what a WFF face can
+and cannot do. It follows the planner (<code>wear/.../watchfaces/wff/WffPlanner.kt</code> in AAPS) and the converter
+(<code>src/main/kotlin/app/aaps/facetool/wff</code> in <code>aaps-face-tool</code>). When they change, change this
+chapter.</p>
+
+<h3 id="wff-what">What WFF is here</h3>
+<div class="scroll"><table>
+<thead><tr><th></th><th>AAPS CWF</th><th>WFF 4</th><th>WFF 2</th></tr></thead>
+<tbody>
+<tr><td>What it is</td><td>The Custom watch face of the AAPS wear app. This engine draws the design.</td><td>A WFF face made from the design.</td><td>A WFF face made from the design.</td></tr>
+<tr><td>Watches</td><td>Watches that still run code-based faces.</td><td>Wear OS 6.</td><td>Wear OS 5.</td></tr>
+<tr><td>How it gets on the watch</td><td>The phone sends the design zip to the wear app.</td><td>With Watch Face Push, with a token of the validator.</td><td>As a normal app. No token.</td></tr>
+</tbody></table></div>
+<p>The converter writes one <strong>face zip</strong> per design for the AAPS phone app. It holds the face in WFF 4 and in
+WFF 2 for each wear app, and <code>data.zip</code>: the part of the design that the wear app draws itself (the data
+picture, see below). A face only works with the wear app it was made for.</p>
+
+<h3 id="wff-parts">Where each part of a design ends up</h3>
+<p>A WFF face has four kinds of parts. The planner puts every view and every layer in one of them, and says so in one
+line of its plan.</p>
+<div class="scroll"><table>
+<thead><tr><th>Kind</th><th>Who draws it</th><th>When it changes</th><th>In the plan</th></tr></thead>
+<tbody>
+<tr><td><strong>Live</strong></td><td>The watch itself (WFF).</td><td>Always right, also while the wear app sleeps and in always-on.</td><td><code>live</code>, or <code>complication glucose</code> and <code>complication age</code></td></tr>
+<tr><td><strong>Baked</strong></td><td>This engine, on the computer that makes the face: static pictures, and frames of the wake.</td><td>Never. Frames play when the screen comes on.</td><td><code>bake</code> with <code>picture N</code> or <code>loop</code></td></tr>
+<tr><td><strong>Data picture</strong></td><td>This engine, in the wear app on the watch: one see-through picture as large as the screen, shown in a complication slot of the face.</td><td>When new data arrives, and at least every 5 minutes.</td><td><code>complication data</code></td></tr>
+<tr><td><strong>Left out</strong></td><td>Nobody.</td><td></td><td><code>omit</code>, with the reason</td></tr>
+</tbody></table></div>
+
+<h4>Views of the face</h4>
+<div class="scroll"><table>
+<thead><tr><th>View</th><th>Ends up</th><th>Goes to the data picture when</th></tr></thead>
+<tbody>
+<tr><td><code>background</code></td><td>Baked, in static picture 0.</td><td>a look changes it</td></tr>
+<tr><td><code>time</code>, <code>hour</code>, <code>minute</code>, <code>second</code></td><td>Live clock text. <code>time</code> shows seconds only when the design has <code>enableSecond</code>; in always-on it shows no seconds.</td><td>the view has <code>dynData</code></td></tr>
+<tr><td><code>day_name</code>, <code>day</code>, <code>month</code></td><td>Live date text, in the formats <code>dayNameFormat</code> and <code>monthFormat</code> of the design.</td><td>the view has <code>dynData</code></td></tr>
+<tr><td><code>hour_hand</code>, <code>minute_hand</code>, <code>second_hand</code></td><td>Live hands, with the hand pictures of the zip.</td><td>the view has <code>dynData</code></td></tr>
+<tr><td><code>sgv</code></td><td>Live text in the glucose slot, coloured by the level: low, in range, high, no reading. The colours are <code>lowColor</code>, <code>midColor</code> and <code>highColor</code> of the design, or the <code>fontColor</code> steps of a <code>dynData</code> on <code>sgvLevel</code>.</td><td>its <code>dynData</code> does more than colours, or reads another value</td></tr>
+<tr><td><code>direction</code></td><td>Live in the glucose slot: the arrow, in the range colour.</td><td>the view has <code>dynData</code></td></tr>
+<tr><td><code>delta</code></td><td>Live in the glucose slot.</td><td>the view has <code>dynData</code></td></tr>
+<tr><td><code>timestamp</code></td><td>Live in the age slot: whole minutes that keep counting.</td><td>its <code>dynData</code> does more than colours and texts, or reads another value</td></tr>
+<tr><td><code>complication1</code> to <code>complication5</code></td><td>Live: a slot the wearer fills, in the style of the design (<code>complicationStyle</code>).</td><td>never</td></tr>
+<tr><td><code>cover_plate</code>, <code>cover_chart</code>, <code>freetext1</code> to <code>freetext4</code></td><td>Baked, in a static picture.</td><td>the view has <code>dynData</code> or a picture from a template (<code>image</code> as an object), or a look or a colour of the wearer changes it</td></tr>
+<tr><td>Every other view: <code>chart</code>, <code>iob1</code>, <code>cob1</code>, <code>basalRate</code>, <code>status</code>, <code>loop</code>, <code>week_number</code>, ...</td><td>Data picture.</td><td>always</td></tr>
+<tr><td>Any view with <code>dynPref</code> or <code>twinView</code></td><td>Data picture: the watch knows the preference.</td><td>always</td></tr>
+</tbody></table></div>
+<p>Left out: <code>second</code> and <code>second_hand</code> when the design does not set <code>enableSecond</code>, and a
+live view that a show or hide preference turns off (see <a href="#wff-design-keys">the design keys below</a>). A live
+view that a look or a colour of the wearer would change keeps the look of the design, and the plan warns.</p>
+
+<h4>Layers</h4>
+<p>The planner looks at what the formulas of a layer read, after templates, <code>let</code> and own functions are written
+out. The first row that fits decides.</p>
+<div class="scroll"><table>
+<thead><tr><th>The layer</th><th>Ends up</th></tr></thead>
+<tbody>
+<tr><td>has <code>blend</code> <code>erase</code> or <code>inside</code> without a <code>group</code></td><td>Left out, as this engine does.</td></tr>
+<tr><td>is a <a href="#views">view layer</a></td><td>It goes where its view goes. In the data picture or in a baked picture the view is drawn at its rest place; its motion in the wake is left out. A view layer that moves a live view (the clock, a hand, the glucose) is not written: the view stays where the design puts it, and the plan warns.</td></tr>
+<tr><td>is a text that is exactly <code>glucose(v_sgv)</code>, and reads nothing of the wake</td><td>Live in the glucose slot, with its font, and its <code>colors</code> and <code>colorIndex</code> worked out for each glucose level.</td></tr>
+<tr><td>is another text that reads the glucose or its age, and nothing of the wake</td><td>Data picture.</td></tr>
+<tr><td>is a picture or a shape that reads <code>v_timestamp</code>, and nothing of the wake</td><td>Data picture, with a warning: a mark of an old reading shows only when the picture is made again.</td></tr>
+<tr><td>is a text that is exactly <code>clock()</code>, and reads nothing else</td><td>Live clock text ("hh:mm") with its font. Its <code>x</code> and <code>y</code> must be fixed numbers, else it is not written.</td></tr>
+<tr><td>reads the wake (<code>t</code>, <code>ms</code>, <code>len</code>, <code>env</code>), <code>noise</code>, <code>hash</code> or <code>bpm</code></td><td>Baked. Without <code>rest</code>: frames that play in the wake. With <code>rest</code>: see the rows below the table.</td></tr>
+<tr><td>is changed by a look, or by a colour of the wearer</td><td>Data picture.</td></tr>
+<tr><td>reads a value (<code>v_...</code>, also an option), <code>sec</code>, <code>min</code>, <code>hour</code>, a date or clock function, a data source, or shows <code>@moon</code></td><td>Data picture. A layer that reads the clock or the seconds gets a warning: its picture changes only with the data.</td></tr>
+<tr><td>anything else: fixed art</td><td>Baked, in a static picture.</td></tr>
+</tbody></table></div>
+<ul>
+  <li><strong>Static pictures.</strong> Picture 0 holds the background and everything baked above it, until a live part
+    or a data part lies between. Baked parts above that go into picture 1, and so on. A baked layer with
+    <code>blend</code> or <code>group</code> stays in the picture below it.</li>
+  <li><strong>A layer with <code>rest</code> that also moves in the wake.</strong> In picture 0 the whole picture plays as
+    frames during the wake. In a later picture the layer keeps its rest pose and its motion is left out, with a
+    warning.</li>
+  <li><strong>A wake layer that shows only on some days</strong> (a <code>visible</code> that reads the date): the
+    converter works out the days with the default choices of the options, and its frames play only on those days.</li>
+  <li><strong>Slots.</strong> A face has at most 8 complication slots. The plan uses up to 5 for the wearer, one for the
+    glucose (id 10), one for its age (id 11) and one for the data picture (id 20).</li>
+</ul>
+<p>The plan of a small design, as <code>facetool wff plan</code> prints it:</p>
+<pre>First Light -&gt; WFF 4
+   background             bake         picture 0     static picture
+   L0 circle              complication data          reads option (60 copies): in the data picture
+   L1 text clock()        live                       clock text: DigitalClock with the zip font
+   L2 text glucose(v_sgv) complication glucose       glucose text: live in the glucose slot
+   L3 Star                bake         loop          moves in the wake: frames when it only shows in the wake, else its rest pose
+Slots 2 / 8   static pictures 1
+   slot 10 glucose (RANGED_VALUE)
+   slot 20 data (SMALL_IMAGE)
+Errors 0   Warnings 0</pre>
+<p>A line that starts with <code>!</code> is a warning: something looks or behaves in another way than on this engine.
+<code>!!</code> is an error: no face is made.</p>
+
+<h3 id="wff-keys">The WFF options of a design: <code>wff</code></h3>
+<p>A design can carry one key that is only for the WFF face: <code>wff</code>. This engine never reads it, so the face
+on the watch does not change. It may stand in four places:</p>
+<div class="scroll"><table>
+<thead><tr><th>Where</th><th>Example</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>a layer, also a layer inside a template</td><td><code>{"image": "Snow", ..., "wff": "still"}</code></td><td>Inside a template the value may use <code>$name</code>.</td></tr>
+<tr><td>a <code>use</code> entry</td><td><code>{"use": "rain", "count": 120, "wff": false}</code></td><td>Every layer the template makes gets this <code>wff</code>, also through a template inside it. A layer of the template that has its own <code>wff</code> keeps its own. When the template has a parameter named <code>wff</code>, the key is that parameter.</td></tr>
+<tr><td>a view of the face</td><td><code>"chart": {..., "wff": false}</code></td><td></td></tr>
+<tr><td>the top of the design JSON</td><td><code>"wff": {"frames": {"frameRate": 12}}</code></td><td>Defaults for the whole face.</td></tr>
+</tbody></table></div>
+<div class="warn">
+  <strong>Not built yet.</strong> The engine keeps the key and hands it on, and the editor checks its form. But the
+  planner and the converter do not read <code>wff</code> yet: today a design with it gives the same WFF face as without
+  it. The meanings below are decided (<code>docs/wff-motion-model.md</code> in <code>aaps-face-tool</code>) and can
+  still change when they are built. Do not count on them for a design you make now.
+</div>
+<p>What works today: the key is allowed in the four places, and <code>facetool lint</code> gives an error for a value
+that is not <code>false</code>, <code>"still"</code> or an object. It also draws the design with and without its
+<code>wff</code> keys and gives an error when the pictures differ.</p>
+<div class="scroll"><table>
+<thead><tr><th>Value</th><th>Meaning on WFF, as decided</th><th>State</th></tr></thead>
+<tbody>
+<tr><td>no <code>wff</code></td><td>The part goes where <a href="#wff-parts">the tables above</a> say.</td><td>Built: this is what happens today.</td></tr>
+<tr><td><code>"wff": false</code></td><td>Not on the WFF face, on purpose. The plan says so without a warning.</td><td><strong>Not built yet</strong></td></tr>
+<tr><td><code>"wff": "still"</code></td><td>Only the still pose, without frames and without a warning.</td><td><strong>Not built yet</strong></td></tr>
+<tr><td><code>"wff": {...}</code></td><td>The layer gets the WFF motion that the object describes. Its wake motion of this engine is not converted.</td><td><strong>Not built yet</strong></td></tr>
+</tbody></table></div>
+<p>The keys of the object. Inside <code>wff</code> the names and the units are those of WFF (<code>angle</code> in
+degrees clockwise, <code>alpha</code> 0 to 255, <code>pivotX</code> 0 to 1), but places and sizes stay in the design
+space of 400 x 400. <strong>None of these is built yet.</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Key</th><th>Value</th><th>Meaning, as decided</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td><code>transform</code></td><td class="wrap">target to formula, or to <code>{"value", "mode", "animation"}</code></td><td>Sets <code>x</code>, <code>y</code>, <code>angle</code>, <code>alpha</code>, <code>scaleX</code>, <code>scaleY</code>, ... from a formula while the screen is on. <code>animation</code> (<code>duration</code>, <code>interpolation</code>, ...) lets the part glide to a new value.</td><td class="wrap"><code>"transform": {"alpha": "[SECOND] % 2 == 0 ? 255 : 0"}</code></td></tr>
+<tr><td><code>variant</code></td><td class="wrap">target to the value in always-on, or to <code>{"value", "duration", "startOffset", "interpolation"}</code></td><td>Another value in always-on. The timed change between the two needs WFF 4.</td><td class="wrap"><code>"variant": {"angle": {"value": -55, "duration": 0.7}}</code></td></tr>
+<tr><td><code>gyro</code></td><td class="wrap">target to formula</td><td>Moves the part with the tilt of the watch.</td><td class="wrap"><code>"gyro": {"x": "clamp([ACCELEROMETER_ANGLE_X], -30, 30) / 3"}</code></td></tr>
+<tr><td><code>condition</code></td><td class="wrap">formula</td><td>The part shows only while it is true.</td><td class="wrap"><code>"condition": "[MONTH] == 12"</code></td></tr>
+<tr><td><code>frames</code></td><td class="wrap">object: <code>play</code>, <code>frameRate</code>, <code>loopCount</code>, <code>delayPlay</code>, <code>from</code>, <code>seconds</code>, ...</td><td>The wake motion of the layer as frames, played as asked, for example also on a tap.</td><td class="wrap"><code>"frames": {"play": "ON_VISIBLE TAP"}</code></td></tr>
+<tr><td><code>sheets</code></td><td class="wrap"><code>{"bands": 1 to 4}</code> or <code>false</code></td><td>For a layer with many copies that drift (snow): how many moving sheets the converter bakes.</td><td class="wrap"><code>"sheets": {"bands": 2}</code></td></tr>
+<tr><td><code>launch</code></td><td class="wrap">text</td><td>A tap on the part opens an app or a system screen.</td><td class="wrap"><code>"launch": "HEALTH_HEART_RATE"</code></td></tr>
+<tr><td><code>let</code></td><td class="wrap">object</td><td>Named formulas for the formulas of this block.</td><td class="wrap"><code>"let": {"ph": "fract([SECOND_MILLISECOND] / 2)"}</code></td></tr>
+<tr><td><code>pose</code></td><td class="wrap"><code>{"t", "env"}</code></td><td>The moment of the wake whose picture is the still look of the part.</td><td class="wrap"><code>"pose": {"t": 2, "env": 1}</code></td></tr>
+<tr><td><code>only</code></td><td class="wrap"><code>true</code></td><td>A layer only for the WFF face. <strong>Today this engine still draws such a layer</strong>, so do not use it yet.</td><td class="wrap"><code>"wff": {"only": true, ...}</code></td></tr>
+<tr><td><code>replaces</code></td><td class="wrap">a view key, or a list</td><td>The views that this part stands in for on WFF. They are left out only when this part can be written.</td><td class="wrap"><code>"replaces": "patient_name"</code></td></tr>
+<tr><td><code>else</code></td><td class="wrap"><code>"default"</code> or <code>"omit"</code></td><td>What a WFF version does that cannot write this block.</td><td class="wrap"><code>"else": "omit"</code></td></tr>
+</tbody></table></div>
+<p>At the top of the design, only <code>frames</code> is decided: defaults (<code>play</code>, <code>frameRate</code>,
+<code>loopCount</code>) for all frames of the face. Not built yet.</p>
+<p>A formula inside <code>wff</code> may read only what a WFF face can work out by itself: the clock and date sources,
+<code>[BATTERY_PERCENT]</code>, <code>[HEART_RATE]</code>, <code>[STEP_COUNT]</code>, the tilt sources, <code>v_sgv</code>
+and <code>v_timestamp</code>. Not <code>t</code>, <code>env</code>, <code>bpm</code>, <code>noise</code>, the copy names
+or other AAPS values.</p>
+
+<h4 id="wff-design-keys">Design keys that count more on WFF</h4>
+<p>These keys are read by this engine too. On WFF they decide more, because a live part and a baked part cannot follow
+the settings of the watch. All of these are built.</p>
+<div class="scroll"><table>
+<thead><tr><th>Key</th><th>Effect on the WFF face</th></tr></thead>
+<tbody>
+<tr><td><code>metadata.key_show_bg</code>, <code>key_show_direction</code>, <code>key_show_delta</code>, <code>key_show_ago</code>, <code>key_show_seconds</code>, <code>key_show_date</code></td><td><code>"true"</code> or <code>"false"</code>. A live view (<code>sgv</code>, <code>direction</code>, <code>delta</code>, <code>timestamp</code>, <code>second</code>, the date views) is left out when the design sets its preference off. Not set: on, but the date is off. The wearer's own setting does not reach a live view; the data picture follows it.</td></tr>
+<tr><td><code>metadata.key_show_complication1</code> to <code>5</code></td><td>A slot of the wearer starts with a source only when the design turns it on: the heart rate and the steps of the watch in slots 1 and 2, carbs and insulin of AAPS in 3 and 4.</td></tr>
+<tr><td><code>enableSecond</code></td><td>Without it the seconds text and the second hand are left out.</td></tr>
+<tr><td><code>default</code> of an <a href="#options">option</a></td><td>Baked pictures, frames and the days of a wake layer are made with the default choice. Only the data picture follows what the wearer picks.</td></tr>
+<tr><td><code>animation.fallbackBpm</code></td><td>The rate of a layer that reads <code>bpm</code>: its frames are baked at this rate.</td></tr>
+<tr><td><code>lowColor</code>, <code>midColor</code>, <code>highColor</code></td><td>The colours of the live glucose text and of the arrow.</td></tr>
+</tbody></table></div>
+
+<h3 id="wff-limits">What works on WFF, per version</h3>
+<p>"WFF" in the last column: a limit of the Watch Face Format or of its runtime on the watch. "Converter": a choice of
+our converter, which can change.</p>
+<div class="scroll"><table>
+<thead><tr><th>Feature</th><th>AAPS CWF</th><th>WFF 4 (Wear OS 6)</th><th>WFF 2 (Wear OS 5)</th><th>The limit comes from</th></tr></thead>
+<tbody>
+<tr><td>Clock, date, hands</td><td>live</td><td>live</td><td>live</td><td></td></tr>
+<tr><td>Glucose, arrow, delta, age</td><td>live</td><td>live in two slots that AAPS feeds; the age counts by itself</td><td>the same</td><td></td></tr>
+<tr><td>Other values: graph, insulin, carbs, status, weather, sky, moon</td><td>read at each wake, and each time the face is drawn new</td><td>in the data picture: made again when data arrives and at least every 5 minutes</td><td>the same</td><td>Converter, and WFF: a face has no code</td></tr>
+<tr><td>A layer that reads <code>sec</code>, <code>min</code>, <code>hour</code> or the date</td><td>follows the clock</td><td>in the data picture, so it can be 5 minutes late (warning). Only a plain <code>clock()</code> text is live.</td><td>the same</td><td>Converter</td></tr>
+<tr><td>Wake animation</td><td><code>durationMs</code> up to 30 s, <code>fps</code> up to 30</td><td>frames, at most 200 for the whole face</td><td>the same</td><td>Converter</td></tr>
+<tr><td>A layer that shows for the whole wake (80 % or more of it)</td><td>plays the whole wake</td><td>a loop of at most 2 s at 15 frames a second, played again and again; it fades in and out with the wake when there is room for those frames</td><td>the same</td><td>Converter</td></tr>
+<tr><td>A layer that shows for a part of the wake</td><td>plays at <code>fps</code></td><td>frames at up to 8 a second</td><td>the same</td><td>Converter</td></tr>
+<tr><td>A <code>rest</code> layer that moves in the wake</td><td>moves</td><td>in picture 0: the whole picture plays at 4 frames a second. In a later picture: rest pose only.</td><td>the same</td><td>Converter</td></tr>
+<tr><td>Wake frames with <code>blend</code> <code>add</code> or <code>screen</code></td><td>yes</td><td>yes (<code>blendMode</code>)</td><td>left out, with a line in the lint</td><td>WFF: <code>blendMode</code> starts with WFF 3</td></tr>
+<tr><td>The watch setting "Wake-up animation" (length, off)</td><td>yes</td><td>does not reach the face</td><td>the same</td><td>Converter</td></tr>
+<tr><td>Wake on a tap</td><td>yes, while no wake plays</td><td>no. A tap on the data picture opens the AAPS menu.</td><td>the same</td><td>Converter</td></tr>
+<tr><td>A view that moves in the wake (<code>sweep</code>, <code>blink</code>, <code>wobble</code>, ...)</td><td>yes</td><td>stays at its rest place</td><td>the same</td><td>Converter</td></tr>
+<tr><td><code>bpm</code></td><td>the heart rate of the watch</td><td>frames at <code>fallbackBpm</code></td><td>the same</td><td>Converter</td></tr>
+<tr><td>Memory of the pictures</td><td>16 MB of kept pictures</td><td>the validator allows 100 MB (4 bytes a pixel, every picture and frame). The converter fills a face to 90 MB. When the frames do not fit, a static picture in motion gets slower first (4, then 2, then 1 frame a second). Then a loop keeps every 2nd or 3rd frame, or is left out. Each has a line in the lint.</td><td>the same</td><td>100 MB: WFF. 90 MB and the order: converter</td></tr>
+<tr><td>Always-on</td><td>the always-on look of the face; <code>rest</code> layers of pictures, shapes and texts are not drawn</td><td>the clock, large hands, the glucose, its age and the wearer's slots. Everything else is hidden: the pictures, the frames and the data picture.</td><td>the same</td><td>Converter</td></tr>
+<tr><td>Change out of always-on</td><td>the wake plays</td><td>the frames play; no timed change of single parts</td><td>the same</td><td>Converter today. WFF 2 has no timed change at all.</td></tr>
+<tr><td>Fonts</td><td>fonts of the zip and of the app</td><td>live texts use the fonts of the zip and the system fonts; baked and data texts are pictures, so any font</td><td>the same</td><td></td></tr>
+<tr><td>Font size of a live text</td><td>any</td><td>any</td><td>whole sizes only: the converter rounds. The runtime of Wear OS 5 draws a wrong size for a size with decimals.</td><td>WFF runtime of Wear OS 5</td></tr>
+<tr><td>Place of a live text</td><td>exact, also at a part of a pixel</td><td>can lie about a pixel off. The parity suite allows 2 % of changed pixels in the box of such a text. Baked and data texts are exact.</td><td>the same</td><td>WFF</td></tr>
+<tr><td>A text layer as a live text</td><td>any text, any motion</td><td>only <code>clock()</code> and <code>glucose(v_sgv)</code>, in one line, at a fixed <code>x</code> and <code>y</code></td><td>the same</td><td>Converter</td></tr>
+<tr><td>Slots of the wearer</td><td>5</td><td>5, in the style of the design. Not written: the <code>dynData</code> steps of a slot. A long text gets smaller by its length.</td><td>the same</td><td>WFF: 8 slots in a face</td></tr>
+<tr><td><a href="#options">Options</a></td><td>the wearer picks</td><td>the data picture follows the choice. Live parts, baked pictures and frames use the default.</td><td>the same</td><td>Converter</td></tr>
+<tr><td><a href="#looks">Looks</a> and <a href="#colour-looks">colours of the wearer</a></td><td>yes</td><td>a baked view or layer that they change goes to the data picture and follows them. A live part keeps the look of the design (warning).</td><td>the same</td><td>Converter</td></tr>
+<tr><td>Day and night, the sun, the moon</td><td>yes</td><td>in the data picture: right within 5 minutes</td><td>the same</td><td>Converter</td></tr>
+<tr><td>Show and hide settings of the watch</td><td>yes</td><td>the data picture follows them. A live part follows what the design sets in its <code>metadata</code>.</td><td>the same</td><td>Converter</td></tr>
+<tr><td>Tilt of the watch, a part that glides to a new value</td><td>no</td><td>WFF can do it; the converter does not write it yet (<a href="#wff-keys"><code>wff</code></a>)</td><td>the same</td><td>Converter: not built yet</td></tr>
+</tbody></table></div>
+<p>Known gaps of the check itself: always-on cannot be compared on an emulator, because its screen goes off. In the
+editor a slot of the wearer shows a sample, not the real source. The glucose slot shows the text the phone sends, with
+the decimal sign of the phone; a <code>glucose()</code> text of this engine uses the sign of the watch.</p>
+
+<h3 id="wff-check">How to check a design for WFF</h3>
+<p>Use the editor <code>facetool</code> of <code>aaps-face-tool</code>. <code>facetool wff plan</code> prints the plan and
+the lint of the converter: where each view and layer goes, and every warning. <code>facetool lint</code> gives the same
+warnings for WFF 4 and WFF 2 next to the errors of this engine. <code>facetool wff compare</code> draws this engine's
+face next to the WFF 4 and the WFF 2 face and marks the pixels that differ. <code>facetool wff wake --sheet</code>
+shows the frames after the screen comes on, and <code>facetool wff render --set ambient=true</code> the always-on
+face. The browser page of the editor (<code>facetool gui</code>) has the same as the tabs WFF 4, WFF 2, Side by side
+and Parts. The commands are in <code>docs/face-editor.md</code> of <code>aaps-face-tool</code>, and the steps of making
+a design in <code>docs/making-a-design.html</code> there. The WFF pictures of the editor are drawn by its own player,
+not by a watch: only an emulator or a watch shows the real face.</p>
 
 </main>
 
@@ -4407,7 +4646,10 @@ function expandEntry(entry, using, into, errors, where, own) {
   if (!isObj(template)) { errors.push(where + ": no template '" + name + "' in the templates of the design"); return; }
   if (using.indexOf(name) >= 0) { errors.push(where + ": template '" + name + "' uses itself"); return; }
   if (using.length >= TEMPLATE_MAX_DEPTH) { errors.push(where + ': templates nested more than ' + TEMPLATE_MAX_DEPTH + ' deep'); return; }
-  var params = bindParams(isObj(template.params) ? template.params : {}, entry, name, errors, where);
+  var spec = isObj(template.params) ? template.params : {};
+  var params = bindParams(spec, entry, name, errors, where);
+  // A template may still have a parameter named wff; then it is that parameter
+  var wff = has(entry, 'wff') && entry.wff !== null && !has(spec, 'wff') ? entry.wff : undefined;
   if (!Array.isArray(template.layers)) return;
   for (var i = 0; i < template.layers.length; i++) {
     var layer = template.layers[i];
@@ -4428,6 +4670,7 @@ function expandEntry(entry, using, into, errors, where, own) {
       }
       if (!keep) continue;
     }
+    if (wff !== undefined && !has(filled, 'wff')) filled.wff = JSON.parse(JSON.stringify(wff));
     expandEntry(filled, using.concat([name]), into, errors, where + ' (' + name + ')', own);
   }
 }
@@ -4435,7 +4678,7 @@ function expandEntry(entry, using, into, errors, where, own) {
 function bindParams(spec, entry, name, errors, where) {
   var params = new Map();
   Object.keys(entry).forEach(function (key) {
-    if (key !== 'use' && !has(spec, key)) errors.push(where + ": '" + name + "' has no parameter '" + key + "'");
+    if (key !== 'use' && key !== 'wff' && !has(spec, key)) errors.push(where + ": '" + name + "' has no parameter '" + key + "'");
   });
   Object.keys(spec).forEach(function (key) {
     var declared = spec[key];
