@@ -167,6 +167,8 @@ class WearPlugin(
             preferences.observe(IntKey.OverviewBolusPercentage).drop(1).map {},
             preferences.observe(IntKey.SafetyMaxCarbs).drop(1).map {},
             preferences.observe(DoubleKey.SafetyMaxBolus).drop(1).map {},
+            preferences.observe(DoubleKey.ApsSmbMaxIob).drop(1).map {}, // PERSONAL PATCH: max_iob of the Custom watch face
+            preferences.observe(DoubleKey.ApsAmaMaxIob).drop(1).map {}, // PERSONAL PATCH: max_iob of the Custom watch face
             preferences.observe(DoubleKey.OverviewInsulinButtonIncrement1).drop(1).map {},
             preferences.observe(DoubleKey.OverviewInsulinButtonIncrement2).drop(1).map {},
             preferences.observe(IntKey.OverviewCarbsButtonIncrement1).drop(1).map {},

@@ -77,7 +77,8 @@ class CustomWatchfaceValuesTest {
                     battery = "78", rigBattery = "--", openApsStatus = now - 3 * MINUTE, bgi = "-0.4", batteryLevel = 1,
                     tempTarget = "100", tempTargetLevel = 0, reservoirString = "120U", reservoir = 120.0, reservoirLevel = 0,
                     sensorEndsAt = now + 60 * HOUR, pumpEndsAt = now + 10 * HOUR, cobValue = 12.0,
-                    iobValue = 1.25, iobBolusValue = 0.9, iobBasalValue = 0.35, basalRateValue = 1.02, bgiMgdl = -7.2
+                    iobValue = 1.25, iobBolusValue = 0.9, iobBasalValue = 0.35, basalRateValue = 1.02, bgiMgdl = -7.2,
+                    icValue = 8.5, isfMgdlValue = 45.0, maxIobValue = 6.0, maxCarbsValue = 120.0
                 )
             )
             // The second phone: the same numbers under the keys that end in _Ext1, and a percent temp basal as text
@@ -86,7 +87,9 @@ class CustomWatchfaceValuesTest {
                     dataset = 1, externalStatus = "", iobSum = "-0,40", iobDetail = "(0,00|-0,40)", cob = "0g", currentBasal = "50%",
                     battery = "55", rigBattery = "--", openApsStatus = now - 1 * MINUTE, bgi = "+0,2", batteryLevel = 1,
                     tempTarget = "100", tempTargetLevel = 0, reservoirString = "", reservoir = 0.0, reservoirLevel = 0, cobValue = 0.0,
-                    iobValue = -0.4, iobBolusValue = 0.0, iobBasalValue = -0.4, basalRateValue = 0.4, bgiMgdl = 3.6
+                    iobValue = -0.4, iobBolusValue = 0.0, iobBasalValue = -0.4, basalRateValue = 0.4, bgiMgdl = 3.6,
+                    // A 0 limit is no limit a design can divide by: it counts as missing
+                    icValue = 12.0, isfMgdlValue = 90.0, maxIobValue = 0.0, maxCarbsValue = null
                 )
             )
         }
@@ -136,7 +139,16 @@ class CustomWatchfaceValuesTest {
             "iob_basal_Ext1" to -0.4,
             "cob_Ext1" to 0.0,
             "basalRate_Ext1" to 0.4,
-            "bgi_Ext1" to 3.6
+            "bgi_Ext1" to 3.6,
+            "ic" to 8.5,
+            "isf" to 45.0,
+            "max_iob" to 6.0,
+            "max_carbs" to 120.0,
+            "ic_Ext1" to 12.0,
+            "isf_Ext1" to 90.0,
+            "max_iob_Ext1" to null,
+            "max_carbs_Ext1" to null,
+            "ic_Ext2" to null
         )
         for ((key, value) in expected) assertWithMessage(key).that(face.designValue(key)).isEqualTo(value)
         // A key that is no value, and the empty key, have none
@@ -149,7 +161,8 @@ class CustomWatchfaceValuesTest {
         val face = newFace()
         face.reload()
         for (key in listOf("sgv", "delta", "avg_delta", "timestamp", "loop", "uploader_battery", "weather_temperature", "sun_next_time", "sensor_left", "pump_left",
-            "iob", "iob_bolus", "iob_basal", "cob", "basalRate", "bgi", "iob_Ext2", "cob_Ext2", "basalRate_Ext2", "bgi_Ext2"))
+            "iob", "iob_bolus", "iob_basal", "cob", "basalRate", "bgi", "iob_Ext2", "cob_Ext2", "basalRate_Ext2", "bgi_Ext2",
+            "ic", "isf", "max_iob", "max_carbs", "ic_Ext1", "max_iob_Ext2"))
             assertWithMessage(key).that(face.designValue(key)).isNull()
         // The sky needs no data: without a place it follows the fixed hours
         assertThat(face.designValue("sun_cycle")).isNotNull()

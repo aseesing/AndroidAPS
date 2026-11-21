@@ -2281,7 +2281,19 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         IOB_BASAL_EXT2(StatusValues.key(StatusValues.IOB_BASAL, 2), -5.0, 5.0), // PERSONAL PATCH: U
         COB_EXT2(StatusValues.key(StatusValues.COB, 2), 0.0, 200.0), // PERSONAL PATCH: grams
         BASAL_RATE_EXT2(StatusValues.key(StatusValues.BASAL_RATE, 2), 0.0, 5.0), // PERSONAL PATCH: U/h
-        BGI_EXT2(StatusValues.key(StatusValues.BGI, 2), -25.0, 25.0); // PERSONAL PATCH: mg/dl per 5 minutes
+        BGI_EXT2(StatusValues.key(StatusValues.BGI, 2), -25.0, 25.0), // PERSONAL PATCH: mg/dl per 5 minutes
+        IC(StatusValues.key(StatusValues.IC, 0), 1.0, 100.0), // PERSONAL PATCH: g/U
+        ISF(StatusValues.key(StatusValues.ISF, 0), 5.0, 500.0), // PERSONAL PATCH: mg/dl per U
+        MAX_IOB(StatusValues.key(StatusValues.MAX_IOB, 0), 0.0, 30.0), // PERSONAL PATCH: U
+        MAX_CARBS(StatusValues.key(StatusValues.MAX_CARBS, 0), 0.0, 300.0), // PERSONAL PATCH: grams
+        IC_EXT1(StatusValues.key(StatusValues.IC, 1), 1.0, 100.0), // PERSONAL PATCH: g/U
+        ISF_EXT1(StatusValues.key(StatusValues.ISF, 1), 5.0, 500.0), // PERSONAL PATCH: mg/dl per U
+        MAX_IOB_EXT1(StatusValues.key(StatusValues.MAX_IOB, 1), 0.0, 30.0), // PERSONAL PATCH: U
+        MAX_CARBS_EXT1(StatusValues.key(StatusValues.MAX_CARBS, 1), 0.0, 300.0), // PERSONAL PATCH: grams
+        IC_EXT2(StatusValues.key(StatusValues.IC, 2), 1.0, 100.0), // PERSONAL PATCH: g/U
+        ISF_EXT2(StatusValues.key(StatusValues.ISF, 2), 5.0, 500.0), // PERSONAL PATCH: mg/dl per U
+        MAX_IOB_EXT2(StatusValues.key(StatusValues.MAX_IOB, 2), 0.0, 30.0), // PERSONAL PATCH: U
+        MAX_CARBS_EXT2(StatusValues.key(StatusValues.MAX_CARBS, 2), 0.0, 300.0); // PERSONAL PATCH: grams
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2411,6 +2423,18 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.COB_EXT2 -> StatusValues.cob(cwf.status[2]) // PERSONAL PATCH
             ValueMap.BASAL_RATE_EXT2 -> cwf.status[2].basalRateValue // PERSONAL PATCH
             ValueMap.BGI_EXT2 -> cwf.status[2].bgiMgdl // PERSONAL PATCH
+            ValueMap.IC -> StatusValues.ic(cwf.status[0]) // PERSONAL PATCH
+            ValueMap.ISF -> StatusValues.isf(cwf.status[0]) // PERSONAL PATCH
+            ValueMap.MAX_IOB -> StatusValues.maxIob(cwf.status[0]) // PERSONAL PATCH
+            ValueMap.MAX_CARBS -> StatusValues.maxCarbs(cwf.status[0]) // PERSONAL PATCH
+            ValueMap.IC_EXT1 -> StatusValues.ic(cwf.status[1]) // PERSONAL PATCH
+            ValueMap.ISF_EXT1 -> StatusValues.isf(cwf.status[1]) // PERSONAL PATCH
+            ValueMap.MAX_IOB_EXT1 -> StatusValues.maxIob(cwf.status[1]) // PERSONAL PATCH
+            ValueMap.MAX_CARBS_EXT1 -> StatusValues.maxCarbs(cwf.status[1]) // PERSONAL PATCH
+            ValueMap.IC_EXT2 -> StatusValues.ic(cwf.status[2]) // PERSONAL PATCH
+            ValueMap.ISF_EXT2 -> StatusValues.isf(cwf.status[2]) // PERSONAL PATCH
+            ValueMap.MAX_IOB_EXT2 -> StatusValues.maxIob(cwf.status[2]) // PERSONAL PATCH
+            ValueMap.MAX_CARBS_EXT2 -> StatusValues.maxCarbs(cwf.status[2]) // PERSONAL PATCH
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->

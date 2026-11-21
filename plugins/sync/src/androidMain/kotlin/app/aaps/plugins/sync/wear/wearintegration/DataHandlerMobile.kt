@@ -1263,6 +1263,9 @@ class DataHandlerMobile(
     /** Private patch: when the sensor and the pod or cannula stop, for the gauges of the Custom watch face. */
     private val partTimes = WearPartTimes(persistenceLayer, activePlugin, preferences)
 
+    /** Private patch: the ratios and limits of the wearer, for the scales of the Custom watch face. */
+    private val ratiosAndLimits = WearRatiosAndLimits(activePlugin, constraintChecker, config, aapsLogger)
+
     /**
      * A resend asked for explicitly (by the watch, a new connection or the wear screen): send everything,
      * also what the watch should already have, see [UnchangedToWearFilter].
@@ -1630,6 +1633,8 @@ class DataHandlerMobile(
             numbers = StatusNumbers.of(bolusIob, basalIob, processedTbrEbData.getTempBasalIncludingConvertedExtended(System.currentTimeMillis())?.convertedToAbsolute(System.currentTimeMillis(), profile) ?: profile.getBasal(), if (glucoseStatusProvider.glucoseStatusData != null) profile.getIsfMgdl("DataHandlerMobile $caller") else null) // PERSONAL PATCH
         }
 
+        numbers = ratiosAndLimits.addTo(numbers, if (config.appInitialized) profile else null, "DataHandlerMobile $caller") // PERSONAL PATCH: ic, isf, max_iob, max_carbs, see WearRatiosAndLimits.kt
+
         //batteries
         val phoneBattery = receiverStatusStore.batteryLevel
         val rigBattery = processedDeviceStatusData.uploaderStatus.trim { it <= ' ' }
@@ -1718,7 +1723,8 @@ class DataHandlerMobile(
                 eatReminderStartedAt = eatReminderState?.startedAt,
                 eatReminderEndsAt = eatReminderState?.endsAt,
                 sensorEndsAt = sensorEndsAt, pumpEndsAt = pumpEndsAt, // PERSONAL PATCH
-                iobValue = numbers.iob, iobBolusValue = numbers.iobBolus, iobBasalValue = numbers.iobBasal, basalRateValue = numbers.basalRate, bgiMgdl = numbers.bgiMgdl // PERSONAL PATCH
+                iobValue = numbers.iob, iobBolusValue = numbers.iobBolus, iobBasalValue = numbers.iobBasal, basalRateValue = numbers.basalRate, bgiMgdl = numbers.bgiMgdl, // PERSONAL PATCH
+                icValue = numbers.ic, isfMgdlValue = numbers.isfMgdl, maxIobValue = numbers.maxIob, maxCarbsValue = numbers.maxCarbs // PERSONAL PATCH
             )
         )
     }
