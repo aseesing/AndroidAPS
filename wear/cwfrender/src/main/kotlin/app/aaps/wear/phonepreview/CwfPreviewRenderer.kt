@@ -83,7 +83,8 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
             heartRate = { null }, // the phone does not measure it; the pulse uses the design's fallback
             chosenLengthMs = { WakeLength.parse(host.sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) },
             value = { key -> face.designValue(key) }, // a low battery blinks, as on the watch
-            images = { name, epochMs, size -> face.dynamicImage(name, epochMs, size) } // the moon layers, the same picture as the face's resting layers
+            images = { name, epochMs, size -> face.dynamicImage(name, epochMs, size) }, // the moon layers, the same picture as the face's resting layers
+            texts = face.faceTexts // the fonts of the design and the units of the watch, for the text layers, as on the watch
         )
 
         /** When the face last read the values, or may have, in wall clock ms. `prepareForRendering` reads them. */
