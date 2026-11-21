@@ -483,7 +483,13 @@ sealed class EventData : Event() {
         val iobBolusValue: Double? = null, // U
         val iobBasalValue: Double? = null, // U
         val basalRateValue: Double? = null, // U/h, the temp basal when one runs
-        val bgiMgdl: Double? = null // mg/dl per 5 minutes
+        val bgiMgdl: Double? = null, // mg/dl per 5 minutes
+        // PERSONAL PATCH: the wearer's ratios and limits, for the scales of the Custom watch face. Null when not known
+        // (no profile, a limit that is not set), or from an older sender: never 0.
+        val icValue: Double? = null, // g/U, the carb ratio of the running profile now
+        val isfMgdlValue: Double? = null, // mg/dl per U, the ISF of the running profile now
+        val maxIobValue: Double? = null, // U, the max IOB of the loop
+        val maxCarbsValue: Double? = null // g, the max carbs limit
     ) : EventData(), EventDataSet
 
     @Serializable
