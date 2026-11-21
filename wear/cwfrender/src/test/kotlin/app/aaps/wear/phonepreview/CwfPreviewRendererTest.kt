@@ -340,6 +340,21 @@ class CwfPreviewRendererTest {
     }
 
     @Test
+    fun aDesignSwitchesASlotOnWithTextOrWithABoolean() {
+        // "key_show_complication2": "true" is the old form, true (a JSON boolean) is the same switch
+        val window = intArrayOf(144, 320, 256, 348)
+        val ink = TestDesigns.STEPS_INK
+        val now = System.currentTimeMillis()
+        fun inkWith(name: String, show: Any) = count(slotRenderer(name, TestDesigns.steps(show), heartRate = null, steps = 6482).frame(SIZE, now), window, ink)
+        val textOn = inkWith("cwf_preview_text_on", "true")
+        val textOff = inkWith("cwf_preview_text_off", "false")
+        assertThat(textOn).isGreaterThan(40)
+        assertThat(textOff).isEqualTo(0)
+        assertThat(inkWith("cwf_preview_boolean_on", true)).isEqualTo(textOn)
+        assertThat(inkWith("cwf_preview_boolean_off", false)).isEqualTo(0)
+    }
+
+    @Test
     fun theHeartRateRowIsDrawn() {
         // Heart rate is slot 1, a row of white text
         val row = intArrayOf(254, 204, 359, 230)
