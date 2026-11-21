@@ -224,7 +224,8 @@
     <string name="wear_wff_face_sent">Watchface sent to the watch.</string>
     <string name="wear_wff_face_sent_confirm">Watchface sent. Confirm the install on the watch, then pick the watchface on the watch.</string>
     <string name="wear_wff_face_not_sent">The watchface could not be sent to the watch. Check the connection and try again.</string>
-    <string name="wear_wff_face_list_label" comment="Small label on an entry in the list of watchfaces. It marks a face in the Watch Face Format of Wear OS, so the wearer can tell it apart from a classic design with the same name. Watch Face Format is the name of the format.">Watch Face Format face</string>
+    <string name="wear_design_type_wff" comment="One line of an entry in the list of watchface files. WFF is the short name of the Watch Face Format of Wear OS: keep it as it is.">Type: WFF</string>
+    <string name="wear_design_type_cwf" comment="One line of an entry in the list of watchface files. CWF is the short name of a design for the AAPS Custom watchface: keep it as it is.">Type: CWF</string>
     <string name="wear_wff_face_on_watch" comment="%1$s = name of a watchface loaded from a file">On the watch: %1$s</string>
     <string name="wear_infos_watchface">Infos Watchface</string>
     <string name="wear_export_watchface">Export template</string>
