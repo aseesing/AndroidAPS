@@ -21,10 +21,9 @@ import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.wear.R
-import app.aaps.wear.complications.CobIconComplication
-import app.aaps.wear.complications.IobIconComplication
+import app.aaps.wear.watchfaces.CustomSlotDefault
 import app.aaps.wear.watchfaces.CustomWatchface
-import app.aaps.wear.watchfaces.customSlotDefaultSource
+import app.aaps.wear.watchfaces.customSlotDefault
 import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -68,8 +67,8 @@ enum class PreviewSlotSource {
  * So each slot shows a source of [PreviewSlotSource], made here from the values the preview has:
  * - the one [chosen] for the slot, by its number (1 to 5);
  * - else what the slot shows on the watch before the wearer picks anything (see
- *   [customSlotDefaultSource]): carbs on board and insulin on board in the slots that have them as
- *   default, nothing in the others.
+ *   [customSlotDefault]): the heart rate and the steps of the watch itself in slots 1 and 2, carbs on
+ *   board and insulin on board in slots 3 and 4, nothing in slot 5.
  *
  * The texts of the AAPS sources are made as the sources of the watch make them (`CobIconComplication`,
  * `IobIconComplication`, `SgvComplication`, `BrComplication`, `UploaderBatteryComplication`). Those are
@@ -110,13 +109,18 @@ internal class PreviewSlots(private val host: PreviewHost, private val logger: A
     /** What slot [number] (1 to 5) shows: the [chosen] source, else the default of the watch. */
     fun sourceOf(number: Int): PreviewSlotSource = chosen[number] ?: defaultOf(number)
 
-    /** What slot [number] (1 to 5) shows on the watch before the wearer picks a source, see [customSlotDefaultSource]. */
+    /**
+     * What slot [number] (1 to 5) shows on the watch before the wearer picks a source, see
+     * [customSlotDefault]. The heart rate and the steps of the watch itself are the stand-ins here.
+     */
     fun defaultOf(number: Int): PreviewSlotSource {
         val slotId = CustomWatchface.complicationSlots.getOrNull(number - 1)?.id ?: return PreviewSlotSource.NONE
-        return when (customSlotDefaultSource(host, slotId).primaryDataSource?.className) {
-            CobIconComplication::class.java.name -> PreviewSlotSource.COB
-            IobIconComplication::class.java.name -> PreviewSlotSource.IOB
-            else                                 -> PreviewSlotSource.NONE
+        return when (customSlotDefault(slotId)) {
+            CustomSlotDefault.HEART_RATE -> PreviewSlotSource.HEART_RATE
+            CustomSlotDefault.STEPS      -> PreviewSlotSource.STEPS
+            CustomSlotDefault.COB        -> PreviewSlotSource.COB
+            CustomSlotDefault.IOB        -> PreviewSlotSource.IOB
+            CustomSlotDefault.NONE       -> PreviewSlotSource.NONE
         }
     }
 

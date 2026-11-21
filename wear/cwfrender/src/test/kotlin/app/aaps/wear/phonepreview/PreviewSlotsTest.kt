@@ -75,13 +75,19 @@ class PreviewSlotsTest {
     @Test
     fun aSlotWithNoChoiceShowsTheDefaultOfTheWatch() {
         val slots = PreviewSlots(host("slots_default"), mock())
-        // Carbs on board in slot 1 and insulin on board in slot 2, as `customSlotDefaultSource` says; nothing in the others
+        // As `customSlotDefault` says: the stand-ins for the heart rate and the steps of the watch in slots 1 and 2,
+        // carbs on board in slot 3, insulin on board in slot 4, nothing in slot 5
         assertThat((1..5).map(slots::sourceOf)).containsExactly(
-            PreviewSlotSource.COB, PreviewSlotSource.IOB, PreviewSlotSource.NONE, PreviewSlotSource.NONE, PreviewSlotSource.NONE
+            PreviewSlotSource.HEART_RATE, PreviewSlotSource.STEPS, PreviewSlotSource.COB, PreviewSlotSource.IOB, PreviewSlotSource.NONE
         ).inOrder()
-        assertThat(text(slots.dataFor(1))).isEqualTo("12g")
-        assertThat(text(slots.dataFor(2))).isEqualTo("1.25U")
-        for (n in 3..5) assertThat(slots.dataFor(n)).isNull()
+        assertThat(text(slots.dataFor(1))).isEqualTo("72")
+        // The watch does not send the steps: no value until the caller gives one
+        assertThat(text(slots.dataFor(2))).isEqualTo("--")
+        slots.steps = 6482
+        assertThat(text(slots.dataFor(2))).isEqualTo("6482")
+        assertThat(text(slots.dataFor(3))).isEqualTo("12g")
+        assertThat(text(slots.dataFor(4))).isEqualTo("1.25U")
+        assertThat(slots.dataFor(5)).isNull()
         // No slot 6
         assertThat(slots.sourceOf(6)).isEqualTo(PreviewSlotSource.NONE)
     }
@@ -90,8 +96,8 @@ class PreviewSlotsTest {
     fun eachSourceMakesTheTextOfItsComplication() {
         val slots = PreviewSlots(host("slots_sources"), mock())
         fun shown(source: PreviewSlotSource): ComplicationData? {
-            slots.chosen = mapOf(3 to source)
-            return slots.dataFor(3)
+            slots.chosen = mapOf(5 to source)
+            return slots.dataFor(5)
         }
         assertThat(shown(PreviewSlotSource.NONE)).isNull()
         // The texts and the icons of CobIconComplication and IobIconComplication
@@ -121,7 +127,7 @@ class PreviewSlotsTest {
         assertThat(text(shown(PreviewSlotSource.HEART_RATE))).isEqualTo("72")
         assertThat(text(shown(PreviewSlotSource.STEPS))).isEqualTo("--")
         slots.steps = 6482
-        assertThat(text(slots.dataFor(3))).isEqualTo("6482")
+        assertThat(text(slots.dataFor(5))).isEqualTo("6482")
     }
 
     @Test
@@ -142,12 +148,12 @@ class PreviewSlotsTest {
     fun newValuesMakeNewTexts() {
         val host = host("slots_new_values")
         val slots = PreviewSlots(host, mock())
-        assertThat(text(slots.dataFor(1))).isEqualTo("12g")
+        assertThat(text(slots.dataFor(3))).isEqualTo("12g")
         runBlocking { host.take((values(System.currentTimeMillis())[1] as EventData.Status).copy(cob = "30g")) }
         // The text is kept until the renderer says the values changed
-        assertThat(text(slots.dataFor(1))).isEqualTo("12g")
+        assertThat(text(slots.dataFor(3))).isEqualTo("12g")
         slots.invalidate()
-        assertThat(text(slots.dataFor(1))).isEqualTo("30g")
+        assertThat(text(slots.dataFor(3))).isEqualTo("30g")
     }
 
     /** A still renderer named [name] with [design] and the values of the tests. */
@@ -182,9 +188,8 @@ class PreviewSlotsTest {
         // As the phone app uses the renderer: it sets no source
         val frame = renderer("cwf_preview_slots_default", TestDesigns.withSlots()).frame(SIZE, System.currentTimeMillis())
         save(frame, "slots_default")
-        assertThat(ink(frame, 1)).isGreaterThan(20)
-        assertThat(ink(frame, 2)).isGreaterThan(20)
-        for (n in 3..5) assertThat(ink(frame, n)).isEqualTo(0)
+        for (n in 1..4) assertThat(ink(frame, n)).isGreaterThan(20)
+        assertThat(ink(frame, 5)).isEqualTo(0)
     }
 
     @Test
@@ -207,10 +212,11 @@ class PreviewSlotsTest {
         assertThat(ink(renderer.frame(SIZE, now), 5)).isLessThan(ink(chosen, 5))
         // A choice does not change what the default is
         assertThat((1..5).map(renderer::defaultSlotSource)).containsExactly(
-            PreviewSlotSource.COB, PreviewSlotSource.IOB, PreviewSlotSource.NONE, PreviewSlotSource.NONE, PreviewSlotSource.NONE
+            PreviewSlotSource.HEART_RATE, PreviewSlotSource.STEPS, PreviewSlotSource.COB, PreviewSlotSource.IOB, PreviewSlotSource.NONE
         ).inOrder()
-        // Back to no choice: the defaults of the watch again
+        // Back to no choice and no steps: the defaults of the watch again
         renderer.slotSources = emptyMap()
+        renderer.stepsToday = null
         assertThat(renderer.frame(SIZE, now).sameAs(defaults)).isTrue()
     }
 
