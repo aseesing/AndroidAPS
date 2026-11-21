@@ -59,6 +59,25 @@ internal object TestDesigns {
 
     const val REST_INK = "#FF2020"
 
+    /**
+     * A dark face that shows the glucose as text layers of its animation, as the design "BG Reactor"
+     * does: a line in [GLUCOSE_INK] in the upper half while there is a reading (`v_sgv`), and a line in
+     * [NO_DATA_INK] in the lower half while there is none (`v_timestamp`). No glucose view.
+     */
+    fun withGlucoseLayers(): CwfData = load("Test_Glucose_Layers", face("Test Glucose Layers", "#101828").apply {
+        remove("sgv")
+        put("animation", JSONObject().put("durationMs", 1_000).put("layers", JSONArray()
+            .put(textLayer("if(missing(v_sgv), '', 'HHHH')", y = 150, color = GLUCOSE_INK))
+            .put(textLayer("if(missing(v_timestamp), 'HHHH', '')", y = 300, color = NO_DATA_INK))
+        ))
+    }, "#101828")
+
+    const val GLUCOSE_INK = "#20FF20"
+    const val NO_DATA_INK = "#FF2020"
+
+    private fun textLayer(text: String, y: Int, color: String): JSONObject = JSONObject()
+        .put("text", text).put("fontSize", 60).put("align", "center").put("valign", "middle").put("x", 200).put("y", y).put("color", color).put("slot", "front").put("rest", 0)
+
     /** A face like [animated] in other colours, without animation. */
     fun still(): CwfData = load("Test_Still", face("Test Still", "#3A1020"), "#3A1020")
 

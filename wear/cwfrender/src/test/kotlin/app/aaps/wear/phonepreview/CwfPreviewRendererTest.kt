@@ -306,6 +306,35 @@ class CwfPreviewRendererTest {
         assertThat(after.sameAs(before)).isFalse()
     }
 
+    @Test
+    fun aDesignThatReadsTheGlucoseInTextLayersShowsItOnceThePhoneSendsIt() {
+        // As seen on the phone with the design "BG Reactor": IOB and COB in the slots, "NO DATA" for the glucose
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_glucose_layers")
+        val now = System.currentTimeMillis()
+        // The status of the phone, and no glucose message
+        values(now).filterNot { it is EventData.SingleBg }.forEach(renderer::apply)
+        renderer.setDesign(TestDesigns.withGlucoseLayers())
+        val upper = intArrayOf(40, 100, 360, 200)
+        val lower = intArrayOf(40, 250, 360, 350)
+        fun atRest(): Bitmap {
+            renderer.frame(SIZE, now)
+            ShadowSystemClock.advanceBy(Duration.ofSeconds(3)) // the animation is over
+            return renderer.frame(SIZE, now)
+        }
+        val without = atRest()
+        save(without, "glucose_layers_none")
+        assertThat(count(without, upper, TestDesigns.GLUCOSE_INK)).isEqualTo(0)
+        assertThat(count(without, lower, TestDesigns.NO_DATA_INK)).isGreaterThan(0)
+
+        // The glucose message of the phone, also an old reading: the design gets the value and its age
+        renderer.apply(bg(now - 3 * 3_600_000L, "6,7", 120.0))
+        Thread.sleep(1_500) // the face reads the values at most once in half a second
+        val with = atRest()
+        save(with, "glucose_layers_reading")
+        assertThat(count(with, upper, TestDesigns.GLUCOSE_INK)).isGreaterThan(0)
+        assertThat(count(with, lower, TestDesigns.NO_DATA_INK)).isEqualTo(0)
+    }
+
     private fun bg(now: Long, text: String, mgdl: Double) = EventData.SingleBg(
         dataset = 0, timeStamp = now - 120_000L, sgvString = text, glucoseUnits = "mmol", slopeArrow = "→",
         delta = "+0,2", deltaDetailed = "+0,2", avgDelta = "+0,1", avgDeltaDetailed = "+0,1", sgvLevel = 0, sgv = mgdl,
