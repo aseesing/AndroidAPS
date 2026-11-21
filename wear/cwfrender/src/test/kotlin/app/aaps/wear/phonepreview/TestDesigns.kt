@@ -49,6 +49,18 @@ internal object TestDesigns {
         }}
     """
 
+    /**
+     * A dark face with a thick line in [REST_INK] that stays at rest after the animation (`"rest"`),
+     * around the middle of the lower half. The watch leaves rest layers out of the always-on face.
+     */
+    fun withRestLayer(): CwfData = load("Test_Rest", face("Test Rest", "#101828").apply {
+        put("animation", JSONObject().put("durationMs", 2_000).put("layers", JSONArray().put(
+            JSONObject().put("shape", "line").put("colors", JSONArray().put(REST_INK)).put("x", 200).put("y", 300).put("length", 80).put("thickness", 24).put("rest", 1)
+        )))
+    }, "#101828")
+
+    const val REST_INK = "#FF2020"
+
     /** A face like [animated] in other colours, without animation and without slots. */
     fun still(): CwfData = load("Test_Still", face("Test Still", "#3A1020"), "#3A1020")
 

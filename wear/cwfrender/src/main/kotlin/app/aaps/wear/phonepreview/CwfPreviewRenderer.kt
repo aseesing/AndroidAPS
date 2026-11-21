@@ -159,11 +159,24 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
     /** The watch settings this preview draws with. Call [settingsChanged] after writing them. */
     val watchSettings: SharedPreferences get() = host.watchSettings
 
+    /**
+     * True to draw the always-on face, as the watch shows it while the wrist is down. No wake-up
+     * animation is drawn then. Going back to false does not play it: call [wake] for that.
+     */
+    var ambient: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            dataVersion++
+            drawing?.invalidate(all = true)
+            readsValues = true
+        }
+
     /** True while the wake-up animation plays. Then frames are wanted every [frameDelayMs]. */
-    val isAnimating: Boolean get() = drawing?.wakeAnimator?.isRunning == true
+    val isAnimating: Boolean get() = !ambient && drawing?.wakeAnimator?.isRunning == true
 
     /** How long to wait for the next frame: short while the animation plays, else [normalMs]. */
-    fun frameDelayMs(normalMs: Long): Long = drawing?.wakeAnimator?.updateDelay(normalMs) ?: normalMs
+    fun frameDelayMs(normalMs: Long): Long = if (ambient) normalMs else drawing?.wakeAnimator?.updateDelay(normalMs) ?: normalMs
 
     /** Shows [cwfData] from the next frame on. The animation of the design plays once. */
     fun setDesign(cwfData: CwfData) {
@@ -221,8 +234,8 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         readsValues = true
     }
 
-    /** Plays the wake-up animation again, as a tap on the watch does. False when there is none to play. */
-    fun wake(): Boolean = drawing?.wakeAnimator?.wakeOnTap() == true
+    /** Plays the wake-up animation again, as a tap on the watch does. False when there is none to play, or while [ambient]. */
+    fun wake(): Boolean = !ambient && drawing?.wakeAnimator?.wakeOnTap() == true
 
     /** The bitmaps the frames are drawn into, in turn, and the one the next frame tries first. */
     private val buffers = arrayOfNulls<Bitmap>(BUFFERS)
@@ -274,13 +287,13 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
             if (drawAnimation(drawing, index, size, nowMs)) return target
         }
         // Also when the animation plays: this sets the clock and the values in the views it draws over
-        var still = drawing.pipeline.compose(nowMs, ambient = false, width = size, height = size)
+        var still = drawing.pipeline.compose(nowMs, ambient = ambient, width = size, height = size)
         // Lines placed as on the watch. When a view changed (a new design, a text that got a line
         // more or less), its text lies somewhere else: draw the frame again
         if (drawing.face.layoutView?.let(WatchLineSpacing::match) == true) {
             still.recycle()
             drawing.pipeline.invalidateAll()
-            still = drawing.pipeline.compose(nowMs, ambient = false, width = size, height = size)
+            still = drawing.pipeline.compose(nowMs, ambient = ambient, width = size, height = size)
             // This draw reads the values again when the last read is more than half a second old.
             // Count it as a read, or new values that come soon after would be skipped by the face
             readsValues = true

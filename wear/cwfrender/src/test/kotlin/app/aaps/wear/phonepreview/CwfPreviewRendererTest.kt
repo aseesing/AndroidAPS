@@ -247,6 +247,31 @@ class CwfPreviewRendererTest {
         assertThat(after.sameAs(before)).isTrue()
     }
 
+    @Test
+    fun theAlwaysOnFaceIsDrawnWithoutTheAnimation() {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
+        val now = System.currentTimeMillis()
+        values(now).forEach(renderer::apply)
+        renderer.setDesign(TestDesigns.withRestLayer())
+        renderer.ambient = true
+        val ambient = renderer.frame(SIZE, now).kept()
+        save(ambient, "ambient")
+        assertThat(renderer.isAnimating).isFalse()
+        assertThat(renderer.frameDelayMs(1000L)).isEqualTo(1000L)
+        assertThat(renderer.wake()).isFalse()
+        // The rest layer is not on the always-on face
+        val box = intArrayOf(100, 200, 300, 400)
+        assertThat(count(ambient, box, TestDesigns.REST_INK)).isEqualTo(0)
+
+        // Back to the normal face: after the animation the rest layer stays
+        renderer.ambient = false
+        renderer.frame(SIZE, now)
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(5))
+        val normal = renderer.frame(SIZE, now)
+        save(normal, "rest")
+        assertThat(count(normal, box, TestDesigns.REST_INK)).isGreaterThan(0)
+    }
+
     /** A renderer named [name] with values and [design], and the wake-up animation switched off. */
     private fun stillRenderer(design: CwfData, name: String = PreviewHost.DEFAULT_NAME): CwfPreviewRenderer {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), name)
