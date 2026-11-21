@@ -12,8 +12,10 @@ Drive or phone storage**. Pick one or more zips from Downloads, Google Drive or 
 phone copies each one into AAPS/export, and the list shows it:
 
 - an old Custom watchface zip is a design, as before (at most 5 MB);
-- a WFF face zip (at most 32 MB) shows with the name, author and picture of its `data.zip`, and
-  the label "Watch Face Format face". Delete removes the face zip itself.
+- a WFF face zip (at most 32 MB) shows with the name, author and picture of its `data.zip`.
+  Delete removes the face zip itself.
+
+Every entry says its type: "Type: WFF" for a face zip, "Type: CWF" for a design.
 
 Tap an entry to send it to the watch. A WFF face goes as a face, in the version the watch can run.
 The list for the night face does not show WFF faces: a WFF face cannot be the night face.
@@ -26,7 +28,11 @@ What then happens on the watch:
 | Wear OS 5 and 5.1 (API 34, 35) | As an ordinary app | Tap the notification on the watch and confirm the install. Then pick the face in the watch's face picker. The watch may first ask to allow AAPS to install apps. |
 | Older | none | The phone says which Wear OS version the face needs. |
 
-The phone shows the name of the face once the watch reports it installed.
+The phone shows the name of the face ("On the watch: ...") while the watch shows that face. The
+watch knows this from its system: the complications of the face (glucose, age, data picture) are
+active only while the face is on the screen (`WffFace.shown`). After the wearer loads a design, or
+picks another face on the watch, the line goes away. With Watch Face Push the face stays a choice on
+the phone as long as the watch keeps it.
 
 ## The zip
 

@@ -44,6 +44,30 @@ class WffFace(private val context: Context, private val aapsLogger: AAPSLogger) 
         cachedFrom = -1L
     }
 
+    // PERSONAL PATCH: whether the watch shows the face, see WffFaceShown.kt
+    private val shownPrefs get() = context.getSharedPreferences(SHOWN_PREFS, Context.MODE_PRIVATE)
+
+    /**
+     * Whether the face is on the screen of the watch: true while the system uses one of the face's
+     * complication sources. Null when the system never said (a face that was already on the screen
+     * when this version of the app came).
+     */
+    val shown: Boolean? get() = shownPrefs.getStringSet(SHOWN_SLOTS, null)?.isNotEmpty()
+
+    /** The system started to use the complication [slot] of the face. */
+    @Synchronized
+    fun slotActivated(slot: String) = setSlots(slots() + slot)
+
+    /** The system stopped using the complication [slot] of the face. */
+    @Synchronized
+    fun slotDeactivated(slot: String) = setSlots(slots() - slot)
+
+    private fun slots(): Set<String> = shownPrefs.getStringSet(SHOWN_SLOTS, null) ?: emptySet()
+
+    private fun setSlots(slots: Set<String>) {
+        shownPrefs.edit().putStringSet(SHOWN_SLOTS, slots).commit()
+    }
+
     /** The name of the face, or null when there is none. */
     val name: String? get() = entry(FACE_JSON)?.let { JSONObject(String(it)).optString("name").ifEmpty { null } }
 
@@ -83,5 +107,7 @@ class WffFace(private val context: Context, private val aapsLogger: AAPSLogger) 
         const val APK = "face.apk"
         const val TOKEN = "face.token"
         private const val FILE_NAME = "wff_face.zip"
+        private const val SHOWN_PREFS = "wff_face_shown"
+        private const val SHOWN_SLOTS = "slots"
     }
 }

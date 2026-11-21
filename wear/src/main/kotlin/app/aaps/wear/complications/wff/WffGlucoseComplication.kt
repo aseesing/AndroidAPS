@@ -18,6 +18,7 @@ import app.aaps.wear.complications.ComplicationAction
 import app.aaps.wear.complications.ModernBaseComplicationProviderService
 import app.aaps.wear.data.ComplicationData as ComplicationStore
 import app.aaps.wear.watchfaces.wff.WffFace
+import app.aaps.wear.watchfaces.wff.WffFaceShown
 import dev.zacsweers.metro.HasMemberInjections
 import dev.zacsweers.metro.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +47,13 @@ import kotlinx.coroutines.launch
 class WffGlucoseComplication : ModernBaseComplicationProviderService() {
 
     @Inject lateinit var wffFace: WffFace
+
+    // The phone names the face only while the watch shows it, see WffFaceShown
+    @Inject lateinit var wffFaceShown: WffFaceShown
+
+    override fun onComplicationActivated(complicationInstanceId: Int, type: ComplicationType) = wffFaceShown.activated(javaClass, complicationInstanceId)
+
+    override fun onComplicationDeactivated(complicationInstanceId: Int) = wffFaceShown.deactivated(javaClass, complicationInstanceId)
 
     private val arrowScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 

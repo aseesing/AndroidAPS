@@ -60,7 +60,9 @@ sealed class EventData : Event() {
         val supported: Boolean,
         val installedFace: String? = null,
         val apiLevel: Int = 0,
-        val designName: String? = null
+        val designName: String? = null,
+        /** PERSONAL PATCH: whether the watch shows the face of [designName] now; null when the watch cannot tell (see `WffFaceShown` in the wear app) */
+        val designShown: Boolean? = null
     ) : EventData()
 
     @Serializable

@@ -81,6 +81,7 @@ data class WearUiState(
     val pushedWatchface: String = PushedWatchfaceId.CWF,
     /** The name of the face from a face zip that the watch reported installed, or null */
     val wffFaceName: String? = null,
+    val wffFaceOnWatch: String? = null, // PERSONAL PATCH: the face from a face zip while the watch shows it, see WffFaceOnWatch.kt
     /** Whether the connected watch reported Watch Face Push (Wear OS 6+); the face choice shows only then */
     val watchFacePushSupported: Boolean = false,
     /** The face the watch reported holding, as a `PushedWatchfaceId` value, or null when unknown or none */
@@ -201,7 +202,8 @@ class WearViewModel(
                     it.copy(
                         watchFacePushSupported = status?.supported == true,
                         installedWatchface = status?.installedFace,
-                        wffFaceName = status?.designName
+                        wffFaceName = status?.designName,
+                        wffFaceOnWatch = wffFaceOnWatch(status) // PERSONAL PATCH
                     )
                 }
             }

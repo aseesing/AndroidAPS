@@ -271,7 +271,8 @@ class WatchFacePushHelper(
      */
     private suspend fun currentStatus(): EventData.WatchFacePushStatus {
         val designName = wffFace.name?.takeIf { isSupported() || packagePresent(PushedFace.DESIGN.packageName(context.packageName)) }
-        val status = EventData.WatchFacePushStatus(supported = isSupported(), apiLevel = Build.VERSION.SDK_INT, designName = designName)
+        val designShown = wffFace.shown.takeIf { designName != null } // PERSONAL PATCH: see WffFaceShown.kt
+        val status = EventData.WatchFacePushStatus(supported = isSupported(), apiLevel = Build.VERSION.SDK_INT, designName = designName, designShown = designShown)
         return if (!status.supported) status
         else try {
             val packageName = listOwnFaces(createManager()).installedWatchFaceDetails.firstOrNull()?.packageName

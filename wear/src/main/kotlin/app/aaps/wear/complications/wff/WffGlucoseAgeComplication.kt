@@ -16,7 +16,9 @@ import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import app.aaps.wear.complications.ComplicationAction
 import app.aaps.wear.complications.ModernBaseComplicationProviderService
 import app.aaps.wear.data.ComplicationData as ComplicationStore
+import app.aaps.wear.watchfaces.wff.WffFaceShown
 import dev.zacsweers.metro.HasMemberInjections
+import dev.zacsweers.metro.Inject
 import java.time.Instant
 
 /**
@@ -32,6 +34,13 @@ import java.time.Instant
  */
 @HasMemberInjections
 class WffGlucoseAgeComplication : ModernBaseComplicationProviderService() {
+
+    // The phone names the face only while the watch shows it, see WffFaceShown
+    @Inject lateinit var wffFaceShown: WffFaceShown
+
+    override fun onComplicationActivated(complicationInstanceId: Int, type: ComplicationType) = wffFaceShown.activated(javaClass, complicationInstanceId)
+
+    override fun onComplicationDeactivated(complicationInstanceId: Int) = wffFaceShown.deactivated(javaClass, complicationInstanceId)
 
     override fun buildComplicationData(type: ComplicationType, data: ComplicationStore, complicationPendingIntent: PendingIntent): ComplicationData? {
         if (type != ComplicationType.RANGED_VALUE) return null

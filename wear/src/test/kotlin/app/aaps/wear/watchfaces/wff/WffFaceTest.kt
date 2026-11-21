@@ -34,6 +34,24 @@ internal class WffFaceTest {
     }
 
     @Test
+    fun `the face is shown while the system uses one of its complications`() {
+        // The system never said: not known
+        assertThat(face.shown).isNull()
+        face.slotActivated("WffGlucoseComplication#7")
+        face.slotActivated("WffDataComplication#9")
+        assertThat(face.shown).isTrue()
+        // Kept on disk: the app's process comes and goes
+        assertThat(WffFace(RuntimeEnvironment.getApplication(), AAPSLoggerTest()).shown).isTrue()
+        face.slotDeactivated("WffGlucoseComplication#7")
+        assertThat(face.shown).isTrue()
+        // The wearer picked another face: the system let go of the last one
+        face.slotDeactivated("WffDataComplication#9")
+        assertThat(face.shown).isFalse()
+        face.slotDeactivated("WffDataComplication#9")
+        assertThat(face.shown).isFalse()
+    }
+
+    @Test
     fun `a stored face gives its name, token, apk and data design`() {
         face.store(
             zip(

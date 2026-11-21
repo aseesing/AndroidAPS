@@ -439,8 +439,8 @@ internal fun WearMainContent(
                     // Row 3: the watch face settings, set from the phone
                     ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings), onCwfSettings), button2 = placeEntryButton(uiState, onDayNightSettings)) // PERSONAL PATCH: a design that needs the place, see WearPlaceUseUi.kt
 
-                    // The Watch Face Format face loaded with "Import designs"
-                    uiState.wffFaceName?.let { name ->
+                    // The Watch Face Format face loaded with "Import designs", while the watch shows it
+                    uiState.wffFaceOnWatch?.let { name -> // PERSONAL PATCH: not while the watch shows another face, see WffFaceOnWatch.kt
                         Text(
                             text = stringResource(SyncStrings.wear_wff_face_on_watch, name),
                             style = MaterialTheme.typography.bodyMedium,

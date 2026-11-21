@@ -192,6 +192,42 @@ internal class WearViewModelTest {
         assertThat(sut.uiState.value.installedWatchface).isNull()
     }
 
+    // PERSONAL PATCH: the line "On the watch: ...", see WffFaceOnWatch.kt
+    @Test
+    fun `the face from a zip is named only while the watch shows it`() {
+        fun shown() = sut.uiState.value.wffFaceOnWatch
+        assertThat(shown()).isNull()
+
+        // A watch without Watch Face Push (Wear OS 5): its system says whether the face is on the screen
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2", designShown = true)
+        assertThat(shown()).isEqualTo("D2")
+        // The wearer loaded a design and picked the Custom watchface: the watch keeps the face, but does not show it
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2", designShown = false)
+        assertThat(shown()).isNull()
+        // The face stays known, it is only not named as shown
+        assertThat(sut.uiState.value.wffFaceName).isEqualTo("D2")
+        // An older watch app does not say: the installed face is named, as before
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2")
+        assertThat(shown()).isEqualTo("D2")
+
+        // With Watch Face Push (Wear OS 6) the slot must hold the face too
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36, designName = "D2", designShown = true)
+        assertThat(shown()).isEqualTo("D2")
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36, designName = "D2")
+        assertThat(shown()).isEqualTo("D2")
+        // The slot holds the Custom watchface again: the face is a choice, not what the watch shows
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.CWF, apiLevel = 36, designName = "D2", designShown = true)
+        assertThat(shown()).isNull()
+        assertThat(sut.uiState.value.wffFaceName).isEqualTo("D2")
+        // In the slot, but the wearer picked another face on the watch
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36, designName = "D2", designShown = false)
+        assertThat(shown()).isNull()
+
+        // No face from a zip on the watch
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36)
+        assertThat(shown()).isNull()
+    }
+
     @Test
     fun `sending a zip while the complications face is on the wrist says so once`() {
         val zip = CwfFile(
