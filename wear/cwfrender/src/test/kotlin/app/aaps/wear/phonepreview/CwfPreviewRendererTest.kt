@@ -267,6 +267,18 @@ class CwfPreviewRendererTest {
         assertThat(count(normal, box, TestDesigns.REST_INK)).isGreaterThan(0)
     }
 
+    @Test
+    fun aDesignSwitchesAViewWithTextOrWithABoolean() {
+        // "key_show_bg": "true" is the old form, true (a JSON boolean) is the same switch
+        val now = System.currentTimeMillis()
+        fun frameWith(name: String, show: Any) = stillRenderer(TestDesigns.withBgSwitch(show), name).frame(SIZE, now).kept()
+        val textOn = frameWith("cwf_preview_text_on", "true")
+        val textOff = frameWith("cwf_preview_text_off", "false")
+        assertThat(textOn.sameAs(textOff)).isFalse()
+        assertThat(frameWith("cwf_preview_boolean_on", true).sameAs(textOn)).isTrue()
+        assertThat(frameWith("cwf_preview_boolean_off", false).sameAs(textOff)).isTrue()
+    }
+
     /** A renderer named [name] with values and [design], and the wake-up animation switched off. */
     private fun stillRenderer(design: CwfData, name: String = PreviewHost.DEFAULT_NAME): CwfPreviewRenderer {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), name)

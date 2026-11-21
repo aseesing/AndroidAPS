@@ -65,6 +65,14 @@ internal object TestDesigns {
     /** A face that asks for the place (`"needsPlace": true`), so it keeps the rule for when it is day, see `PlaceRuleKeeping`. */
     fun withPlace(): CwfData = load("Test_Place", face("Test Place", "#101828").put("needsPlace", true), "#101828")
 
+    /**
+     * A dark face whose glucose text is switched by the design. [show] is the value of `key_show_bg`
+     * in the metadata: a text (`"true"`) or a JSON boolean (`true`).
+     */
+    fun withBgSwitch(show: Any): CwfData = load("Test_Bg_Switch", face("Test Bg Switch", "#101828").apply {
+        getJSONObject("metadata").put("key_show_bg", show)
+    }, "#101828")
+
     private fun face(name: String, background: String): JSONObject = JSONObject()
         .put("metadata", JSONObject().put("name", name).put("cwf_version", "3.0").put("key_show_date", "false"))
         .put("background", JSONObject().put("width", 400).put("height", 400).put("topmargin", 0).put("leftmargin", 0).put("visibility", "visible"))

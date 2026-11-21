@@ -92,6 +92,19 @@ internal class WffPlannerTest {
     }
 
     @Test
+    fun aPreferenceOfTheDesignMayBeAJsonBoolean() {
+        // "key_show_bg": false is the same switch as "key_show_bg": "false", and true as "true"
+        val d = design(""""sgv": ${view(30, 100, 140, 100)}, "day": ${view(10, 10, 20, 20)}""")
+        d.getJSONObject("metadata").put("key_show_date", true).put("key_show_bg", false)
+        val plan = plan(d)
+        assertThat(item(plan, "sgv").tier).isEqualTo(WffTier.OMIT)
+        assertThat(item(plan, "day").tier).isNotEqualTo(WffTier.OMIT)
+        // The date is off when the design does not set it: the boolean true above is what turns it on
+        d.getJSONObject("metadata").remove("key_show_date")
+        assertThat(item(plan(d), "day").tier).isEqualTo(WffTier.OMIT)
+    }
+
+    @Test
     fun layersByWhatTheyRead() {
         val plan = plan(design(
             """"background": ${view(0, 0, 400, 400)}""",

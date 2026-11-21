@@ -3683,13 +3683,16 @@ the settings of the watch. All of these are built.</p>
 <div class="scroll"><table>
 <thead><tr><th>Key</th><th>Effect on the WFF face</th></tr></thead>
 <tbody>
-<tr><td><code>metadata.key_show_bg</code>, <code>key_show_direction</code>, <code>key_show_delta</code>, <code>key_show_ago</code>, <code>key_show_seconds</code>, <code>key_show_date</code></td><td><code>"true"</code> or <code>"false"</code>. A live view (<code>sgv</code>, <code>direction</code>, <code>delta</code>, <code>timestamp</code>, <code>second</code>, the date views) is left out when the design sets its preference off. Not set: on, but the date is off. The wearer's own setting does not reach a live view; the data picture follows it.</td></tr>
-<tr><td><code>metadata.key_show_complication1</code> to <code>5</code></td><td>A slot of the wearer starts with a source only when the design turns it on: the heart rate and the steps of the watch in slots 1 and 2, carbs and insulin of AAPS in 3 and 4.</td></tr>
+<tr><td><code>metadata.key_show_bg</code>, <code>key_show_direction</code>, <code>key_show_delta</code>, <code>key_show_ago</code>, <code>key_show_seconds</code>, <code>key_show_date</code></td><td><code>true</code> or <code>false</code>. A live view (<code>sgv</code>, <code>direction</code>, <code>delta</code>, <code>timestamp</code>, <code>second</code>, the date views) is left out when the design sets its preference off. Not set: on, but the date is off. The wearer's own setting does not reach a live view; the data picture follows it.</td></tr>
+<tr><td><code>metadata.key_show_complication1</code> to <code>5</code></td><td><code>true</code> or <code>false</code>. A slot of the wearer starts with a source only when the design turns it on: the heart rate and the steps of the watch in slots 1 and 2, carbs and insulin of AAPS in 3 and 4.</td></tr>
 <tr><td><code>enableSecond</code></td><td>Without it the seconds text and the second hand are left out.</td></tr>
 <tr><td><code>default</code> of an <a href="#options">option</a></td><td>Baked pictures, frames and the days of a wake layer are made with the default choice. Only the data picture follows what the wearer picks.</td></tr>
 <tr><td><code>animation.fallbackBpm</code></td><td>The rate of a layer that reads <code>bpm</code>: its frames are baked at this rate.</td></tr>
 <tr><td><code>lowColor</code>, <code>midColor</code>, <code>highColor</code></td><td>The colours of the live glucose text and of the arrow.</td></tr>
 </tbody></table></div>
+<p>Every on/off value in <code>metadata</code> (each <code>key_show_...</code>) may be written as a JSON boolean or as a
+text: <code>"key_show_complication1": true</code> is the same as <code>"key_show_complication1": "true"</code>. Older
+designs use the text. This engine reads both forms too.</p>
 
 <h3 id="wff-limits">What works on WFF, per version</h3>
 <p>"WFF" in the last column: a limit of the Watch Face Format or of its runtime on the watch. "Converter": a choice of
