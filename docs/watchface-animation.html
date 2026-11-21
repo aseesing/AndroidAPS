@@ -1703,12 +1703,16 @@ width and speed. <code>onRing</code> is called for every copy with its number <c
 <tr><td><code>cob</code></td><td>The carbs on board, in grams.</td><td>0 to 200</td></tr>
 <tr><td><code>basalRate</code></td><td>The basal rate that runs now, in U/h. A temp basal in percent is given as its rate in U/h too.</td><td>0 to 5</td></tr>
 <tr><td><code>bgi</code></td><td>The blood glucose impact: how much the insulin moves the glucose in 5 minutes, in mg/dl. Below 0 when it lowers the glucose. No value while there is no glucose reading.</td><td>-25 to 25</td></tr>
+<tr><td><code>ic</code></td><td>The carb ratio of the profile that runs now, in grams per unit. It follows the time of day and the percentage of the profile. No value without a profile.</td><td>1 to 100</td></tr>
+<tr><td><code>isf</code></td><td>The insulin sensitivity of the profile that runs now, in mg/dl per unit, also when the wearer uses mmol/l. With dynamic ISF: the one the loop uses now. No value without a profile.</td><td>5 to 500</td></tr>
+<tr><td><code>max_iob</code></td><td>The max IOB setting of the loop (OpenAPS SMB, AMA or autoISF), in units: the usual maximum of the wearer, also while the loop is off. No value when it is 0, and on AAPSClient.</td><td>0 to 30</td></tr>
+<tr><td><code>max_carbs</code></td><td>The max carbs limit of the safety settings, in grams.</td><td>0 to 300</td></tr>
 <tr><td><code>uploader_battery</code></td><td>The battery of the phone, in percent.</td><td>0 to 100</td></tr>
 <tr><td><code>rig_battery</code></td><td>The battery of the rig or pump, in percent.</td><td>0 to 100</td></tr>
 <tr><td><code>watch_battery</code></td><td>The battery of the watch itself, in percent.</td><td>0 to 100</td></tr>
 <tr><td><code>sensor_left</code>, <code>pump_left</code></td><td>Hours until the sensor, and the pod or cannula, must be changed. Below 0 when that time has passed. No value when the end is not known.</td><td>0 to 72</td></tr>
 <tr><td><code>day</code>, <code>day_name</code>, <code>month</code>, <code>week_number</code></td><td>The day of the month, the day of the week (1 is Monday), the month and the week of the year.</td><td>1 to 31, 1 to 7, 1 to 12, 1 to 53</td></tr>
-<tr><td class="wrap"><code>sgv_Ext1</code>, <code>sgvLevel_Ext1</code>, <code>direction_Ext1</code>, <code>delta_Ext1</code>, <code>avg_delta_Ext1</code>, <code>timestamp_Ext1</code>, <code>loop_Ext1</code>, <code>tempTarget_Ext1</code>, <code>reservoir_Ext1</code>, <code>reservoirLevel_Ext1</code>, <code>rig_battery_Ext1</code>, <code>iob_Ext1</code>, <code>iob_bolus_Ext1</code>, <code>iob_basal_Ext1</code>, <code>cob_Ext1</code>, <code>basalRate_Ext1</code>, <code>bgi_Ext1</code></td><td>The same values of the first followed person. With <code>_Ext2</code> in place of <code>_Ext1</code>: of the second.</td><td>as above</td></tr>
+<tr><td class="wrap"><code>sgv_Ext1</code>, <code>sgvLevel_Ext1</code>, <code>direction_Ext1</code>, <code>delta_Ext1</code>, <code>avg_delta_Ext1</code>, <code>timestamp_Ext1</code>, <code>loop_Ext1</code>, <code>tempTarget_Ext1</code>, <code>reservoir_Ext1</code>, <code>reservoirLevel_Ext1</code>, <code>rig_battery_Ext1</code>, <code>iob_Ext1</code>, <code>iob_bolus_Ext1</code>, <code>iob_basal_Ext1</code>, <code>cob_Ext1</code>, <code>basalRate_Ext1</code>, <code>bgi_Ext1</code>, <code>ic_Ext1</code>, <code>isf_Ext1</code>, <code>max_iob_Ext1</code>, <code>max_carbs_Ext1</code></td><td>The same values of the first followed person. With <code>_Ext2</code> in place of <code>_Ext1</code>: of the second.</td><td>as above</td></tr>
 <tr><td><code>moon_phase</code></td><td>Where the moon is in its month: 0 new moon, 0.25 first quarter, 0.5 full moon, 0.75 last quarter. From the date alone, the same all over the world.</td><td>0 to below 1</td></tr>
 <tr><td><code>sun_progress</code></td><td>How far the day is: 0 at sunrise, 0.5 around noon, 1 at sunset. At night: 1 after sunset until midnight, then 0.</td><td>0 to 1</td></tr>
 <tr><td><code>night_progress</code></td><td>How far the night is: 0 at sunset, 0.5 in the middle of the night, 1 at sunrise. In the day 0.</td><td>0 to 1</td></tr>
@@ -1726,6 +1730,10 @@ width and speed. <code>onRing</code> is called for every copy with its number <c
 <p>The range is what a design can expect. A formula gets the value as it is; it is not cut to the range.</p>
 <p>The phone sends <code>iob</code>, <code>iob_bolus</code>, <code>iob_basal</code>, <code>basalRate</code> and <code>bgi</code> as numbers
 next to the texts of the face. A phone with an AAPS that does not send these numbers yet gives no value for them.</p>
+<p><code>ic</code>, <code>isf</code>, <code>max_iob</code> and <code>max_carbs</code> come the same way. They are for scales: COB as
+insulin is <code>v_cob / v_ic</code>, so a bar of it and a bar of IOB mean the same at the same height. They are never 0:
+when the phone does not know one, or it sends none (an older AAPS), the value is missing. Test it with
+<code>missing(v_ic)</code> and fall back, for example to an option.</p>
 
 <h4>The sun and the moon</h4>
 <p>The sky values follow the day and night rule of the watch. With a place they follow the real sun and
@@ -2855,7 +2863,7 @@ the wearer chooses. Try the buttons.</figcaption>
 </figure>
 
 <h3 id="options">Choices the wearer can make: <code>options</code></h3>
-<p>A design can offer up to four options, for example "Santa: at Christmas, always, never". The list
+<p>A design can offer up to eight options, for example "Santa: at Christmas, always, never". The list
 <code>options</code> is at the top of the design JSON. The watch and the AAPS app show one row per option, with the
 title and the choices of the design. A formula and the <code>when</code> of a look read the choice as
 <code>v_opt_</code> and the name: the number of the chosen choice, from 0. While the wearer has not chosen, it is the
@@ -3021,7 +3029,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><td><code>animation</code></td><td>object</td><td>none</td><td>The wake animation and the <code>rest</code> layers. <a href="#overview">1</a></td></tr>
 <tr><td><code>looks</code></td><td>list of looks</td><td>none</td><td>Changes while a condition is true. <a href="#looks">9</a></td></tr>
 <tr><td><code>colourLooks</code></td><td>object with <code>colour1</code>, <code>colour2</code></td><td>none</td><td>Colours the wearer chooses. <a href="#colour-looks">10</a></td></tr>
-<tr><td><code>options</code></td><td>list of objects, at most 4</td><td>none</td><td>Choices the wearer makes, read as <code>v_opt_&lt;name&gt;</code>. <a href="#options">10</a></td></tr>
+<tr><td><code>options</code></td><td>list of objects, at most 8</td><td>none</td><td>Choices the wearer makes, read as <code>v_opt_&lt;name&gt;</code>. <a href="#options">10</a></td></tr>
 <tr><td><code>needsPlace</code></td><td><code>true</code></td><td>not set</td><td>The design wants the place of the wearer. <a href="#needs-place">6</a></td></tr>
 <tr><td><code>graphLineWidth</code></td><td>whole number, 0 to 8</td><td>0 (dots)</td><td>The glucose as a line. <a href="#graph-line">10</a></td></tr>
 <tr><td><code>graphLineColor</code></td><td>colour text</td><td>the range colours</td><td>One colour for the line. <a href="#graph-line">10</a></td></tr>
@@ -3131,7 +3139,7 @@ time. A fixed number may always be written as a formula of fixed numbers.</p>
 <tr><th>Functions</th><td class="wrap"><code>sin</code> <code>cos</code> <code>tan</code> <code>atan2</code> <code>abs</code> <code>sign</code> <code>sqrt</code> <code>exp</code> <code>log</code> <code>pow</code> <code>floor</code> <code>ceil</code> <code>round</code> <code>fract</code> <code>mod</code> <code>min</code> <code>max</code> <code>clamp</code> <code>mix</code> <code>step</code> <code>smoothstep</code> <code>if</code> <code>noise</code> <code>hash</code> <code>easeInOut</code> <code>window</code> <code>pingpong</code> <code>missing</code></td></tr>
 <tr><th>Text functions</th><td class="wrap"><code>concat</code> <code>left</code> <code>right</code> <code>mid</code> <code>len</code> <code>upper</code> <code>lower</code> <code>trim</code> <code>rept</code> <code>substitute</code> <code>find</code> <code>padLeft</code> <code>padRight</code> <code>text</code> <code>fixed</code> <code>value</code> <code>glucose</code> <code>clock</code> <code>clockHour</code> <code>clockMinute</code> <code>ampm</code> <code>date</code>, and the <a href="#own-functions">own functions</a> of the design</td></tr>
 <tr><th>Variables</th><td class="wrap"><code>t</code> <code>ms</code> <code>len</code> <code>env</code> <code>i</code> <code>n</code> <code>u</code> <code>px</code> <code>py</code> <code>p0</code> to <code>p7</code> <code>r1</code> to <code>r8</code> <code>bpm</code> <code>sec</code> <code>min</code> <code>hour</code> <code>rot0</code> <code>dx0</code> <code>cx0</code> <code>cy0</code> <code>pi</code></td></tr>
-<tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_iob</code> <code>v_iob_bolus</code> <code>v_iob_basal</code> <code>v_cob</code> <code>v_basalRate</code> <code>v_bgi</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_moon_lit</code> <code>v_moon_limb</code> <code>v_moon_north</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>. And <code>v_opt_&lt;name&gt;</code> for each option, see <a href="#options">10</a>.</td></tr>
+<tr><th>Values</th><td class="wrap"><code>v_sgv</code> <code>v_sgvLevel</code> <code>v_direction</code> <code>v_delta</code> <code>v_avg_delta</code> <code>v_timestamp</code> <code>v_loop</code> <code>v_tempTarget</code> <code>v_reservoir</code> <code>v_reservoirLevel</code> <code>v_iob</code> <code>v_iob_bolus</code> <code>v_iob_basal</code> <code>v_cob</code> <code>v_basalRate</code> <code>v_bgi</code> <code>v_ic</code> <code>v_isf</code> <code>v_max_iob</code> <code>v_max_carbs</code> <code>v_uploader_battery</code> <code>v_rig_battery</code> <code>v_watch_battery</code> <code>v_sensor_left</code> <code>v_pump_left</code> <code>v_day</code> <code>v_day_name</code> <code>v_month</code> <code>v_week_number</code> <code>v_moon_phase</code> <code>v_sun_progress</code> <code>v_night_progress</code> <code>v_sun_cycle</code> <code>v_moon_cycle</code> <code>v_moon_lit</code> <code>v_moon_limb</code> <code>v_moon_north</code> <code>v_sun_next_time</code> <code>v_is_day</code> <code>v_weather_kind</code> <code>v_weather_temperature</code>, and the <code>_Ext1</code> and <code>_Ext2</code> forms. See <a href="#values">6</a>. And <code>v_opt_&lt;name&gt;</code> for each option, see <a href="#options">10</a>.</td></tr>
 </tbody></table></div>
 
 
@@ -5549,9 +5557,9 @@ function merge(target, overlay) {
   return target;
 }
 
-/** DesignOptions.read: the options of the design that can be read, at most 4. */
+/** DesignOptions.read: the options of the design that can be read, at most 8. */
 function designOptions(design) {
-  var list = Array.isArray(design.options) ? design.options.slice(0, 4) : [];
+  var list = Array.isArray(design.options) ? design.options.slice(0, 8) : [];
   return list.filter(function (o) {
     return isObj(o) && typeof o.name === 'string' && /^[A-Za-z0-9_]+$/.test(o.name) && typeof o.title === 'string' && o.title.trim() !== '' &&
       Array.isArray(o.choices) && o.choices.length >= 2 && o.choices.length <= 8 &&
@@ -5699,6 +5707,7 @@ Scene.prototype.refreshValues = function (nowMs) {
     sgv: 115, sgvLevel: 0, direction: 4, delta: 2, avg_delta: 1.5, tempTarget: 0, reservoir: 120, reservoirLevel: 0,
     uploader_battery: 85, rig_battery: 60, timestamp: 2, loop: 3,
     iob: 1.6, iob_bolus: 1.2, iob_basal: 0.4, cob: 24, basalRate: 0.85, bgi: -3.6,
+    ic: 10, isf: 50, max_iob: 6, max_carbs: 120,
     day: d.getDate(), day_name: ((d.getDay() + 6) % 7) + 1, month: d.getMonth() + 1, week_number: week,
     watch_battery: 64, moon_phase: phase,
     // The page has no place: the lit side is right while the moon grows, and the control turns the moon

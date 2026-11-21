@@ -8,8 +8,8 @@ import app.aaps.core.interfaces.aps.IobTotal
 
 /**
  * The numbers the phone sends for the value keys of the Custom watch face (`iob`, `iob_bolus`, `iob_basal`,
- * `basalRate`, `bgi`). The status texts are formatted for the screen: their decimal sign depends on the
- * language, a percent temp basal has no rate in U/h, and the BGI text is in the user's units. Each number is
+ * `basalRate`, `bgi`, and `ic`, `isf`, `max_iob`, `max_carbs` from [WearRatiosAndLimits]). The status texts
+ * are formatted for the screen: their decimal sign depends on the language, a percent temp basal has no rate in U/h, and the BGI text is in the user's units. Each number is
  * null when it is not known.
  */
 data class StatusNumbers(
@@ -17,7 +17,11 @@ data class StatusNumbers(
     val iobBolus: Double? = null,
     val iobBasal: Double? = null,
     val basalRate: Double? = null,
-    val bgiMgdl: Double? = null
+    val bgiMgdl: Double? = null,
+    val ic: Double? = null, // g/U
+    val isfMgdl: Double? = null, // mg/dl per U
+    val maxIob: Double? = null, // U
+    val maxCarbs: Double? = null // g
 ) {
 
     companion object {
