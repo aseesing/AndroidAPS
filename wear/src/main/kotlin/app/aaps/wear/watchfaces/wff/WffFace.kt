@@ -44,28 +44,24 @@ class WffFace(private val context: Context, private val aapsLogger: AAPSLogger) 
         cachedFrom = -1L
     }
 
-    // PERSONAL PATCH: whether the watch shows the face, see WffFaceShown.kt
-    private val shownPrefs get() = context.getSharedPreferences(SHOWN_PREFS, Context.MODE_PRIVATE)
+    // PERSONAL PATCH: whether the watch shows the face, see WffFaceShown.kt and WffShownSlots.kt
+    private val shownSlots = WffShownSlots(context)
 
     /**
      * Whether the face is on the screen of the watch: true while the system uses one of the face's
-     * complication sources. Null when the system never said (a face that was already on the screen
-     * when this version of the app came).
+     * complication sources, false when it uses none or a code-based face of this app is on the
+     * screen. Null when the system never said.
      */
-    val shown: Boolean? get() = shownPrefs.getStringSet(SHOWN_SLOTS, null)?.isNotEmpty()
+    val shown: Boolean? get() = shownSlots.shown
 
     /** The system started to use the complication [slot] of the face. */
-    @Synchronized
-    fun slotActivated(slot: String) = setSlots(slots() + slot)
+    fun slotActivated(slot: String) {
+        shownSlots.activated(slot)
+    }
 
     /** The system stopped using the complication [slot] of the face. */
-    @Synchronized
-    fun slotDeactivated(slot: String) = setSlots(slots() - slot)
-
-    private fun slots(): Set<String> = shownPrefs.getStringSet(SHOWN_SLOTS, null) ?: emptySet()
-
-    private fun setSlots(slots: Set<String>) {
-        shownPrefs.edit().putStringSet(SHOWN_SLOTS, slots).commit()
+    fun slotDeactivated(slot: String) {
+        shownSlots.deactivated(slot)
     }
 
     /** The name of the face, or null when there is none. */
@@ -107,7 +103,5 @@ class WffFace(private val context: Context, private val aapsLogger: AAPSLogger) 
         const val APK = "face.apk"
         const val TOKEN = "face.token"
         private const val FILE_NAME = "wff_face.zip"
-        private const val SHOWN_PREFS = "wff_face_shown"
-        private const val SHOWN_SLOTS = "slots"
     }
 }

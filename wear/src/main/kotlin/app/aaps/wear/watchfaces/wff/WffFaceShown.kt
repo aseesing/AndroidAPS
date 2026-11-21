@@ -23,6 +23,11 @@ import kotlinx.coroutines.launch
  * source when a face starts to use it and when it stops, and the sources in `complications/wff`
  * are made for the face from a face zip. So while one of them is in use, that face is shown. The
  * state itself is kept in [WffFace.shown].
+ *
+ * The system does not always say that it let go of a source. So there is a second sign, which does
+ * not go through this class: a code-based face of the app that comes on the screen notes "not
+ * shown" itself ([WffShownSlots.otherFaceShown]). The phone hears of that with the next sync, when
+ * `WatchFacePushHelper.reportStatusIfChanged` runs.
  */
 @SingleIn(AppScope::class)
 @Inject

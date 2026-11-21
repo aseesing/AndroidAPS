@@ -43,6 +43,7 @@ import app.aaps.plugins.sync.wear.daynight.WearDayNightCarryOver // PERSONAL PAT
 import app.aaps.plugins.sync.wear.keys.WearDayNightBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearDayNightCarryOverKey // PERSONAL PATCH: day and night of the personal build
 import app.aaps.plugins.sync.wear.keys.WearDayNightIntKey
+import app.aaps.plugins.sync.wear.keys.WffFaceCoverKey // PERSONAL PATCH: the line "On the watch: ...", see WffFaceCover.kt
 import app.aaps.plugins.sync.wear.keys.WearDayNightStringKey
 import app.aaps.plugins.sync.wear.keys.WearDesignImportKey // PERSONAL PATCH: design import
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
@@ -101,7 +102,7 @@ class WearPlugin(
         .composeContent { WearComposeContent() },
     ownPreferences = WearNightFaceKey.entries + WearNightFaceBooleanKey.entries +
         WearDayNightBooleanKey.entries + WearDayNightIntKey.entries + WearDayNightStringKey.entries +
-        WearDesignImportKey.entries + WearDayNightCarryOverKey.entries + WearPlaceUseKey.entries, // PERSONAL PATCH: design import, day and night of the personal build, what the designs need the place for
+        WearDesignImportKey.entries + WearDayNightCarryOverKey.entries + WearPlaceUseKey.entries + WffFaceCoverKey.entries, // PERSONAL PATCH: design import, day and night of the personal build, what the designs need the place for, the face from a face zip
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
 
@@ -231,6 +232,7 @@ class WearPlugin(
                             checkCustomWatchfacePreferences()
                         }
                     }
+                    event.watchFacePushStatus?.let { WffFaceCover(preferences).watchReported(it) } // PERSONAL PATCH: before the screen reads the status, see WffFaceCover.kt
                     event.watchFacePushStatus?.let { _watchFacePushStatus.value = it }
                 }
             }

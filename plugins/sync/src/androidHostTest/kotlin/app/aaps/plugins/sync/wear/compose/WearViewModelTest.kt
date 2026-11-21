@@ -23,6 +23,7 @@ import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.keys.WffFaceCoverKey
 import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
@@ -226,6 +227,38 @@ internal class WearViewModelTest {
         // No face from a zip on the watch
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36)
         assertThat(shown()).isNull()
+    }
+
+    // PERSONAL PATCH: the phone knows that it sent a design, see WffFaceCover.kt
+    @Test
+    fun `a design sent to the watch takes the face from a zip off the line at once`() {
+        // The phone keeps what it knows in the preferences
+        var designSentAfter = false
+        whenever(preferences.get(WffFaceCoverKey.DesignSentAfter)).thenAnswer { designSentAfter }
+        doAnswer { if (it.arguments[0] == WffFaceCoverKey.DesignSentAfter) designSentAfter = it.arguments[1] as Boolean }.whenever(preferences).put(any<WffFaceCoverKey>(), any<Boolean>())
+        fun shown() = sut.uiState.value.wffFaceOnWatch
+
+        // As seen on the phone: the watch keeps the face "D2" and cannot tell whether it is on the screen
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2")
+        assertThat(shown()).isEqualTo("D2")
+
+        // The wearer loads a design: the line goes without a word from the watch
+        sut.selectWatchface(design)
+        assertThat(shown()).isNull()
+        // And it stays away when the watch reports again, also a watch that still says "shown"
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2", designShown = true)
+        assertThat(shown()).isNull()
+        // The face is still known, and a choice with Watch Face Push
+        assertThat(sut.uiState.value.wffFaceName).isEqualTo("D2")
+
+        // The wearer chooses the face again
+        sut.selectPushedWatchface(PushedWatchfaceId.DESIGN)
+        assertThat(shown()).isEqualTo("D2")
+
+        // With Watch Face Push the slot of the watch decides: a design sent while it holds the face changes nothing
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36, designName = "D2")
+        sut.selectWatchface(design)
+        assertThat(shown()).isEqualTo("D2")
     }
 
     @Test

@@ -47,8 +47,12 @@ class FirstFrameAfterWake(private val post: (Runnable) -> Unit = { task -> mainH
         s.launch { watchState.isVisible.collect { visible -> if (visible != null) onVisibility(visible) } }
     }
 
+    /** Called each time the face comes on the screen, also the first time. For `WffShownSlots`. */
+    var onShown: () -> Unit = {}
+
     /** The face was shown ([visible] true) or hidden. Shown after hidden is a wake. */
     fun onVisibility(visible: Boolean) {
+        if (visible) onShown()
         if (visible && wasHidden) wakeAsked = true
         wasHidden = !visible
     }

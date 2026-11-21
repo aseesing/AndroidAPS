@@ -52,6 +52,25 @@ internal class WffFaceTest {
     }
 
     @Test
+    fun `a code-based face on the screen means the face is not shown`() {
+        val slots = WffShownSlots(RuntimeEnvironment.getApplication())
+        // The face was on the screen before the app was updated: the system never said
+        assertThat(face.shown).isNull()
+        slots.otherFaceShown()
+        assertThat(face.shown).isFalse()
+
+        // The system never said that it let go of the complications: the Custom watchface says it
+        face.slotActivated("WffGlucoseComplication#7")
+        assertThat(face.shown).isTrue()
+        slots.otherFaceShown()
+        assertThat(face.shown).isFalse()
+
+        // The wearer picks the face from the zip again
+        face.slotActivated("WffGlucoseComplication#8")
+        assertThat(face.shown).isTrue()
+    }
+
+    @Test
     fun `a stored face gives its name, token, apk and data design`() {
         face.store(
             zip(

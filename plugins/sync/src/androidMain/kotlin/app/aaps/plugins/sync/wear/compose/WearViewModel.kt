@@ -35,6 +35,7 @@ import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.WffFaceCover
 import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import app.aaps.shared.impl.weardata.CwfPlaceNeeds // PERSONAL PATCH: a design that needs the place
 import app.aaps.plugins.sync.wear.WffFaceZip
@@ -165,6 +166,7 @@ class WearViewModel(
 
     private val faceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(loadingWatchface = name) } }
     private val nightFaceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(nightFace = it.nightFace.copy(loadingNightWatchface = name)) } } // PERSONAL PATCH: loading indicator of the night face
+    private val wffFaceCover = WffFaceCover(preferences) // PERSONAL PATCH: above init, which reads it; see the line "On the watch: ..." at the end
 
     init {
         viewModelScope.launch {
@@ -203,7 +205,7 @@ class WearViewModel(
                         watchFacePushSupported = status?.supported == true,
                         installedWatchface = status?.installedFace,
                         wffFaceName = status?.designName,
-                        wffFaceOnWatch = wffFaceOnWatch(status) // PERSONAL PATCH
+                        wffFaceOnWatch = wffFaceOnWatch(status, wffFaceCover.designSentAfter) // PERSONAL PATCH
                     )
                 }
             }
@@ -244,6 +246,7 @@ class WearViewModel(
     /** Stores the wearer's choice of pushed face; the plugin observes the key and resends the preferences to the watch */
     fun selectPushedWatchface(face: String) {
         preferences.put(StringKey.WearPushedWatchface, face)
+        if (face == PushedWatchfaceId.DESIGN) wffFaceChosen() // PERSONAL PATCH: the line "On the watch: ...", see WffFaceCover.kt
     }
 
     fun showCwfInfos() {
@@ -388,6 +391,7 @@ class WearViewModel(
                 val sent = withTimeoutOrNull(faceSendWait) { event.sent.await() } == true
                 // The watch puts the face in the app's one slot, so the choice follows
                 if (sent && result.usesPush) preferences.put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+                if (sent) wffFaceChosen() // PERSONAL PATCH: the line "On the watch: ...", see WffFaceCover.kt
                 rh.gs(
                     when {
                         !sent           -> SyncStrings.wear_wff_face_not_sent
@@ -434,6 +438,7 @@ class WearViewModel(
         preferences.put(StringNonKey.WearCwfAuthorVersion, metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] ?: "")
         preferences.put(StringNonKey.WearCwfFileName, metadata[CwfMetadataKey.CWF_FILENAME] ?: "")
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray))
+        designSentAfterWffFace() // PERSONAL PATCH: the line "On the watch: ..." goes at once, see WffFaceCover.kt
         // Without a watch nothing will report the face back, so there is nothing to wait for
         if (_uiState.value.isDeviceConnected) faceLoading.start(metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedCustomWatchface)
         _uiState.update { state ->
@@ -553,6 +558,28 @@ class WearViewModel(
      * next zip the wearer picks does not replace the main face.
      */
     private fun reloadImportList() = openImportList(forNight = _uiState.value.nightFace.importForNight, reload = true)
+
+    // ---- PERSONAL PATCH: the line "On the watch: ...", see WffFaceCover.kt and WffFaceOnWatch.kt ----
+
+    /**
+     * The phone sent a design to the watch: the face from a face zip is no longer named. Not with
+     * Watch Face Push: there the watch says which face its slot holds, and a design does not change that.
+     */
+    private fun designSentAfterWffFace() {
+        if (_uiState.value.watchFacePushSupported) return
+        wffFaceCover.designSent()
+        showWffFaceOnWatch()
+    }
+
+    /** The wearer sent the face zip again, or chose that face: it can be named again. */
+    private fun wffFaceChosen() {
+        wffFaceCover.faceChosen()
+        showWffFaceOnWatch()
+    }
+
+    private fun showWffFaceOnWatch() {
+        _uiState.update { it.copy(wffFaceOnWatch = wffFaceOnWatch(wearPlugin.watchFacePushStatus.value, wffFaceCover.designSentAfter)) }
+    }
 
     // ---- PERSONAL PATCH: Watch Face Format face zips in the list, see WffFaceDesigns.kt ----
 

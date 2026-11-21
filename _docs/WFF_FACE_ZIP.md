@@ -30,9 +30,12 @@ What then happens on the watch:
 
 The phone shows the name of the face ("On the watch: ...") while the watch shows that face. The
 watch knows this from its system: the complications of the face (glucose, age, data picture) are
-active only while the face is on the screen (`WffFace.shown`). After the wearer loads a design, or
-picks another face on the watch, the line goes away. With Watch Face Push the face stays a choice on
-the phone as long as the watch keeps it.
+active only while the face is on the screen (`WffFace.shown`), and a code-based face of the app that
+comes on the screen says so too (`WffShownSlots`). The phone does not wait for the watch: when the
+wearer sends a design (a CWF) to the watch, the line goes away at once (`WffFaceCover`), and it comes
+back when the face zip is sent again, the face is chosen on the phone, or the watch says the face
+came back on its screen. After the wearer picks another face on the watch, the line goes away too.
+With Watch Face Push the face stays a choice on the phone as long as the watch keeps it.
 
 ## The zip
 

@@ -78,6 +78,7 @@ val wearShared = listOf(
     "watchfaces/wff/WffDesignParts.kt", // PERSONAL PATCH
     "watchfaces/wff/WffLooks.kt", // PERSONAL PATCH
     "watchfaces/wff/WffPlanner.kt", // PERSONAL PATCH
+    "watchfaces/wff/WffShownSlots.kt", // PERSONAL PATCH: named by WatchFace.kt, never run on the phone
     "watchfaces/colour/ColourLooks.kt", // PERSONAL PATCH
     "watchfaces/daynight/DayNightChoice.kt",
     "watchfaces/daynight/DayNightClock.kt",
