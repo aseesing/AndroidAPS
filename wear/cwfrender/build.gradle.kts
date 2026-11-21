@@ -62,6 +62,7 @@ val wearShared = listOf(
     "watchfaces/animation/FormulaParts.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerAnimator.kt", // PERSONAL PATCH
     "watchfaces/animation/LayerVariables.kt", // PERSONAL PATCH
+    "watchfaces/animation/MoonQuarters.kt", // PERSONAL PATCH
     "watchfaces/animation/PulseCurve.kt", // PERSONAL PATCH
     "watchfaces/animation/Templates.kt", // PERSONAL PATCH
     "watchfaces/animation/TextFormula.kt", // PERSONAL PATCH
@@ -72,6 +73,11 @@ val wearShared = listOf(
     "watchfaces/animation/WakeLength.kt", // PERSONAL PATCH
     "watchfaces/animation/WakeTimer.kt", // PERSONAL PATCH
     "watchfaces/animation/WallClock.kt", // PERSONAL PATCH
+    "watchfaces/animation/WffSources.kt", // PERSONAL PATCH
+    "watchfaces/wff/WffPlan.kt", // PERSONAL PATCH: the plan of a converted WFF face, for its data picture (the converter is in aaps-face-tool)
+    "watchfaces/wff/WffDesignParts.kt", // PERSONAL PATCH
+    "watchfaces/wff/WffLooks.kt", // PERSONAL PATCH
+    "watchfaces/wff/WffPlanner.kt", // PERSONAL PATCH
     "watchfaces/colour/ColourLooks.kt", // PERSONAL PATCH
     "watchfaces/daynight/DayNightChoice.kt",
     "watchfaces/daynight/DayNightClock.kt",

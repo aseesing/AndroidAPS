@@ -6,12 +6,18 @@ package app.aaps.wear.watchfaces.animation
 
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.acos
+import kotlin.math.asin
+import kotlin.math.atan
 import kotlin.math.atan2
+import kotlin.math.cbrt
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.expm1
 import kotlin.math.floor
 import kotlin.math.ln
+import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -19,6 +25,7 @@ import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
+import kotlin.math.truncate
 
 /** A formula of a design that cannot be read: the text says why. */
 class FormulaException(message: String) : IllegalArgumentException(message)
@@ -30,7 +37,9 @@ class FormulaException(message: String) : IllegalArgumentException(message)
  * The language is math and texts only, so a design can never hang the watch or reach anything else:
  * - numbers, `pi`, and the variables the layer offers (see [LayerVariables])
  * - `+ - * / %` (`%` is [mod]), `< <= > >= == !=` (1 when true, else 0), `&& || !`, brackets
+ * - `c ? a : b`, the same as `if(c, a, b)`
  * - the functions in [FUNCTIONS], for example `sin`, `clamp`, `noise` and `if(c, a, b)`
+ * - the data sources of the Watch Face Format, for example `[HOUR_0_23]` (see [WffSources])
  * - texts: `'hello'`, `a & b` (joined), `==` and `!=` of two texts, and the text functions (see
  *   `TextFunctions`), for example `len('abc')`. A formula that gives a text is a [TextFormula].
  * - the own functions of the design (see [DesignFunctions])
@@ -62,6 +71,13 @@ class Formula private constructor(private val root: Node, val text: String) {
 
     /** True when the formula is one fixed number. */
     val isConstant: Boolean get() = root is Const
+
+    /**
+     * Walks the parts of the formula from the leaves up and gives [visitor]'s result for the whole.
+     * For a reader outside the engine, like the converter to the Watch Face Format. Drawing never
+     * uses it.
+     */
+    fun <R> visit(visitor: FormulaVisitor<R>): R = walk(root, visitor)
 
     override fun toString(): String = text
 
@@ -100,6 +116,9 @@ class Formula private constructor(private val root: Node, val text: String) {
         val FUNCTIONS: Map<String, IntRange> = mapOf(
             "sin" to 1..1, "cos" to 1..1, "tan" to 1..1, "atan2" to 2..2, "abs" to 1..1, "sign" to 1..1,
             "sqrt" to 1..1, "exp" to 1..1, "log" to 1..1, "pow" to 2..2,
+            // The same names as in the Watch Face Format, with the same meaning
+            "asin" to 1..1, "acos" to 1..1, "atan" to 1..1, "log2" to 1..1, "log10" to 1..1, "cbrt" to 1..1, "expm1" to 1..1,
+            "deg" to 1..1, "rad" to 1..1,
             "floor" to 1..1, "ceil" to 1..1, "round" to 1..1, "fract" to 1..1, "mod" to 2..2,
             "min" to 2..8, "max" to 2..8, "clamp" to 3..3, "mix" to 3..3, "step" to 2..2, "smoothstep" to 3..3,
             "if" to 3..3, "noise" to 1..2, "hash" to 1..3, "missing" to 1..1,
@@ -203,16 +222,29 @@ class Formula private constructor(private val root: Node, val text: String) {
             "sqrt" to Fn1 { a -> sqrt(a) },
             "exp" to Fn1 { a -> exp(a) },
             "log" to Fn1 { a -> ln(a) },
+            "asin" to Fn1 { a -> asin(a) },
+            "acos" to Fn1 { a -> acos(a) },
+            "atan" to Fn1 { a -> atan(a) },
+            // The way the Watch Face Format works it out, so the last digit is the same too
+            "log2" to Fn1 { a -> log10(a) / LOG10_2 },
+            "log10" to Fn1 { a -> log10(a) },
+            "cbrt" to Fn1 { a -> cbrt(a) },
+            "expm1" to Fn1 { a -> expm1(a) },
+            "deg" to Fn1 { a -> Math.toDegrees(a) },
+            "rad" to Fn1 { a -> Math.toRadians(a) },
             "floor" to Fn1 { a -> floor(a) },
             "ceil" to Fn1 { a -> ceil(a) },
             // A half goes up, like a person rounds (kotlin.math.round would make round(2.5) = 2)
             "round" to Fn1 { a -> floor(a + 0.5) },
-            "fract" to Fn1 { a -> a - floor(a) },
+            // As in the Watch Face Format: the part after the dot keeps the sign, fract(-0.25) is -0.25
+            "fract" to Fn1 { a -> a - truncate(a) },
             "noise" to Fn1 { a -> noise(a) },
             "hash" to Fn1 { a -> hash(a) },
             "easeInOut" to Fn1 { a -> easeInOut(a) },
             "missing" to Fn1 { a -> if (a.isNaN()) 1.0 else 0.0 }
         )
+
+        private val LOG10_2 = log10(2.0)
 
         private val FN2: Map<String, Fn2> = mapOf(
             "atan2" to Fn2 { a, b -> atan2(a, b) },
@@ -280,7 +312,7 @@ class Formula private constructor(private val root: Node, val text: String) {
 
         private class Token(val kind: Char, val text: String, val number: Double = 0.0)
 
-        /** Kinds: 'n' number, 'i' name, 's' text, 'o' operator, '(' ')' ',' */
+        /** Kinds: 'n' number, 'i' name, 's' text, 'd' data source (the name between `[` and `]`), 'o' operator, '(' ')' ',' */
         private fun tokenize(text: String): List<Token> {
             val tokens = ArrayList<Token>()
             var i = 0
@@ -329,11 +361,19 @@ class Formula private constructor(private val root: Node, val text: String) {
                         tokens += Token(c, c.toString()); i++
                     }
 
+                    c == '['                                                        -> {
+                        // A data source of the Watch Face Format, like [HOUR_0_23] or [CONFIGURATION.santa]
+                        val end = text.indexOf(']', i)
+                        if (end < 0) throw FormulaException("a '[' has no closing ']' in '$text'")
+                        tokens += Token('d', text.substring(i + 1, end).trim())
+                        i = end + 1
+                    }
+
                     else                                                            -> {
                         val two = if (i + 1 < text.length) text.substring(i, i + 2) else ""
                         val op = when {
                             two in setOf("<=", ">=", "==", "!=", "&&", "||") -> two
-                            c in "+-*/%<>!&"                                 -> c.toString()
+                            c in "+-*/%<>!&?:"                               -> c.toString()
                             else                                             -> throw FormulaException("unexpected '$c' in '$text'")
                         }
                         tokens += Token('o', op)
@@ -401,9 +441,31 @@ class Formula private constructor(private val root: Node, val text: String) {
 
             fun expression(): Part {
                 if (++depth > 40) throw FormulaException("formula is nested too deep")
-                val node = or()
+                val node = conditional()
                 depth--
                 return node
+            }
+
+            /** `c ? a : b`, as the Watch Face Format writes `if(c, a, b)`. The weakest operator; `a ? b : c ? d : e` is `a ? b : (c ? d : e)`. */
+            private fun conditional(): Part {
+                val condition = or()
+                if (!isOp("?")) return condition
+                pos++
+                val a = expression()
+                if (!isOp(":")) throw FormulaException("'?' needs a ':' but found '${peekText()}'")
+                pos++
+                val b = expression()
+                return choose(number(condition, "?"), a, b, "?")
+            }
+
+            /** [a] when [condition] is true, else [b]: two numbers or two texts. */
+            private fun choose(condition: Node, a: Part, b: Part, what: String): Part {
+                val choice: Part = when {
+                    a is Node && b is Node         -> If(condition, a, b)
+                    a is TextNode && b is TextNode -> TextIf(condition, a, b)
+                    else                           -> throw FormulaException("'$what' needs two numbers or two texts to choose from")
+                }
+                return fold(count(choice))
             }
 
             private fun or(): Part {
@@ -495,6 +557,11 @@ class Formula private constructor(private val root: Node, val text: String) {
                         pos++; count(TextConst(TextFunctions.cut(token.text)))
                     }
 
+                    'd'  -> {
+                        pos++
+                        source(token.text)
+                    }
+
                     '('  -> {
                         pos++
                         val inner = expression()
@@ -531,18 +598,26 @@ class Formula private constructor(private val root: Node, val text: String) {
                 texts.call(name, args)?.let { return fold(count(it)) }
                 val arity = FUNCTIONS[name] ?: throw FormulaException("unknown function '$name'")
                 if (args.size !in arity) throw FormulaException("'$name' takes ${arity.first}..${arity.last} values, not ${args.size}")
-                if (name == "if") {
-                    val condition = number(args[0], name)
-                    val a = args[1]
-                    val b = args[2]
-                    val choice: Part = when {
-                        a is Node && b is Node         -> If(condition, a, b)
-                        a is TextNode && b is TextNode -> TextIf(condition, a, b)
-                        else                           -> throw FormulaException("'if' needs two numbers or two texts to choose from")
-                    }
-                    return fold(count(choice))
-                }
+                if (name == "if") return choose(number(args[0], name), args[1], args[2], name)
                 return fold(count(callOf(name, args.map { number(it, name) })))
+            }
+
+            /**
+             * The data source [name] of the Watch Face Format (see [WffSources]). One made from our
+             * variables is read as its formula, with no values of an own function and no own
+             * functions, so a value called `hour` cannot change what `[HOUR_1_12]` means.
+             */
+            private fun source(name: String): Part {
+                WffSources.formula(name)?.let { formula ->
+                    return try {
+                        read(formula, names, { null }, setting, null, emptyMap(), using, counter)
+                    } catch (e: FormulaException) {
+                        throw FormulaException("[$name] cannot be used here: ${e.message}")
+                    }
+                }
+                val part = WffSources.part(name, setting) { variable -> names(variable) ?: throw FormulaException("[$name] cannot be used here: there is no '$variable'") }
+                    ?: throw FormulaException("unknown data source '[$name]'")
+                return count(part)
             }
 
             /** The body of the own function [function] with [args] as its values. */
@@ -578,11 +653,29 @@ class Formula private constructor(private val root: Node, val text: String) {
         private fun callOf(name: String, args: List<Node>): Node {
             fun missing(): Nothing = throw IllegalStateException("$name/${args.size}")
             return when (args.size) {
-                1    -> Call1(FN1[name] ?: missing(), args[0])
-                2    -> Call2(FN2[name] ?: missing(), args[0], args[1])
-                3    -> Call3(FN3[name] ?: missing(), args[0], args[1], args[2])
-                else -> CallN(FNN[name] ?: missing(), args.toTypedArray())
+                1    -> Call1(name, FN1[name] ?: missing(), args[0])
+                2    -> Call2(name, FN2[name] ?: missing(), args[0], args[1])
+                3    -> Call3(name, FN3[name] ?: missing(), args[0], args[1], args[2])
+                else -> CallN(name, FNN[name] ?: missing(), args.toTypedArray())
             }
+        }
+
+        /** The parts of [part] for [visitor], see [visit]. */
+        private fun <R> walk(part: Part, visitor: FormulaVisitor<R>): R = when (part) {
+            is Const      -> visitor.number(part.value)
+            is Var        -> visitor.variable(part.index)
+            is Negate     -> visitor.negate(walk(part.a, visitor))
+            is Not        -> visitor.not(walk(part.a, visitor))
+            is If         -> visitor.choose(walk(part.c, visitor), walk(part.a, visitor), walk(part.b, visitor))
+            is Binary     -> visitor.operator(part.op, walk(part.a, visitor), walk(part.b, visitor))
+            is Call1      -> visitor.function(part.name, listOf(walk(part.a, visitor)))
+            is Call2      -> visitor.function(part.name, listOf(walk(part.a, visitor), walk(part.b, visitor)))
+            is Call3      -> visitor.function(part.name, listOf(walk(part.a, visitor), walk(part.b, visitor), walk(part.c, visitor)))
+            is CallN      -> visitor.function(part.name, part.args.map { walk(it, visitor) })
+            is DatePart   -> visitor.source(part.sourceName)
+            is Is24Hour   -> visitor.source("IS_24_HOUR_MODE")
+            is MoonPosition -> visitor.source("MOON_PHASE_POSITION")
+            else          -> visitor.other(part.javaClass.simpleName)
         }
 
         // ---- the number parts of a formula (the shared ones are in FormulaParts.kt) ----
@@ -609,7 +702,7 @@ class Formula private constructor(private val root: Node, val text: String) {
             override fun children(): List<Part> = listOf(c, a, b)
         }
 
-        private class Binary(op: String, val a: Node, val b: Node) : Node() {
+        private class Binary(val op: String, val a: Node, val b: Node) : Node() {
 
             private val code = OPERATORS[op] ?: throw IllegalStateException(op)
 
@@ -640,25 +733,25 @@ class Formula private constructor(private val root: Node, val text: String) {
             override fun children(): List<Part> = listOf(a, b)
         }
 
-        private class Call1(val work: Fn1, val a: Node) : Node() {
+        private class Call1(val name: String, val work: Fn1, val a: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v))
             override fun children(): List<Part> = listOf(a)
         }
 
-        private class Call2(val work: Fn2, val a: Node, val b: Node) : Node() {
+        private class Call2(val name: String, val work: Fn2, val a: Node, val b: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v), b.eval(v))
             override fun children(): List<Part> = listOf(a, b)
         }
 
-        private class Call3(val work: Fn3, val a: Node, val b: Node, val c: Node) : Node() {
+        private class Call3(val name: String, val work: Fn3, val a: Node, val b: Node, val c: Node) : Node() {
 
             override fun eval(v: DoubleArray): Double = work.apply(a.eval(v), b.eval(v), c.eval(v))
             override fun children(): List<Part> = listOf(a, b, c)
         }
 
-        private class CallN(val work: FnN, val args: Array<Node>) : Node() {
+        private class CallN(val name: String, val work: FnN, val args: Array<Node>) : Node() {
 
             private val values = DoubleArray(args.size)
             override fun eval(v: DoubleArray): Double {
@@ -674,4 +767,38 @@ class Formula private constructor(private val root: Node, val text: String) {
         private fun truth(x: Double) = x != 0.0 && !x.isNaN()
         private fun bool(b: Boolean) = if (b) 1.0 else 0.0
     }
+}
+
+/**
+ * Reads the parts of a [Formula], see [Formula.visit]. Each call gets the results of the parts
+ * inside it. Texts are not shown part by part: a part that gives or reads a text comes as [other].
+ */
+interface FormulaVisitor<R> {
+
+    /** A fixed number. */
+    fun number(value: Double): R
+
+    /** The variable at [index] of the name lookup the formula was read with. */
+    fun variable(index: Int): R
+
+    /** `-a` */
+    fun negate(a: R): R
+
+    /** `!a` */
+    fun not(a: R): R
+
+    /** `if(c, a, b)` and `c ? a : b` with two numbers. */
+    fun choose(c: R, a: R, b: R): R
+
+    /** One of `&& || + - * / % < <= > >= == !=`; `%` is [Formula.mod]. */
+    fun operator(op: String, a: R, b: R): R
+
+    /** A number function of [Formula.FUNCTIONS] by its name. */
+    fun function(name: String, args: List<R>): R
+
+    /** A data source of the Watch Face Format that is not made from our variables, like `DAY_OF_WEEK`. */
+    fun source(name: String): R
+
+    /** Any other part; [kind] says which. */
+    fun other(kind: String): R
 }

@@ -6,6 +6,7 @@ package app.aaps.wear.phonepreview
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Color
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.rx.weardata.CUSTOM_VERSION
 import app.aaps.core.interfaces.rx.weardata.CwfData
@@ -27,6 +28,7 @@ import java.time.Duration
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
 import app.aaps.core.interfaces.R as InterfacesR
 
@@ -240,6 +242,31 @@ class CwfPreviewRendererTest {
         assertThat(after.sameAs(before)).isTrue()
     }
 
+    @Test
+    fun theAlwaysOnFaceIsDrawnWithoutTheAnimation() {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
+        val now = System.currentTimeMillis()
+        values(now).forEach(renderer::apply)
+        renderer.setDesign(TestDesigns.withRestLayer())
+        renderer.ambient = true
+        val ambient = renderer.frame(SIZE, now).kept()
+        save(ambient, "ambient")
+        assertThat(renderer.isAnimating).isFalse()
+        assertThat(renderer.frameDelayMs(1000L)).isEqualTo(1000L)
+        assertThat(renderer.wake()).isFalse()
+        // The rest layer is not on the always-on face
+        val box = intArrayOf(100, 200, 300, 400)
+        assertThat(count(ambient, box, TestDesigns.REST_INK)).isEqualTo(0)
+
+        // Back to the normal face: after the animation the rest layer stays
+        renderer.ambient = false
+        renderer.frame(SIZE, now)
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(5))
+        val normal = renderer.frame(SIZE, now)
+        save(normal, "rest")
+        assertThat(count(normal, box, TestDesigns.REST_INK)).isGreaterThan(0)
+    }
+
     /** A renderer named [name] with values and [design], and the wake-up animation switched off. */
     private fun stillRenderer(design: CwfData, name: String = PreviewHost.DEFAULT_NAME): CwfPreviewRenderer {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), name)
@@ -286,6 +313,17 @@ class CwfPreviewRendererTest {
     )
 
     /** A copy of a frame: the renderer draws into its frames again two frames later. */
+    /** How many pixels in the box (left, top, right, bottom in the 400 design space) of [frame] have about the colour [hex]. */
+    private fun count(frame: Bitmap, box: IntArray, hex: String): Int {
+        val c = Color.parseColor(hex)
+        var n = 0
+        for (y in box[1] * SIZE / 400 until box[3] * SIZE / 400) for (x in box[0] * SIZE / 400 until box[2] * SIZE / 400) {
+            val p = frame.getPixel(x, y)
+            if (abs(Color.red(p) - Color.red(c)) < 50 && abs(Color.green(p) - Color.green(c)) < 50 && abs(Color.blue(p) - Color.blue(c)) < 50) n++
+        }
+        return n
+    }
+
     private fun Bitmap.kept(): Bitmap = copy(Bitmap.Config.ARGB_8888, false)
 
     private fun save(bitmap: Bitmap, name: String) = File(out, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }

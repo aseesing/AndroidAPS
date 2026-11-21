@@ -61,7 +61,7 @@ class PreviewHost(
     val sp: SP by lazy { SPImpl(watchSettings, this) }
     val rxBus: RxBus by lazy { RxBusImpl(logger) }
     val dateUtil: DateUtil by lazy { DateUtilImpl(this) }
-    val repository: ComplicationDataRepository by lazy { ComplicationDataRepository(this, logger, sp) }
+    val repository: ComplicationDataRepository by lazy { ComplicationDataRepository(this, logger, sp).apply { batchWindowMs = 0L } } // PERSONAL PATCH: the preview stores each message at once (it gets them one by one, so a wait only delays the picture)
     private val simpleUi: SimpleUi by lazy { SimpleUi(this, sp, dateUtil) }
 
     /**

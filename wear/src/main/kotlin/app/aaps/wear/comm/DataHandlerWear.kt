@@ -51,9 +51,9 @@ import app.aaps.wear.complications.SgvComplicationExt2
 import app.aaps.wear.complications.SgvLargeComplication
 import app.aaps.wear.complications.TargetComplication
 import app.aaps.wear.complications.UploaderBatteryComplication
-import app.aaps.wear.complications.wff.WffDataComplication
-import app.aaps.wear.complications.wff.WffGlucoseAgeComplication
-import app.aaps.wear.complications.wff.WffGlucoseComplication
+import app.aaps.wear.complications.wff.WffDataComplication // PERSONAL PATCH
+import app.aaps.wear.complications.wff.WffGlucoseAgeComplication // PERSONAL PATCH
+import app.aaps.wear.complications.wff.WffGlucoseComplication // PERSONAL PATCH
 import app.aaps.wear.data.ComplicationDataRepository
 import app.aaps.wear.alarm.CgmAlarmWatch
 import app.aaps.wear.alarm.PhoneAlarmWatch
@@ -626,10 +626,7 @@ class DataHandlerWear(
             UploaderBatteryComplication::class.java,
             // Running mode complication
             RunningModeComplication::class.java,
-            // A Watch Face Format face loaded from a face zip
-            WffGlucoseComplication::class.java,
-            WffGlucoseAgeComplication::class.java,
-            WffDataComplication::class.java
+            WffGlucoseComplication::class.java, WffGlucoseAgeComplication::class.java, WffDataComplication::class.java // PERSONAL PATCH: converted WFF faces
             // Note: WallpaperComplication is abstract, subclasses will auto-update
         )
 
