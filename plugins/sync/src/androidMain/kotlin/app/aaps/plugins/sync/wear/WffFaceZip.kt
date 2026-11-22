@@ -1,3 +1,7 @@
+// ============================================================================================
+// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+// Own file: keep upstream files to small hooks that call into here.
+// ============================================================================================
 package app.aaps.plugins.sync.wear
 
 import java.io.ByteArrayInputStream
@@ -22,6 +26,9 @@ object WffFaceZip {
     /** Watch Face Push needs a token, and Push is the only way to install a face on Wear OS 6 */
     private const val PUSH_VERSION = 4
 
+    /** From this Android API level (Wear OS 6) a watch installs a face only with Watch Face Push */
+    private const val PUSH_ONLY_API_LEVEL = 36
+
     private const val FACE_JSON = "face.json"
     private const val DATA_ZIP = "data.zip"
 
@@ -36,6 +43,12 @@ object WffFaceZip {
         /** The watch is too old for every face in the zip; [minApiLevel] is the lowest level they need */
         class WatchTooOld(val minApiLevel: Int) : Result
 
+        /**
+         * The zip has a face for this app, but none the watch can install: the watch needs Watch Face
+         * Push (Wear OS 6 or newer), or the only face is one for Push, and the zip has no token for it
+         */
+        data object NoPushToken : Result
+
         /** Not a face zip of a known layout */
         data object Invalid : Result
     }
@@ -47,9 +60,13 @@ object WffFaceZip {
     fun forWatch(zip: ByteArray, appId: String, apiLevel: Int): Result {
         val files = read(zip)
         if (FACE_JSON !in files || DATA_ZIP !in files) return Result.Invalid
-        val forApp = VERSIONS.filter { "wff${it.number}/$appId.apk" in files && (it.number != PUSH_VERSION || "wff${it.number}/$appId.token" in files) }
-        if (forApp.isEmpty()) return Result.OtherApp
-        val version = forApp.firstOrNull { apiLevel >= it.minApiLevel } ?: return Result.WatchTooOld(forApp.minOf { it.minApiLevel })
+        val withApk = VERSIONS.filter { "wff${it.number}/$appId.apk" in files }
+        if (withApk.isEmpty()) return Result.OtherApp
+        val forApp = withApk.filter { it.number != PUSH_VERSION || "wff${it.number}/$appId.token" in files }
+        // A watch of Wear OS 6 cannot install a face as a normal app, so an older version is no way out there
+        val installable = if (apiLevel >= PUSH_ONLY_API_LEVEL) forApp.filter { it.number == PUSH_VERSION } else forApp
+        if (installable.isEmpty()) return Result.NoPushToken
+        val version = installable.firstOrNull { apiLevel >= it.minApiLevel } ?: return Result.WatchTooOld(installable.minOf { it.minApiLevel })
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zipOut ->
             fun put(name: String, bytes: ByteArray?) {

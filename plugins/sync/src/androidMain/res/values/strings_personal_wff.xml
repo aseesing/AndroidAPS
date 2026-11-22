@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ============================================================================================
+  PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+  Own file: keep upstream files to small hooks that call into here.
+  ============================================================================================
+  Watch Face Format (WFF) face zips sent from the phone. English only: not sent to Crowdin.
+-->
+<resources>
+    <string name="wear_wff_face_no_push_token">This watchface file has no Watch Face Push token for this AAPS app, and the watch cannot install the watchface without one. Make the watchface again with a token.</string>
+    <string name="wear_not_a_watchface_file">This file is not a watchface.</string>
+    <string name="wear_wff_face_watch_unknown">The watch has not told its Wear OS version yet. Check the connection, and that the AAPS app on the watch is of the same version.</string>
+    <string name="wear_wff_face_watch_too_old" comment="%1$s = a Wear OS version, for example 5 or 6">This watchface needs Wear OS %1$s or newer on the watch.</string>
+    <string name="wear_wff_face_other_app">This watchface was made for another AAPS app. Make it again for this app.</string>
+    <string name="wear_wff_face_sent">Watchface sent to the watch.</string>
+    <string name="wear_wff_face_sent_confirm">Watchface sent. Confirm the install on the watch, then pick the watchface on the watch.</string>
+    <string name="wear_wff_face_not_sent">The watchface could not be sent to the watch. Check the connection and try again.</string>
+    <string name="wear_design_type_wff" comment="One line of an entry in the list of watchface files. WFF is the short name of the Watch Face Format of Wear OS: keep it as it is.">Type: WFF</string>
+    <string name="wear_design_type_cwf" comment="One line of an entry in the list of watchface files. CWF is the short name of a design for the AAPS Custom watchface: keep it as it is.">Type: CWF</string>
+    <string name="wear_wff_face_on_watch" comment="%1$s = name of a watchface loaded from a file">On the watch: %1$s</string>
+</resources>

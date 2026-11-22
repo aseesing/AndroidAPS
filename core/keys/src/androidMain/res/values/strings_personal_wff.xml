@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ============================================================================================
+  PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+  Own file: keep upstream files to small hooks that call into here.
+  ============================================================================================
+  The Watch Face Format (WFF) face from a face zip as a choice of pushed watchface. English only: not sent to Crowdin.
+-->
+<resources>
+    <string name="wear_pushed_watchface_design" comment="Entry of a list setting: a Watch Face Format watchface loaded from a file">Watchface from a file</string>
+</resources>

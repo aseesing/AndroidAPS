@@ -14,6 +14,6 @@ object PushedWatchfaceId {
     /** The face that shows the wearer's own Custom watchface zip as a picture */
     const val CWF = "cwf"
 
-    /** The face loaded on the phone from a Watch Face Format face zip; not embedded */
+    /** PERSONAL PATCH: the face loaded on the phone from a Watch Face Format face zip; not embedded */
     const val DESIGN = "design"
 }

@@ -1,3 +1,7 @@
+// ============================================================================================
+// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+// Own file: keep upstream files to small hooks that call into here.
+// ============================================================================================
 package app.aaps.plugins.sync.wear
 
 import com.google.common.truth.Truth.assertThat
@@ -42,10 +46,34 @@ internal class WffFaceZipTest {
     }
 
     @Test
-    fun `version 4 without its token is not offered`() {
-        val result = WffFaceZip.forWatch(zip("face.json", "data.zip", "wff4/$APP.apk", "wff2/$APP.apk"), APP, 36) as WffFaceZip.Result.ForWatch
+    fun `a Wear OS 6 watch is not offered an older version when version 4 has no token`() {
+        // Such a watch cannot install a face as a normal app: version 2 would be sent and never show
+        val result = WffFaceZip.forWatch(zip("face.json", "data.zip", "wff4/$APP.apk", "wff2/$APP.apk"), APP, 36)
 
+        assertThat(result).isEqualTo(WffFaceZip.Result.NoPushToken)
+    }
+
+    @Test
+    fun `a Wear OS 6 watch is not offered a zip with only older versions`() {
+        val result = WffFaceZip.forWatch(zip("face.json", "data.zip", "wff3/$APP.apk", "wff2/$APP.apk"), APP, 36)
+
+        assertThat(result).isEqualTo(WffFaceZip.Result.NoPushToken)
+    }
+
+    @Test
+    fun `a Wear OS 5 watch still gets an older version when version 4 has no token`() {
+        val result = WffFaceZip.forWatch(zip("face.json", "data.zip", "wff4/$APP.apk", "wff2/$APP.apk"), APP, 35) as WffFaceZip.Result.ForWatch
+
+        assertThat(result.usesPush).isFalse()
         assertThat(entries(result.zip)["face.apk"]).isEqualTo("wff2/$APP.apk")
+    }
+
+    @Test
+    fun `a zip with only version 4 and no token names the token, not another app`() {
+        val onlyPush = zip("face.json", "data.zip", "wff4/$APP.apk")
+
+        assertThat(WffFaceZip.forWatch(onlyPush, APP, 36)).isEqualTo(WffFaceZip.Result.NoPushToken)
+        assertThat(WffFaceZip.forWatch(onlyPush, APP, 34)).isEqualTo(WffFaceZip.Result.NoPushToken)
     }
 
     @Test

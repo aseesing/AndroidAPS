@@ -76,6 +76,9 @@ class Formula private constructor(private val root: Node, val text: String) {
      * Walks the parts of the formula from the leaves up and gives [visitor]'s result for the whole.
      * For a reader outside the engine, like the converter to the Watch Face Format. Drawing never
      * uses it.
+     *
+     * Used by the face tool (outside this repository), which builds this code in. The app itself does
+     * not call it: it is not dead code.
      */
     fun <R> visit(visitor: FormulaVisitor<R>): R = walk(root, visitor)
 
@@ -772,6 +775,8 @@ class Formula private constructor(private val root: Node, val text: String) {
 /**
  * Reads the parts of a [Formula], see [Formula.visit]. Each call gets the results of the parts
  * inside it. Texts are not shown part by part: a part that gives or reads a text comes as [other].
+ *
+ * Used by the face tool (outside this repository), not by the app: it is not dead code.
  */
 interface FormulaVisitor<R> {
 

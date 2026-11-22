@@ -15,6 +15,9 @@ import org.json.JSONObject
 import java.util.Base64
 
 /**
+ * Used by the face tool (the converter to Watch Face Format, outside this repository), which builds this
+ * code in. The app itself does not call it: it is not dead code.
+ *
  * Copies of a design that each show only some of its parts, for the pictures of a converted face
  * (see [WffPlanner]). The engine draws a copy unchanged, so every picture is exactly what the watch
  * shows of those parts: no second way of drawing.

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ============================================================================================
+  PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+  Own file: keep upstream files to small hooks that call into here.
+  ============================================================================================
+  The channel of a Watch Face Format (WFF) face zip from the phone to the watch.
+-->
+<resources>
+    <!-- A channel that carries one Watch Face Format face zip from the phone to the watch -->
+    <string name="path_wff_face" translatable="false">/wff_face</string>
+</resources>

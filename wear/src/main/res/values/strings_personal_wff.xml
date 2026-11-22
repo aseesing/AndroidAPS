@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ============================================================================================
+  PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+  Own file: keep upstream files to small hooks that call into here.
+  ============================================================================================
+  A Watch Face Format (WFF) face from a face zip, on the watch. English only: not sent to Crowdin.
+-->
+<resources>
+    <string name="wff_face_channel">AAPS watch face</string>
+    <string name="wff_face_confirm" comment="%1$s = the name of the watch face. Shown on the watch after the face was sent from the phone">Tap to install the watch face %1$s</string>
+    <string name="wff_face_failed" comment="%1$s = the reason the system gives, in English">The watch face was not installed: %1$s</string>
+    <string name="complication_wff_glucose">Glucose (value and arrow)</string>
+    <string name="complication_wff_glucose_age">Glucose age</string>
+    <string name="complication_wff_data">AAPS data picture</string>
+</resources>

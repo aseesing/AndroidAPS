@@ -43,8 +43,8 @@ internal class SafFaceFolder(private val dir: DocumentFile, private val contentR
  *
  * A face zip holds `data.zip`, a design zip with the name, author and preview picture of the face.
  * The list shows the face as that design, but named by the file name of the face zip itself, so a
- * delete removes the face zip and not some other file. Only `face.json` and `data.zip` are read into
- * memory here: the face APKs in the zip can be many MB.
+ * delete removes the face zip and not some other file. Only `face.json` and `data.zip` are read
+ * here: the face APKs in the zip can be many MB, and the list is made each time it opens.
  */
 internal class WffFaceDesigns(private val aapsLogger: AAPSLogger) {
 
@@ -106,7 +106,9 @@ internal class WffFaceDesigns(private val aapsLogger: AAPSLogger) {
             var hasFaceJson = false
             var dataZip: ByteArray? = null
             val zip = ZipInputStream(input)
-            while (true) {
+            // Stop at the two files the list needs. The face tool writes them first, and the face APKs
+            // after them can be many MB: a stream has to read through each file to reach the next
+            while (!hasFaceJson || dataZip == null) {
                 val entry = zip.nextEntry ?: break
                 when (entry.name) {
                     FACE_JSON -> hasFaceJson = true

@@ -14,7 +14,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.core.keys.PushedWatchfaceId
 import app.aaps.wear.watchfaces.WatchFacePushHelper.Companion.KEY_FACE_INSTALLED
-import app.aaps.wear.watchfaces.wff.WffFace
+import app.aaps.wear.watchfaces.wff.WffFace // PERSONAL PATCH: the face from a face zip
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -27,10 +27,10 @@ import java.io.File
 import java.io.IOException
 
 /**
- * The Watch Face Format faces of the wear app: the two embedded ones, one per `face` flavor of
- * `:wear:watchfacepush`, and the one loaded on the phone from a face zip. The [id] is shared with
- * the phone through [PushedWatchfaceId]: it names the embedded assets and ends the face's package
- * name, which Watch Face Push requires to be `<wear app package>.watchfacepush.<id>`.
+ * The Watch Face Format faces embedded in the wear app, one per `face` flavor of
+ * `:wear:watchfacepush`. The [id] is shared with the phone through [PushedWatchfaceId]: it names
+ * the embedded assets and ends the face's package name, which Watch Face Push requires to be
+ * `<wear app package>.watchfacepush.<id>`.
  */
 enum class PushedFace(val id: String) {
 
@@ -38,9 +38,9 @@ enum class PushedFace(val id: String) {
     WFS(PushedWatchfaceId.WFS),
 
     /** The face that shows the wearer's own Custom watchface zip as a picture */
-    CWF(PushedWatchfaceId.CWF),
+    CWF(PushedWatchfaceId.CWF), // PERSONAL PATCH: a comma, for the next entry
 
-    /** The face loaded on the phone from a face zip, see [WffFace]. Not embedded. */
+    /** PERSONAL PATCH: the face loaded on the phone from a face zip, see [WffFace]. Not embedded: it has no assets. */
     DESIGN(PushedWatchfaceId.DESIGN);
 
     val assetApk: String get() = "watchfacepush/$id.apk"
@@ -80,8 +80,8 @@ class WatchFacePushHelper(
     private val context: Context,
     private val sp: SP,
     private val rxBus: RxBus,
-    private val aapsLogger: AAPSLogger,
-    private val wffFace: WffFace
+    private val aapsLogger: AAPSLogger, // PERSONAL PATCH: a comma, for the next parameter
+    private val wffFace: WffFace // PERSONAL PATCH: the face from a face zip
 ) {
 
     companion object {
@@ -164,8 +164,8 @@ class WatchFacePushHelper(
      * bytes, so two builds share a token only when they carry the same face.
      */
     private fun embeddedFaceToken(face: PushedFace): String? =
-        if (face == PushedFace.DESIGN) wffFace.token
-        else try {
+        if (face == PushedFace.DESIGN) wffFace.token else // PERSONAL PATCH: the token of a face from a face zip comes with the zip
+        try {
             context.assets.open(face.assetToken).use { String(it.readBytes()) }.trim()
         } catch (e: IOException) {
             aapsLogger.error(LTag.WEAR, "WatchFacePush: cannot read the embedded ${face.id} face token", e)
@@ -244,7 +244,7 @@ class WatchFacePushHelper(
      * listing reports "supported, face unknown".
      */
     suspend fun reportStatus() = withContext(Dispatchers.IO) {
-        send(currentStatus())
+        send(withDesign(currentStatus())) // PERSONAL PATCH: withDesign
     }
 
     /**
@@ -253,7 +253,7 @@ class WatchFacePushHelper(
      * only seen here - but the message goes out only when the status differs from the last sent.
      */
     suspend fun reportStatusIfChanged() = withContext(Dispatchers.IO) {
-        val status = currentStatus()
+        val status = withDesign(currentStatus()) // PERSONAL PATCH: withDesign
         if (status != lastReported) send(status)
     }
 
@@ -262,26 +262,19 @@ class WatchFacePushHelper(
         rxBus.send(EventWearToMobile(status))
     }
 
-    /**
-     * The status for the phone. On every watch it carries the API level, so the phone can pick the
-     * Watch Face Format version of a face zip, and the name of the face loaded from a face zip. With
-     * Watch Face Push the name comes whenever the watch keeps that face, so the phone can offer it as
-     * a choice also while the slot holds another face. Below Wear OS 6 it comes only while the face
-     * is installed as an app.
-     */
-    private suspend fun currentStatus(): EventData.WatchFacePushStatus {
-        val designName = wffFace.name?.takeIf { isSupported() || packagePresent(PushedFace.DESIGN.packageName(context.packageName)) }
-        val designShown = wffFace.shown.takeIf { designName != null } // PERSONAL PATCH: see WffFaceShown.kt
-        val status = EventData.WatchFacePushStatus(supported = isSupported(), apiLevel = Build.VERSION.SDK_INT, designName = designName, designShown = designShown)
-        return if (!status.supported) status
-        else try {
+    private suspend fun currentStatus(): EventData.WatchFacePushStatus =
+        if (!isSupported()) {
+            EventData.WatchFacePushStatus(supported = false)
+        } else try {
             val packageName = listOwnFaces(createManager()).installedWatchFaceDetails.firstOrNull()?.packageName
-            status.copy(installedFace = PushedFace.entries.firstOrNull { it.packageName(context.packageName) == packageName }?.id)
+            EventData.WatchFacePushStatus(
+                supported = true,
+                installedFace = PushedFace.entries.firstOrNull { it.packageName(context.packageName) == packageName }?.id
+            )
         } catch (e: Exception) {
             aapsLogger.error(LTag.WEAR, "WatchFacePush: status listing failed", e)
-            status
+            EventData.WatchFacePushStatus(supported = true)
         }
-    }
 
     /**
      * One install at a time. Three callers can want one at the same moment - the startup sync, the
@@ -322,8 +315,8 @@ class WatchFacePushHelper(
                     aapsLogger.debug(LTag.WEAR, "WatchFacePush: face ${face.id} already in place")
                     return@withLock true
                 }
-                if (face == PushedFace.DESIGN) apkFile.writeBytes(wffFace.apk() ?: return@withLock false)
-                else context.assets.open(face.assetApk).use { input ->
+                if (face == PushedFace.DESIGN) apkFile.writeBytes(wffFace.apk() ?: return@withLock false) else // PERSONAL PATCH: the APK of a face from a face zip comes with the zip
+                context.assets.open(face.assetApk).use { input ->
                     apkFile.outputStream().use { input.copyTo(it) }
                 }
                 // Any slot of ours, not only one holding this face: with a single slot per app the
@@ -379,11 +372,9 @@ class WatchFacePushHelper(
         }
     }
 
-    private fun facePackagePresent(): Boolean = packagePresent(facePackageName)
-
-    private fun packagePresent(packageName: String): Boolean =
+    private fun facePackagePresent(): Boolean =
         try {
-            context.packageManager.getPackageInfo(packageName, 0)
+            context.packageManager.getPackageInfo(facePackageName, 0)
             true
         } catch (_: PackageManager.NameNotFoundException) {
             false
@@ -424,4 +415,27 @@ class WatchFacePushHelper(
             aapsLogger.debug(LTag.WEAR, "WatchFacePush: could not set face active: ${e.message}")
         }
     }
+
+    // ---- PERSONAL PATCH: the face loaded on the phone from a face zip, see WffFace.kt ----
+
+    /**
+     * [status] with what the phone needs for a face zip. On every watch it carries the API level, so
+     * the phone can pick the Watch Face Format version of a face zip, and the name of the face loaded
+     * from a face zip. With Watch Face Push the name comes whenever the watch keeps that face, so the
+     * phone can offer it as a choice also while the slot holds another face. Below Wear OS 6 it comes
+     * only while the face is installed as an app.
+     */
+    private fun withDesign(status: EventData.WatchFacePushStatus): EventData.WatchFacePushStatus {
+        val designName = wffFace.name?.takeIf { isSupported() || designPackagePresent() }
+        // Whether the watch shows that face now, see WffFaceShown.kt
+        return status.copy(apiLevel = Build.VERSION.SDK_INT, designName = designName, designShown = wffFace.shown.takeIf { designName != null })
+    }
+
+    private fun designPackagePresent(): Boolean =
+        try {
+            context.packageManager.getPackageInfo(PushedFace.DESIGN.packageName(context.packageName), 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
 }

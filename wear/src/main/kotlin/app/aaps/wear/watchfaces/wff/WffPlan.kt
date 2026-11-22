@@ -7,6 +7,9 @@ package app.aaps.wear.watchfaces.wff
 import app.aaps.wear.watchfaces.animation.DesignRect
 
 /**
+ * Used by the face tool (the converter to Watch Face Format, outside this repository), which builds this
+ * code in. The app itself does not call it: it is not dead code.
+ *
  * How one part of a design goes to a Watch Face Format (WFF) face, see [WffPlanner].
  *
  * - [LIVE]: WFF draws and updates it (clock, date, hands, the wearer's slots)
@@ -51,7 +54,11 @@ data class WffPlanItem(
 /** One complication slot of the face. [id] is fixed per role, so an update keeps the wearer's settings. */
 data class WffPlanSlot(val id: Int, val role: String, val type: String, val box: DesignRect)
 
-/** The plan of a converted face. It is also the lint report, see [lint]. */
+/**
+ * The plan of a converted face. It is also the lint report, see [lint].
+ *
+ * Used by the face tool (outside this repository), not by the app: it is not dead code.
+ */
 data class WffPlan(
     val title: String,
     val version: Int,

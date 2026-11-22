@@ -1,3 +1,7 @@
+// ============================================================================================
+// PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+// Own file: keep upstream files to small hooks that call into here.
+// ============================================================================================
 package app.aaps.wear.watchfaces.wff
 
 import android.annotation.SuppressLint
@@ -13,19 +17,24 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
+import app.aaps.core.interfaces.R as InterfacesR
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.keys.PushedWatchfaceId
 import app.aaps.wear.R
 import app.aaps.wear.watchfaces.PushedFace
 import app.aaps.wear.watchfaces.WatchFacePushHelper
+import com.google.android.gms.wearable.ChannelClient
+import com.google.android.gms.wearable.Wearable
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 /**
  * Installs the face zip that the phone sent (see [WffFace]).
@@ -47,6 +56,28 @@ class WffFaceInstaller(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var receiverRegistered = false
+
+    /**
+     * Called for every channel the phone opens; takes only the channel of a face zip (`path_wff_face`).
+     * The zip comes on a channel because it is too large for a message. The listener service gets the
+     * channel only through the `CHANNEL_EVENT` filter for this path in the manifest.
+     */
+    fun onChannelOpened(channel: ChannelClient.Channel) {
+        if (channel.path != context.getString(InterfacesR.string.path_wff_face)) return
+        val channelClient = Wearable.getChannelClient(context)
+        scope.launch {
+            try {
+                val zip = channelClient.getInputStream(channel).await().use { it.readBytes() }
+                install(zip)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                aapsLogger.error(LTag.WEAR, "The face zip from the phone was not installed", e)
+            } finally {
+                channelClient.close(channel)
+            }
+        }
+    }
 
     /** Keeps [zip] from the phone and installs the face in it. */
     suspend fun install(zip: ByteArray) {
