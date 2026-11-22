@@ -920,6 +920,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 backgroundView.draw(this)
             }
         if (!renderSkipBackground) drawRestLayers(canvas, canvasWidth, renderNow()) // wake layers that stay on the face
+        if (!renderSkipBackground) slotPainter?.invoke(canvas) // the phone preview's slots, where the system draws them on the watch
         // super.onDraw() has just laid out mainLayout, so the placeholders hold this frame's geometry
         // and the slots' declared bounds can follow it. Not in complicationRender(): that runs per
         // slot, while one pushed option covers every slot at once.
@@ -1062,6 +1063,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         drawSlots = { canvas ->
             complications.syncGeometry(::visibleSlotBounds)
             slotTime?.let { drawComplicationSlots(canvas, it) }
+            slotPainter?.invoke(canvas) // the phone preview's slots
         },
         drawRest = { canvas, nowMs, slot -> drawRestLayers(canvas, canvas.width, nowMs, slot) }
     )
@@ -1512,7 +1514,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     fun previewImageBytes(): ByteArray? = resDataMap[ResFileMap.CUSTOM_WATCHFACE.fileName]?.value
 
     private fun prefBoolean(prefMap: PrefMap): Boolean =
-        if (isRenderOnly && ComplicationMap.entries.any { it.showPref == prefMap }) false
+        if (isRenderOnly && slotPainter == null && ComplicationMap.entries.any { it.showPref == prefMap }) false // slotPainter, the phone preview draws its slots
         else sp.getBoolean(prefMap.prefKey, prefMap.defaultValue as Boolean)
 
     private fun setVisibility(visibility: String, pref: Boolean = true): Int = when (visibility) {
@@ -2286,7 +2288,19 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         IOB_BASAL_EXT2(JsonKeyValues.IOB_BASAL_EXT2.key, -5.0, 5.0),
         COB_EXT2(JsonKeyValues.COB_EXT2.key, 0.0, 200.0),
         BASAL_RATE_EXT2(ViewKeys.BASALRATE_EXT2.key, 0.0, 5.0),
-        BGI_EXT2(ViewKeys.BGI_EXT2.key, -25.0, 25.0);
+        BGI_EXT2(ViewKeys.BGI_EXT2.key, -25.0, 25.0),
+        IC(StatusValues.key(StatusValues.IC, 0), 1.0, 100.0), // g/U
+        ISF(StatusValues.key(StatusValues.ISF, 0), 5.0, 500.0), // mg/dl per U
+        MAX_IOB(StatusValues.key(StatusValues.MAX_IOB, 0), 0.0, 30.0), // U
+        MAX_CARBS(StatusValues.key(StatusValues.MAX_CARBS, 0), 0.0, 300.0), // grams
+        IC_EXT1(StatusValues.key(StatusValues.IC, 1), 1.0, 100.0), // g/U
+        ISF_EXT1(StatusValues.key(StatusValues.ISF, 1), 5.0, 500.0), // mg/dl per U
+        MAX_IOB_EXT1(StatusValues.key(StatusValues.MAX_IOB, 1), 0.0, 30.0), // U
+        MAX_CARBS_EXT1(StatusValues.key(StatusValues.MAX_CARBS, 1), 0.0, 300.0), // grams
+        IC_EXT2(StatusValues.key(StatusValues.IC, 2), 1.0, 100.0), // g/U
+        ISF_EXT2(StatusValues.key(StatusValues.ISF, 2), 5.0, 500.0), // mg/dl per U
+        MAX_IOB_EXT2(StatusValues.key(StatusValues.MAX_IOB, 2), 0.0, 30.0), // U
+        MAX_CARBS_EXT2(StatusValues.key(StatusValues.MAX_CARBS, 2), 0.0, 300.0); // grams
 
         fun dynValue(dataValue: Double, dataRange: DataRange, valueRange: DataRange): Double = when {
             dataValue < dataRange.minData -> dataRange.minData
@@ -2416,6 +2430,18 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             ValueMap.COB_EXT2 -> cwf.status[2].cobValue.takeIf { it >= 0.0 }
             ValueMap.BASAL_RATE_EXT2 -> cwf.status[2].basalRateValue
             ValueMap.BGI_EXT2 -> cwf.status[2].bgiMgdl
+            ValueMap.IC -> StatusValues.ic(cwf.status[0])
+            ValueMap.ISF -> StatusValues.isf(cwf.status[0])
+            ValueMap.MAX_IOB -> StatusValues.maxIob(cwf.status[0])
+            ValueMap.MAX_CARBS -> StatusValues.maxCarbs(cwf.status[0])
+            ValueMap.IC_EXT1 -> StatusValues.ic(cwf.status[1])
+            ValueMap.ISF_EXT1 -> StatusValues.isf(cwf.status[1])
+            ValueMap.MAX_IOB_EXT1 -> StatusValues.maxIob(cwf.status[1])
+            ValueMap.MAX_CARBS_EXT1 -> StatusValues.maxCarbs(cwf.status[1])
+            ValueMap.IC_EXT2 -> StatusValues.ic(cwf.status[2])
+            ValueMap.ISF_EXT2 -> StatusValues.isf(cwf.status[2])
+            ValueMap.MAX_IOB_EXT2 -> StatusValues.maxIob(cwf.status[2])
+            ValueMap.MAX_CARBS_EXT2 -> StatusValues.maxCarbs(cwf.status[2])
         }
 
         fun getTopOffset(cwf: CustomWatchface): Int = dataRange?.let { dataRange ->
@@ -2603,6 +2629,19 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     private fun checkPref() = valPref.any { (prefMap, s) ->
         s != PrefMap.fromKey(prefMap)?.let { if (it.typeBool) prefBoolean(it).toString() else sp.getString(it.prefKey, it.defaultValue as String) }
+    }
+
+    // The phone preview has no system to draw the complication slots, so it draws them
+    // itself (`PreviewSlots` in wear/cwfrender). Never set on the watch, where the system draws them.
+    /** Draws the slots right after the background, where the system draws them on the watch. */
+    internal var slotPainter: ((Canvas) -> Unit)? = null
+
+    /** Where slot [slotId] is drawn this frame and the style the design gives it, or null when it is not shown. */
+    internal fun slotLook(slotId: Int): Pair<ComplicationRender.At, ComplicationStyleValues>? {
+        val view = complicationPlaceholder(slotId)?.takeIf { it.isVisible && it.width > 0 && it.height > 0 } ?: return null
+        if (simpleUi.isEnabled(currentWatchMode)) return null
+        val style = complications.stateFor(slotId)?.style ?: return null
+        return Pair(ComplicationRender.At(Rect(view.left, view.top, view.right, view.bottom), view.rotation), style)
     }
 
     // the layers of the wake-up animation that stay on the face while no wake plays

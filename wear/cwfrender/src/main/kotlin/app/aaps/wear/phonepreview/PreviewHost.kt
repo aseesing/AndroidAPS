@@ -61,12 +61,13 @@ class PreviewHost(
     val sp: SP by lazy { SPImpl(watchSettings, this) }
     val rxBus: RxBus by lazy { RxBusImpl(logger) }
     val dateUtil: DateUtil by lazy { DateUtilImpl(this) }
-    val repository: ComplicationDataRepository by lazy { ComplicationDataRepository(this, logger, sp) }
+    val repository: ComplicationDataRepository by lazy { ComplicationDataRepository(this, logger, sp).apply { batchWindowMs = 0L } } // the preview stores each message at once (it gets them one by one, so a wait only delays the picture)
     private val simpleUi: SimpleUi by lazy { SimpleUi(this, sp, dateUtil) }
 
     /**
      * The heart rate store of the face, in the same file as on the watch (see
      * `HealthModule`), here behind [name]. The watch does not send the heart rate, so on the phone it stays empty.
+     * A slot of the preview that shows the heart rate reads it too, see `PreviewSlots`.
      */
     val healthValues: HealthValues by lazy { HealthValues(getSharedPreferences(HealthValues.FILE, MODE_PRIVATE)) }
 
