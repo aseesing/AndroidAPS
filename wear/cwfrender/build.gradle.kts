@@ -93,6 +93,7 @@ val wearShared = listOf(
     "watchfaces/utils/PartTimeLeft.kt",
     "watchfaces/utils/SecondVisibility.kt",
     "watchfaces/utils/SimpleUi.kt",
+    "watchfaces/utils/StoreReads.kt",
     "watchfaces/utils/WatchFace.kt",
     "watchfaces/utils/WatchFaceComplication.kt",
     "watchfaces/utils/WatchFaceSettings.kt",
