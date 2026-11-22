@@ -64,8 +64,8 @@ enum class PreviewSlotSource {
  * So each slot shows a source of [PreviewSlotSource], made here from the values the preview has:
  * - the one [chosen] for the slot, by its number (1 to 5);
  * - else what the slot shows on the watch before the wearer picks anything (see
- *   [customSlotDefault]): the heart rate and the steps of the watch itself in slots 1 and 2, carbs on
- *   board and insulin on board in slots 3 and 4, nothing in slot 5.
+ *   [customSlotDefault]): carbs on board in slot 1, insulin on board in slot 2, nothing in slots 3
+ *   to 5.
  *
  * The texts of the AAPS sources are made as the sources of the watch make them (`CobIconComplication`,
  * `IobIconComplication`, `SgvComplication`, `BrComplication`, `UploaderBatteryComplication`). Those are
@@ -108,16 +108,14 @@ internal class PreviewSlots(private val host: PreviewHost, private val logger: A
 
     /**
      * What slot [number] (1 to 5) shows on the watch before the wearer picks a source, see
-     * [customSlotDefault]. The heart rate and the steps of the watch itself are the stand-ins here.
+     * [customSlotDefault].
      */
     fun defaultOf(number: Int): PreviewSlotSource {
         val slotId = CustomWatchface.complicationSlots.getOrNull(number - 1)?.id ?: return PreviewSlotSource.NONE
         return when (customSlotDefault(slotId)) {
-            CustomSlotDefault.HEART_RATE -> PreviewSlotSource.HEART_RATE
-            CustomSlotDefault.STEPS      -> PreviewSlotSource.STEPS
-            CustomSlotDefault.COB        -> PreviewSlotSource.COB
-            CustomSlotDefault.IOB        -> PreviewSlotSource.IOB
-            CustomSlotDefault.NONE       -> PreviewSlotSource.NONE
+            CustomSlotDefault.COB  -> PreviewSlotSource.COB
+            CustomSlotDefault.IOB  -> PreviewSlotSource.IOB
+            CustomSlotDefault.NONE -> PreviewSlotSource.NONE
         }
     }
 
