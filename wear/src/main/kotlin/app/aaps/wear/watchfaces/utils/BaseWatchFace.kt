@@ -190,7 +190,10 @@ abstract class BaseWatchFace : WatchFace() {
     // True only once injection has returned, via onCreate below or via ensureInjected() for instances
     // that never get an onCreate. Checked instead of catching UninitializedPropertyAccessException,
     // which would also mask unrelated bugs.
+    @Volatile // read on two threads, see ensureInjected
     protected var injectionComplete = false
+
+    protected val storeReads = StoreReads() // one time limit for each start of the face, see StoreReads.kt
 
     /**
      * Injects this instance if [onCreate] never ran, so `@Inject` fields are usable anyway.
@@ -205,6 +208,7 @@ abstract class BaseWatchFace : WatchFace() {
      * Works because `attachBaseContext` has run, so the graph can be reached. Safe to call
      * repeatedly - it no-ops once injection has happened by either route.
      */
+    @Synchronized // the system calls this on two threads at once, see BaseWatchFaceInjectionTest
     protected fun ensureInjected() {
         if (injectionComplete) return
         injectMetroMembers(this)
@@ -235,11 +239,12 @@ abstract class BaseWatchFace : WatchFace() {
         // with LineChartView requires main thread Handler. We'll initialize on first onDraw().
 
         // Load initial data synchronously (like old persistence.updateFromPersistence())
-        waitForStore(aapsLogger, "The first read of the values") { complicationDataRepository.complicationData.first() }.value?.let { complicationData = it } // a time limit, see StoreReads.kt
+        storeReads.wait(aapsLogger, "The first read of the values") { complicationDataRepository.complicationData.first() }.value?.let { complicationData = it } // a time limit, see StoreReads.kt
 
         // Observe DataStore for updates
         watchfaceScope.launch {
             complicationDataRepository.complicationData.collect { data ->
+                storeReads.storeAnswered() // the store answers, so reads may wait again
                 complicationData = data
                 // Only update if binding is initialized
                 if (::binding.isInitialized && (!simpleUi.isEnabled(currentWatchMode) || !needUpdate())) {
@@ -528,7 +533,8 @@ abstract class BaseWatchFace : WatchFace() {
         val now = System.currentTimeMillis()
         if (now - lastRenderDataLoad >= RENDER_DATA_SHARE_MS) {
             lastRenderDataLoad = now
-            waitForStore(aapsLogger, "Reading the values") { complicationDataRepository.complicationData.first() }.value?.let { complicationData = it } // a time limit, see StoreReads.kt
+            if (isRenderOnly) storeReads.tryAgainAfter() // no flow tells this instance that the store answers again
+            storeReads.wait(aapsLogger, "Reading the values") { complicationDataRepository.complicationData.first() }.value?.let { complicationData = it } // a time limit, see StoreReads.kt
         }
         // [onDraw] populates the views only on its first call, through performViewSetup(); after that
         // it just measures, lays out and draws. So a warm instance must re-apply the data itself or

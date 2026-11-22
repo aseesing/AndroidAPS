@@ -120,7 +120,6 @@ import app.aaps.wear.watchfaces.utils.DynamicImages
 import app.aaps.wear.watchfaces.utils.ViewTemplates
 import app.aaps.wear.watchfaces.utils.ViewImages
 import app.aaps.wear.watchfaces.utils.secondVisibility
-import app.aaps.wear.watchfaces.utils.waitForStore
 import dev.zacsweers.metro.Inject
 import org.json.JSONException
 import org.json.JSONObject
@@ -507,7 +506,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         // Read here rather than in WatchFaceComplications: ensureInjected / injectionComplete
         // are protected members of BaseWatchFace. The generic layer only needs the resulting bounds.
         val storedJson = if (injectionComplete) {
-            waitForStore(aapsLogger, "Reading the design for the slots") {
+            storeReads.wait(aapsLogger, "Reading the design for the slots") {
                 complicationDataRepository.getCustomWatchface() ?: complicationDataRepository.getCustomWatchface(true)
             }.value?.json?.let { JSONObject(it) }
         } else {
@@ -743,10 +742,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         //
         // A render-only instance still avoids rewriting the same values on every render - it only
         // steps in when nothing is stored yet.
-        val defaults = waitForStore(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }
+        val defaults = storeReads.wait(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }
         val defaultsMissing = defaults.inTime && defaults.value == null
         if (!isRenderOnly || defaultsMissing)
-            waitForStore(aapsLogger, "Storing the default design") {
+            storeReads.wait(aapsLogger, "Storing the default design") {
                 complicationDataRepository.storeCustomWatchface(
                     customWatchface = defaultWatchface(false).customWatchfaceData,
                     customWatchfaceFull = defaultWatchface(true).customWatchfaceData,
@@ -1224,10 +1223,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     internal var designFilter: ((CwfData) -> CwfData)? = null
 
     private fun setWatchfaceStyle() {
-        val stored = waitForStore(aapsLogger, "Reading the design") {
+        val stored = storeReads.wait(aapsLogger, "Reading the design") {
             complicationDataRepository.getCustomWatchface() ?: complicationDataRepository.getCustomWatchface(true)
         }
-        // Read too late (see waitForStore): keep the style of now and try again at the next refresh.
+        // Read too late (see StoreReads): keep the style of now and try again at the next refresh.
         // Never store the default over a design that was only not read in time.
         if (!stored.inTime) return
         var customWatchfaceData = stored.value
@@ -1241,12 +1240,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             // NullPointerException, the render never produced a frame, and the face stayed black for
             // good. Reproduced on a Wear OS 6 emulator on a fresh install, where no watch face has
             // been stored yet - the same state a new user is in.
-            if (!waitForStore(aapsLogger, "Storing the default design") { complicationDataRepository.setDefaultWatchface() }.inTime) return
-            customWatchfaceData = waitForStore(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }.value
+            if (!storeReads.wait(aapsLogger, "Storing the default design") { complicationDataRepository.setDefaultWatchface() }.inTime) return
+            customWatchfaceData = storeReads.wait(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }.value
         }
         customWatchfaceData = customWatchfaceData?.let { stored -> designFilter?.invoke(stored) ?: stored }
         // The night face, when one is stored, shows instead of the main face at night (see CwfNight)
-        val night = waitForStore(aapsLogger, "Reading the night face") { complicationDataRepository.getNightWatchfaceData() }.value ?: return // read too late: keep the style of now
+        val night = storeReads.wait(aapsLogger, "Reading the night face") { complicationDataRepository.getNightWatchfaceData() }.value ?: return // read too late: keep the style of now
         skyRule = night.dayNightRule // the sun and the moon of a design
         var showsNightFace = false
         customWatchfaceData?.let { main ->
@@ -1368,7 +1367,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 manageSpecificViews()
             } catch (_: Exception) {
                 aapsLogger.debug(LTag.WEAR, "Crash during Custom watch load")
-                waitForStore(aapsLogger, "Recovering from a broken design") {
+                storeReads.wait(aapsLogger, "Recovering from a broken design") {
                     // A broken night face is dropped, the main face stays, and the phone is told
                     if (showsNightFace) {
                         complicationDataRepository.clearNightWatchface()
