@@ -13,6 +13,7 @@ import app.aaps.shared.impl.weardata.WatchLogProtocol
 import app.aaps.wear.AAPSLoggerTest
 import app.aaps.wear.selfupdate.WatchAppSelfUpdate
 import app.aaps.wear.watchfaces.WatchFacePushHelper
+import app.aaps.wear.watchfaces.wff.WffFaceInstaller
 import app.aaps.wear.watchlog.WatchLogUpload
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.MessageEvent
@@ -41,6 +42,7 @@ internal class DataLayerListenerServiceWearTest {
     private val rxBus: RxBus = mock()
     private val watchAppSelfUpdate: WatchAppSelfUpdate = mock()
     private val watchLogUpload: WatchLogUpload = mock()
+    private val wffFaceInstaller: WffFaceInstaller = mock() // face zips from the phone
     private val watchFacePushHelper: WatchFacePushHelper = mock()
 
     private fun service(): DataLayerListenerServiceWear =
@@ -50,6 +52,7 @@ internal class DataLayerListenerServiceWearTest {
             it.sp = mock<SP>()
             it.aapsSchedulers = mock<AapsSchedulers>()
             it.watchAppSelfUpdate = watchAppSelfUpdate
+            it.wffFaceInstaller = wffFaceInstaller
             it.watchLogUpload = watchLogUpload
             it.watchFacePushHelper = watchFacePushHelper
         }
@@ -103,6 +106,7 @@ internal class DataLayerListenerServiceWearTest {
 
         verify(watchAppSelfUpdate).onChannelOpened(channel)
         verify(watchLogUpload).onChannelOpened(channel)
+        verify(wffFaceInstaller).onChannelOpened(channel) // and to the face zip installer
     }
 
     // the status at the start of the app, see StartupStatusReport
