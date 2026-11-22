@@ -15,6 +15,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.wear.R
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.mock
@@ -240,6 +241,26 @@ class CwfPreviewRendererTest {
         ShadowSystemClock.advanceBy(Duration.ofSeconds(16))
         val after = renderer.frame(SIZE, now)
         assertThat(after.sameAs(before)).isTrue()
+    }
+
+    @Test
+    fun aLookSwapsThePictureOfATextView() {
+        // The hands of a design swap their picture with the look; a text view with an `image` must too:
+        // with PNG and SVG pictures, and in a design with a rest layer (then the face keeps view pictures)
+        for ((name, design) in listOf(
+            "png" to TestDesigns.withLookImageSwap(),
+            "svg" to TestDesigns.withLookImageSwap(svg = true),
+            "png_layer" to TestDesigns.withLookImageSwap(layer = true),
+            "svg_layer" to TestDesigns.withLookImageSwap(svg = true, layer = true),
+            // A look that depends on the glucose, as the colour looks of a design do (the values give 121 mg/dl)
+            "sgv" to TestDesigns.withLookImageSwap(svg = true, layer = true, whenFormula = "!missing(v_sgv) && v_sgv > 100")
+        )) {
+            val frame = stillRenderer(design, "cwf_preview_swap_$name").frame(SIZE, System.currentTimeMillis())
+            save(frame, "look_swap_$name")
+            val box = intArrayOf(110, 210, 190, 290)
+            assertWithMessage(name).that(count(frame, box, TestDesigns.POD_LOOK_INK)).isGreaterThan(0)
+            assertWithMessage(name).that(count(frame, box, TestDesigns.POD_INK)).isEqualTo(0)
+        }
     }
 
     @Test

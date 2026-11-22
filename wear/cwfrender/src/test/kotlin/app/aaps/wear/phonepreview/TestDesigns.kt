@@ -130,7 +130,24 @@ internal object TestDesigns {
         if (Color.luminance(Color.parseColor(background)) > 0.5f) "#202020" else "#E0E0E0"
 
     /** [json] with a plain [background] picture, zipped and loaded as the phone loads a design. */
-    private fun load(fileName: String, json: JSONObject, background: String): CwfData {
+    /**
+     * A dark face with a text view that shows the picture "Pod" ([POD_INK]), and a look that is always on
+     * and swaps "Pod" for "PodLook" ([POD_LOOK_INK]) with `images`, as a design swaps its hands per colour.
+     */
+    fun withLookImageSwap(svg: Boolean = false, layer: Boolean = false, whenFormula: String = "1"): CwfData = load("Test_Look_Swap", face("Test Look Swap", "#101828").apply {
+        remove("sgv")
+        put("freetext1", text(left = 100, top = 200, width = 100, height = 100, size = 10, color = "#FFFFFF", gravity = "center").put("image", "Pod").put("textvalue", ""))
+        put("looks", JSONArray().put(JSONObject().put("when", whenFormula).put("images", JSONObject().put("Pod", "PodLook"))))
+        // A layer that stays at rest: the face then keeps the pictures of its views between frames
+        if (layer) put("animation", JSONObject().put("durationMs", 2_000).put("layers", JSONArray().put(
+            JSONObject().put("shape", "line").put("colors", JSONArray().put("#2040FF")).put("x", 20).put("y", 20).put("length", 10).put("thickness", 4).put("rest", 1)
+        )))
+    }, "#101828", mapOf("Pod" to POD_INK, "PodLook" to POD_LOOK_INK), svg)
+
+    const val POD_INK = "#20FF20"
+    const val POD_LOOK_INK = "#FF20FF"
+
+    private fun load(fileName: String, json: JSONObject, background: String, pictures: Map<String, String> = emptyMap(), svg: Boolean = false): CwfData {
         val zip = ByteArrayOutputStream().also { bytes ->
             ZipOutputStream(bytes).use { zip ->
                 zip.putNextEntry(ZipEntry("CustomWatchface.json"))
@@ -139,6 +156,10 @@ internal object TestDesigns {
                 zip.write(png(40, background))
                 zip.putNextEntry(ZipEntry("${ResFileMap.BACKGROUND.fileName}.png"))
                 zip.write(png(400, background))
+                for ((name, colour) in pictures) {
+                    zip.putNextEntry(ZipEntry(if (svg) "$name.svg" else "$name.png"))
+                    zip.write(if (svg) "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"><rect width=\"100\" height=\"100\" fill=\"$colour\"/></svg>".toByteArray() else png(100, colour))
+                }
                 zip.closeEntry()
             }
         }.toByteArray()
