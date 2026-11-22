@@ -1216,6 +1216,13 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         binding.secondHand.visibility = secondVisibility(ViewMap.SECOND_HAND.visibility(this) == View.VISIBLE, showSecond)
     }
 
+    /**
+     * Gives the design to draw instead of the stored one, for an instance that only draws pictures:
+     * the data picture of a Watch Face Format face (`WffDataPicture`). Set before the first draw.
+     * Such a face never shows the night face (`NightFace`), which is a whole design with all its art.
+     */
+    internal var designFilter: ((CwfData) -> CwfData)? = null
+
     private fun setWatchfaceStyle() {
         val stored = waitForStore(aapsLogger, "Reading the design") {
             complicationDataRepository.getCustomWatchface() ?: complicationDataRepository.getCustomWatchface(true)
@@ -1237,6 +1244,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             if (!waitForStore(aapsLogger, "Storing the default design") { complicationDataRepository.setDefaultWatchface() }.inTime) return
             customWatchfaceData = waitForStore(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }.value
         }
+        customWatchfaceData = customWatchfaceData?.let { stored -> designFilter?.invoke(stored) ?: stored }
         // The night face, when one is stored, shows instead of the main face at night (see CwfNight)
         val night = waitForStore(aapsLogger, "Reading the night face") { complicationDataRepository.getNightWatchfaceData() }.value ?: return // read too late: keep the style of now
         skyRule = night.dayNightRule // the sun and the moon of a design
@@ -1255,7 +1263,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                         isDayNow = { dayNight.isDay(renderNow(), night.dayNightRule) }
                     )
                 }
-                val face = NightFace.choose(main, night.customWatchfaceNight) { showDay }
+                val face = if (designFilter != null) main else NightFace.choose(main, night.customWatchfaceNight) { showDay } // a face with a designFilter (the WFF data picture) never shows the night face
                 showsNightFace = face !== main
                 // A swap between the day face and the night face is not a new zip
                 val daySwap = showsNightFace != styleShowsNightFace
@@ -1365,7 +1373,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     if (showsNightFace) {
                         complicationDataRepository.clearNightWatchface()
                         rxBus.send(EventWearToMobile(EventData.ActionClearNightWatchface(System.currentTimeMillis())))
-                    } else complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false)
+                    } else if (designFilter == null) complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false) // designFilter, the broken design is then not the stored one, so the wearer's own design stays
                 } // reload correct values to avoid crash of watchface
             }
         }

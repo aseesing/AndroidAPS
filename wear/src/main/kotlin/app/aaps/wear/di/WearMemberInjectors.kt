@@ -37,6 +37,9 @@ import app.aaps.wear.complications.cwf.CwfAmbientFaceComplication
 import app.aaps.wear.complications.cwf.CwfFaceComplication
 import app.aaps.wear.health.HealthPassiveService
 import app.aaps.wear.health.HealthPermissionActivity
+import app.aaps.wear.complications.wff.WffDataComplication
+import app.aaps.wear.complications.wff.WffGlucoseAgeComplication
+import app.aaps.wear.complications.wff.WffGlucoseComplication
 import app.aaps.wear.interaction.ConfigurationActivity
 import app.aaps.wear.interaction.WatchfaceConfigurationActivity
 import app.aaps.wear.interaction.actions.BackgroundActionActivity
@@ -508,6 +511,24 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(RunningModeComplication::class)
     fun bindRunningModeComplication(injector: MembersInjector<RunningModeComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(WffGlucoseComplication::class)
+    fun bindWffGlucoseComplication(injector: MembersInjector<WffGlucoseComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(WffGlucoseAgeComplication::class)
+    fun bindWffGlucoseAgeComplication(injector: MembersInjector<WffGlucoseAgeComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(WffDataComplication::class)
+    fun bindWffDataComplication(injector: MembersInjector<WffDataComplication>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors

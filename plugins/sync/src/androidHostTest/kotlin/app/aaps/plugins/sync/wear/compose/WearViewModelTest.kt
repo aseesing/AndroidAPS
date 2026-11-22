@@ -1,12 +1,15 @@
 package app.aaps.plugins.sync.wear.compose
 
 import android.net.Uri
+import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.Event
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
+import app.aaps.core.interfaces.rx.events.EventMobileToWearWatchface
+import app.aaps.core.interfaces.rx.events.EventMobileToWearWffFace
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.weardata.CwfData
 import app.aaps.core.interfaces.rx.weardata.CwfFile
@@ -20,6 +23,7 @@ import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.keys.WffFaceCoverKey
 import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
@@ -29,17 +33,24 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.atLeast
+import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -48,6 +59,7 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class WearViewModelTest {
@@ -62,12 +74,14 @@ internal class WearViewModelTest {
     @Mock private lateinit var aapsLogger: AAPSLogger
     @Mock private lateinit var designImport: CwfDesignImport
     @Mock private lateinit var wearNightFace: WearNightFace
+    @Mock private lateinit var config: Config
 
     private val connectedDeviceFlow = MutableStateFlow<String?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
     private val eventWearUpdateGuiFlow = MutableSharedFlow<EventWearUpdateGui>()
     private val pushedWatchfaceFlow = MutableStateFlow(PushedWatchfaceId.CWF)
     private val watchFacePushStatusFlow = MutableStateFlow<EventData.WatchFacePushStatus?>(null)
+    private val watchApiLevelFlow = MutableStateFlow(0)
 
     private lateinit var sut: WearViewModel
 
@@ -78,11 +92,13 @@ internal class WearViewModelTest {
         whenever(wearPlugin.connectedDevice).thenReturn(connectedDeviceFlow)
         whenever(wearPlugin.savedCustomWatchface).thenReturn(savedCustomWatchfaceFlow)
         whenever(wearPlugin.watchFacePushStatus).thenReturn(watchFacePushStatusFlow)
+        whenever(wearPlugin.watchApiLevel).thenReturn(watchApiLevelFlow)
         whenever(wearNightFace.saved).thenReturn(MutableStateFlow(null))
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(eventWearUpdateGuiFlow)
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(pushedWatchfaceFlow)
         whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace)
+        whenever(config.APPLICATION_ID).thenReturn(APP_ID)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace, config)
     }
 
     @AfterEach
@@ -177,6 +193,74 @@ internal class WearViewModelTest {
         assertThat(sut.uiState.value.installedWatchface).isNull()
     }
 
+    // the line "On the watch: ...", see WffFaceOnWatch.kt
+    @Test
+    fun `the face from a zip is named only while the watch shows it`() {
+        fun shown() = sut.uiState.value.wffFaceOnWatch
+        assertThat(shown()).isNull()
+
+        // A watch without Watch Face Push (Wear OS 5): its system says whether the face is on the screen
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2", designShown = true)
+        assertThat(shown()).isEqualTo("D2")
+        // The wearer loaded a design and picked the Custom watchface: the watch keeps the face, but does not show it
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2", designShown = false)
+        assertThat(shown()).isNull()
+        // The face stays known, it is only not named as shown
+        assertThat(sut.uiState.value.wffFaceName).isEqualTo("D2")
+        // An older watch app does not say: the installed face is named, as before
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2")
+        assertThat(shown()).isEqualTo("D2")
+
+        // With Watch Face Push (Wear OS 6) the slot must hold the face too
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36, designName = "D2", designShown = true)
+        assertThat(shown()).isEqualTo("D2")
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36, designName = "D2")
+        assertThat(shown()).isEqualTo("D2")
+        // The slot holds the Custom watchface again: the face is a choice, not what the watch shows
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.CWF, apiLevel = 36, designName = "D2", designShown = true)
+        assertThat(shown()).isNull()
+        assertThat(sut.uiState.value.wffFaceName).isEqualTo("D2")
+        // In the slot, but the wearer picked another face on the watch
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36, designName = "D2", designShown = false)
+        assertThat(shown()).isNull()
+
+        // No face from a zip on the watch
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36)
+        assertThat(shown()).isNull()
+    }
+
+    // the phone knows that it sent a design, see WffFaceCover.kt
+    @Test
+    fun `a design sent to the watch takes the face from a zip off the line at once`() {
+        // The phone keeps what it knows in the preferences
+        var designSentAfter = false
+        whenever(preferences.get(WffFaceCoverKey.DesignSentAfter)).thenAnswer { designSentAfter }
+        doAnswer { if (it.arguments[0] == WffFaceCoverKey.DesignSentAfter) designSentAfter = it.arguments[1] as Boolean }.whenever(preferences).put(any<WffFaceCoverKey>(), any<Boolean>())
+        fun shown() = sut.uiState.value.wffFaceOnWatch
+
+        // As seen on the phone: the watch keeps the face "D2" and cannot tell whether it is on the screen
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2")
+        assertThat(shown()).isEqualTo("D2")
+
+        // The wearer loads a design: the line goes without a word from the watch
+        sut.selectWatchface(design)
+        assertThat(shown()).isNull()
+        // And it stays away when the watch reports again, also a watch that still says "shown"
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34, designName = "D2", designShown = true)
+        assertThat(shown()).isNull()
+        // The face is still known, and a choice with Watch Face Push
+        assertThat(sut.uiState.value.wffFaceName).isEqualTo("D2")
+
+        // The wearer chooses the face again
+        sut.selectPushedWatchface(PushedWatchfaceId.DESIGN)
+        assertThat(shown()).isEqualTo("D2")
+
+        // With Watch Face Push the slot of the watch decides: a design sent while it holds the face changes nothing
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, installedFace = PushedWatchfaceId.DESIGN, apiLevel = 36, designName = "D2")
+        sut.selectWatchface(design)
+        assertThat(shown()).isEqualTo("D2")
+    }
+
     @Test
     fun `sending a zip while the complications face is on the wrist says so once`() {
         val zip = CwfFile(
@@ -243,6 +327,288 @@ internal class WearViewModelTest {
         cwfData = CwfData(json = "{}", metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Analog G-Watch"), resData = mutableMapOf()),
         zipByteArray = ByteArray(0)
     )
+
+    /** The phone's channel send: completes the face zip event with [ok], like the service does */
+    private fun channelSends(ok: Boolean) {
+        doAnswer { (it.arguments[0] as EventMobileToWearWffFace).sent.complete(ok) }.whenever(rxBus).send(any<EventMobileToWearWffFace>())
+    }
+
+    /** The watch's answer to a ping: runs [answer] when the phone pings */
+    private fun watchAnswersPing(answer: () -> Unit) {
+        doAnswer { if ((it.arguments[0] as EventMobileToWear).payload is EventData.ActionPing) answer() }.whenever(rxBus).send(any<EventMobileToWear>())
+    }
+
+    /** How many pings the phone sent so far */
+    private fun pings(): Int {
+        val captor = argumentCaptor<Event>()
+        verify(rxBus, atLeast(0)).send(captor.capture())
+        return captor.allValues.filterIsInstance<EventMobileToWear>().count { it.payload is EventData.ActionPing }
+    }
+
+    private fun stubFaceMessages() {
+        whenever(rh.gs(SyncStrings.wear_wff_face_sent)).thenReturn("sent")
+        whenever(rh.gs(SyncStrings.wear_wff_face_sent_confirm)).thenReturn("sent, confirm")
+        whenever(rh.gs(SyncStrings.wear_wff_face_not_sent)).thenReturn("not sent")
+        whenever(rh.gs(SyncStrings.wear_wff_face_watch_unknown)).thenReturn("unknown")
+    }
+
+    @Test
+    fun `a face zip for a Wear OS 6 watch goes to the watch and becomes the pushed face`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        verify(rxBus).send(any<EventMobileToWearWffFace>())
+        verify(preferences).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+    }
+
+    @Test
+    fun `a face zip for a Wear OS 5 watch goes to the watch and leaves the pushed face alone`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent_confirm)
+        verify(rxBus).send(any<EventMobileToWearWffFace>())
+        verify(preferences, never()).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+    }
+
+    @Test
+    fun `a face zip says sent only after the send has finished`() {
+        stubFaceMessages()
+        val event = CompletableDeferred<EventMobileToWearWffFace>()
+        doAnswer { event.complete(it.arguments[0] as EventMobileToWearWffFace) }.whenever(rxBus).send(any<EventMobileToWearWffFace>())
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
+
+        pickFace()
+        verify(rxBus, timeout(TIMEOUT_MS)).send(any<EventMobileToWearWffFace>())
+
+        // Still on its way: no message and the choice of face is not changed yet
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_sent)
+        verify(preferences, never()).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+
+        runBlocking { withTimeout(TIMEOUT_MS) { event.await() } }.sent.complete(true)
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        verify(preferences, timeout(TIMEOUT_MS)).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+    }
+
+    @Test
+    fun `a face zip that the phone could not send says so and keeps the pushed face`() {
+        stubFaceMessages()
+        channelSends(ok = false)
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_not_sent)
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_sent)
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_sent_confirm)
+        verify(preferences, never()).put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+    }
+
+    @Test
+    fun `a face zip whose send never ends counts as not sent`() {
+        stubFaceMessages()
+        sut.faceSendWait = 200.milliseconds
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_not_sent)
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_sent_confirm)
+    }
+
+    @Test
+    fun `without a known version the phone pings and sends once the status tells the version`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        watchAnswersPing { watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36) }
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        assertThat(pings()).isEqualTo(1)
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_watch_unknown)
+    }
+
+    @Test
+    fun `an old status without a version is not enough, the answer to the ping tells the version`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        // From an older watch app: no version, and the new ping status does not come
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false)
+        watchAnswersPing { watchApiLevelFlow.value = 34 }
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent_confirm)
+        assertThat(pings()).isEqualTo(1)
+        verify(rxBus).send(any<EventMobileToWearWffFace>())
+        verify(rh, never()).gs(SyncStrings.wear_wff_face_watch_unknown)
+    }
+
+    @Test
+    fun `a version known from an earlier ping is used at once`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        watchApiLevelFlow.value = 36
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        assertThat(pings()).isEqualTo(0)
+    }
+
+    @Test
+    fun `a face zip is not sent when the watch does not tell its version after a ping`() {
+        stubFaceMessages()
+        sut.watchVersionWait = 200.milliseconds
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_watch_unknown)
+        assertThat(pings()).isEqualTo(1)
+        verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
+    }
+
+    /** A face zip in AAPS/export as the list holds it: the design of its data.zip, named by the face zip */
+    private val face = CwfFile(
+        cwfData = CwfData(
+            json = "{}",
+            metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "D2", CwfMetadataKey.CWF_FILENAME to "D2-wff"),
+            resData = mutableMapOf()
+        ),
+        zipByteArray = ByteArray(0)
+    )
+
+    /** A design in AAPS/export */
+    private val design = CwfFile(
+        cwfData = CwfData(
+            json = "{}",
+            metadata = mutableMapOf(CwfMetadataKey.CWF_NAME to "Analog", CwfMetadataKey.CWF_FILENAME to "Analog"),
+            resData = mutableMapOf()
+        ),
+        zipByteArray = ByteArray(3)
+    )
+
+    private fun item(cwfFile: CwfFile, wffFace: Boolean) = CwfImportItemState(
+        cwfFile = cwfFile, name = "", fileName = "", author = "", createdAt = "", version = "", isVersionOk = true,
+        prefCount = 0, hasPrefAuthorization = false, watchfaceImage = null, wffFace = wffFace
+    )
+
+    /** The wearer picks the face zip [faceZip] in the list of watchfaces */
+    private fun pickFace() {
+        whenever(designImport.readFace(face)).thenReturn(faceZip())
+        sut.selectImportItem(item(face, wffFace = true))
+    }
+
+    /** The list is read on Dispatchers.IO: wait until it shows */
+    private fun awaitImportList() {
+        val until = System.currentTimeMillis() + TIMEOUT_MS
+        while (!sut.uiState.value.showImportList && System.currentTimeMillis() < until) Thread.sleep(10)
+        assertThat(sut.uiState.value.showImportList).isTrue()
+    }
+
+    /** The list's texts: each label shows its value, so "File name: %1$s" shows only the file name */
+    private fun labelsShowTheirValue() {
+        whenever(rh.gs(any<TextRef>(), any())).thenAnswer { it.arguments[1].toString() }
+    }
+
+    @Test
+    fun `face zips in AAPS export show in the list next to the designs, marked as faces`() {
+        labelsShowTheirValue()
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf(design))
+        whenever(designImport.listFaces()).thenReturn(listOf(face))
+
+        sut.loadWatchfaceFiles()
+        awaitImportList()
+
+        val items = sut.uiState.value.importItems
+        assertThat(items.map { it.name }).containsExactly("Analog", "D2").inOrder()
+        val faceItem = items.single { it.wffFace }
+        assertThat(faceItem.cwfFile).isSameInstanceAs(face)
+        assertThat(faceItem.fileName).isEqualTo("D2-wff.zip")
+        assertThat(items.single { !it.wffFace }.cwfFile).isSameInstanceAs(design)
+    }
+
+    @Test
+    fun `the night list does not show face zips, so a face zip can never be the night face`() {
+        labelsShowTheirValue()
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf(design))
+        whenever(designImport.listFaces()).thenReturn(listOf(face))
+
+        sut.loadNightWatchfaceFiles()
+        awaitImportList()
+
+        assertThat(sut.uiState.value.importItems.map { it.cwfFile }).containsExactly(design)
+        verify(designImport, never()).listFaces()
+    }
+
+    @Test
+    fun `picking a face zip in the list sends the face zip, not a design`() {
+        stubFaceMessages()
+        channelSends(ok = true)
+        watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = true, apiLevel = 36)
+
+        pickFace()
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_wff_face_sent)
+        verify(designImport).readFace(face)
+        verify(rxBus).send(any<EventMobileToWearWffFace>())
+        verify(rxBus, never()).send(any<EventMobileToWearWatchface>())
+        assertThat(sut.uiState.value.showImportList).isFalse()
+    }
+
+    @Test
+    fun `picking a design in the list goes the old way`() {
+        sut.selectImportItem(item(design, wffFace = false))
+
+        verify(rxBus).send(any<EventMobileToWearWatchface>())
+        verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
+        verify(designImport, never()).readFace(any())
+    }
+
+    @Test
+    fun `a face zip that cannot be read any more says so`() {
+        whenever(rh.gs(SyncStrings.wear_not_a_watchface_file)).thenReturn("not a watchface")
+        whenever(designImport.readFace(face)).thenReturn(null)
+
+        sut.selectImportItem(item(face, wffFace = true))
+
+        verify(rh, timeout(TIMEOUT_MS)).gs(SyncStrings.wear_not_a_watchface_file)
+        verify(rxBus, never()).send(any<EventMobileToWearWffFace>())
+    }
+
+    @Test
+    fun `deleting a face zip deletes the entry the list holds`() = runTest(UnconfinedTestDispatcher()) {
+        whenever(designImport.deleteFrom(face)).thenReturn("Deleted: D2-wff.zip")
+        whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
+        val messages = mutableListOf<String>()
+        backgroundScope.launch { sut.toastEvent.toList(messages) }
+
+        sut.deleteDesign(item(face, wffFace = true).cwfFile)
+
+        assertThat(messages).containsExactly("Deleted: D2-wff.zip")
+        verify(designImport).deleteFrom(face)
+    }
+
+    private fun faceZip(): ByteArray {
+        val out = ByteArrayOutputStream()
+        ZipOutputStream(out).use { zip ->
+            for (name in listOf("face.json", "data.zip", "wff4/$APP_ID.apk", "wff4/$APP_ID.token", "wff2/$APP_ID.apk")) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(name.toByteArray())
+                zip.closeEntry()
+            }
+        }
+        return out.toByteArray()
+    }
 
     @Test
     fun `selectPushedWatchface stores the choice for the plugin to resend`() {
@@ -457,5 +823,11 @@ internal class WearViewModelTest {
         sut.importDesigns(emptyList())
 
         verifyNoInteractions(designImport)
+    }
+
+    private companion object {
+
+        const val APP_ID = "info.nightscout.androidaps"
+        const val TIMEOUT_MS = 2_000L
     }
 }

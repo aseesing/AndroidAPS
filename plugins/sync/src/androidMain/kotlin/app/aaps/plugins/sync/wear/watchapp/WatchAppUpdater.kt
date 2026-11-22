@@ -3,6 +3,9 @@ package app.aaps.plugins.sync.wear.watchapp
 import android.content.Context
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
+import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventMobileToWear
+import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.plugins.sync.wear.wearintegration.DataLayerListenerServiceMobile
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.CapabilityClient
@@ -15,6 +18,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +29,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Properties
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Updates the watch app from the phone, without adb on the watch.
@@ -33,6 +39,7 @@ import java.util.concurrent.TimeUnit
  * [embedded] is null and the Wear screen shows nothing. One app-wide instance, so an update keeps
  * running when the user leaves the screen.
  *
+ * @param rxBus pings the watch after an update, see [askNewWatchAppToReport]
  * @param scope runs the updates; the state may be read from any thread
  */
 @SingleIn(AppScope::class)
@@ -41,12 +48,13 @@ class WatchAppUpdater internal constructor(
     opener: WatchChannelOpener,
     wifiServers: WifiBodyServerFactory,
     private val aapsLogger: AAPSLogger,
+    private val rxBus: RxBus,
     private val scope: CoroutineScope
 ) {
 
     @Inject
-    constructor(source: EmbeddedWatchAppSource, opener: WatchChannelOpener, wifiServers: WifiBodyServerFactory, aapsLogger: AAPSLogger) :
-        this(source, opener, wifiServers, aapsLogger, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+    constructor(source: EmbeddedWatchAppSource, opener: WatchChannelOpener, wifiServers: WifiBodyServerFactory, aapsLogger: AAPSLogger, rxBus: RxBus) :
+        this(source, opener, wifiServers, aapsLogger, rxBus, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
 
     private val sender = WatchAppSender(source, opener, wifiServers)
 
@@ -64,6 +72,7 @@ class WatchAppUpdater internal constructor(
             try {
                 val result = sender.send { _state.value = it }
                 aapsLogger.info(LTag.WEAR, "Watch app update: $result")
+                if (result is WatchAppUpdateState.Sent) scope.launch { askNewWatchAppToReport() }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -72,6 +81,25 @@ class WatchAppUpdater internal constructor(
                 _state.value = WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.ERROR, e.message ?: e.javaClass.simpleName)
             }
         }
+    }
+
+    /**
+     * Pings the watch a few times after an update. The phone still keeps what the old watch app told
+     * it, for example a Watch Face Push status without the watch's Android API level. A ping makes the
+     * new watch app tell its status again. Android installs the new app some time after
+     * [WatchAppUpdateState.Sent], or only after the user confirms on the watch, so one ping is not enough.
+     */
+    internal suspend fun askNewWatchAppToReport() {
+        for (wait in PING_WAITS) {
+            delay(wait)
+            rxBus.send(EventMobileToWear(EventData.ActionPing(System.currentTimeMillis())))
+        }
+    }
+
+    companion object {
+
+        /** The waits before each ping, one after the other: pings at 10 s, 30 s and 90 s */
+        internal val PING_WAITS: List<Duration> = listOf(10.seconds, 20.seconds, 60.seconds)
     }
 }
 

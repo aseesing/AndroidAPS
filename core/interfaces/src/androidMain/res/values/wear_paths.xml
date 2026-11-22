@@ -2,4 +2,6 @@
 <resources>
     <string name="path_rx_bridge" translatable="false">/rx_bridge</string>
     <string name="path_rx_data_bridge" translatable="false">/rx_data_bridge</string>
+    <!-- A channel that carries one Watch Face Format face zip from the phone to the watch -->
+    <string name="path_wff_face" translatable="false">/wff_face</string>
 </resources>

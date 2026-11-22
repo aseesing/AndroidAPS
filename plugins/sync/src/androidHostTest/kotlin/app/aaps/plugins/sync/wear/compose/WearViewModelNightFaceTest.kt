@@ -1,5 +1,6 @@
 package app.aaps.plugins.sync.wear.compose
 
+import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
@@ -56,6 +57,7 @@ internal class WearViewModelNightFaceTest {
     @Mock private lateinit var aapsLogger: AAPSLogger
     @Mock private lateinit var designImport: CwfDesignImport
     @Mock private lateinit var wearNightFace: WearNightFace
+    @Mock private lateinit var config: Config
 
     private val savedNightWatchfaceFlow = MutableStateFlow<CwfData?>(null)
     private val savedCustomWatchfaceFlow = MutableStateFlow<CwfData?>(null)
@@ -82,7 +84,7 @@ internal class WearViewModelNightFaceTest {
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(MutableSharedFlow())
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(MutableStateFlow(PushedWatchfaceId.CWF))
         whenever(fileListProvider.listCustomWatchfaceFiles()).thenReturn(mutableListOf())
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace, config)
     }
 
     @AfterEach

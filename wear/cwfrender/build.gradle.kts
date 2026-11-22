@@ -65,6 +65,7 @@ val wearShared = listOf(
     "watchfaces/animation/WakeTimer.kt",
     "watchfaces/animation/WallClock.kt",
     "watchfaces/animation/WffSources.kt",
+    "watchfaces/wff/WffShownSlots.kt", // named by WatchFace.kt, never run on the phone
     "watchfaces/colour/ColourLooks.kt",
     "watchfaces/daynight/DayNightChoice.kt",
     "watchfaces/daynight/DayNightClock.kt",
