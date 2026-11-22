@@ -112,7 +112,7 @@ class CwfLivePreviewValuesTest {
     /** The time of the glucose reading the renderer of the day face has; 0 when it has none. */
     private suspend fun glucoseTimeIn(engine: CwfPreviewEngine): Long? = engine.use(PreviewSlot.DAY) { renderer ->
         val host = renderer.javaClass.getDeclaredField("host").apply { isAccessible = true }.get(renderer) as PreviewHost
-        runBlocking { host.repository.current().bgData.timeStamp }
+        runBlocking { host.repository.complicationData.first().bgData.timeStamp }
     }
 
     private fun viewModel(engine: CwfPreviewEngine, sent: List<EventData>): CwfLivePreviewViewModel {
