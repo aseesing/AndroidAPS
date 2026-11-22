@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ============================================================================================
+  PERSONAL PATCH - not part of upstream AAPS (branch local/personal, see .github/README.md).
+  Own file: keep upstream files to small hooks that call into here.
+  ============================================================================================
+  Watch Face Format (WFF) face zips sent from the phone. English only: not sent to Crowdin.
+-->
+<resources>
+    <string name="wear_wff_face_no_push_token">This watchface file has no Watch Face Push token for this AAPS app, and the watch cannot install the watchface without one. Make the watchface again with a token.</string>
+</resources>

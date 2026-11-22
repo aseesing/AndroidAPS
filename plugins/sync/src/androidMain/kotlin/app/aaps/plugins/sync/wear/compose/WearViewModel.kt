@@ -403,6 +403,7 @@ class WearViewModel(
 
             is WffFaceZip.Result.WatchTooOld -> rh.gs(SyncStrings.wear_wff_face_watch_too_old, wearOsVersion(result.minApiLevel))
             WffFaceZip.Result.OtherApp       -> rh.gs(SyncStrings.wear_wff_face_other_app)
+            WffFaceZip.Result.NoPushToken    -> rh.gs(SyncStrings.wear_wff_face_no_push_token)
             WffFaceZip.Result.Invalid        -> rh.gs(SyncStrings.wear_not_a_watchface_file)
         }
         _toastEvent.emit(message)
