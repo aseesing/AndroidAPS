@@ -82,6 +82,16 @@ internal class WffGlucoseComplicationsTest {
     }
 
     @Test
+    fun `the dynamic age is kept inside 0 to the maximum too`() {
+        // The system works the value out, so the limit must be part of the value itself: a choice
+        // between the minutes and the two ends of the range
+        val value = WffGlucoseAgeComplication.minutesSince(System.currentTimeMillis() - 3 * 3_600_000L).toString()
+        assertThat(Regex("ConditionalFloatOp").findAll(value).count()).isEqualTo(2)
+        assertThat(value).contains("FixedFloat{value=${WffGlucoseAgeComplication.MAX_MINUTES}")
+        assertThat(value).contains("FixedFloat{value=0.0")
+    }
+
+    @Test
     fun `age minutes are kept inside 0 to the maximum`() {
         assertThat(WffGlucoseAgeComplication.ageMinutes(1_000_000L, 1_000_000L + 90_000L)).isEqualTo(1.5f)
         assertThat(WffGlucoseAgeComplication.ageMinutes(1_000_000L, 900_000L)).isEqualTo(0f)
