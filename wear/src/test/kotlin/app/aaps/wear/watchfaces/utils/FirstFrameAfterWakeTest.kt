@@ -39,6 +39,17 @@ class FirstFrameAfterWakeTest {
     }
 
     @Test
+    fun eachTimeTheFaceComesOnTheScreenIsTold() {
+        var shown = 0
+        wakeFrame.onShown = { shown++ }
+        wakeFrame.onVisibility(true)   // the face starts on the screen
+        wakeFrame.onVisibility(false)
+        assertThat(shown).isEqualTo(1)
+        wakeFrame.onVisibility(true)
+        assertThat(shown).isEqualTo(2)
+    }
+
+    @Test
     fun shownAfterHiddenIsAWakeOnce() {
         wakeFrame.onVisibility(true)
         wakeFrame.beginFrame(leftAmbient = false, interactive = true)

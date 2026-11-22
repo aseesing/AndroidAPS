@@ -27,6 +27,7 @@ import app.aaps.wear.interaction.ConfigurationActivity
 import app.aaps.wear.selfupdate.WatchAppSelfUpdate
 import app.aaps.wear.watchlog.WatchLogUpload
 import app.aaps.wear.watchfaces.WatchFacePushHelper
+import app.aaps.wear.watchfaces.wff.WffFaceInstaller
 import app.aaps.wear.wearStepCount.StepCountListener
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.CapabilityClient
@@ -61,10 +62,12 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
     @Inject lateinit var watchAppSelfUpdate: WatchAppSelfUpdate
     @Inject lateinit var watchLogUpload: WatchLogUpload
+    @Inject lateinit var wffFaceInstaller: WffFaceInstaller
 
     private val dataClient by lazy { Wearable.getDataClient(this) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
     private val capabilityClient by lazy { Wearable.getCapabilityClient(this) }
+    private val channelClient by lazy { Wearable.getChannelClient(this) }
     //private val nodeClient by lazy { Wearable.getNodeClient(this) }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -78,6 +81,8 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     private val rxDataPath get() = getString(app.aaps.core.interfaces.R.string.path_rx_data_bridge)
     // A night face zip, see CwfNight
     private val rxNightDataPath get() = rxDataPath + CwfNight.PATH_SUFFIX
+    // the status at the start of the app is lost on the bus, so send it once the phone node is known
+    private val startupStatusReport by lazy { StartupStatusReport(scope, aapsLogger) { watchFacePushHelper.reportStatus() } }
 
     @ExperimentalSerializationApi
     override fun onCreate() {
@@ -111,6 +116,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
         // preferences arrive. So ask now. Posted behind the capability lookup above, on the same
         // thread: that is the first moment a node is known, and the collectors above exist by then.
         handler.post {
+            startupStatusReport.onPhoneNode(transcriptionNodeId)
             if (watchFacePushHelper.isSupported())
                 rxBus.send(EventWearToMobile(EventData.ActionResendData("DataLayerListenerServiceWear::onCreate")))
         }
@@ -119,7 +125,29 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     override fun onCapabilityChanged(p0: CapabilityInfo) {
         super.onCapabilityChanged(p0)
         handler.post { updateTranscriptionCapability() }
-        aapsLogger.debug(LTag.WEAR, "onCapabilityChanged:  ${p0.name} ${p0.nodes.joinToString(", ") { it.displayName + "(" + it.id + ")" }}")
+        handler.post { startupStatusReport.onPhoneNode(transcriptionNodeId) }
+        aapsLogger.debug(LTag.WEAR, "onCapabilityChanged: ${p0.name} ${p0.nodes.joinToString(", ") { it.displayName + "(" + it.id + ")" }}")
+    }
+
+    /**
+     * A Watch Face Format face zip sent by the phone, installed by [WffFaceInstaller]. It comes on a
+     * channel: it is too large for a message. The service gets the channel only through the
+     * `CHANNEL_EVENT` filter for this path in the manifest.
+     */
+    private fun receiveWffFace(channel: ChannelClient.Channel) {
+        if (channel.path != getString(app.aaps.core.interfaces.R.string.path_wff_face)) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                val zip = channelClient.getInputStream(channel).await().use { it.readBytes() }
+                wffFaceInstaller.install(zip)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                aapsLogger.error(LTag.WEAR, "The face zip from the phone was not installed", e)
+            } finally {
+                channelClient.close(channel)
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -156,13 +184,15 @@ class DataLayerListenerServiceWear : WearableListenerService() {
                 aapsLogger.debug(LTag.WEAR, "Updated node: $transcriptionNodeId")
             }
         }
+        startupStatusReport.onPhoneNode(transcriptionNodeId)
     }
 
-    // A channel from the phone app: a new watch app, or a request for the watch log
+    // A channel from the phone app: a new watch app, a request for the watch log, or a face zip
     override fun onChannelOpened(channel: ChannelClient.Channel) {
         super.onChannelOpened(channel)
         watchAppSelfUpdate.onChannelOpened(channel)
         watchLogUpload.onChannelOpened(channel)
+        receiveWffFace(channel)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

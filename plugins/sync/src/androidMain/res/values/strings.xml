@@ -217,6 +217,16 @@
     <string name="wear_pushed_watchface_confirm_message" comment="%1$s=name of the watchface that will be installed, %2$s=name of the one installed now. Example: Complications watchface will replace the Custom watchface on the watch.">%1$s will replace the %2$s on the watch.</string>
     <string name="wear_pushed_watchface_confirm_message_from_complications" comment="%1$s=name of the watchface that will be installed, %2$s=name of the one installed now. Example: Custom watchface will replace the Complications watchface on the watch.">%1$s will replace the %2$s on the watch. Complications you changed in the watch face editor go back to the defaults.</string>
     <string name="wear_load_watchface">Load Watchface</string>
+    <string name="wear_not_a_watchface_file">This file is not a watchface.</string>
+    <string name="wear_wff_face_watch_unknown">The watch has not told its Wear OS version yet. Check the connection, and that the AAPS app on the watch is of the same version.</string>
+    <string name="wear_wff_face_watch_too_old" comment="%1$s = a Wear OS version, for example 5 or 6">This watchface needs Wear OS %1$s or newer on the watch.</string>
+    <string name="wear_wff_face_other_app">This watchface was made for another AAPS app. Make it again for this app.</string>
+    <string name="wear_wff_face_sent">Watchface sent to the watch.</string>
+    <string name="wear_wff_face_sent_confirm">Watchface sent. Confirm the install on the watch, then pick the watchface on the watch.</string>
+    <string name="wear_wff_face_not_sent">The watchface could not be sent to the watch. Check the connection and try again.</string>
+    <string name="wear_design_type_wff" comment="One line of an entry in the list of watchface files. WFF is the short name of the Watch Face Format of Wear OS: keep it as it is.">Type: WFF</string>
+    <string name="wear_design_type_cwf" comment="One line of an entry in the list of watchface files. CWF is the short name of a design for the AAPS Custom watchface: keep it as it is.">Type: CWF</string>
+    <string name="wear_wff_face_on_watch" comment="%1$s = name of a watchface loaded from a file">On the watch: %1$s</string>
     <string name="wear_infos_watchface">Infos Watchface</string>
     <string name="wear_export_watchface">Export template</string>
     <string name="wear_cwf_settings" comment="Button on the Wear screen, and title of the screen it opens: the settings of the Custom watch face, set from the phone">Watch face settings</string>
