@@ -152,9 +152,8 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
 
     /**
      * What each complication slot shows, by its number (1 to 5). A slot that is not in the map shows
-     * what it shows on the watch before the wearer picks a source: stand-ins for the heart rate and the
-     * steps of the watch in slots 1 and 2, carbs on board and insulin on board in slots 3 and 4, and
-     * nothing in slot 5. Only a slot the design shows is drawn.
+     * what it shows on the watch before the wearer picks a source: carbs on board in slot 1, insulin on
+     * board in slot 2, and nothing in slots 3 to 5. Only a slot the design shows is drawn.
      *
      * Used by the face tool (outside this repository), not by the app: it is not dead code.
      */
