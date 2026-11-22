@@ -470,7 +470,13 @@ sealed class EventData : Event() {
         // Null when not known, or from an older sender. Keep new fields at the END of this class: the
         // ProtoBuf wire format numbers fields by declaration order.
         val sensorEndsAt: Long? = null,
-        val pumpEndsAt: Long? = null
+        val pumpEndsAt: Long? = null,
+        // The wearer's ratios and limits, for the scales of the Custom watch face. Null when not known
+        // (no profile, a limit that is not set), or from an older sender: never 0.
+        val icValue: Double? = null, // g/U, the carb ratio of the running profile now
+        val isfMgdlValue: Double? = null, // mg/dl per U, the ISF of the running profile now
+        val maxIobValue: Double? = null, // U, the max IOB of the loop
+        val maxCarbsValue: Double? = null // g, the max carbs limit
     ) : EventData(), EventDataSet
 
     @Serializable

@@ -1263,6 +1263,9 @@ class DataHandlerMobile(
     /** When the sensor and the pod or cannula stop, for the gauges of the Custom watch face. */
     private val partTimes = WearPartTimes(persistenceLayer, activePlugin, preferences)
 
+    /** The ratios and limits of the wearer, for the scales of the Custom watch face. */
+    private val ratiosAndLimits = WearRatiosAndLimits(activePlugin, constraintChecker, config, aapsLogger)
+
     /**
      * A resend asked for explicitly (by the watch, a new connection or the wear screen): send everything,
      * also what the watch should already have, see [UnchangedToWearFilter].
@@ -1633,6 +1636,8 @@ class DataHandlerMobile(
             numbers = StatusNumbers.of(bolusIob, basalIob, basalRate, isfMgdl)
         }
 
+        numbers = ratiosAndLimits.addTo(numbers, if (config.appInitialized) profile else null, "DataHandlerMobile $caller") // ic, isf, max_iob, max_carbs, see WearRatiosAndLimits.kt
+
         //batteries
         val phoneBattery = receiverStatusStore.batteryLevel
         val rigBattery = processedDeviceStatusData.uploaderStatus.trim { it <= ' ' }
@@ -1726,7 +1731,11 @@ class DataHandlerMobile(
                 basalRateValue = numbers.basalRate,
                 bgiMgdl = numbers.bgiMgdl,
                 sensorEndsAt = sensorEndsAt,
-                pumpEndsAt = pumpEndsAt
+                pumpEndsAt = pumpEndsAt,
+                icValue = numbers.ic,
+                isfMgdlValue = numbers.isfMgdl,
+                maxIobValue = numbers.maxIob,
+                maxCarbsValue = numbers.maxCarbs
             )
         )
     }
