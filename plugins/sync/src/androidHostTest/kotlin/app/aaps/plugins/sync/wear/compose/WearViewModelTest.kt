@@ -415,7 +415,7 @@ internal class WearViewModelTest {
     @Test
     fun `a face zip whose send never ends counts as not sent`() {
         stubFaceMessages()
-        sut.faceSendWait = 200.milliseconds
+        sut.wffFaceToWatch.faceSendWait = 200.milliseconds
         watchFacePushStatusFlow.value = EventData.WatchFacePushStatus(supported = false, apiLevel = 34)
 
         pickFace()
@@ -468,7 +468,7 @@ internal class WearViewModelTest {
     @Test
     fun `a face zip is not sent when the watch does not tell its version after a ping`() {
         stubFaceMessages()
-        sut.watchVersionWait = 200.milliseconds
+        sut.wffFaceToWatch.watchVersionWait = 200.milliseconds
 
         pickFace()
 

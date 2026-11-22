@@ -51,19 +51,15 @@ sealed class EventData : Event() {
      * every install, and in reply to [Preferences], so the phone shows the face choice only on a
      * watch that has Watch Face Push (Wear OS 6+) and can tell when the watch still holds the other
      * face. [installedFace] is a `PushedWatchfaceId` value, or null when no face of ours is installed.
+     *
+     * PERSONAL PATCH, for a face from a face zip (see `WffFace` in the wear app):
      * [apiLevel] is the watch's Android API level, so the phone can pick the Watch Face Format
      * version of a face zip (0 from an older wear app). [designName] is the name of the face loaded
-     * from a face zip while it is installed on the watch, on any Wear OS version.
+     * from a face zip while it is installed on the watch, on any Wear OS version. [designShown] is
+     * whether the watch shows that face now; null when the watch cannot tell (see `WffFaceShown`).
      */
     @Serializable
-    data class WatchFacePushStatus(
-        val supported: Boolean,
-        val installedFace: String? = null,
-        val apiLevel: Int = 0,
-        val designName: String? = null,
-        /** PERSONAL PATCH: whether the watch shows the face of [designName] now; null when the watch cannot tell (see `WffFaceShown` in the wear app) */
-        val designShown: Boolean? = null
-    ) : EventData()
+    data class WatchFacePushStatus(val supported: Boolean, val installedFace: String? = null, val apiLevel: Int = 0, val designName: String? = null, val designShown: Boolean? = null) : EventData() // PERSONAL PATCH: apiLevel, designName, designShown
 
     @Serializable
     data class WearException(

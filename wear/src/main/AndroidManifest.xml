@@ -28,8 +28,8 @@
          one-shot activation on first install was used -->
     <uses-permission android:name="com.google.wear.permission.PUSH_WATCH_FACES" />
     <uses-permission android:name="com.google.wear.permission.SET_PUSHED_WATCH_FACE_AS_ACTIVE" />
-    <!-- Below Wear OS 6: a watch face loaded from a file on the phone is installed as an app,
-         and the wearer confirms it -->
+    <!-- PERSONAL PATCH: below Wear OS 6 a watch face loaded from a file on the phone is installed
+         as an app, and the wearer confirms it -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- androidx.wear.watchfacepush requires minSdk 36; all usages are runtime-guarded by SDK checks -->
@@ -50,6 +50,7 @@
         <intent>
             <action android:name="android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" />
         </intent>
+        <!-- PERSONAL PATCH: the face from a face zip -->
         <package android:name="${applicationId}.watchfacepush.design" />
     </queries>
 
@@ -286,6 +287,7 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="300" />
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -315,6 +317,7 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="300" />
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -339,6 +342,7 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="300" />
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -441,6 +445,7 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="300" />
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -570,6 +575,7 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="300" />
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -663,6 +669,7 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="300" />
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -696,6 +703,7 @@
                 <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
             </intent-filter>
 
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -741,6 +749,7 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="300" />
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -762,6 +771,7 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="300" />
+            <!-- PERSONAL PATCH: .design, the face from a face zip may show this too -->
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.design" />
@@ -821,7 +831,7 @@
                 android:value="0" />
         </service>
 
-        <!-- For a Watch Face Format face loaded from a face zip (complications/wff): the glucose and
+        <!-- PERSONAL PATCH, three services: for a Watch Face Format face loaded from a face zip (complications/wff): the glucose and
              its age as ranged values, and the data picture drawn from the face's data.zip -->
         <service
             android:name=".complications.wff.WffGlucoseComplication"

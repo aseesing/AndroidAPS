@@ -282,7 +282,7 @@ internal fun WearMainContent(
     // Confirmed first because the watch replaces its installed face at once.
     var pendingWatchface by remember { mutableStateOf<String?>(null) }
     pendingWatchface?.let { face ->
-        val current = uiState.pushedWatchface
+        val current = uiState.pushedWatchface // PERSONAL PATCH: three faces, with the one from a face zip
         // Leaving the complications face loses what was edited on it in the watch face editor:
         // the runtime drops a face's user configuration when a face of another package name takes
         // the slot. Leaving the custom face loses nothing worth a warning, so only one way says so.
@@ -368,16 +368,13 @@ internal fun WearMainContent(
                     // While the watch still holds the other face - the seconds an install takes,
                     // or longer after a reinstall until the preferences reach it - the chosen row
                     // says so, quietly: it is progress, not a fault.
-                    // The face from a file is a choice only once the watch has one
-                    val selectedId = uiState.pushedWatchface
+                    val selectedId = uiState.pushedWatchface // PERSONAL PATCH: three faces, with the one from a face zip
                     val installing = uiState.installedWatchface != null && uiState.installedWatchface != selectedId
-                    val faces = listOf(PushedWatchfaceId.CWF, PushedWatchfaceId.WFS) +
-                        listOfNotNull(PushedWatchfaceId.DESIGN.takeIf { uiState.wffFaceName != null || selectedId == it })
                     Column(modifier = Modifier.selectableGroup()) {
-                        faces.forEach { face ->
+                        pushedFaceChoices(uiState).forEach { face -> // PERSONAL PATCH: also the face from a file, see WffFaceChoice.kt
                             val selected = face == selectedId
                             WatchfaceChoiceRow(
-                                label = uiState.wffFaceName?.takeIf { face == PushedWatchfaceId.DESIGN } ?: pushedWatchfaceLabel(face),
+                                label = wffFaceChoiceLabel(uiState, face) ?: pushedWatchfaceLabel(face), // PERSONAL PATCH: wffFaceChoiceLabel
                                 selected = selected,
                                 hint = if (selected && installing) stringResource(SyncStrings.wear_pushed_watchface_installing) else null,
                                 onSelect = { if (!selected) pendingWatchface = face }
@@ -387,7 +384,7 @@ internal fun WearMainContent(
 
                     // What the wrist shows with the complications face chosen. The custom face
                     // needs no picture here: its own preview is in its own card below.
-                    if (uiState.pushedWatchface == PushedWatchfaceId.WFS) {
+                    if (uiState.pushedWatchface == PushedWatchfaceId.WFS) { // PERSONAL PATCH: three faces, with the one from a face zip
                         Spacer(modifier = Modifier.height(AapsSpacing.small))
                         Image(
                             painter = painterResource(R.drawable.wfs_watchface_preview),
@@ -439,14 +436,7 @@ internal fun WearMainContent(
                     // Row 3: the watch face settings, set from the phone
                     ButtonRow(button1 = ButtonDef(Icons.Default.Tune, stringResource(SyncStrings.wear_cwf_settings), onCwfSettings), button2 = placeEntryButton(uiState, onDayNightSettings)) // PERSONAL PATCH: a design that needs the place, see WearPlaceUseUi.kt
 
-                    // The Watch Face Format face loaded with "Import designs", while the watch shows it
-                    uiState.wffFaceOnWatch?.let { name -> // PERSONAL PATCH: not while the watch shows another face, see WffFaceOnWatch.kt
-                        Text(
-                            text = stringResource(SyncStrings.wear_wff_face_on_watch, name),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = AapsSpacing.small)
-                        )
-                    }
+                    WffFaceOnWatchLine(uiState.wffFaceOnWatch) // PERSONAL PATCH: the line "On the watch: ...", see WffFaceChoice.kt
 
                     // Watchface preview image, or a loading indicator while a new face goes to the watch
                     uiState.loadingWatchface?.let { name -> FaceLoadingIndicator(name) }
@@ -471,13 +461,8 @@ internal fun WearMainContent(
 /** The label of an embedded face, from the same strings the key's list entries use */
 @Composable
 private fun pushedWatchfaceLabel(face: String): String =
-    stringResource(
-        when (face) {
-            PushedWatchfaceId.CWF    -> KeysStrings.wear_pushed_watchface_cwf
-            PushedWatchfaceId.DESIGN -> KeysStrings.wear_pushed_watchface_design
-            else                     -> KeysStrings.wear_pushed_watchface_wfs
-        }
-    )
+    if (face == PushedWatchfaceId.DESIGN) stringResource(KeysStrings.wear_pushed_watchface_design) else // PERSONAL PATCH: the face from a face zip
+    stringResource(if (face == PushedWatchfaceId.CWF) KeysStrings.wear_pushed_watchface_cwf else KeysStrings.wear_pushed_watchface_wfs)
 
 /** One radio row; [hint] is a quiet note after the label, for a state that will pass by itself */
 @Composable
