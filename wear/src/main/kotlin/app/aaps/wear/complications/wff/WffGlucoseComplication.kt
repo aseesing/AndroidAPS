@@ -44,6 +44,9 @@ class WffGlucoseComplication : ModernBaseComplicationProviderService() {
 
     @Inject lateinit var wffFace: WffFace
 
+    // The arrow pictures outlive this service, which the system binds only while it answers
+    @Inject lateinit var arrows: DesignArrows
+
     // The phone names the face only while the watch shows it, see WffFaceShown
     @Inject lateinit var wffFaceShown: WffFaceShown
 
@@ -61,7 +64,7 @@ class WffGlucoseComplication : ModernBaseComplicationProviderService() {
         // A failure only means the app's own arrows are used.
         arrowScope.launch {
             designArrows = try {
-                GlucoseArrows.fromDesign(wffFace.dataDesign(), resources)
+                arrows.of(wffFace.dataDesign(), resources)
             } catch (e: Exception) {
                 aapsLogger.error(LTag.WEAR, "WffGlucoseComplication: design arrows not read", e)
                 null
