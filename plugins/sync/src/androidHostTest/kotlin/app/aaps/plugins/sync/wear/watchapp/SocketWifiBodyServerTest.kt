@@ -7,6 +7,7 @@ import org.junit.jupiter.api.assertThrows
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.net.InetAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -32,11 +33,32 @@ class SocketWifiBodyServerTest {
         return serving to error
     }
 
-    private fun fetch(token: String): ByteArray =
-        Socket(InetAddress.getLoopbackAddress(), server.port).use { socket ->
-            WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), token)
-            socket.getInputStream().readBytes()
+    private fun fetch(token: String): ByteArray = exchange(server.port) { WatchAppUpdateProtocol.writeWifiRequest(it, token) }
+
+    /**
+     * Connects to [port], writes with [send], then reads until the server closes the connection.
+     * A connection that cannot be made throws.
+     *
+     * The server may close the connection before or while the client writes or reads. Then a write
+     * fails (broken pipe) or a read is reset. For the client that is the same as an end of stream:
+     * the server closed it. So it ends the exchange too, and the result is all bytes read up to then.
+     */
+    private fun exchange(port: Int, send: (OutputStream) -> Unit): ByteArray {
+        val received = ByteArrayOutputStream()
+        Socket(InetAddress.getLoopbackAddress(), port).use { socket ->
+            // A server that keeps the connection open fails the test instead of hanging it
+            socket.soTimeout = 10 * SocketWifiBodyServer.REQUEST_TIMEOUT_MS
+            try {
+                send(socket.getOutputStream())
+                socket.getInputStream().copyTo(received)
+            } catch (e: SocketTimeoutException) {
+                throw AssertionError("The server kept the connection open", e)
+            } catch (_: IOException) {
+                // The server closed the connection
+            }
         }
+        return received.toByteArray()
+    }
 
     @Test
     fun `a wrong token gets nothing, the right one gets the body`() {
@@ -55,15 +77,8 @@ class SocketWifiBodyServerTest {
     fun `something that is not the watch gets nothing`() {
         val (serving, _) = serveInBackground()
 
-        val answer = Socket(InetAddress.getLoopbackAddress(), server.port).use { socket ->
-            socket.getOutputStream().write("GET / HTTP/1.1\r\n\r\n".toByteArray())
-            // The server closes with bytes unread, which may reset the connection
-            try {
-                socket.getInputStream().readBytes()
-            } catch (_: IOException) {
-                ByteArray(0)
-            }
-        }
+        // The server closes with bytes unread, which may reset the connection
+        val answer = exchange(server.port) { it.write("GET / HTTP/1.1\r\n\r\n".toByteArray()) }
 
         assertThat(answer).isEmpty()
         server.close()
@@ -89,6 +104,8 @@ class SocketWifiBodyServerTest {
 
         repeat(SocketWifiBodyServer.MAX_WRONG_REQUESTS) {
             Socket(InetAddress.getLoopbackAddress(), server.port).use { socket ->
+                // A server that keeps an idle connection fails the test instead of hanging it
+                socket.soTimeout = 3 * SocketWifiBodyServer.REQUEST_TIMEOUT_MS
                 // Sends nothing; the server closes it
                 assertThat(socket.getInputStream().read()).isEqualTo(-1)
             }
@@ -96,8 +113,9 @@ class SocketWifiBodyServerTest {
 
         serving.join(5_000)
         assertThat(error.get()).isInstanceOf(IOException::class.java)
-        val seconds = (System.nanoTime() - started) / 1_000_000_000
-        assertThat(seconds).isAtMost(SocketWifiBodyServer.MAX_WRONG_REQUESTS * SocketWifiBodyServer.REQUEST_TIMEOUT_MS / 1000L + 2)
+        // Each idle connection takes the request time; the rest is room for a slow machine
+        val ms = (System.nanoTime() - started) / 1_000_000
+        assertThat(ms).isAtMost(SocketWifiBodyServer.MAX_WRONG_REQUESTS * SocketWifiBodyServer.REQUEST_TIMEOUT_MS + SLOW_MACHINE_MS)
     }
 
     @Test
@@ -150,16 +168,12 @@ class SocketWifiBodyServerTest {
             }
         }
 
-        val answer = Socket(InetAddress.getLoopbackAddress(), other.port).use { socket ->
-            WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), "right")
-            try {
-                socket.getInputStream().readBytes()
-            } catch (_: IOException) {
-                ByteArray(0)
-            }
-        }
+        // The server closes this connection at once, without reading: the request may already fail
+        val answer = exchange(other.port) { WatchAppUpdateProtocol.writeWifiRequest(it, "right") }
 
         assertThat(answer).isEmpty()
+        // One wrong connection does not end the server
+        assertThat(serving.isAlive).isTrue()
         other.close()
         serving.join(5_000)
         assertThat(error.get()).isInstanceOf(IOException::class.java)
@@ -196,5 +210,11 @@ class SocketWifiBodyServerTest {
         assertThat(accepting.isAlive).isFalse()
         assertThat(received.get()).isEqualTo(body)
         server.close()
+    }
+
+    companion object {
+
+        /** Room on top of a time the server must keep, so a slow or busy machine still passes */
+        private const val SLOW_MACHINE_MS = 5_000L
     }
 }

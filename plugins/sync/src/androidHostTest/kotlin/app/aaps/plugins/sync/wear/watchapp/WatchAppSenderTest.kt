@@ -15,6 +15,8 @@ import java.io.PipedOutputStream
 import java.net.InetAddress
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
@@ -78,6 +80,23 @@ class WatchAppSenderTest {
             FakeChannel(pipeSize, watch)
         }
 
+    /**
+     * Reads until the phone closes the channel, and returns how many bytes came.
+     *
+     * A fake watch that answers before it has read all the phone writes must wait here, and not end
+     * its thread: a pipe fails the next write ("Read end dead") once the thread that read from it has
+     * ended. The phone would then see an error instead of the answer.
+     */
+    private fun readUntilClosed(input: InputStream): Long {
+        val buffer = ByteArray(8192)
+        var count = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) return count
+            count += read
+        }
+    }
+
     @Test
     fun `a watch that takes the update gets the whole body and the phone reports it sent`() = runBlocking {
         val received = ByteArrayOutputStream()
@@ -114,15 +133,22 @@ class WatchAppSenderTest {
 
     @Test
     fun `a watch that refuses at the start sends no body`() = runBlocking {
-        var bodyBytes = 0
+        val bodyBytes = AtomicLong(-1)
+        val watchDone = CountDownLatch(1)
         val result = sender(opener = channel { input, output ->
-            WatchAppUpdateProtocol.readHeader(input)
-            WatchAppUpdateProtocol.writeReply(output, Reply.Failed("Cannot start the install"))
-            bodyBytes = input.available()
+            try {
+                WatchAppUpdateProtocol.readHeader(input)
+                WatchAppUpdateProtocol.writeReply(output, Reply.Failed("Cannot start the install"))
+                // All that the phone sends after the refusal, until it closes the channel
+                bodyBytes.set(readUntilClosed(input))
+            } finally {
+                watchDone.countDown()
+            }
         }).send { states += it }
 
         assertThat(result).isEqualTo(WatchAppUpdateState.Failed(WatchAppUpdateState.Reason.WATCH_ERROR, "Cannot start the install"))
-        assertThat(bodyBytes).isEqualTo(0)
+        assertThat(watchDone.await(5, TimeUnit.SECONDS)).isTrue()
+        assertThat(bodyBytes.get()).isEqualTo(0)
         assertThat(states.none { it is WatchAppUpdateState.Sending }).isTrue()
     }
 
@@ -189,7 +215,7 @@ class WatchAppSenderTest {
         val result = sender(opener = channel { input, output ->
             // What a watch app with an older version answers to this header
             WatchAppUpdateProtocol.writeReply(output, Reply.Failed("Wrong update: ${WatchAppUpdateProtocol.UNKNOWN_FORMAT} 3, expected 2"))
-            input.read()
+            readUntilClosed(input)
         }).send { states += it }
 
         assertThat((result as WatchAppUpdateState.Failed).reason).isEqualTo(WatchAppUpdateState.Reason.OLD_WATCH_APP)
@@ -200,7 +226,7 @@ class WatchAppSenderTest {
         val result = sender(opener = channel { input, output ->
             // What a watch app with a newer version answers to this header
             WatchAppUpdateProtocol.writeReply(output, Reply.Failed("Wrong update: ${WatchAppUpdateProtocol.OLD_FORMAT} 3, expected 4"))
-            input.read()
+            readUntilClosed(input)
         }).send { states += it }
 
         assertThat((result as WatchAppUpdateState.Failed).reason).isEqualTo(WatchAppUpdateState.Reason.OLD_PHONE_APP)
@@ -295,8 +321,11 @@ class WatchAppSenderTest {
             // Another device knocks with wrong tokens until the server gives up
             repeat(SocketWifiBodyServer.MAX_WRONG_REQUESTS) {
                 Socket(offer.addresses.first(), offer.port).use { socket ->
-                    WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), "wrong")
-                    runCatching { socket.getInputStream().read() }
+                    // Also the write may fail: the server may have closed this connection already
+                    runCatching {
+                        WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), "wrong")
+                        socket.getInputStream().read()
+                    }
                 }
             }
             // The watch cannot connect any more, and asks for the channel

@@ -203,8 +203,11 @@ class WatchLogReceiverTest {
             // Another device knocks with wrong tokens until the server gives up
             repeat(SocketWifiBodyServer.MAX_WRONG_REQUESTS) {
                 Socket(offer.addresses.first(), offer.port).use { socket ->
-                    WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), "wrong")
-                    runCatching { socket.getInputStream().read() }
+                    // Also the write may fail: the server may have closed this connection already
+                    runCatching {
+                        WatchAppUpdateProtocol.writeWifiRequest(socket.getOutputStream(), "wrong")
+                        socket.getInputStream().read()
+                    }
                 }
             }
             // The watch cannot connect any more, and sends over the channel
