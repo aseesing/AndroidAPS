@@ -32,6 +32,7 @@ import androidx.wear.watchface.WatchFaceType
 import androidx.wear.watchface.WatchState
 import androidx.wear.watchface.style.CurrentUserStyleRepository
 import androidx.wear.watchface.style.WatchFaceLayer
+import app.aaps.wear.watchfaces.wff.WffShownSlots // PERSONAL PATCH
 import java.time.ZonedDateTime
 import java.util.TimeZone
 
@@ -343,7 +344,10 @@ abstract class WatchFace : WatchFaceService() {
         }
 
         /** The first frame after a wake of this renderer, see [WatchFace.wakeFrame]. */
-        private val wake = FirstFrameAfterWake().also { it.watch(wState) }
+        private val wake = FirstFrameAfterWake().also {
+            it.onShown = WffShownSlots(context)::otherFaceShown // PERSONAL PATCH: this face is on the screen, so the face from a face zip is not
+            it.watch(wState)
+        }
 
         init {
             // Register broadcast receiver for time changes

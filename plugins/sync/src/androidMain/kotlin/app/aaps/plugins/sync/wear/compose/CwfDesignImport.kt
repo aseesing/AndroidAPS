@@ -12,6 +12,7 @@ import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.weardata.CwfFile
 import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.plugins.sync.SyncStrings
+import app.aaps.plugins.sync.wear.WffFaceZip
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -30,7 +31,7 @@ import java.util.zip.ZipInputStream
  */
 internal class PickedDesign(val fileName: String, val read: () -> ByteArray?)
 
-/** A picked file is bigger than [CwfDesignImport.MAX_ZIP_BYTES]: it is not read to the end. */
+/** A picked file is bigger than [CwfDesignImport.MAX_FACE_ZIP_BYTES]: it is not read to the end. */
 internal class DesignTooBigException : IOException()
 
 /** The folder the designs are copied to: AAPS/export. */
@@ -81,7 +82,8 @@ class CwfDesignImport(
 ) {
 
     /**
-     * Copies the zips at [uris] into AAPS/export.
+     * Copies the zips at [uris] into AAPS/export. A Watch Face Format face zip is copied too, see
+     * [WffFaceDesigns].
      *
      * @return the message for the wearer: how many designs were imported, then one line for each
      *   file that was not, with the reason
@@ -132,7 +134,9 @@ class CwfDesignImport(
             aapsLogger.error(LTag.WEAR, "Cannot read picked design ${design.fileName}", e)
             return DesignRefusal.NOT_READ
         }
+        if (isFaceZip(bytes)) return WffFaceDesigns.refusalOf(bytes, fileName, folder) // PERSONAL PATCH: a face zip goes into the list too
         return when {
+            bytes.size > MAX_ZIP_BYTES                 -> DesignRefusal.TOO_BIG
             !unzipsToAtMost(bytes, MAX_UNZIPPED_BYTES) -> DesignRefusal.TOO_BIG
             !isWatchfaceZip(bytes, fileName)           -> DesignRefusal.NOT_A_DESIGN
             !folder.write(fileName, bytes)             -> DesignRefusal.NOT_WRITTEN
@@ -160,11 +164,23 @@ class CwfDesignImport(
         return rh.gs(if (deleted) SyncStrings.wear_design_delete_done else SyncStrings.wear_design_delete_failed, shownName)
     }
 
+    // ---- PERSONAL PATCH: Watch Face Format face zips in the list, see WffFaceDesigns.kt ----
+
+    private val wffFaces = WffFaceDesigns(aapsLogger)
+
+    /** The face zips in AAPS/export, as designs for the list. It reads files: call it off the main thread. */
+    fun listFaces(): List<CwfFile> = faceFolder()?.let { wffFaces.list(it) } ?: emptyList()
+
+    /** The whole face zip of [cwfFile], a face from [listFaces]. Null when it cannot be read. It reads a file: call it off the main thread. */
+    fun readFace(cwfFile: CwfFile): ByteArray? = faceFolder()?.let { wffFaces.read(it, cwfFile) }
+
+    private fun faceFolder(): FaceFolder? = fileListProvider.ensureExportDirExists()?.let { SafFaceFolder(it, context.contentResolver) }
+
     /** The zips at [uris], named as the place they come from (Drive, Downloads, ...) names them. */
     private fun ContentResolver.pickedDesigns(uris: List<Uri>): List<PickedDesign> =
         uris.map { uri ->
             PickedDesign(fileName = displayName(uri) ?: uri.lastPathSegment ?: "design") {
-                openInputStream(uri)?.use { readAtMost(it, MAX_ZIP_BYTES) }
+                openInputStream(uri)?.use { readAtMost(it, MAX_FACE_ZIP_BYTES) }
             }
         }
 
@@ -179,8 +195,14 @@ class CwfDesignImport(
 
     companion object {
 
-        /** A bigger file is not read at all. The watch only takes zips of about 320 KB anyway. */
+        /** A bigger design is refused. The watch only takes zips of about 320 KB anyway. */
         const val MAX_ZIP_BYTES = 5 * 1024 * 1024
+
+        /**
+         * A bigger file is not read at all. A Watch Face Format face zip holds a face for each AAPS
+         * app and Wear OS version: about 12 MB for a big design.
+         */
+        const val MAX_FACE_ZIP_BYTES = 32 * 1024 * 1024
 
         /**
          * A zip that unpacks to more is refused before it is loaded. A small zip can unpack to
@@ -200,6 +222,20 @@ class CwfDesignImport(
         fun zipName(fileName: String): String =
             if (fileName.endsWith(ZIP_EXTENSION, ignoreCase = true)) fileName.dropLast(ZIP_EXTENSION.length) + ZIP_EXTENSION
             else fileName + ZIP_EXTENSION
+
+        /**
+         * True when [bytes] is a Watch Face Format face zip, made by the design tool. It must unpack
+         * to a sane size, like a design.
+         */
+        fun isFaceZip(bytes: ByteArray): Boolean =
+            try {
+                unzipsToAtMost(bytes, MAX_UNZIPPED_FACE_BYTES) && WffFaceZip.isFaceZip(bytes)
+            } catch (_: Exception) {
+                false
+            }
+
+        /** A face zip that unpacks to more is not a face. Its APKs are stored compressed already. */
+        const val MAX_UNZIPPED_FACE_BYTES = 64L * 1024 * 1024
 
         /** True when [bytes] is a zip of a sane size that AAPS can load as a Custom watch face. */
         fun isWatchfaceZip(bytes: ByteArray, fileName: String): Boolean =

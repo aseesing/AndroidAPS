@@ -2,6 +2,7 @@ package app.aaps.plugins.sync.wear.compose
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
@@ -9,6 +10,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.aaps.core.interfaces.InterfacesStrings
+import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.FileListProvider
@@ -16,6 +18,7 @@ import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
 import app.aaps.core.interfaces.rx.events.EventMobileToWearWatchface
+import app.aaps.core.interfaces.rx.events.EventMobileToWearWffFace
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.weardata.CUSTOM_VERSION
 import app.aaps.core.interfaces.rx.weardata.CwfData
@@ -32,8 +35,10 @@ import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.sync.SyncStrings
 import app.aaps.plugins.sync.wear.WearPlugin
+import app.aaps.plugins.sync.wear.WffFaceCover
 import app.aaps.plugins.sync.wear.wearintegration.WearNightFace
 import app.aaps.shared.impl.weardata.CwfPlaceNeeds // PERSONAL PATCH: a design that needs the place
+import app.aaps.plugins.sync.wear.WffFaceZip
 import app.aaps.shared.impl.weardata.JsonKeyValues
 import app.aaps.shared.impl.weardata.JsonKeys
 import app.aaps.shared.impl.weardata.ResFileMap
@@ -44,15 +49,22 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Immutable
 data class WearUiState(
@@ -66,6 +78,11 @@ data class WearUiState(
      * is not, a loaded zip reaches the watch but stays invisible there until the choice changes.
      */
     val customWatchfaceSelected: Boolean = true,
+    /** The phone's choice of pushed face, a `PushedWatchfaceId` value */
+    val pushedWatchface: String = PushedWatchfaceId.CWF,
+    /** The name of the face from a face zip that the watch reported installed, or null */
+    val wffFaceName: String? = null,
+    val wffFaceOnWatch: String? = null, // PERSONAL PATCH: the face from a face zip while the watch shows it, see WffFaceOnWatch.kt
     /** Whether the connected watch reported Watch Face Push (Wear OS 6+); the face choice shows only then */
     val watchFacePushSupported: Boolean = false,
     /** The face the watch reported holding, as a `PushedWatchfaceId` value, or null when unknown or none */
@@ -119,7 +136,8 @@ data class CwfImportItemState(
     val isVersionOk: Boolean,
     val prefCount: Int,
     val hasPrefAuthorization: Boolean,
-    val watchfaceImage: ImageBitmap?
+    val watchfaceImage: ImageBitmap?,
+    val wffFace: Boolean = false // PERSONAL PATCH: a Watch Face Format face zip, see WffFaceDesigns.kt
 )
 
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
@@ -136,7 +154,8 @@ class WearViewModel(
     private val fileListProvider: FileListProvider,
     private val aapsLogger: AAPSLogger,
     private val designImport: CwfDesignImport,
-    private val wearNightFace: WearNightFace
+    private val wearNightFace: WearNightFace,
+    private val config: Config
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WearUiState())
@@ -147,6 +166,7 @@ class WearViewModel(
 
     private val faceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(loadingWatchface = name) } }
     private val nightFaceLoading = WearFaceLoadingTracker(viewModelScope) { name -> _uiState.update { it.copy(nightFace = it.nightFace.copy(loadingNightWatchface = name)) } } // PERSONAL PATCH: loading indicator of the night face
+    private val wffFaceCover = WffFaceCover(preferences) // PERSONAL PATCH: above init, which reads it; see the line "On the watch: ..." at the end
 
     init {
         viewModelScope.launch {
@@ -175,7 +195,7 @@ class WearViewModel(
         }
         viewModelScope.launch {
             preferences.observe(StringKey.WearPushedWatchface).collect { face ->
-                _uiState.update { it.copy(customWatchfaceSelected = face == PushedWatchfaceId.CWF) }
+                _uiState.update { it.copy(customWatchfaceSelected = face == PushedWatchfaceId.CWF, pushedWatchface = face) }
             }
         }
         viewModelScope.launch {
@@ -183,7 +203,9 @@ class WearViewModel(
                 _uiState.update {
                     it.copy(
                         watchFacePushSupported = status?.supported == true,
-                        installedWatchface = status?.installedFace
+                        installedWatchface = status?.installedFace,
+                        wffFaceName = status?.designName,
+                        wffFaceOnWatch = wffFaceOnWatch(status, wffFaceCover.designSentAfter) // PERSONAL PATCH
                     )
                 }
             }
@@ -224,6 +246,7 @@ class WearViewModel(
     /** Stores the wearer's choice of pushed face; the plugin observes the key and resends the preferences to the watch */
     fun selectPushedWatchface(face: String) {
         preferences.put(StringKey.WearPushedWatchface, face)
+        if (face == PushedWatchfaceId.DESIGN) wffFaceChosen() // PERSONAL PATCH: the line "On the watch: ...", see WffFaceCover.kt
     }
 
     fun showCwfInfos() {
@@ -323,7 +346,8 @@ class WearViewModel(
         _uiState.update { it.copy(nightFace = it.nightFace.copy(importForNight = forNight)) }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val cwfAuthorization = preferences.get(BooleanKey.WearCustomWatchfaceAuthorization)
-            val files = fileListProvider.listCustomWatchfaceFiles()
+            val faces = if (forNight) emptyList() else designImport.listFaces() // PERSONAL PATCH: face zips in the list, never as the night face
+            val files = (fileListProvider.listCustomWatchfaceFiles() + faces)
                 .sortedBy { it.cwfData.metadata[CwfMetadataKey.CWF_NAME] }
             val items = files.map { cwfFile ->
                 val metadata = cwfFile.cwfData.metadata
@@ -341,12 +365,70 @@ class WearViewModel(
                     isVersionOk = checkCustomVersion(metadata),
                     prefCount = metadata.count { it.key.isPref },
                     hasPrefAuthorization = cwfAuthorization,
-                    watchfaceImage = decodeWatchfaceImage(cwfFile.cwfData)
+                    watchfaceImage = decodeWatchfaceImage(cwfFile.cwfData),
+                    wffFace = faces.any { it === cwfFile } // PERSONAL PATCH
                 )
             }
             // PERSONAL PATCH: a reload never opens a list the user closed meanwhile (by picking a design)
             _uiState.update { if (reload && !it.showImportList) it else it.copy(showImportList = true, importItems = items) }
         }
+    }
+
+    /** How long a face zip waits for the watch to tell its Android API level after a ping */
+    @VisibleForTesting internal var watchVersionWait: Duration = 8.seconds
+
+    /** How long a face zip waits for the phone to finish sending it to the watch */
+    @VisibleForTesting internal var faceSendWait: Duration = 2.minutes
+
+    private suspend fun sendWffFace(bytes: ByteArray) {
+        val apiLevel = watchApiLevel()
+        if (apiLevel == 0) return _toastEvent.emit(rh.gs(SyncStrings.wear_wff_face_watch_unknown))
+        val message = when (val result = WffFaceZip.forWatch(bytes, config.APPLICATION_ID, apiLevel)) {
+            is WffFaceZip.Result.ForWatch    -> {
+                val event = EventMobileToWearWffFace(result.zip)
+                rxBus.send(event)
+                // "Sent" only when it really went out: the watch can close the channel before the end
+                val sent = withTimeoutOrNull(faceSendWait) { event.sent.await() } == true
+                // The watch puts the face in the app's one slot, so the choice follows
+                if (sent && result.usesPush) preferences.put(StringKey.WearPushedWatchface, PushedWatchfaceId.DESIGN)
+                if (sent) wffFaceChosen() // PERSONAL PATCH: the line "On the watch: ...", see WffFaceCover.kt
+                rh.gs(
+                    when {
+                        !sent           -> SyncStrings.wear_wff_face_not_sent
+                        result.usesPush -> SyncStrings.wear_wff_face_sent
+                        else            -> SyncStrings.wear_wff_face_sent_confirm
+                    }
+                )
+            }
+
+            is WffFaceZip.Result.WatchTooOld -> rh.gs(SyncStrings.wear_wff_face_watch_too_old, wearOsVersion(result.minApiLevel))
+            WffFaceZip.Result.OtherApp       -> rh.gs(SyncStrings.wear_wff_face_other_app)
+            WffFaceZip.Result.Invalid        -> rh.gs(SyncStrings.wear_not_a_watchface_file)
+        }
+        _toastEvent.emit(message)
+    }
+
+    /**
+     * The watch's Android API level, or 0 when the watch does not tell it. The status of Watch Face
+     * Push carries it, and so does the watch's answer to a ping. When neither has it yet (an old
+     * status from an older watch app, or none at all), the phone pings the watch and waits a little.
+     */
+    private suspend fun watchApiLevel(): Int {
+        knownWatchApiLevel(wearPlugin.watchFacePushStatus.value, wearPlugin.watchApiLevel.value).takeIf { it > 0 }?.let { return it }
+        rxBus.send(EventMobileToWear(EventData.ActionPing(dateUtil.now())))
+        return withTimeoutOrNull(watchVersionWait) {
+            combine(wearPlugin.watchFacePushStatus, wearPlugin.watchApiLevel, ::knownWatchApiLevel).first { it > 0 }
+        } ?: 0
+    }
+
+    private fun knownWatchApiLevel(status: EventData.WatchFacePushStatus?, pongApiLevel: Int): Int =
+        status?.apiLevel?.takeIf { it > 0 } ?: pongApiLevel
+
+    /** The Wear OS version that comes with Android API level [apiLevel], as people know it */
+    private fun wearOsVersion(apiLevel: Int): String = when {
+        apiLevel >= 36 -> "6"
+        apiLevel >= 35 -> "5.1"
+        else           -> "5"
     }
 
     fun selectWatchface(cwfFile: CwfFile) {
@@ -356,6 +438,7 @@ class WearViewModel(
         preferences.put(StringNonKey.WearCwfAuthorVersion, metadata[CwfMetadataKey.CWF_AUTHOR_VERSION] ?: "")
         preferences.put(StringNonKey.WearCwfFileName, metadata[CwfMetadataKey.CWF_FILENAME] ?: "")
         rxBus.send(EventMobileToWearWatchface(cwfFile.zipByteArray))
+        designSentAfterWffFace() // PERSONAL PATCH: the line "On the watch: ..." goes at once, see WffFaceCover.kt
         // Without a watch nothing will report the face back, so there is nothing to wait for
         if (_uiState.value.isDeviceConnected) faceLoading.start(metadata[CwfMetadataKey.CWF_NAME] ?: "", wearPlugin.savedCustomWatchface)
         _uiState.update { state ->
@@ -475,4 +558,46 @@ class WearViewModel(
      * next zip the wearer picks does not replace the main face.
      */
     private fun reloadImportList() = openImportList(forNight = _uiState.value.nightFace.importForNight, reload = true)
+
+    // ---- PERSONAL PATCH: the line "On the watch: ...", see WffFaceCover.kt and WffFaceOnWatch.kt ----
+
+    /**
+     * The phone sent a design to the watch: the face from a face zip is no longer named. Not with
+     * Watch Face Push: there the watch says which face its slot holds, and a design does not change that.
+     */
+    private fun designSentAfterWffFace() {
+        if (_uiState.value.watchFacePushSupported) return
+        wffFaceCover.designSent()
+        showWffFaceOnWatch()
+    }
+
+    /** The wearer sent the face zip again, or chose that face: it can be named again. */
+    private fun wffFaceChosen() {
+        wffFaceCover.faceChosen()
+        showWffFaceOnWatch()
+    }
+
+    private fun showWffFaceOnWatch() {
+        _uiState.update { it.copy(wffFaceOnWatch = wffFaceOnWatch(wearPlugin.watchFacePushStatus.value, wffFaceCover.designSentAfter)) }
+    }
+
+    // ---- PERSONAL PATCH: Watch Face Format face zips in the list, see WffFaceDesigns.kt ----
+
+    /** The wearer picked [item] in the import list: a face zip goes to the watch as a face, a design goes the old way. */
+    fun selectImportItem(item: CwfImportItemState) {
+        if (item.wffFace) selectWffFace(item.cwfFile) else selectWatchface(item.cwfFile)
+    }
+
+    /**
+     * Sends the face zip of [cwfFile] to the watch, cut down to the face that watch can run. The list
+     * closes at once; the message comes when the send is done. The night list never shows face zips.
+     */
+    private fun selectWffFace(cwfFile: CwfFile) {
+        _uiState.update { it.copy(showImportList = false, importItems = emptyList(), nightFace = it.nightFace.copy(importForNight = false)) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val bytes = designImport.readFace(cwfFile)
+            if (bytes == null) _toastEvent.emit(rh.gs(SyncStrings.wear_not_a_watchface_file))
+            else sendWffFace(bytes)
+        }
+    }
 }

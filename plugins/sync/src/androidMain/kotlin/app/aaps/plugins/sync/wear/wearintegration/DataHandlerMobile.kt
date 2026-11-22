@@ -97,6 +97,7 @@ import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.UnitDoubleKey
 import app.aaps.core.keys.interfaces.Preferences
+import app.aaps.core.objects.extensions.fromGv // PERSONAL PATCH: live watch face preview
 import app.aaps.core.objects.extensions.apsAdjustedTargetMgdl
 import app.aaps.core.objects.extensions.convertedToAbsolute
 import app.aaps.core.objects.extensions.round
@@ -2033,6 +2034,22 @@ class DataHandlerMobile(
     }
 
     internal fun lastSentToWear(): List<EventData> = lastSentToWatchFace() + listOfNotNull(wearWeather.last(), placeUse.lastRule()) // PERSONAL PATCH: live watch face preview, with the weather and the rule
+
+    /**
+     * PERSONAL PATCH: what the live watch face preview starts with: [lastSentToWear], after a first
+     * resend when the phone has sent nothing yet, and the last glucose the phone has now, see
+     * PreviewStartValues.kt. Before the calculator has its table the glucose comes from the database.
+     */
+    internal suspend fun previewStartValues(): List<EventData> = if (config.appInitialized) previewStart.now() else lastSentToWear()
+
+    private val previewStart by lazy {
+        PreviewStartValues(
+            sent = ::lastSentToWear,
+            firstResend = { resendData("WatchFacePreview") },
+            lastBg = { (iobCobCalculator.ads.lastBg() ?: persistenceLayer.getLastGlucoseValue()?.let { InMemoryGlucoseValue.fromGv(it) })?.let { getSingleBG(it) } },
+            graph = { buildGraphData() }
+        )
+    }
 
     private val lastLoopEnact = LastLoopEnact() // PERSONAL PATCH: the loop time for the watch, kept across loop runs
     private val graphHistory = WearGraphHistory(T.hours(WEAR_GRAPH_HOURS).msecs()) { WearGraphHistory.logGraphOn(cwfWatchSettings.values.value) } // PERSONAL PATCH: log time graph

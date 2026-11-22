@@ -212,6 +212,12 @@ class WakeAnimationJsonTest {
         assertThat(spec.group).isEqualTo("moon")
         assertThat(spec.blend).isEqualTo(LayerBlend.ERASE)
         assertThat(layer("""{"shape": "circle", "group": "moon", "blend": "inside"}""").blend).isEqualTo(LayerBlend.INSIDE)
+        // The names of the Watch Face Format are the same blends
+        assertThat(layer("""{"shape": "circle", "group": "moon", "blend": "DST_OUT"}""").blend).isEqualTo(LayerBlend.ERASE)
+        assertThat(layer("""{"shape": "circle", "group": "moon", "blend": "SRC_IN"}""").blend).isEqualTo(LayerBlend.INSIDE)
+        assertThat(layer("""{"shape": "circle", "blend": "PLUS"}""").blend).isEqualTo(LayerBlend.ADD)
+        assertThat(layer("""{"shape": "circle", "blend": "screen"}""").blend).isEqualTo(LayerBlend.SCREEN)
+        assertThat(layer("""{"shape": "circle", "blend": "SRC_OVER"}""").blend).isEqualTo(LayerBlend.NORMAL)
         assertThat(layer("""{"shape": "circle"}""").group).isNull()
         // Without a group these two would cut the face: the layer is left out
         assertThat(layer("""{"shape": "circle", "blend": "erase"}""").normalized()).isNull()

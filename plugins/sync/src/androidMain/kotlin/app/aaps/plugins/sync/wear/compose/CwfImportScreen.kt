@@ -142,6 +142,12 @@ private fun CwfImportItemCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                // PERSONAL PATCH: every entry says what it is, a Watch Face Format face zip (WffFaceDesigns.kt) or a design zip
+                Text(
+                    text = stringResource(if (item.wffFace) SyncStrings.wear_design_type_wff else SyncStrings.wear_design_type_cwf),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
                 Text(
                     text = item.author,
                     style = MaterialTheme.typography.bodySmall

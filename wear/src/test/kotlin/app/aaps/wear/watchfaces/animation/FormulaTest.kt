@@ -191,7 +191,7 @@ class FormulaTest {
         "floor" to listOf("floor(1.7)" to 1.0, "floor(-1.2)" to -2.0),
         "ceil" to listOf("ceil(1.2)" to 2.0, "ceil(-1.7)" to -1.0),
         "round" to listOf("round(1.4)" to 1.0, "round(1.6)" to 2.0, "round(2.5)" to 3.0, "round(0.5)" to 1.0, "round(-1.6)" to -2.0),
-        "fract" to listOf("fract(1.25)" to 0.25, "fract(-0.25)" to 0.75),
+        "fract" to listOf("fract(1.25)" to 0.25, "fract(-0.25)" to -0.25, "fract(-1.75)" to -0.75),
         "mod" to listOf("mod(7, 3)" to 1.0, "mod(-7, 3)" to 2.0),
         "min" to listOf("min(3, 1)" to 1.0, "min(5, 4, 3, 2, 9, 8, 7, 6)" to 2.0),
         "max" to listOf("max(3, 1)" to 3.0, "max(5, 4, 3, 2, 9, 8, 7, 6)" to 9.0),
@@ -210,7 +210,17 @@ class FormulaTest {
         "easeInOut" to listOf("easeInOut(0)" to 0.0, "easeInOut(0.5)" to 0.5, "easeInOut(1)" to 1.0),
         "window" to listOf("window(3, 2, 4)" to 0.25, "window(1, 2, 0)" to 0.0, "window(2, 2, 0)" to 1.0),
         "missing" to listOf("missing(nan)" to 1.0, "missing(3)" to 0.0, "missing(0 / 0)" to 1.0, "missing(1 / 0)" to 0.0),
-        "pingpong" to listOf("pingpong(3, 2)" to 1.0, "pingpong(4, 2)" to 0.0, "pingpong(1, 0)" to 0.0)
+        "pingpong" to listOf("pingpong(3, 2)" to 1.0, "pingpong(4, 2)" to 0.0, "pingpong(1, 0)" to 0.0),
+        // The functions of the Watch Face Format, with its meaning (see WffNamesTest)
+        "asin" to listOf("asin(1)" to PI / 2, "asin(0)" to 0.0),
+        "acos" to listOf("acos(1)" to 0.0, "acos(0)" to PI / 2),
+        "atan" to listOf("atan(1)" to PI / 4),
+        "log2" to listOf("log2(8)" to 3.0, "log2(1024)" to 10.0),
+        "log10" to listOf("log10(1000)" to 3.0),
+        "cbrt" to listOf("cbrt(27)" to 3.0, "cbrt(-8)" to -2.0),
+        "expm1" to listOf("expm1(0)" to 0.0, "expm1(1)" to E - 1),
+        "deg" to listOf("deg(pi)" to 180.0, "deg(pi / 2)" to 90.0),
+        "rad" to listOf("rad(180)" to PI, "rad(90)" to PI / 2)
     )
 
     @Test

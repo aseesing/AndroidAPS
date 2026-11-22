@@ -23,7 +23,9 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -36,6 +38,7 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicReference
 
@@ -43,8 +46,9 @@ import java.util.concurrent.atomic.AtomicReference
  * Feeds the live watch face preview and hands out its frames.
  *
  * - The design is the one the watch has, as the wear screen already shows it.
- * - The values are what the phone last built for the watch, then every new message to the watch.
- *   So the preview shows what the watch shows, without asking the watch.
+ * - The values are what the phone last built for the watch and the last glucose it has, read each
+ *   time a preview opens, then every new message to the watch. So the preview shows what the watch
+ *   shows, without asking the watch.
  * - The watch settings (which values to show, seconds, wake-up animation, ...) are the ones the phone
  *   keeps in [CwfWatchSettingsStore]. A change shows in the next frame, drawn at once.
  *
@@ -52,7 +56,8 @@ import java.util.concurrent.atomic.AtomicReference
  *   whole design from the phone, see [CwfFullDesigns].
  *
  * Nothing is drawn or stored while no preview is on screen: new values and settings are only kept
- * here, the newest of each kind, and handed to the renderer just before it draws a frame. When the
+ * here, the newest of each kind ([PreviewPendingValues]), and handed to the renderer just before it
+ * draws a frame. When the
  * screen stops showing a preview (left, or the app goes to the background), the kept layer pictures
  * of its face are freed, and the thread too when no preview is shown; they come back when the
  * preview is shown again, see [CwfPreviewEngine.release].
@@ -65,7 +70,7 @@ class CwfLivePreviewViewModel(
     private val engine: CwfPreviewEngine,
     private val wearPlugin: WearPlugin,
     private val fullDesigns: CwfFullDesigns,
-    dataHandlerMobile: DataHandlerMobile,
+    private val dataHandlerMobile: DataHandlerMobile,
     rxBus: RxBus,
     settingsStore: CwfWatchSettingsStore
 ) : ViewModel() {
@@ -73,8 +78,8 @@ class CwfLivePreviewViewModel(
     /** What each preview has not had yet, and how to wake it. */
     private class Waiting {
 
-        /** The newest value of each kind. Guarded by itself. */
-        val values = LinkedHashMap<String, EventData>()
+        /** The newest value of each kind. */
+        val values = PreviewPendingValues()
 
         /** The newest watch settings, or null. */
         val settings = AtomicReference<Map<String, String>?>(null)
@@ -86,7 +91,7 @@ class CwfLivePreviewViewModel(
     private val waiting = PreviewSlot.entries.associateWith { Waiting() }
 
     init {
-        dataHandlerMobile.lastSentToWear().forEach(::keep)
+        // The values the phone has now are read each time a preview opens, see [keepStartValues]
         viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
             rxBus.toFlow(EventMobileToWear::class).collect { event -> keep(event.payload) }
         }
@@ -103,22 +108,36 @@ class CwfLivePreviewViewModel(
 
     /** Keeps [event] until the next frame of each preview, in place of an older value of the same kind. */
     private fun keep(event: EventData) {
-        // The kinds of the watch face, the weather the personal designs draw, and the rule for their sun and moon
-        val kind = LastWatchFaceValues.kindOf(event) ?: when (event) {
-            is EventData.Weather                                                       -> "Weather"
-            is EventData.ActionSetDayNightRule, is EventData.ActionClearDayNightRule -> "DayNightRule"
-            else                                                                       -> return
-        }
-        waiting.values.forEach { slot ->
-            synchronized(slot.values) {
-                slot.values.remove(kind)
-                slot.values[kind] = event
-            }
-        }
+        val kind = kindOf(event) ?: return
+        waiting.values.forEach { slot -> slot.values.put(kind, event) }
     }
 
-    private fun takeValues(slot: Waiting): List<EventData> = synchronized(slot.values) {
-        slot.values.values.toList().also { slot.values.clear() }
+    /** The kinds of the watch face, the weather the personal designs draw, and the rule for their sun and moon. Null for others. */
+    private fun kindOf(event: EventData): String? = LastWatchFaceValues.kindOf(event) ?: when (event) {
+        is EventData.Weather                                                       -> "Weather"
+        is EventData.ActionSetDayNightRule, is EventData.ActionClearDayNightRule -> "DayNightRule"
+        else                                                                       -> null
+    }
+
+    /**
+     * Gives the preview of [slot] what the phone has now: the values last sent to the watch and the
+     * last glucose, see `previewStartValues`. Each time the preview opens, so it shows the last
+     * glucose at once and does not wait for the next message to the watch. A value that comes from
+     * the event bus while these are read is newer, and stays.
+     *
+     * Never fails: without them the preview shows what the next messages bring, as before.
+     */
+    private suspend fun keepStartValues(slot: Waiting) {
+        val mark = slot.values.mark()
+        val values = try {
+            // Not on the main thread: building the glucose message, and the graph when there is none, takes a moment
+            withContext(Dispatchers.Default) { dataHandlerMobile.previewStartValues() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return
+        }
+        values.forEach { event -> kindOf(event)?.let { kind -> slot.values.putUnlessNewer(kind, event, mark) } }
     }
 
     /** The design the watch has for [slot], as the short copy it sends. */
@@ -142,6 +161,7 @@ class CwfLivePreviewViewModel(
      */
     fun frames(sizePx: Int, slot: PreviewSlot): Flow<PreviewFrame?> = flow {
         val waits = waiting.getValue(slot)
+        keepStartValues(waits)
         var shortCopy: CwfData? = null
         var design: CwfData? = null
         val handOff = FrameHandOff<Bitmap>()
@@ -158,11 +178,12 @@ class CwfLivePreviewViewModel(
                 watchDesign(slot).first { it !== now }
                 continue
             }
-            val values = takeValues(waits)
-            val settings = waits.settings.getAndSet(null)
             val next = engine.use(slot) { renderer ->
                 renderer.setDesign(drawn)
-                values.forEach(renderer::apply)
+                // Taken here, where they are surely given to the renderer: a preview that closes while
+                // it waits for the renderer keeps them for the next time, see PreviewPendingValues
+                waits.values.take().forEach(renderer::apply)
+                val settings = waits.settings.getAndSet(null)
                 // A new length of the wake-up animation is shown by playing it
                 if (settings != null && renderer.applyWatchSettings(settings)) renderer.wake()
                 val time = System.currentTimeMillis()

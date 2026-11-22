@@ -4,6 +4,7 @@
 // ============================================================================================
 package app.aaps.plugins.sync.wear.compose
 
+import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.resources.ResourceHelper
@@ -53,6 +54,7 @@ internal class WearViewModelPlaceUseTest {
     @Mock private lateinit var aapsLogger: AAPSLogger
     @Mock private lateinit var designImport: CwfDesignImport
     @Mock private lateinit var wearNightFace: WearNightFace
+    @Mock private lateinit var config: Config
 
     private val mainFlow = MutableStateFlow<CwfData?>(null)
     private val nightFlow = MutableStateFlow<CwfData?>(null)
@@ -70,7 +72,7 @@ internal class WearViewModelPlaceUseTest {
         whenever(rxBus.toFlow(EventWearUpdateGui::class)).thenReturn(MutableSharedFlow())
         whenever(preferences.observe(StringKey.WearPushedWatchface)).thenReturn(MutableStateFlow(PushedWatchfaceId.CWF))
         whenever(rh.gs(SyncStrings.no_watch_connected)).thenReturn("No watch connected")
-        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace)
+        sut = WearViewModel(wearPlugin, rxBus, rh, dateUtil, preferences, versionCheckerUtils, fileListProvider, aapsLogger, designImport, wearNightFace, config)
     }
 
     @AfterEach

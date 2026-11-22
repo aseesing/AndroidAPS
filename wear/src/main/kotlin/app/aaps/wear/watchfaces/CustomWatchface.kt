@@ -121,7 +121,7 @@ import app.aaps.wear.watchfaces.utils.ViewTemplates
 import app.aaps.wear.watchfaces.utils.ViewImages
 import app.aaps.wear.watchfaces.utils.secondVisibility
 import dev.zacsweers.metro.Inject
-import kotlinx.coroutines.runBlocking
+import app.aaps.wear.watchfaces.utils.waitForStore // PERSONAL PATCH: a time limit, see StoreReads.kt
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -507,9 +507,9 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         // Read here rather than in WatchFaceComplications: ensureInjected / injectionComplete
         // are protected members of BaseWatchFace. The generic layer only needs the resulting bounds.
         val storedJson = if (injectionComplete) {
-            runBlocking {
+            waitForStore(aapsLogger, "Reading the design for the slots") { // PERSONAL PATCH: a time limit, see StoreReads.kt
                 complicationDataRepository.getCustomWatchface() ?: complicationDataRepository.getCustomWatchface(true)
-            }?.json?.let { JSONObject(it) }
+            }.value?.json?.let { JSONObject(it) } // PERSONAL PATCH
         } else {
             null
         }
@@ -743,9 +743,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         //
         // A render-only instance still avoids rewriting the same values on every render - it only
         // steps in when nothing is stored yet.
-        val defaultsMissing = runBlocking { complicationDataRepository.getCustomWatchface(true) } == null
+        val defaults = waitForStore(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) } // PERSONAL PATCH: a time limit, see StoreReads.kt
+        val defaultsMissing = defaults.inTime && defaults.value == null // PERSONAL PATCH
         if (!isRenderOnly || defaultsMissing)
-            runBlocking {
+            waitForStore(aapsLogger, "Storing the default design") { // PERSONAL PATCH: a time limit
                 complicationDataRepository.storeCustomWatchface(
                     customWatchface = defaultWatchface(false).customWatchfaceData,
                     customWatchfaceFull = defaultWatchface(true).customWatchfaceData,
@@ -919,6 +920,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 backgroundView.draw(this)
             }
         if (!renderSkipBackground) drawRestLayers(canvas, canvasWidth, renderNow()) // PERSONAL PATCH: wake layers that stay on the face
+        if (!renderSkipBackground) slotPainter?.invoke(canvas) // PERSONAL PATCH: the phone preview's slots, where the system draws them on the watch
         // super.onDraw() has just laid out mainLayout, so the placeholders hold this frame's geometry
         // and the slots' declared bounds can follow it. Not in complicationRender(): that runs per
         // slot, while one pushed option covers every slot at once.
@@ -1061,6 +1063,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         drawSlots = { canvas ->
             complications.syncGeometry(::visibleSlotBounds)
             slotTime?.let { drawComplicationSlots(canvas, it) }
+            slotPainter?.invoke(canvas) // PERSONAL PATCH: the phone preview's slots
         },
         drawRest = { canvas, nowMs, slot -> drawRestLayers(canvas, canvas.width, nowMs, slot) }
     )
@@ -1213,10 +1216,19 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         binding.secondHand.visibility = secondVisibility(ViewMap.SECOND_HAND.visibility(this) == View.VISIBLE, showSecond)
     }
 
+    /**
+     * Gives the design to draw instead of the stored one, for an instance that only draws pictures:
+     * the data picture of a Watch Face Format face (`WffDataPicture`). Set before the first draw.
+     * PERSONAL PATCH: such a face never shows the night face (`NightFace`), which is a whole design with all its art.
+     */
+    internal var designFilter: ((CwfData) -> CwfData)? = null
+
     private fun setWatchfaceStyle() {
-        var customWatchfaceData = runBlocking {
+        val stored = waitForStore(aapsLogger, "Reading the design") { // PERSONAL PATCH: a time limit, see StoreReads.kt
             complicationDataRepository.getCustomWatchface() ?: complicationDataRepository.getCustomWatchface(true)
         }
+        if (!stored.inTime) return // PERSONAL PATCH: keep the style of now and try again at the next refresh; never store the default over a design that was not read in time
+        var customWatchfaceData = stored.value // PERSONAL PATCH
         if (customWatchfaceData == null) {
             // Neither the user's watch face nor the default was stored yet, so store the default and
             // read it back. This used to call super.onCreate(), which never did that job: onCreate
@@ -1227,11 +1239,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             // NullPointerException, the render never produced a frame, and the face stayed black for
             // good. Reproduced on a Wear OS 6 emulator on a fresh install, where no watch face has
             // been stored yet - the same state a new user is in.
-            runBlocking { complicationDataRepository.setDefaultWatchface() }
-            customWatchfaceData = runBlocking { complicationDataRepository.getCustomWatchface(true) }
+            if (!waitForStore(aapsLogger, "Storing the default design") { complicationDataRepository.setDefaultWatchface() }.inTime) return // PERSONAL PATCH: a time limit
+            customWatchfaceData = waitForStore(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }.value // PERSONAL PATCH: a time limit
         }
+        customWatchfaceData = customWatchfaceData?.let { stored -> designFilter?.invoke(stored) ?: stored }
         // The night face, when one is stored, shows instead of the main face at night (see CwfNight)
-        val night = runBlocking { complicationDataRepository.getNightWatchfaceData() }
+        val night = waitForStore(aapsLogger, "Reading the night face") { complicationDataRepository.getNightWatchfaceData() }.value ?: return // PERSONAL PATCH: a time limit; keep the style of now
         skyRule = night.dayNightRule // PERSONAL PATCH: the sun and the moon of the personal designs
         var showsNightFace = false
         customWatchfaceData?.let { main ->
@@ -1248,7 +1261,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                         isDayNow = { dayNight.isDay(renderNow(), night.dayNightRule) }
                     )
                 }
-                val face = NightFace.choose(main, night.customWatchfaceNight) { showDay }
+                val face = if (designFilter != null) main else NightFace.choose(main, night.customWatchfaceNight) { showDay } // PERSONAL PATCH: a face with a designFilter (the WFF data picture) never shows the night face
                 showsNightFace = face !== main
                 // A swap between the day face and the night face is not a new zip
                 val daySwap = showsNightFace != styleShowsNightFace
@@ -1353,12 +1366,12 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 manageSpecificViews()
             } catch (_: Exception) {
                 aapsLogger.debug(LTag.WEAR, "Crash during Custom watch load")
-                runBlocking {
+                waitForStore(aapsLogger, "Recovering from a broken design") { // PERSONAL PATCH: a time limit
                     // A broken night face is dropped, the main face stays, and the phone is told
                     if (showsNightFace) {
                         complicationDataRepository.clearNightWatchface()
                         rxBus.send(EventWearToMobile(EventData.ActionClearNightWatchface(System.currentTimeMillis())))
-                    } else complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false)
+                    } else if (designFilter == null) complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false) // PERSONAL PATCH: designFilter, the broken design is then not the stored one, so the wearer's own design stays
                 } // reload correct values to avoid crash of watchface
             }
         }
@@ -1507,7 +1520,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     fun previewImageBytes(): ByteArray? = resDataMap[ResFileMap.CUSTOM_WATCHFACE.fileName]?.value
 
     private fun prefBoolean(prefMap: PrefMap): Boolean =
-        if (isRenderOnly && ComplicationMap.entries.any { it.showPref == prefMap }) false
+        if (isRenderOnly && slotPainter == null && ComplicationMap.entries.any { it.showPref == prefMap }) false // PERSONAL PATCH: slotPainter, the phone preview draws its slots
         else sp.getBoolean(prefMap.prefKey, prefMap.defaultValue as Boolean)
 
     private fun setVisibility(visibility: String, pref: Boolean = true): Int = when (visibility) {
@@ -2622,6 +2635,19 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
 
     private fun checkPref() = valPref.any { (prefMap, s) ->
         s != PrefMap.fromKey(prefMap)?.let { if (it.typeBool) prefBoolean(it).toString() else sp.getString(it.prefKey, it.defaultValue as String) }
+    }
+
+    // PERSONAL PATCH: the phone preview has no system to draw the complication slots, so it draws them
+    // itself (`PreviewSlots` in wear/cwfrender). Never set on the watch, where the system draws them.
+    /** Draws the slots right after the background, where the system draws them on the watch. */
+    internal var slotPainter: ((Canvas) -> Unit)? = null
+
+    /** Where slot [slotId] is drawn this frame and the style the design gives it, or null when it is not shown. */
+    internal fun slotLook(slotId: Int): Pair<ComplicationRender.At, ComplicationStyleValues>? {
+        val view = complicationPlaceholder(slotId)?.takeIf { it.isVisible && it.width > 0 && it.height > 0 } ?: return null
+        if (simpleUi.isEnabled(currentWatchMode)) return null
+        val style = complications.stateFor(slotId)?.style ?: return null
+        return Pair(ComplicationRender.At(Rect(view.left, view.top, view.right, view.bottom), view.rotation), style)
     }
 
     // PERSONAL PATCH: the layers of the wake-up animation that stay on the face while no wake plays

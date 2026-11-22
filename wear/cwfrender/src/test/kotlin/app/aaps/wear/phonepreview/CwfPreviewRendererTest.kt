@@ -6,6 +6,7 @@ package app.aaps.wear.phonepreview
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Color
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.rx.weardata.CUSTOM_VERSION
 import app.aaps.core.interfaces.rx.weardata.CwfData
@@ -14,6 +15,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.wear.R
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.mock
@@ -27,6 +29,7 @@ import java.time.Duration
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
 import app.aaps.core.interfaces.R as InterfacesR
 
@@ -240,6 +243,63 @@ class CwfPreviewRendererTest {
         assertThat(after.sameAs(before)).isTrue()
     }
 
+    @Test
+    fun aLookSwapsThePictureOfATextView() {
+        // The hands of a design swap their picture with the look; a text view with an `image` must too:
+        // with PNG and SVG pictures, and in a design with a rest layer (then the face keeps view pictures)
+        for ((name, design) in listOf(
+            "png" to TestDesigns.withLookImageSwap(),
+            "svg" to TestDesigns.withLookImageSwap(svg = true),
+            "png_layer" to TestDesigns.withLookImageSwap(layer = true),
+            "svg_layer" to TestDesigns.withLookImageSwap(svg = true, layer = true),
+            // A look that depends on the glucose, as the colour looks of a design do (the values give 121 mg/dl)
+            "sgv" to TestDesigns.withLookImageSwap(svg = true, layer = true, whenFormula = "!missing(v_sgv) && v_sgv > 100")
+        )) {
+            val frame = stillRenderer(design, "cwf_preview_swap_$name").frame(SIZE, System.currentTimeMillis())
+            save(frame, "look_swap_$name")
+            val box = intArrayOf(110, 210, 190, 290)
+            assertWithMessage(name).that(count(frame, box, TestDesigns.POD_LOOK_INK)).isGreaterThan(0)
+            assertWithMessage(name).that(count(frame, box, TestDesigns.POD_INK)).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun theAlwaysOnFaceIsDrawnWithoutTheAnimation() {
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock())
+        val now = System.currentTimeMillis()
+        values(now).forEach(renderer::apply)
+        renderer.setDesign(TestDesigns.withRestLayer())
+        renderer.ambient = true
+        val ambient = renderer.frame(SIZE, now).kept()
+        save(ambient, "ambient")
+        assertThat(renderer.isAnimating).isFalse()
+        assertThat(renderer.frameDelayMs(1000L)).isEqualTo(1000L)
+        assertThat(renderer.wake()).isFalse()
+        // The rest layer is not on the always-on face
+        val box = intArrayOf(100, 200, 300, 400)
+        assertThat(count(ambient, box, TestDesigns.REST_INK)).isEqualTo(0)
+
+        // Back to the normal face: after the animation the rest layer stays
+        renderer.ambient = false
+        renderer.frame(SIZE, now)
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(5))
+        val normal = renderer.frame(SIZE, now)
+        save(normal, "rest")
+        assertThat(count(normal, box, TestDesigns.REST_INK)).isGreaterThan(0)
+    }
+
+    @Test
+    fun aDesignSwitchesAViewWithTextOrWithABoolean() {
+        // "key_show_bg": "true" is the old form, true (a JSON boolean) is the same switch
+        val now = System.currentTimeMillis()
+        fun frameWith(name: String, show: Any) = stillRenderer(TestDesigns.withBgSwitch(show), name).frame(SIZE, now).kept()
+        val textOn = frameWith("cwf_preview_text_on", "true")
+        val textOff = frameWith("cwf_preview_text_off", "false")
+        assertThat(textOn.sameAs(textOff)).isFalse()
+        assertThat(frameWith("cwf_preview_boolean_on", true).sameAs(textOn)).isTrue()
+        assertThat(frameWith("cwf_preview_boolean_off", false).sameAs(textOff)).isTrue()
+    }
+
     /** A renderer named [name] with values and [design], and the wake-up animation switched off. */
     private fun stillRenderer(design: CwfData, name: String = PreviewHost.DEFAULT_NAME): CwfPreviewRenderer {
         val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), name)
@@ -267,6 +327,35 @@ class CwfPreviewRendererTest {
         assertThat(after.sameAs(before)).isFalse()
     }
 
+    @Test
+    fun aDesignThatReadsTheGlucoseInTextLayersShowsItOnceThePhoneSendsIt() {
+        // As seen on the phone with the design "BG Reactor": IOB and COB in the slots, "NO DATA" for the glucose
+        val renderer = CwfPreviewRenderer(RuntimeEnvironment.getApplication(), mock(), "cwf_preview_glucose_layers")
+        val now = System.currentTimeMillis()
+        // The status of the phone, and no glucose message
+        values(now).filterNot { it is EventData.SingleBg }.forEach(renderer::apply)
+        renderer.setDesign(TestDesigns.withGlucoseLayers())
+        val upper = intArrayOf(40, 100, 360, 200)
+        val lower = intArrayOf(40, 250, 360, 350)
+        fun atRest(): Bitmap {
+            renderer.frame(SIZE, now)
+            ShadowSystemClock.advanceBy(Duration.ofSeconds(3)) // the animation is over
+            return renderer.frame(SIZE, now)
+        }
+        val without = atRest()
+        save(without, "glucose_layers_none")
+        assertThat(count(without, upper, TestDesigns.GLUCOSE_INK)).isEqualTo(0)
+        assertThat(count(without, lower, TestDesigns.NO_DATA_INK)).isGreaterThan(0)
+
+        // The glucose message of the phone, also an old reading: the design gets the value and its age
+        renderer.apply(bg(now - 3 * 3_600_000L, "6,7", 120.0))
+        Thread.sleep(1_500) // the face reads the values at most once in half a second
+        val with = atRest()
+        save(with, "glucose_layers_reading")
+        assertThat(count(with, upper, TestDesigns.GLUCOSE_INK)).isGreaterThan(0)
+        assertThat(count(with, lower, TestDesigns.NO_DATA_INK)).isEqualTo(0)
+    }
+
     private fun bg(now: Long, text: String, mgdl: Double) = EventData.SingleBg(
         dataset = 0, timeStamp = now - 120_000L, sgvString = text, glucoseUnits = "mmol", slopeArrow = "→",
         delta = "+0,2", deltaDetailed = "+0,2", avgDelta = "+0,1", avgDeltaDetailed = "+0,1", sgvLevel = 0, sgv = mgdl,
@@ -286,6 +375,17 @@ class CwfPreviewRendererTest {
     )
 
     /** A copy of a frame: the renderer draws into its frames again two frames later. */
+    /** How many pixels in the box (left, top, right, bottom in the 400 design space) of [frame] have about the colour [hex]. */
+    private fun count(frame: Bitmap, box: IntArray, hex: String): Int {
+        val c = Color.parseColor(hex)
+        var n = 0
+        for (y in box[1] * SIZE / 400 until box[3] * SIZE / 400) for (x in box[0] * SIZE / 400 until box[2] * SIZE / 400) {
+            val p = frame.getPixel(x, y)
+            if (abs(Color.red(p) - Color.red(c)) < 50 && abs(Color.green(p) - Color.green(c)) < 50 && abs(Color.blue(p) - Color.blue(c)) < 50) n++
+        }
+        return n
+    }
+
     private fun Bitmap.kept(): Bitmap = copy(Bitmap.Config.ARGB_8888, false)
 
     private fun save(bitmap: Bitmap, name: String) = File(out, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }

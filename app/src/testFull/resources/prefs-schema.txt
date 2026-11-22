@@ -595,6 +595,8 @@ wear_notifySMB|BooleanKey|true
 wear_place_uses_main|WearPlaceUseKey|false
 wear_place_uses_night|WearPlaceUseKey|false
 wear_pushed_watchface|StringKey|true
+wear_wff_face_design_sent_after|WffFaceCoverKey|false
+wear_wff_face_watch_said_not_shown|WffFaceCoverKey|false
 wearcontrol|BooleanKey|true
 wearwizard_bg|BooleanKey|true
 wearwizard_cob|BooleanKey|true

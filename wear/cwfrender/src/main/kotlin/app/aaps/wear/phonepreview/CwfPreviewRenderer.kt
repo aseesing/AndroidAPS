@@ -68,13 +68,21 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
      */
     private inner class Drawing(val size: Int) {
 
-        val face = CustomWatchface().apply { prepareForRendering(host) }
+        /** The time of the frame being drawn, for the complication slots. */
+        var frameTime = System.currentTimeMillis()
+
+        val face = CustomWatchface().apply {
+            prepareForRendering(host)
+            // The system draws the slots on the watch; here the preview draws them itself
+            slotPainter = { canvas -> slots.draw(canvas, this, frameTime) }
+        }
         val pipeline = CwfFramePipeline(host, logger) { face }
         val wakeAnimator = WakeAnimator(
             heartRate = { null }, // the phone does not measure it; the pulse uses the design's fallback
             chosenLengthMs = { WakeLength.parse(host.sp.getString(R.string.key_wake_animation_length, WakeLength.AS_DESIGN)) },
             value = { key -> face.designValue(key) }, // a low battery blinks, as on the watch
-            images = { name, epochMs, size -> face.dynamicImage(name, epochMs, size) } // the moon layers, the same picture as the face's resting layers
+            images = { name, epochMs, size -> face.dynamicImage(name, epochMs, size) }, // the moon layers, the same picture as the face's resting layers
+            texts = face.faceTexts // the fonts of the design and the units of the watch, for the text layers, as on the watch
         )
 
         /** When the face last read the values, or may have, in wall clock ms. `prepareForRendering` reads them. */
@@ -98,6 +106,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         /** Marks the views as out of date: [all] also for a new design or new settings, else for new values. */
         fun invalidate(all: Boolean) {
             if (all) pipeline.invalidateAll() else pipeline.invalidateData()
+            slots.invalidate() // the texts of the slots are made from the same values
             stale = true
         }
 
@@ -146,14 +155,56 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
     /** The design last set, to skip setting the same design again. */
     private var design: CwfData? = null
 
+    /** Draws the complication slots, which the system draws on the watch. */
+    private val slots = PreviewSlots(host, logger)
+
+    /**
+     * What each complication slot shows, by its number (1 to 5). A slot that is not in the map shows
+     * what it shows on the watch before the wearer picks a source: stand-ins for the heart rate and the
+     * steps of the watch in slots 1 and 2, carbs on board and insulin on board in slots 3 and 4, and
+     * nothing in slot 5. Only a slot the design shows is drawn.
+     */
+    var slotSources: Map<Int, PreviewSlotSource>
+        get() = slots.chosen
+        set(value) {
+            if (value == slots.chosen) return
+            slots.chosen = value
+            settingsChanged()
+        }
+
+    /** What slot [number] (1 to 5) shows on the watch before the wearer picks a source: what it shows here when [slotSources] leaves it out. */
+    fun defaultSlotSource(number: Int): PreviewSlotSource = slots.defaultOf(number)
+
+    /** The steps of today for a slot that shows [PreviewSlotSource.STEPS], or null for none. The watch does not send them. */
+    var stepsToday: Long?
+        get() = slots.steps
+        set(value) {
+            if (value == slots.steps) return
+            slots.steps = value
+            settingsChanged()
+        }
+
     /** The watch settings this preview draws with. Call [settingsChanged] after writing them. */
     val watchSettings: SharedPreferences get() = host.watchSettings
 
+    /**
+     * True to draw the always-on face, as the watch shows it while the wrist is down. No wake-up
+     * animation is drawn then. Going back to false does not play it: call [wake] for that.
+     */
+    var ambient: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            dataVersion++
+            drawing?.invalidate(all = true)
+            readsValues = true
+        }
+
     /** True while the wake-up animation plays. Then frames are wanted every [frameDelayMs]. */
-    val isAnimating: Boolean get() = drawing?.wakeAnimator?.isRunning == true
+    val isAnimating: Boolean get() = !ambient && drawing?.wakeAnimator?.isRunning == true
 
     /** How long to wait for the next frame: short while the animation plays, else [normalMs]. */
-    fun frameDelayMs(normalMs: Long): Long = drawing?.wakeAnimator?.updateDelay(normalMs) ?: normalMs
+    fun frameDelayMs(normalMs: Long): Long = if (ambient) normalMs else drawing?.wakeAnimator?.updateDelay(normalMs) ?: normalMs
 
     /** Shows [cwfData] from the next frame on. The animation of the design plays once. */
     fun setDesign(cwfData: CwfData) {
@@ -211,8 +262,8 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         readsValues = true
     }
 
-    /** Plays the wake-up animation again, as a tap on the watch does. False when there is none to play. */
-    fun wake(): Boolean = drawing?.wakeAnimator?.wakeOnTap() == true
+    /** Plays the wake-up animation again, as a tap on the watch does. False when there is none to play, or while [ambient]. */
+    fun wake(): Boolean = !ambient && drawing?.wakeAnimator?.wakeOnTap() == true
 
     /** The bitmaps the frames are drawn into, in turn, and the one the next frame tries first. */
     private val buffers = arrayOfNulls<Bitmap>(BUFFERS)
@@ -238,6 +289,7 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
         val index = freeBuffer(size, isFree) ?: return null
         val target = buffers[index]!!
         val drawing = drawing(size)
+        drawing.frameTime = nowMs
         // The hour, minute and date fields are filled with the data, from the real clock
         val minute = nowMs / MS_PER_MINUTE
         if (minute != drawing.minute) {
@@ -263,13 +315,13 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
             if (drawAnimation(drawing, index, size, nowMs)) return target
         }
         // Also when the animation plays: this sets the clock and the values in the views it draws over
-        var still = drawing.pipeline.compose(nowMs, ambient = false, width = size, height = size)
+        var still = drawing.pipeline.compose(nowMs, ambient = ambient, width = size, height = size)
         // Lines placed as on the watch. When a view changed (a new design, a text that got a line
         // more or less), its text lies somewhere else: draw the frame again
         if (drawing.face.layoutView?.let(WatchLineSpacing::match) == true) {
             still.recycle()
             drawing.pipeline.invalidateAll()
-            still = drawing.pipeline.compose(nowMs, ambient = false, width = size, height = size)
+            still = drawing.pipeline.compose(nowMs, ambient = ambient, width = size, height = size)
             // This draw reads the values again when the last read is more than half a second old.
             // Count it as a read, or new values that come soon after would be skipped by the face
             readsValues = true

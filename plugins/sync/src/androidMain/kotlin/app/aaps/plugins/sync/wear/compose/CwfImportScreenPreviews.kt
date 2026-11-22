@@ -14,7 +14,8 @@ internal fun CwfImportContentPreview() {
             items = listOf(
                 previewImportItem("AAPS V2", "AAPS_V2", true, 3, true),
                 previewImportItem("Digital Style", "digital_style", false, 0, false),
-                previewImportItem("Steampunk", "steampunk", true, 2, false)
+                previewImportItem("Steampunk", "steampunk", true, 2, false),
+                previewImportItem("D2", "D2-wff", true, 0, false).copy(wffFace = true) // PERSONAL PATCH: a Watch Face Format face zip
             ),
             importing = false,
             onItemClick = {},

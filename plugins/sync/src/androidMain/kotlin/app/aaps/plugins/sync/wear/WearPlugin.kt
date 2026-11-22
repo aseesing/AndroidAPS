@@ -43,6 +43,7 @@ import app.aaps.plugins.sync.wear.daynight.WearDayNightCarryOver // PERSONAL PAT
 import app.aaps.plugins.sync.wear.keys.WearDayNightBooleanKey
 import app.aaps.plugins.sync.wear.keys.WearDayNightCarryOverKey // PERSONAL PATCH: day and night of the personal build
 import app.aaps.plugins.sync.wear.keys.WearDayNightIntKey
+import app.aaps.plugins.sync.wear.keys.WffFaceCoverKey // PERSONAL PATCH: the line "On the watch: ...", see WffFaceCover.kt
 import app.aaps.plugins.sync.wear.keys.WearDayNightStringKey
 import app.aaps.plugins.sync.wear.keys.WearDesignImportKey // PERSONAL PATCH: design import
 import app.aaps.plugins.sync.wear.keys.WearNightFaceBooleanKey
@@ -101,7 +102,7 @@ class WearPlugin(
         .composeContent { WearComposeContent() },
     ownPreferences = WearNightFaceKey.entries + WearNightFaceBooleanKey.entries +
         WearDayNightBooleanKey.entries + WearDayNightIntKey.entries + WearDayNightStringKey.entries +
-        WearDesignImportKey.entries + WearDayNightCarryOverKey.entries + WearPlaceUseKey.entries, // PERSONAL PATCH: design import, day and night of the personal build, what the designs need the place for
+        WearDesignImportKey.entries + WearDayNightCarryOverKey.entries + WearPlaceUseKey.entries + WffFaceCoverKey.entries, // PERSONAL PATCH: design import, day and night of the personal build, what the designs need the place for, the face from a face zip
     aapsLogger = aapsLogger, rh = rh, preferences = preferences, notificationManager = notificationManager
 ) {
 
@@ -125,9 +126,25 @@ class WearPlugin(
     private val _watchFacePushStatus = MutableStateFlow<EventData.WatchFacePushStatus?>(null)
     val watchFacePushStatus: StateFlow<EventData.WatchFacePushStatus?> = _watchFacePushStatus.asStateFlow()
 
+    /**
+     * The watch's Android API level from its last answer to a ping, or 0 when unknown. A second
+     * source next to [watchFacePushStatus]: an older watch app reports a status without the level,
+     * but every watch app answers a ping with it. Cleared when the watch disconnects, like the status.
+     */
+    private val _watchApiLevel = MutableStateFlow(0)
+    val watchApiLevel: StateFlow<Int> = _watchApiLevel.asStateFlow()
+
     fun updateConnectedDevice(deviceName: String?) {
         _connectedDevice.value = deviceName
-        if (deviceName == null) _watchFacePushStatus.value = null
+        if (deviceName == null) {
+            _watchFacePushStatus.value = null
+            _watchApiLevel.value = 0
+        }
+    }
+
+    /** Keeps the API level from the watch's answer to a ping; 0 says nothing and changes nothing */
+    fun updateWatchApiLevel(apiLevel: Int) {
+        if (apiLevel > 0) _watchApiLevel.value = apiLevel
     }
 
     fun updateSavedCustomWatchface(cwfData: CwfData?) {
@@ -217,9 +234,12 @@ class WearPlugin(
                             checkCustomWatchfacePreferences()
                         }
                     }
+                    event.watchFacePushStatus?.let { WffFaceCover(preferences).watchReported(it) } // PERSONAL PATCH: before the screen reads the status, see WffFaceCover.kt
                     event.watchFacePushStatus?.let { _watchFacePushStatus.value = it }
                 }
             }
+        rxBus.toFlow(EventData.ActionPong::class)
+            .collectResilient(newScope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { updateWatchApiLevel(it.apiLevel) }
         rxBus.toFlow(EventMobileToWear::class)
             .collectResilient(newScope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
                 // If there is a broadcast selected (ie.

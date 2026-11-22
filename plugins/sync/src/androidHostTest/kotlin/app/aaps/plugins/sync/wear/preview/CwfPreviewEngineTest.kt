@@ -103,7 +103,7 @@ class CwfPreviewEngineTest {
             on { savedCustomWatchface } doReturn MutableStateFlow<CwfData?>(null)
             on { savedNightWatchface } doReturn MutableStateFlow<CwfData?>(null)
         }
-        val dataHandlerMobile: DataHandlerMobile = mock { on { lastSentToWear() } doReturn emptyList() }
+        val dataHandlerMobile: DataHandlerMobile = mock { onBlocking { previewStartValues() } doReturn emptyList() }
         return CwfLivePreviewViewModel(
             engine, wearPlugin, CwfFullDesigns(mock<FileListProvider>()), dataHandlerMobile, RxBusImpl(logger), CwfWatchSettingsStore(app)
         )
