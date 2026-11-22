@@ -145,6 +145,16 @@ class PreviewSlotsTest {
     }
 
     @Test
+    fun glucoseWithoutAReadingShowsNoValueAndNoAge() {
+        // A phone that sent nothing: the time of the reading is 0, and an age counted from it would be the years since 1970
+        val slots = PreviewSlots(PreviewHost(app, mock(), "slots_no_reading"), mock())
+        slots.chosen = mapOf(1 to PreviewSlotSource.BG)
+        val shown = slots.dataFor(1) as ShortTextComplicationData
+        assertThat(text(shown)).isEqualTo("--")
+        assertThat(shown.title).isNull()
+    }
+
+    @Test
     fun newValuesMakeNewTexts() {
         val host = host("slots_new_values")
         val slots = PreviewSlots(host, mock())
