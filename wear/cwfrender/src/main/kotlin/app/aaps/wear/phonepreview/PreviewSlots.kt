@@ -172,8 +172,14 @@ internal class PreviewSlots(private val host: PreviewHost, private val logger: A
     private fun shortText(text: String, description: String, @DrawableRes icon: Int?): ComplicationData =
         ShortTextComplicationData.Builder(plain(text), plain(description)).apply { icon?.let { setMonochromaticImage(icon(it)) } }.build()
 
-    /** `SgvComplication`: the glucose and its arrow, and a title that counts the minutes since the reading, with the delta. */
+    /**
+     * `SgvComplication`: the glucose and its arrow, and a title that counts the minutes since the reading, with the delta.
+     *
+     * Without a reading (the phone sent none yet, so the time of the reading is 0) the slot shows "--" and
+     * no title: a title that counts from 0 would show the years since 1970 as the age of a reading.
+     */
     private fun glucose(bg: EventData.SingleBg): ComplicationData {
+        if (bg.timeStamp == 0L) return shortText(NO_VALUE, "Glucose $NO_VALUE", null)
         val text = bg.sgvString + bg.slopeArrow
         // As `ModernBaseComplicationProviderService.buildCountUpText`: half a minute later, so the age rounds down
         val title = TimeDifferenceComplicationText.Builder(TimeDifferenceStyle.SHORT_SINGLE_UNIT, CountUpTimeReference(Instant.ofEpochMilli(bg.timeStamp + 30_000L)))
