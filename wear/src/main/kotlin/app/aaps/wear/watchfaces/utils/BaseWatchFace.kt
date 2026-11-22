@@ -189,6 +189,7 @@ abstract class BaseWatchFace : WatchFace() {
     // True only once injection has returned, via onCreate below or via ensureInjected() for instances
     // that never get an onCreate. Checked instead of catching UninitializedPropertyAccessException,
     // which would also mask unrelated bugs.
+    @Volatile // read on two threads, see ensureInjected
     protected var injectionComplete = false
 
     protected val storeReads = StoreReads() // one time limit for each start of the face, see StoreReads.kt
@@ -206,6 +207,7 @@ abstract class BaseWatchFace : WatchFace() {
      * Works because `attachBaseContext` has run, so the graph can be reached. Safe to call
      * repeatedly - it no-ops once injection has happened by either route.
      */
+    @Synchronized // the system calls this on two threads at once, see BaseWatchFaceInjectionTest
     protected fun ensureInjected() {
         if (injectionComplete) return
         injectMetroMembers(this)
