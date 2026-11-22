@@ -26,12 +26,4 @@ class LastWatchFaceValuesTest {
         assertThat(sut.all()).isEmpty()
         assertThat(LastWatchFaceValues.kindOf(EventData.ActionPing(1))).isNull()
     }
-
-    @Test
-    fun takeAllForgetsWhatItGave() {
-        val sut = LastWatchFaceValues()
-        sut.note(bg(0, 1))
-        assertThat(sut.takeAll()).containsExactly(bg(0, 1))
-        assertThat(sut.takeAll()).isEmpty()
-    }
 }

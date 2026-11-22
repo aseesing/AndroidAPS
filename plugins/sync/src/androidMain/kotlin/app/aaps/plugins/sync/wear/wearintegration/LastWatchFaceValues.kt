@@ -23,10 +23,6 @@ class LastWatchFaceValues {
     @Synchronized
     fun all(): List<EventData> = last.values.toList()
 
-    /** The last value of each kind, the oldest first, and forgets them: for a reader that only wants what is new. */
-    @Synchronized
-    fun takeAll(): List<EventData> = last.values.toList().also { last.clear() }
-
     companion object {
 
         /**
