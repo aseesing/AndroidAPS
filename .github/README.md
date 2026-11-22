@@ -20,7 +20,7 @@
 <tr>
 <td></td>
 <td align="center" width="33%"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/d2.gif" width="220" alt="D2: steel and glass, a big trend arrow, a graph of the whole day"><br><b>D2</b><br><sub>steel and glass, a big trend arrow</sub></td>
-<td></td>
+<td align="center" width="33%"><a href="https://github.com/aseesing/aaps-watchfaces/blob/main/docs/bg-reactor.md"><img src="https://raw.githubusercontent.com/aseesing/aaps-watchfaces/main/images/bg_reactor/wake_good_rising_slow.gif" width="220" alt="BG Reactor: a neon reactor in the colour of the glucose, moving with the trend"></a><br><b><a href="https://github.com/aseesing/aaps-watchfaces/blob/main/docs/bg-reactor.md">BG Reactor</a></b><br><sub>the colour of your glucose, moves with the trend</sub></td>
 </tr>
 <tr>
 <td align="center" colspan="3"><sub>Each picture is drawn by the watch's own code, wake-up animation and all, by <code>ReadmeAnimationsTest</code> in <a href="https://github.com/aseesing/aaps-watchfaces">aaps-watchfaces</a>. The same code draws the live preview on the phone.</sub></td>
@@ -38,7 +38,8 @@ OnePlus Watch 2R and other round Wear OS watches.
 | 📱 | **Live preview in AAPS** | The phone shows your watch face as it looks on the watch now, animation and all. |
 | ⚙️ | **Watch face settings in AAPS** | Set up the watch face on the phone and see it at once. Changes on the watch come back. |
 | 🌗 | **Day face and night face** | One face for the day, one for the night, with the weather, the sun and the moon. |
-| 🎨 | **Seven designs** | Cyberpunk Tech, Weather and Yellow, Wilds Weather, the analog Grand Complication for day and night, and D2. |
+| 🎨 | **Eight designs** | Cyberpunk Tech, Weather and Yellow, Wilds Weather, the analog Grand Complication for day and night, D2 and [BG Reactor](https://github.com/aseesing/aaps-watchfaces/blob/main/docs/bg-reactor.md). |
+| ⚛️ | **BG Reactor** | The whole face fades through the colour of your glucose, from red through green and blue to orange. On a wrist raise it moves up, down or round with the trend. It has neon digits, IOB and COB bars scaled to your own Max IOB and carb ratio, and complication pods that can show the date or the time. [Its page](https://github.com/aseesing/aaps-watchfaces/blob/main/docs/bg-reactor.md) shows it at different glucose values and trends. |
 | 📈 | **Log time graph** | The last hour in detail and the whole day behind it, with the time ago along the graph. On every face with a graph. |
 | 〰️ | **Glucose as a line** | A design can draw the glucose as a line instead of dots, with its own width and colour (`graphLineWidth`, `graphLineColor`). The Cyberpunk and Wilds faces do. |
 | 🌙 | **The real sun and moon** | They rise and set over a horizon as in the sky, the moon in its real phase, worked out on the watch. The watch draws the moon from a NASA photo, lit and turned as you see it in your sky. |
