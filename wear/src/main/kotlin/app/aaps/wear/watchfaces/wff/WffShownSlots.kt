@@ -40,8 +40,10 @@ class WffShownSlots(private val context: Context) {
         }
     }
 
+    // apply(), not commit(): this runs on the main thread, also while a watch face starts to draw. The
+    // new value is in memory at once for every reader in this process, and the write to disk follows.
     private fun change(next: (Set<String>) -> Set<String>) = synchronized(LOCK) {
-        prefs.edit().putStringSet(SLOTS, next(prefs.getStringSet(SLOTS, null) ?: emptySet())).commit()
+        prefs.edit().putStringSet(SLOTS, next(prefs.getStringSet(SLOTS, null) ?: emptySet())).apply()
     }
 
     private companion object {
