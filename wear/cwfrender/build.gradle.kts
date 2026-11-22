@@ -110,6 +110,7 @@ val wearShared = listOf(
     "watchfaces/utils/PartTimeLeft.kt", // PERSONAL PATCH
     "watchfaces/utils/SecondVisibility.kt",
     "watchfaces/utils/SimpleUi.kt",
+    "watchfaces/utils/StoreReads.kt", // PERSONAL PATCH: the time limit of the store reads
     "watchfaces/utils/WatchFace.kt",
     "watchfaces/utils/WatchFaceComplication.kt",
     "watchfaces/utils/WatchFaceSettings.kt",
