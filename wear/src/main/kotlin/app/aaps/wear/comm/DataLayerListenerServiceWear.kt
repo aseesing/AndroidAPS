@@ -67,7 +67,6 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     private val dataClient by lazy { Wearable.getDataClient(this) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
     private val capabilityClient by lazy { Wearable.getCapabilityClient(this) }
-    private val channelClient by lazy { Wearable.getChannelClient(this) }
     //private val nodeClient by lazy { Wearable.getNodeClient(this) }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -126,28 +125,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
         super.onCapabilityChanged(p0)
         handler.post { updateTranscriptionCapability() }
         handler.post { startupStatusReport.onPhoneNode(transcriptionNodeId) }
-        aapsLogger.debug(LTag.WEAR, "onCapabilityChanged: ${p0.name} ${p0.nodes.joinToString(", ") { it.displayName + "(" + it.id + ")" }}")
-    }
-
-    /**
-     * A Watch Face Format face zip sent by the phone, installed by [WffFaceInstaller]. It comes on a
-     * channel: it is too large for a message. The service gets the channel only through the
-     * `CHANNEL_EVENT` filter for this path in the manifest.
-     */
-    private fun receiveWffFace(channel: ChannelClient.Channel) {
-        if (channel.path != getString(app.aaps.core.interfaces.R.string.path_wff_face)) return
-        scope.launch(Dispatchers.IO) {
-            try {
-                val zip = channelClient.getInputStream(channel).await().use { it.readBytes() }
-                wffFaceInstaller.install(zip)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                aapsLogger.error(LTag.WEAR, "The face zip from the phone was not installed", e)
-            } finally {
-                channelClient.close(channel)
-            }
-        }
+        aapsLogger.debug(LTag.WEAR, "onCapabilityChanged:  ${p0.name} ${p0.nodes.joinToString(", ") { it.displayName + "(" + it.id + ")" }}")
     }
 
     override fun onDestroy() {
@@ -187,12 +165,12 @@ class DataLayerListenerServiceWear : WearableListenerService() {
         startupStatusReport.onPhoneNode(transcriptionNodeId)
     }
 
-    // A channel from the phone app: a new watch app, a request for the watch log, or a face zip
+    // A channel from the phone app: a new watch app, or a request for the watch log
     override fun onChannelOpened(channel: ChannelClient.Channel) {
         super.onChannelOpened(channel)
         watchAppSelfUpdate.onChannelOpened(channel)
         watchLogUpload.onChannelOpened(channel)
-        receiveWffFace(channel)
+        wffFaceInstaller.onChannelOpened(channel) // or a face zip
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

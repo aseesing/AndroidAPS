@@ -39,7 +39,10 @@ object GlucoseArrows {
     fun appArrow(context: Context, symbol: String): Icon =
         Icon.createWithResource(context, (ARROWS.firstOrNull { it.symbol == symbol } ?: ARROWS.first()).icon)
 
-    /** The design's own arrows by symbol, only for the symbols the design has a picture for. */
+    /**
+     * The design's own arrows by symbol, only for the symbols the design has a picture for. This makes
+     * the pictures each time: ask [DesignArrows], which keeps them for a design.
+     */
     fun fromDesign(design: CwfData?, resources: Resources): Map<String, Icon> {
         design ?: return emptyMap()
         val result = mutableMapOf<String, Icon>()

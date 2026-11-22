@@ -21,6 +21,7 @@ import app.aaps.wear.watchfaces.wff.WffFace
 import app.aaps.wear.watchfaces.wff.WffFaceShown
 import dev.zacsweers.metro.HasMemberInjections
 import dev.zacsweers.metro.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,6 +44,9 @@ class WffDataComplication : ModernBaseComplicationProviderService() {
 
     @Inject lateinit var wffFace: WffFace
 
+    // The painter outlives this service, which the system binds only while it answers
+    @Inject lateinit var painter: WffDataPainter
+
     // The phone names the face only while the watch shows it, see WffFaceShown
     @Inject lateinit var wffFaceShown: WffFaceShown
 
@@ -57,6 +61,9 @@ class WffDataComplication : ModernBaseComplicationProviderService() {
         drawScope.launch {
             val data = try {
                 if (request.complicationType == ComplicationType.SMALL_IMAGE) picture(tap) else null
+            } catch (e: CancellationException) {
+                // The service is gone (onDestroy): there is nobody to answer, and it is not a failure
+                throw e
             } catch (e: Exception) {
                 aapsLogger.error(LTag.WEAR, "WffDataComplication: the data picture was not made", e)
                 null
@@ -67,7 +74,6 @@ class WffDataComplication : ModernBaseComplicationProviderService() {
 
     private suspend fun picture(tap: PendingIntent): ComplicationData? {
         val design = withContext(Dispatchers.IO) { wffFace.dataDesign() } ?: return null
-        val painter = warm ?: WffDataPicture(applicationContext, aapsLogger).also { warm = it }
         val bitmap = painter.draw(design, System.currentTimeMillis())
         val bytes = withContext(Dispatchers.Default) {
             ByteArrayOutputStream(COMPRESS_HINT_BYTES).also { bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 100, it) }.toByteArray().also { bitmap.recycle() }
@@ -89,12 +95,5 @@ class WffDataComplication : ModernBaseComplicationProviderService() {
     private companion object {
 
         const val COMPRESS_HINT_BYTES = 64 * 1024
-
-        /**
-         * The painter, kept for the life of the process: the system binds this service only while it
-         * answers, and making the face again for each request would cost most of the time (see
-         * `CwfFaceComplication`). It holds the application context only.
-         */
-        private var warm: WffDataPicture? = null
     }
 }

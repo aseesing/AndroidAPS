@@ -16,6 +16,8 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.FilterInputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -206,6 +208,27 @@ internal class CwfDesignImportTest {
         assertThat(metadata[CwfMetadataKey.CWF_AUTHOR]).isEqualTo("Someone")
         assertThat(metadata[CwfMetadataKey.CWF_FILENAME]).isEqualTo("D2-wff")
         assertThat(faces[0].cwfData.resData).containsKey(ResFileMap.CUSTOM_WATCHFACE.fileName)
+    }
+
+    @Test
+    fun `the list reads only the start of a face zip, not its face APKs`() {
+        val padding = 4 * 1024 * 1024
+        val face = faceZip("D2", padding = padding)
+        var read = 0L
+        val folder = object : FaceFolder {
+            override fun zipNames() = listOf("D2-wff.zip")
+            override fun open(name: String): InputStream = object : FilterInputStream(ByteArrayInputStream(face)) {
+                override fun read(): Int = super.read().also { if (it >= 0) read++ }
+                override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { if (it > 0) read += it }
+            }
+        }
+
+        val faces = WffFaceDesigns(mock<AAPSLogger>()).list(folder)
+
+        assertThat(faces).hasSize(1)
+        assertThat(faces[0].cwfData.metadata[CwfMetadataKey.CWF_NAME]).isEqualTo("D2")
+        // face.json and data.zip come first; the 4 MB of the APK after them are not read
+        assertThat(read).isLessThan((face.size - padding + 64 * 1024).toLong())
     }
 
     @Test

@@ -27,6 +27,11 @@ import java.time.Instant
  * process stopped and drives a `Condition`.
  *
  * The text is "5m", which also counts by itself.
+ *
+ * Below Android 13 there are no dynamic values: the value is then a fixed number, right when it is sent
+ * and old until the next update (a new reading, or the 300 s refresh of the complication). The API has no
+ * ranged value that counts by itself there; only the text does. This does not matter in practice: the
+ * faces that read this value are Watch Face Format faces, and those run on Wear OS 5 and later (Android 14).
  */
 @HasMemberInjections
 class WffGlucoseAgeComplication : ModernBaseComplicationProviderService() {
@@ -70,12 +75,19 @@ class WffGlucoseAgeComplication : ModernBaseComplicationProviderService() {
         /** Minutes from [timeStamp] to [now], inside 0 to [MAX_MINUTES]. */
         fun ageMinutes(timeStamp: Long, now: Long): Float = ((now - timeStamp) / 60_000f).coerceIn(0f, MAX_MINUTES)
 
-        /** Minutes from [timeStamp] to the platform's "now", worked out by the system itself. */
-        private fun minutesSince(timeStamp: Long): DynamicFloat =
-            DynamicInstant.withSecondsPrecision(Instant.ofEpochMilli(timeStamp))
+        /**
+         * Minutes from [timeStamp] to the platform's "now", worked out by the system itself, inside 0 to
+         * [MAX_MINUTES] like [ageMinutes]: a face may draw the value as a bar or an arc, and a value past
+         * the range draws wrong.
+         */
+        internal fun minutesSince(timeStamp: Long): DynamicFloat {
+            val minutes = DynamicInstant.withSecondsPrecision(Instant.ofEpochMilli(timeStamp))
                 .durationUntil(DynamicInstant.platformTimeWithSecondsPrecision())
                 .toIntSeconds()
                 .asFloat()
                 .div(60f)
+            val atMost = DynamicFloat.onCondition(minutes.gt(MAX_MINUTES)).use(MAX_MINUTES).elseUse(minutes)
+            return DynamicFloat.onCondition(minutes.lt(0f)).use(0f).elseUse(atMost)
+        }
     }
 }
