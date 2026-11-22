@@ -8,6 +8,7 @@ import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipFile
@@ -64,8 +65,19 @@ class WffFace(private val context: Context, private val aapsLogger: AAPSLogger) 
         shownSlots.deactivated(slot)
     }
 
-    /** The name of the face, or null when there is none. */
-    val name: String? get() = entry(FACE_JSON)?.let { JSONObject(String(it)).optString("name").ifEmpty { null } }
+    /**
+     * The name of the face, or null when there is none or `face.json` cannot be read. Never throws:
+     * the watch reads the name for every status it sends to the phone.
+     */
+    val name: String?
+        get() = entry(FACE_JSON)?.let { json ->
+            try {
+                JSONObject(String(json)).optString("name").ifEmpty { null }
+            } catch (e: JSONException) {
+                aapsLogger.error(LTag.WEAR, "WffFace: $FACE_JSON is not JSON", e)
+                null
+            }
+        }
 
     /** The Watch Face Push token of [apk], or null when there is none. */
     val token: String? get() = entry(TOKEN)?.let { String(it).trim() }

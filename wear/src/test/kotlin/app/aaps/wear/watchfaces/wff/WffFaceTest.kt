@@ -104,6 +104,14 @@ internal class WffFaceTest {
         assertThat(face.name).isNull()
     }
 
+    @Test
+    fun `a face json that cannot be read gives no name and does not throw`() {
+        // The watch reads the name for every status it sends to the phone: a throw here would stop them all
+        face.store(zip(WffFace.FACE_JSON to "not json".toByteArray(), WffFace.APK to byteArrayOf(1)))
+
+        assertThat(face.name).isNull()
+    }
+
     private fun zip(vararg files: Pair<String, ByteArray>): ByteArray {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
