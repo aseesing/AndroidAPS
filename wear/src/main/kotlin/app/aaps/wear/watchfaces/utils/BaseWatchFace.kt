@@ -44,7 +44,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlin.math.floor
 
 @SuppressLint("Deprecated")
@@ -235,9 +234,7 @@ abstract class BaseWatchFace : WatchFace() {
         // with LineChartView requires main thread Handler. We'll initialize on first onDraw().
 
         // Load initial data synchronously (like old persistence.updateFromPersistence())
-        runBlocking {
-            complicationData = complicationDataRepository.complicationData.first()
-        }
+        waitForStore(aapsLogger, "The first read of the values") { complicationDataRepository.complicationData.first() }.value?.let { complicationData = it } // a time limit, see StoreReads.kt
 
         // Observe DataStore for updates
         watchfaceScope.launch {
@@ -530,7 +527,7 @@ abstract class BaseWatchFace : WatchFace() {
         val now = System.currentTimeMillis()
         if (now - lastRenderDataLoad >= RENDER_DATA_SHARE_MS) {
             lastRenderDataLoad = now
-            runBlocking { complicationData = complicationDataRepository.complicationData.first() }
+            waitForStore(aapsLogger, "Reading the values") { complicationDataRepository.complicationData.first() }.value?.let { complicationData = it } // a time limit, see StoreReads.kt
         }
         // [onDraw] populates the views only on its first call, through performViewSetup(); after that
         // it just measures, lays out and draws. So a warm instance must re-apply the data itself or
