@@ -80,7 +80,6 @@ import app.aaps.wear.watchfaces.utils.WatchFaceSettings
 import app.aaps.wear.watchfaces.utils.WatchfaceViewAdapter.Companion.SelectedWatchFace
 import app.aaps.wear.watchfaces.utils.drawWithHidden
 import app.aaps.wear.watchfaces.utils.secondVisibility
-import app.aaps.wear.watchfaces.utils.waitForStore
 import dev.zacsweers.metro.Inject
 import org.json.JSONException
 import org.json.JSONObject
@@ -387,7 +386,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         // Read here rather than in WatchFaceComplications: ensureInjected / injectionComplete
         // are protected members of BaseWatchFace. The generic layer only needs the resulting bounds.
         val storedJson = if (injectionComplete) {
-            waitForStore(aapsLogger, "Reading the design for the slots") {
+            storeReads.wait(aapsLogger, "Reading the design for the slots") {
                 complicationDataRepository.getCustomWatchface() ?: complicationDataRepository.getCustomWatchface(true)
             }.value?.json?.let { JSONObject(it) }
         } else {
@@ -623,10 +622,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
         //
         // A render-only instance still avoids rewriting the same values on every render - it only
         // steps in when nothing is stored yet.
-        val defaults = waitForStore(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }
+        val defaults = storeReads.wait(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }
         val defaultsMissing = defaults.inTime && defaults.value == null
         if (!isRenderOnly || defaultsMissing)
-            waitForStore(aapsLogger, "Storing the default design") {
+            storeReads.wait(aapsLogger, "Storing the default design") {
                 complicationDataRepository.storeCustomWatchface(
                     customWatchface = defaultWatchface(false).customWatchfaceData,
                     customWatchfaceFull = defaultWatchface(true).customWatchfaceData,
@@ -999,10 +998,10 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
     }
 
     private fun setWatchfaceStyle() {
-        val stored = waitForStore(aapsLogger, "Reading the design") {
+        val stored = storeReads.wait(aapsLogger, "Reading the design") {
             complicationDataRepository.getCustomWatchface() ?: complicationDataRepository.getCustomWatchface(true)
         }
-        // Read too late (see waitForStore): keep the style of now and try again at the next refresh.
+        // Read too late (see StoreReads): keep the style of now and try again at the next refresh.
         // Never store the default over a design that was only not read in time.
         if (!stored.inTime) return
         var customWatchfaceData = stored.value
@@ -1016,8 +1015,8 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
             // NullPointerException, the render never produced a frame, and the face stayed black for
             // good. Reproduced on a Wear OS 6 emulator on a fresh install, where no watch face has
             // been stored yet - the same state a new user is in.
-            if (!waitForStore(aapsLogger, "Storing the default design") { complicationDataRepository.setDefaultWatchface() }.inTime) return
-            customWatchfaceData = waitForStore(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }.value
+            if (!storeReads.wait(aapsLogger, "Storing the default design") { complicationDataRepository.setDefaultWatchface() }.inTime) return
+            customWatchfaceData = storeReads.wait(aapsLogger, "Reading the default design") { complicationDataRepository.getCustomWatchface(true) }.value
         }
         customWatchfaceData?.let {
             updatePref(it.metadata)
@@ -1107,7 +1106,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                 manageSpecificViews()
             } catch (_: Exception) {
                 aapsLogger.debug(LTag.WEAR, "Crash during Custom watch load")
-                waitForStore(aapsLogger, "Recovering from a broken design") {
+                storeReads.wait(aapsLogger, "Recovering from a broken design") {
                     complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false)
                 } // reload correct values to avoid crash of watchface
             }
