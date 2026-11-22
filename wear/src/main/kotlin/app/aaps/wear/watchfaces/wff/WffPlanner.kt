@@ -15,6 +15,9 @@ import app.aaps.wear.watchfaces.animation.WakeAnimationSpec
 import org.json.JSONObject
 
 /**
+ * Used by the face tool (the converter to Watch Face Format, outside this repository), which builds this
+ * code in. The app itself does not call it: it is not dead code.
+ *
  * Makes the [WffPlan] of a design: how each view and layer goes to a Watch Face Format (WFF) face.
  * It only reads; it draws nothing and builds nothing, so it also runs in the design tests and on
  * the watch.

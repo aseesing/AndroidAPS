@@ -163,6 +163,8 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
      * what it shows on the watch before the wearer picks a source: stand-ins for the heart rate and the
      * steps of the watch in slots 1 and 2, carbs on board and insulin on board in slots 3 and 4, and
      * nothing in slot 5. Only a slot the design shows is drawn.
+     *
+     * Used by the face tool (outside this repository), not by the app: it is not dead code.
      */
     var slotSources: Map<Int, PreviewSlotSource>
         get() = slots.chosen
@@ -172,10 +174,18 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
             settingsChanged()
         }
 
-    /** What slot [number] (1 to 5) shows on the watch before the wearer picks a source: what it shows here when [slotSources] leaves it out. */
+    /**
+     * What slot [number] (1 to 5) shows on the watch before the wearer picks a source: what it shows here when [slotSources] leaves it out.
+     *
+     * Used by the face tool (outside this repository), not by the app: it is not dead code.
+     */
     fun defaultSlotSource(number: Int): PreviewSlotSource = slots.defaultOf(number)
 
-    /** The steps of today for a slot that shows [PreviewSlotSource.STEPS], or null for none. The watch does not send them. */
+    /**
+     * The steps of today for a slot that shows [PreviewSlotSource.STEPS], or null for none. The watch does not send them.
+     *
+     * Used by the face tool (outside this repository), not by the app: it is not dead code.
+     */
     var stepsToday: Long?
         get() = slots.steps
         set(value) {
@@ -190,6 +200,8 @@ class CwfPreviewRenderer(context: Context, private val logger: AAPSLogger, name:
     /**
      * True to draw the always-on face, as the watch shows it while the wrist is down. No wake-up
      * animation is drawn then. Going back to false does not play it: call [wake] for that.
+     *
+     * Used by the face tool (outside this repository), not by the app: it is not dead code.
      */
     var ambient: Boolean = false
         set(value) {

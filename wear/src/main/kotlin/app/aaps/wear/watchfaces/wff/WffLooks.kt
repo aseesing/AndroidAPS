@@ -9,6 +9,9 @@ import app.aaps.wear.watchfaces.animation.LayerSource
 import org.json.JSONObject
 
 /**
+ * Used by the face tool (the converter to Watch Face Format, outside this repository), which builds this
+ * code in. The app itself does not call it: it is not dead code.
+ *
  * What the looks (`looks`) and the colours of the wearer (`colourLooks`) of a design change, for the
  * [WffPlanner]. Both change the design on the watch while it runs: a look when its condition turns
  * true (day, the weather), a colour when the wearer picks one. A baked picture cannot follow them, the
