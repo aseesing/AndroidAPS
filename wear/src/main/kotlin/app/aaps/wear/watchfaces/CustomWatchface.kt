@@ -1371,7 +1371,7 @@ class CustomWatchface : BaseWatchFace(), CwfRenderTarget {
                     if (showsNightFace) {
                         complicationDataRepository.clearNightWatchface()
                         rxBus.send(EventWearToMobile(EventData.ActionClearNightWatchface(System.currentTimeMillis())))
-                    } else complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false)
+                    } else if (designFilter == null) complicationDataRepository.storeCustomWatchface(defaultWatchface(true).customWatchfaceData, isDefault = false) // PERSONAL PATCH: designFilter, the broken design is then not the stored one, so the wearer's own design stays
                 } // reload correct values to avoid crash of watchface
             }
         }

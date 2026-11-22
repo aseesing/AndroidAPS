@@ -7,6 +7,7 @@ package app.aaps.wear.complications.wff
 import android.graphics.Bitmap
 import android.graphics.Color
 import app.aaps.core.interfaces.rx.weardata.CwfData
+import app.aaps.core.interfaces.rx.weardata.CwfMetadataKey
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
@@ -152,6 +153,21 @@ class WffDataPictureTest {
         val res = data.resData.toMutableMap().apply { remove(ResFileMap.BACKGROUND.fileName) }
         val picture = WffDataPicture(app, AAPSLoggerTest()).draw(CwfData(data.json, data.metadata, res), System.currentTimeMillis())
         assertOnlyData(picture)
+    }
+
+    @Test
+    fun aBrokenDataDesignLeavesTheWearersOwnDesignAlone() {
+        choose(DayNightChoice.DAY)
+        // The wearer's own Custom watch face, told apart from the Default design by its name
+        val default = runBlocking { helper.complicationDataRepository.getCustomWatchface(true) }!!
+        val mine = CwfData(default.json, default.metadata.toMutableMap().apply { put(CwfMetadataKey.CWF_NAME, "Mine") }, default.resData)
+        runBlocking { helper.complicationDataRepository.storeCustomWatchface(mine) }
+
+        // A data.zip whose design cannot be read. The picture may fail, the store may not change
+        runCatching { WffDataPicture(app, AAPSLoggerTest()).draw(CwfData("not a design", data.metadata, data.resData), System.currentTimeMillis()) }
+
+        val stored = runBlocking { helper.complicationDataRepository.getCustomWatchface() }!!
+        assertThat(stored.metadata[CwfMetadataKey.CWF_NAME]).isEqualTo("Mine")
     }
 
     private companion object {
