@@ -72,7 +72,7 @@ OnePlus Watch 2R and other round Wear OS watches.
 
 ## Version
 
-Based on AAPS 4.0.0 with the Dexcom ONE+ / G7 pull request #5431 (upstream `dev` at `9c7e775437`);
+Based on AAPS 4.0.0 with the Dexcom ONE+ / G7 pull request #5431 (upstream `dev` at `08ac1c2337`);
 each new upstream release is merged in.
 
 ## Credits
